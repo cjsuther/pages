@@ -1,0 +1,21 @@
+{
+    "name": "rezonar/personal-pages-api",
+    "description": "API backend para sistema de páginas personales con notificaciones",
+    "type": "project",
+    "require": {
+        "php": ">=7.4",
+        "minishlink/web-push": "^8.0"
+    },
+    "require-dev": {},
+    "autoload": {
+        "classmap": [
+            "Database.php",
+            "JWT.php"
+        ]
+    },
+    "scripts": {
+        "post-install-cmd": [
+            "@php -r \"if (!file_exists('config.php')) { copy('config.example.php', 'config.php'); echo 'Archivo config.php creado. Por favor configúralo antes de usar la aplicación.\\n'; }\""
+        ]
+    }
+}

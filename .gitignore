@@ -1,0 +1,27 @@
+# PHP dependencies
+api/vendor/
+
+# Config with credentials (copy from config.example.php)
+api/config.php
+
+# User uploads
+api/uploads/*
+!api/uploads/.gitkeep
+!api/uploads/.htaccess
+
+# Node dependencies and build output
+frontend/node_modules/
+frontend/dist/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo

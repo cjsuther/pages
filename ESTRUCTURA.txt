@@ -1,0 +1,204 @@
+ESTRUCTURA DEL PROYECTO - GESTOR DE PÁGINAS PERSONALES
+=========================================================
+
+php-mysql-version/
+│
+├── README.md                    # Documentación completa del proyecto
+├── QUICKSTART.md                # Guía de inicio rápido
+├── RESUMEN.md                   # Resumen ejecutivo del proyecto
+├── ESTRUCTURA.txt               # Este archivo - estructura del proyecto
+├── .gitignore                   # Archivos a ignorar en Git
+├── .htaccess                    # Configuración de Apache para rutas (frontend)
+│
+├── database.sql                 # Script de creación de base de datos
+│                                  - Tabla users
+│                                  - Tabla pages
+│                                  - Tabla link_groups
+│                                  - Tabla links
+│
+├── api/                         # BACKEND PHP
+│   │
+│   ├── .htaccess               # Configuración de Apache para la API
+│   ├── config.php              # Configuración (DB, JWT, CORS)
+│   ├── config.example.php      # Ejemplo de configuración
+│   ├── Database.php            # Clase de conexión a MySQL
+│   ├── JWT.php                 # Utilidades de autenticación JWT
+│   │
+│   ├── auth/                   # Endpoints de autenticación
+│   │   ├── register.php        # POST - Registro de usuarios
+│   │   └── login.php           # POST - Inicio de sesión
+│   │
+│   ├── pages/                  # Endpoints de páginas
+│   │   ├── index.php           # GET - Listar páginas, POST - Crear página
+│   │   └── detail.php          # GET - Detalle, PUT - Actualizar, DELETE - Eliminar
+│   │
+│   ├── groups/                 # Endpoints de grupos de enlaces
+│   │   ├── index.php           # POST - Crear grupo
+│   │   └── detail.php          # PUT - Actualizar, DELETE - Eliminar
+│   │
+│   ├── links/                  # Endpoints de enlaces
+│   │   ├── index.php           # POST - Crear enlace
+│   │   └── detail.php          # PUT - Actualizar, DELETE - Eliminar
+│   │
+│   └── public/                 # Endpoints públicos (sin autenticación)
+│       └── page.php            # GET - Ver página pública por slug
+│
+└── frontend/                    # FRONTEND REACT
+    │
+    ├── package.json            # Dependencias de Node.js
+    ├── package-lock.json       # Lock file de dependencias
+    ├── vite.config.js          # Configuración de Vite (dev server, proxy)
+    ├── tailwind.config.js      # Configuración de Tailwind CSS
+    ├── postcss.config.js       # Configuración de PostCSS
+    ├── index.html              # HTML principal
+    │
+    ├── src/                    # Código fuente
+    │   │
+    │   ├── main.jsx            # Punto de entrada de React
+    │   ├── index.css           # Estilos globales (Tailwind)
+    │   ├── App.jsx             # Componente principal (Router, Auth Context)
+    │   │
+    │   └── pages/              # Componentes de páginas
+    │       │
+    │       ├── Login.jsx       # Página de inicio de sesión
+    │       ├── Register.jsx    # Página de registro
+    │       ├── Dashboard.jsx   # Panel de control (lista de páginas)
+    │       ├── PageEditor.jsx  # Editor de página (gestión completa)
+    │       └── PublicPage.jsx  # Vista pública de una página
+    │
+    ├── dist/                   # Archivos compilados (después de build)
+    │   └── (generado por npm run build)
+    │
+    └── node_modules/           # Dependencias instaladas
+        └── (generado por npm install)
+
+
+FLUJO DE DATOS
+==============
+
+1. AUTENTICACIÓN:
+   Usuario → Register.jsx → POST /api/auth/register.php → MySQL
+                          ← JWT Token
+   Usuario guarda token en localStorage
+
+2. LISTAR PÁGINAS:
+   Dashboard.jsx → GET /api/pages/index.php (+ JWT) → MySQL
+                 ← Lista de páginas del usuario
+
+3. CREAR PÁGINA:
+   Dashboard.jsx → POST /api/pages/index.php (+ JWT) → MySQL
+                 ← Nueva página creada
+
+4. EDITAR PÁGINA:
+   PageEditor.jsx → GET /api/pages/detail.php?id=X (+ JWT) → MySQL
+                  ← Página con grupos y links
+
+   PageEditor.jsx → PUT /api/pages/detail.php?id=X (+ JWT) → MySQL
+                  ← Página actualizada
+
+5. CREAR GRUPO:
+   PageEditor.jsx → POST /api/groups/index.php (+ JWT) → MySQL
+                  ← Nuevo grupo creado
+
+6. CREAR LINK:
+   PageEditor.jsx → POST /api/links/index.php (+ JWT) → MySQL
+                  ← Nuevo link creado
+
+7. VER PÁGINA PÚBLICA:
+   PublicPage.jsx → GET /api/public/page.php?slug=mi-url → MySQL
+                  ← Página con todos sus grupos y links
+
+
+TECNOLOGÍAS POR ARCHIVO
+========================
+
+Backend (PHP):
+--------------
+- config.php          → Configuración, constantes, CORS headers
+- Database.php        → PDO, conexión MySQL, manejo de errores
+- JWT.php             → Encoding/Decoding JWT, validación de tokens
+- auth/*.php          → Registro, login, hashing de contraseñas
+- pages/*.php         → CRUD de páginas, validaciones
+- groups/*.php        → CRUD de grupos, relaciones con pages
+- links/*.php         → CRUD de links, relaciones con groups
+- public/*.php        → Consultas públicas sin autenticación
+
+Frontend (React):
+-----------------
+- App.jsx             → React Router, Context API, Auth provider
+- Login.jsx           → Formularios, fetch API, manejo de errores
+- Register.jsx        → Validación de contraseñas, registro
+- Dashboard.jsx       → Listado, modales, state management
+- PageEditor.jsx      → CRUD completo, color pickers, formularios
+- PublicPage.jsx      → Renderizado dinámico con estilos inline
+- *.css               → Tailwind CSS, utility classes
+
+
+CONFIGURACIÓN REQUERIDA
+========================
+
+1. MySQL:
+   - Crear base de datos: personal_pages
+   - Ejecutar: database.sql
+   - Usuario con permisos: SELECT, INSERT, UPDATE, DELETE
+
+2. PHP:
+   - Versión: 7.4 o superior
+   - Extensiones: pdo, pdo_mysql
+   - Editar: api/config.php (credenciales DB y JWT_SECRET)
+
+3. Apache:
+   - mod_rewrite habilitado
+   - AllowOverride All (para .htaccess)
+
+4. Node.js:
+   - Versión: 16 o superior
+   - Ejecutar: npm install (en carpeta frontend)
+   - Editar: src/App.jsx (URL de la API)
+
+
+URLS DE LA APLICACIÓN
+======================
+
+Frontend:
+---------
+/                      → Redirige a /login o /dashboard
+/login                 → Página de inicio de sesión
+/register              → Página de registro
+/dashboard             → Panel de control (lista de páginas)
+/page/:id              → Editor de página específica
+/p/:slug               → Vista pública de página
+
+API:
+----
+POST   /api/auth/register.php
+POST   /api/auth/login.php
+GET    /api/pages/index.php
+POST   /api/pages/index.php
+GET    /api/pages/detail.php?id=X
+PUT    /api/pages/detail.php?id=X
+DELETE /api/pages/detail.php?id=X
+POST   /api/groups/index.php
+PUT    /api/groups/detail.php?id=X
+DELETE /api/groups/detail.php?id=X
+POST   /api/links/index.php
+PUT    /api/links/detail.php?id=X
+DELETE /api/links/detail.php?id=X
+GET    /api/public/page.php?slug=X
+
+
+ARCHIVOS A EDITAR ANTES DE USAR
+================================
+
+1. api/config.php:
+   - DB_HOST
+   - DB_NAME
+   - DB_USER
+   - DB_PASS
+   - JWT_SECRET (¡IMPORTANTE!)
+
+2. frontend/src/App.jsx:
+   - API_URL (línea 8)
+
+3. database.sql:
+   - Ejecutar en MySQL
