@@ -39,7 +39,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $groups = $stmt->fetchAll();
 
         foreach ($groups as &$group) {
-            $stmt = $db->prepare("SELECT *, (event_date IS NOT NULL AND event_date < CURDATE()) as event_due FROM links WHERE group_id = ? ORDER BY position, id");
+            if($group['type']=='eventos') {
+                $stmt = $db->prepare("SELECT *, (event_date <> '0000-00-00' AND event_date < CURDATE()) as event_due FROM links WHERE group_id = ? ORDER BY event_date, id");
+            } else {
+                $stmt = $db->prepare("SELECT *, (event_date <> '0000-00-00' AND event_date < CURDATE()) as event_due FROM links WHERE group_id = ? ORDER BY position, id");
+            }
             $stmt->execute([$group['id']]);
             $group['links'] = $stmt->fetchAll();
         }

@@ -36,6 +36,11 @@ try {
     $groups = $stmt->fetchAll();
 
     foreach ($groups as &$group) {
+        if($group['type']=='eventos') {
+            $stmt = $db->prepare("SELECT *, (event_date IS NOT NULL AND event_date < CURDATE()) as event_due FROM links WHERE group_id = ? AND event_date > CURDATE() ORDER BY event_date, id");
+        } else {
+            $stmt = $db->prepare("SELECT *, (event_date IS NOT NULL AND event_date < CURDATE()) as event_due FROM links WHERE group_id = ? ORDER BY position, id");
+        }
         $stmt = $db->prepare("SELECT *, (event_date IS NOT NULL AND event_date < CURDATE()) as event_due FROM links WHERE group_id = ? ORDER BY position, id");
         $stmt->execute([$group['id']]);
         $group['links'] = $stmt->fetchAll();
