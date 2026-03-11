@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import FollowButton from '../FollowButton';
+import EventCollaborators from '../EventCollaborators';
 import { Users } from 'lucide-react';
 
 function CardsTemplate({ page }) {
@@ -73,23 +74,21 @@ function CardsTemplate({ page }) {
                 </div>
               ) : group.type === 'eventos' ? (
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {[...group.links].sort((a, b) => {
+                  {[...(group.links || []), ...(group.collaborated_events || [])].sort((a, b) => {
                     const dateA = new Date(a.event_date + ' ' + (a.event_time || '00:00'));
                     const dateB = new Date(b.event_date + ' ' + (b.event_time || '00:00'));
                     return dateA - dateB;
-                  })?.map((link) => (
+                  }).map((link) => (
                     <div
-                      key={link.id}
+                      key={(link.is_collaborated ? 'c-' : '') + link.id}
                       onClick={() => setModalEvent(link)}
                       className="bg-white rounded-lg p-6 shadow-md hover:shadow-xl transition cursor-pointer"
                     >
-                      {(
-                        <img
-                          src={link.image_url ?? 'https://images.pexels.com/photos/1190298/pexels-photo-1190298.jpeg?auto=compress&cs=tinysrgb&w=800'}
-                          alt={link.text}
-                          className="w-full h-48 object-cover rounded-lg mb-4"
-                        />
-                      )}
+                      <img
+                        src={link.image_url ?? 'https://images.pexels.com/photos/1190298/pexels-photo-1190298.jpeg?auto=compress&cs=tinysrgb&w=800'}
+                        alt={link.text}
+                        className="w-full h-48 object-cover rounded-lg mb-4"
+                      />
                       <h3 className="font-bold text-xl mb-2">{link.text}</h3>
                       {(link.event_date || link.event_time) && (
                         <p className="opacity-60">
@@ -104,6 +103,7 @@ function CardsTemplate({ page }) {
                             })}
                         </p>
                       )}
+                      <EventCollaborators event={link} currentPageId={page.id} color={primaryColor} />
                     </div>
                   ))}
                 </div>
@@ -271,6 +271,7 @@ function CardsTemplate({ page }) {
                   Más información →
                 </a>
               )}
+              <EventCollaborators event={modalEvent} currentPageId={page.id} color={primaryColor} />
             </div>
           </div>
         </div>

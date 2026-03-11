@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd /mnt/c/Trabajo/pages/project/php-mysql-version/frontend && npm run build 2>&1 | tail -30)",
+      "Bash(npm run:*)"
+    ]
+  }
+}

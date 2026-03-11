@@ -10,11 +10,28 @@ function MyPages() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newPage, setNewPage] = useState({ title: '', description: '', url_slug: '' });
   const [error, setError] = useState('');
+  const [pendingCollabPageIds, setPendingCollabPageIds] = useState(new Set());
   const navigate = useNavigate();
 
   useEffect(() => {
     fetchPages();
+    fetchPendingCollabs();
   }, []);
+
+  const fetchPendingCollabs = async () => {
+    try {
+      const response = await fetch(`${apiUrl}/collaborations/index.php?type=pending`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const ids = new Set((data.pending || []).map(c => c.collaborator_page_id));
+        setPendingCollabPageIds(ids);
+      }
+    } catch (err) {
+      console.error('Error fetching pending collabs:', err);
+    }
+  };
 
   const fetchPages = async () => {
     try {
@@ -106,7 +123,10 @@ function MyPages() {
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
             {pages.map((page) => (
-              <div key={page.id} className="bg-gray-900 border border-gray-800 p-8 hover:border-gray-700 transition group">
+              <div key={page.id} className="bg-gray-900 border border-gray-800 p-8 hover:border-gray-700 transition group relative">
+                {pendingCollabPageIds.has(page.id) && (
+                  <span className="absolute top-4 right-4 w-3 h-3 bg-red-500 rounded-full" title="Tenés colaboraciones pendientes para aprobar" />
+                )}
                 <h3 className="text-2xl font-bold mb-4">{page.title}</h3>
                 <p className="text-gray-400 mb-8 leading-relaxed">{page.description}</p>
                 <div className="mb-8">

@@ -43,6 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             n.id,
             n.title,
             n.message,
+            n.type,
             n.is_read,
             n.created_at,
             p.id as page_id,

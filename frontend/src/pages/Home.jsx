@@ -20,7 +20,7 @@ function Home() {
   const [locationError, setLocationError] = useState(null);
   const [sortBy, setSortBy] = useState('date');
   const [sortOrder, setSortOrder] = useState('asc');
-  const [viewMode, setViewMode] = useState('grid');
+  const [viewMode, setViewMode] = useState('map');
   const [showFollowedOnly, setShowFollowedOnly] = useState(false);
 
   useEffect(() => {

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import FollowButton from '../FollowButton';
+import EventCollaborators from '../EventCollaborators';
 import { Users } from 'lucide-react';
 
 function CondensedTemplate({ page }) {
@@ -79,13 +80,13 @@ function CondensedTemplate({ page }) {
                 </div>
               ) : group.type === 'eventos' ? (
                 <div className="space-y-2">
-                  {[...group.links].sort((a, b) => {
+                  {[...(group.links || []), ...(group.collaborated_events || [])].sort((a, b) => {
                     const dateA = new Date(a.event_date + ' ' + (a.event_time || '00:00'));
                     const dateB = new Date(b.event_date + ' ' + (b.event_time || '00:00'));
                     return dateA - dateB;
-                  })?.map((link) => (
+                  }).map((link) => (
                     <div
-                      key={link.id}
+                      key={(link.is_collaborated ? 'c-' : '') + link.id}
                       onClick={() => setModalEvent(link)}
                       className="flex items-center gap-3 p-3 rounded-lg hover:bg-black hover:bg-opacity-5 transition cursor-pointer"
                     >
@@ -111,6 +112,7 @@ function CondensedTemplate({ page }) {
                             })}
                           </div>
                         )}
+                        <EventCollaborators event={link} currentPageId={page.id} color={primaryColor} />
                       </div>
                     </div>
                   ))}
@@ -277,6 +279,7 @@ function CondensedTemplate({ page }) {
                   Más información →
                 </a>
               )}
+              <EventCollaborators event={modalEvent} currentPageId={page.id} color={primaryColor} />
             </div>
           </div>
         </div>

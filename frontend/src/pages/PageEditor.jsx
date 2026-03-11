@@ -38,9 +38,22 @@ function PageEditor() {
   const groupMenuRef = useRef(null);
   const linkMenuRef = useRef(null);
 
+  // Collaborations state
+  const [pendingCollaborations, setPendingCollaborations] = useState([]);
+  const [showCollabAcceptModal, setShowCollabAcceptModal] = useState(false);
+  const [acceptingCollab, setAcceptingCollab] = useState(null);
+  const [collabAcceptGroupId, setCollabAcceptGroupId] = useState('');
+  const [pageSearchQuery, setPageSearchQuery] = useState('');
+  const [pageSearchResults, setPageSearchResults] = useState([]);
+  const [searchingPages, setSearchingPages] = useState(false);
+
   useEffect(() => {
     fetchPage();
   }, [id]);
+
+  useEffect(() => {
+    if (page) loadPendingCollaborations();
+  }, [page?.id]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -404,6 +417,135 @@ function PageEditor() {
     setShowEditLinkModal(true);
   };
 
+  const loadPendingCollaborations = async () => {
+    try {
+      const response = await fetch(`${apiUrl}/collaborations/index.php?type=pending`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setPendingCollaborations(data.pending || []);
+      }
+    } catch (err) {
+      console.error('Error loading collaborations:', err);
+    }
+  };
+
+  const searchPagesForCollaboration = async (query) => {
+    if (!query.trim()) { setPageSearchResults([]); return; }
+    setSearchingPages(true);
+    try {
+      const response = await fetch(`${apiUrl}/public/search.php?q=${encodeURIComponent(query)}`);
+      const data = await response.json();
+      setPageSearchResults((data.results || []).filter(r => r.type === 'page'));
+    } catch (err) {
+      console.error('Error searching pages:', err);
+    } finally {
+      setSearchingPages(false);
+    }
+  };
+
+  const addCollaborator = async (linkId, page) => {
+    try {
+      setGlobalLoading(true);
+      const response = await fetch(`${apiUrl}/collaborations/index.php`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ link_id: linkId, collaborator_page_id: page.id })
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setPageSearchQuery('');
+        setPageSearchResults([]);
+        // Update editingLink immediately so the modal reflects the new collaborator
+        const newCollab = {
+          id: data.collaboration_id,
+          status: 'pending',
+          collaborator_page_id: page.id,
+          page_title: page.title,
+          page_slug: page.slug,
+          page_image: page.profile_image || null,
+        };
+        setEditingLink(prev => prev ? { ...prev, collaborations: [...(prev.collaborations || []), newCollab] } : prev);
+        fetchPage();
+      } else {
+        alert(data.error || 'Error al invitar colaborador');
+      }
+    } catch (err) {
+      console.error('Error adding collaborator:', err);
+    } finally {
+      setGlobalLoading(false);
+    }
+  };
+
+  const removeCollaboration = async (collabId) => {
+    if (!confirm('¿Quitar esta colaboración?')) return;
+    try {
+      setGlobalLoading(true);
+      await fetch(`${apiUrl}/collaborations/detail.php?id=${collabId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      fetchPage();
+      loadPendingCollaborations();
+    } catch (err) {
+      console.error('Error removing collaboration:', err);
+    } finally {
+      setGlobalLoading(false);
+    }
+  };
+
+  const openAcceptCollabModal = (collab) => {
+    setAcceptingCollab(collab);
+    const eventGroups = page?.groups?.filter(g => g.type === 'eventos') || [];
+    setCollabAcceptGroupId(eventGroups.length === 1 ? String(eventGroups[0].id) : '');
+    setShowCollabAcceptModal(true);
+  };
+
+  const acceptCollaboration = async (e) => {
+    e.preventDefault();
+    if (!collabAcceptGroupId) { alert('Debes seleccionar un grupo de eventos'); return; }
+    try {
+      setGlobalLoading(true);
+      const response = await fetch(`${apiUrl}/collaborations/detail.php?id=${acceptingCollab.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ status: 'accepted', group_id: parseInt(collabAcceptGroupId) })
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setShowCollabAcceptModal(false);
+        setAcceptingCollab(null);
+        setCollabAcceptGroupId('');
+        loadPendingCollaborations();
+        fetchPage();
+      } else {
+        alert(data.error || 'Error al aceptar');
+      }
+    } catch (err) {
+      console.error('Error accepting collaboration:', err);
+    } finally {
+      setGlobalLoading(false);
+    }
+  };
+
+  const rejectCollaboration = async (collab) => {
+    if (!confirm('¿Rechazar esta invitación?')) return;
+    try {
+      setGlobalLoading(true);
+      await fetch(`${apiUrl}/collaborations/detail.php?id=${collab.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ status: 'rejected' })
+      });
+      loadPendingCollaborations();
+    } catch (err) {
+      console.error('Error rejecting collaboration:', err);
+    } finally {
+      setGlobalLoading(false);
+    }
+  };
+
   const handlePlaceSelect = (placeData, isEditing = false) => {
     if (isEditing && editingLink) {
       setEditingLink({
@@ -683,6 +825,48 @@ function PageEditor() {
           </div>
         </div>
 
+        {pendingCollaborations.filter(c => c.collaborator_page_id == id).length > 0 && (
+          <div className="bg-gray-900 border border-orange-800 p-8 mb-8">
+            <h2 className="text-2xl font-black tracking-tight mb-6 text-orange-400">COLABORACIONES PENDIENTES</h2>
+            <div className="space-y-4">
+              {pendingCollaborations.filter(c => c.collaborator_page_id == id).map((collab) => (
+                <div key={collab.id} className="bg-black border border-gray-800 p-4 flex flex-col sm:flex-row sm:items-center gap-4">
+                  <div className="flex items-center gap-3 flex-1">
+                    {collab.requester_page_image && (
+                      <img src={collab.requester_page_image} alt={collab.requester_page_title} className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
+                    )}
+                    <div>
+                      <p className="font-bold text-white">{collab.requester_page_title}</p>
+                      <p className="text-sm text-gray-400">te invita a colaborar en <span className="text-white">{collab.event_title}</span></p>
+                      {collab.event_date && (
+                        <p className="text-xs text-gray-600 mt-1">
+                          {new Date(collab.event_date + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                          {collab.event_time && ' · ' + collab.event_time}
+                        </p>
+                      )}
+                      <p className="text-xs text-gray-500 mt-1">Para tu página: <span className="text-gray-300">{collab.collaborator_page_title}</span></p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 flex-shrink-0">
+                    <button
+                      onClick={() => openAcceptCollabModal(collab)}
+                      className="px-4 py-2 bg-green-700 text-white text-sm font-bold hover:bg-green-600 transition"
+                    >
+                      Aceptar
+                    </button>
+                    <button
+                      onClick={() => rejectCollaboration(collab)}
+                      className="px-4 py-2 bg-gray-800 text-red-400 text-sm font-bold hover:bg-gray-700 transition"
+                    >
+                      Rechazar
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="bg-gray-900 border border-gray-800 p-8 mb-8">
           <div className="flex justify-between items-center mb-8">
             <h2 className="text-2xl font-black tracking-tight">GRUPOS DE LINKS</h2>
@@ -802,18 +986,51 @@ function PageEditor() {
                     </div>
                   </div>
 
-                  {group.links && group.links.length === 0 ? (
+                  {group.links && group.links.length === 0 && (!group.collaborated_events || group.collaborated_events.length === 0) ? (
                     <p className="text-gray-400 text-sm">No hay links en este grupo</p>
                   ) : (
                     <div className="space-y-2">
                       {(group.type === 'eventos'
-                        ? [...group.links].sort((a, b) => {
-                          const dateA = new Date(a.event_date + ' ' + (a.event_time || '00:00'));
-                          const dateB = new Date(b.event_date + ' ' + (b.event_time || '00:00'));
-                          return dateA - dateB;
-                        })
+                        ? [
+                            ...group.links.map(l => ({ ...l, _isCollaboration: false })),
+                            ...(group.collaborated_events || []).map(e => ({ ...e, _isCollaboration: true }))
+                          ].sort((a, b) => {
+                            const dateA = new Date((a.event_date || '9999-12-31') + ' ' + (a.event_time || '00:00'));
+                            const dateB = new Date((b.event_date || '9999-12-31') + ' ' + (b.event_time || '00:00'));
+                            return dateA - dateB;
+                          })
                         : group.links
                       )?.map((link, linkIndex) => (
+                        link._isCollaboration ? (
+                        <div key={`collab-${link.collaboration_id}`} className="flex items-center gap-4 p-3 bg-gray-800 rounded-lg border border-orange-900">
+                          {link.image_url && (
+                            <img src={link.image_url} alt={link.text} className="w-12 h-12 object-cover rounded" />
+                          )}
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-xs bg-orange-900 text-orange-300 px-2 py-0.5 rounded font-medium">Colaboración</span>
+                              {link.source_page_image && <img src={link.source_page_image} alt={link.source_page_title} className="w-4 h-4 rounded-full object-cover" />}
+                              <span className="text-xs text-gray-400">{link.source_page_title}</span>
+                            </div>
+                            <p className="text-white font-medium">{link.text}</p>
+                            {link.event_date && (
+                              <p className="text-xs text-gray-500 mt-0.5">
+                                {new Date(link.event_date + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                                {link.event_time && ' · ' + link.event_time}
+                              </p>
+                            )}
+                            {link.event_due == '1' && (
+                              <p className="text-sm text-red-400 font-semibold mt-1">¡Evento vencido!</p>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => removeCollaboration(link.collaboration_id)}
+                            className="text-red-400 hover:bg-red-900 px-3 py-1 rounded transition text-sm flex-shrink-0"
+                          >
+                            Quitar
+                          </button>
+                        </div>
+                        ) : (
                         <div
                           key={link.id}
                           className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg hover:bg-gray-100"
@@ -839,6 +1056,30 @@ function PageEditor() {
                             )}
                             {link.event_due == '1' && (
                               <p className="text-sm text-red-600 font-semibold mt-1">¡Evento vencido!</p>
+                            )}
+                            {group.type === 'eventos' && link.collaborations && link.collaborations.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-2">
+                                {link.collaborations.map(c => (
+                                  <span
+                                    key={c.id}
+                                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${
+                                      c.status === 'accepted' ? 'bg-green-100 text-green-700' :
+                                      c.status === 'rejected' ? 'bg-red-100 text-red-600' :
+                                      'bg-yellow-100 text-yellow-700'
+                                    }`}
+                                  >
+                                    {c.page_image && <img src={c.page_image} alt="" className="w-3 h-3 rounded-full object-cover" />}
+                                    {c.page_title}
+                                    {' · '}
+                                    {c.status === 'accepted' ? 'aceptó' : c.status === 'rejected' ? 'rechazó' : 'pendiente'}
+                                    <button
+                                      onClick={() => removeCollaboration(c.id)}
+                                      className="ml-1 opacity-60 hover:opacity-100"
+                                      title="Quitar colaborador"
+                                    >×</button>
+                                  </span>
+                                ))}
+                              </div>
                             )}
                           </div>
                           <div className="flex gap-1 items-center">
@@ -911,6 +1152,7 @@ function PageEditor() {
                             </div>
                           </div>
                         </div>
+                        )
                       ))}
                     </div>
                   )}
@@ -1342,6 +1584,82 @@ function PageEditor() {
                   />
                 </div>
               )}
+
+              {selectedGroup.type === 'eventos' && (
+                <div className="border-t border-gray-700 pt-6">
+                  <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">COLABORADORES</label>
+
+                  {editingLink.collaborations && editingLink.collaborations.length > 0 && (
+                    <div className="space-y-2 mb-4">
+                      {editingLink.collaborations.map(c => (
+                        <div key={c.id} className="flex items-center justify-between bg-black px-3 py-2 rounded">
+                          <div className="flex items-center gap-2">
+                            {c.page_image && <img src={c.page_image} alt="" className="w-6 h-6 rounded-full object-cover" />}
+                            <span className="text-sm text-white">{c.page_title}</span>
+                            <span className={`text-xs px-2 py-0.5 rounded ${
+                              c.status === 'accepted' ? 'bg-green-900 text-green-300' :
+                              c.status === 'rejected' ? 'bg-red-900 text-red-300' :
+                              'bg-yellow-900 text-yellow-300'
+                            }`}>
+                              {c.status === 'accepted' ? 'Aceptó' : c.status === 'rejected' ? 'Rechazó' : 'Pendiente'}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              removeCollaboration(c.id);
+                              setEditingLink({ ...editingLink, collaborations: editingLink.collaborations.filter(x => x.id !== c.id) });
+                            }}
+                            className="text-red-400 hover:text-red-300 text-sm"
+                          >
+                            Quitar
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={pageSearchQuery}
+                      onChange={(e) => {
+                        setPageSearchQuery(e.target.value);
+                        searchPagesForCollaboration(e.target.value);
+                      }}
+                      placeholder="Buscar página para invitar..."
+                      className="flex-1 px-3 py-2 bg-black border border-gray-700 text-white text-sm focus:border-white transition"
+                    />
+                    {searchingPages && <span className="text-gray-500 text-sm self-center">...</span>}
+                  </div>
+
+                  {pageSearchResults.length > 0 && (
+                    <div className="mt-2 bg-black border border-gray-700 rounded max-h-40 overflow-y-auto">
+                      {pageSearchResults
+                        .filter(p => !editingLink.collaborations?.some(c => c.collaborator_page_id == p.id))
+                        .map(p => (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onClick={() => {
+                              addCollaborator(editingLink.id, p);
+                              setPageSearchQuery('');
+                              setPageSearchResults([]);
+                            }}
+                            className="w-full text-left px-3 py-2 hover:bg-gray-800 text-sm text-white flex items-center gap-2"
+                          >
+                            <span className="font-medium">{p.title}</span>
+                            <span className="text-gray-500 text-xs">/{p.slug}</span>
+                          </button>
+                        ))}
+                    </div>
+                  )}
+                  <p className="text-xs text-gray-600 mt-2">
+                    Las páginas invitadas recibirán una notificación para aceptar o rechazar la colaboración
+                  </p>
+                </div>
+              )}
+
               <div className="flex gap-3 pt-4">
                 <button
                   type="button"
@@ -1349,6 +1667,8 @@ function PageEditor() {
                     setShowEditLinkModal(false);
                     setEditingLink(null);
                     setSelectedGroup(null);
+                    setPageSearchQuery('');
+                    setPageSearchResults([]);
                   }}
                   className="flex-1 px-4 py-3 border border-gray-700 text-white hover:bg-gray-800 transition font-bold"
                 >
@@ -1360,6 +1680,81 @@ function PageEditor() {
                 >
                   GUARDAR
                 </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {showCollabAcceptModal && acceptingCollab && (
+        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center p-4 z-50">
+          <div className="bg-gray-900 border border-gray-800 max-w-lg w-full p-10">
+            <h2 className="text-2xl font-black mb-2 text-white">ACEPTAR COLABORACIÓN</h2>
+            <p className="text-gray-400 mb-6 text-sm">
+              <span className="text-white font-medium">{acceptingCollab.requester_page_title}</span> te invita a colaborar en el evento <span className="text-white font-medium">&ldquo;{acceptingCollab.event_title}&rdquo;</span>.
+              {acceptingCollab.event_date && (
+                <span className="block mt-1 text-gray-500">
+                  {new Date(acceptingCollab.event_date + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                  {acceptingCollab.event_time && ' · ' + acceptingCollab.event_time}
+                </span>
+              )}
+            </p>
+            <form onSubmit={acceptCollaboration} className="space-y-6">
+              <div>
+                {(() => {
+                  const eventGroups = page?.groups?.filter(g => g.type === 'eventos') || [];
+                  if (eventGroups.length === 0) {
+                    return <p className="text-red-400 text-sm">No tenés grupos de eventos en tu página &ldquo;{acceptingCollab.collaborator_page_title}&rdquo;. Creá uno primero.</p>;
+                  }
+                  if (eventGroups.length === 1) {
+                    return (
+                      <p className="text-sm text-gray-300">
+                        El evento se agregará al grupo <span className="font-bold text-white">&ldquo;{eventGroups[0].title}&rdquo;</span>.
+                      </p>
+                    );
+                  }
+                  return (
+                    <>
+                      <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">
+                        ¿EN QUÉ GRUPO AGREGAR EL EVENTO?
+                      </label>
+                      <select
+                        value={collabAcceptGroupId}
+                        onChange={(e) => setCollabAcceptGroupId(e.target.value)}
+                        className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+                        required
+                      >
+                        <option value="">Seleccionar grupo...</option>
+                        {eventGroups.map(g => (
+                          <option key={g.id} value={g.id}>{g.title}</option>
+                        ))}
+                      </select>
+                    </>
+                  );
+                })()}
+                <p className="text-xs text-gray-600 mt-2">
+                  El evento aparecerá en ese grupo con un indicador de colaboración. También se agregará el link a tu página en el evento original.
+                </p>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCollabAcceptModal(false);
+                    setAcceptingCollab(null);
+                    setCollabAcceptGroupId('');
+                  }}
+                  className="flex-1 px-4 py-3 border border-gray-700 text-white hover:bg-gray-800 transition font-bold"
+                >
+                  CANCELAR
+                </button>
+                {page?.groups?.filter(g => g.type === 'eventos').length > 0 && (
+                  <button
+                    type="submit"
+                    className="flex-1 bg-green-700 text-white px-4 py-3 font-bold hover:bg-green-600 transition"
+                  >
+                    ACEPTAR
+                  </button>
+                )}
               </div>
             </form>
           </div>

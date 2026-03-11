@@ -39,13 +39,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $groups = $stmt->fetchAll();
 
         foreach ($groups as &$group) {
-            if($group['type']=='eventos') {
+            if ($group['type'] == 'eventos') {
                 $stmt = $db->prepare("SELECT *, (event_date <> '0000-00-00' AND event_date < CURDATE()) as event_due FROM links WHERE group_id = ? ORDER BY event_date, id");
+                $stmt->execute([$group['id']]);
+                $links = $stmt->fetchAll();
+
+                // Load collaborators for each event link
+                foreach ($links as &$link) {
+                    $collabStmt = $db->prepare('
+                        SELECT ec.id, ec.status, ec.collaborator_page_id,
+                            p.title as page_title, p.url_slug as page_slug, p.profile_image as page_image
+                        FROM event_collaborations ec
+                        JOIN pages p ON ec.collaborator_page_id = p.id
+                        WHERE ec.link_id = ?
+                        ORDER BY ec.created_at
+                    ');
+                    $collabStmt->execute([$link['id']]);
+                    $link['collaborations'] = $collabStmt->fetchAll(PDO::FETCH_ASSOC);
+                }
+                unset($link);
+                $group['links'] = $links;
+
+                // Load accepted collaborated events for this group (events from other pages)
+                $collabEvtStmt = $db->prepare("
+                    SELECT l.*, ec.id as collaboration_id, ec.requester_page_id,
+                        rp.title as source_page_title, rp.url_slug as source_page_slug, rp.profile_image as source_page_image,
+                        (l.event_date <> '0000-00-00' AND l.event_date < CURDATE()) as event_due
+                    FROM event_collaborations ec
+                    JOIN links l ON ec.link_id = l.id
+                    JOIN pages rp ON ec.requester_page_id = rp.id
+                    WHERE ec.collaborator_group_id = ? AND ec.status = 'accepted'
+                    ORDER BY l.event_date, l.id
+                ");
+                $collabEvtStmt->execute([$group['id']]);
+                $group['collaborated_events'] = $collabEvtStmt->fetchAll(PDO::FETCH_ASSOC);
+
             } else {
                 $stmt = $db->prepare("SELECT *, (event_date <> '0000-00-00' AND event_date < CURDATE()) as event_due FROM links WHERE group_id = ? ORDER BY position, id");
+                $stmt->execute([$group['id']]);
+                $group['links'] = $stmt->fetchAll();
             }
-            $stmt->execute([$group['id']]);
-            $group['links'] = $stmt->fetchAll();
         }
 
         $page['groups'] = $groups;

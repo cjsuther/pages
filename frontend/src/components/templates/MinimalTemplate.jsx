@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { trackEvent } from '../../utils/analytics';
 import FollowButton from '../FollowButton';
+import EventCollaborators from '../EventCollaborators';
 import { Users } from 'lucide-react';
 
 function MinimalTemplate({ page }) {
@@ -73,13 +74,13 @@ function MinimalTemplate({ page }) {
               </div>
             ) : group.type === 'eventos' ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {[...group.links].sort((a, b) => {
+                {[...(group.links || []), ...(group.collaborated_events || [])].sort((a, b) => {
                   const dateA = new Date(a.event_date + ' ' + (a.event_time || '00:00'));
                   const dateB = new Date(b.event_date + ' ' + (b.event_time || '00:00'));
                   return dateA - dateB;
-                })?.map((link) => (
+                }).map((link) => (
                   <div
-                    key={link.id}
+                    key={(link.is_collaborated ? 'c-' : '') + link.id}
                     onClick={() => {
                       setModalEvent(link);
                       trackEvent.event('view_event_modal', { event_title: link.text });
@@ -87,13 +88,11 @@ function MinimalTemplate({ page }) {
                     className="border pb-6 p-4 rounded cursor-pointer hover:shadow-lg transition"
                     style={{ borderColor: textColor + '20' }}
                   >
-                    {(
-                      <img
-                        src={link.image_url ?? 'https://images.pexels.com/photos/1190298/pexels-photo-1190298.jpeg?auto=compress&cs=tinysrgb&w=800'}
-                        alt={link.text}
-                        className="w-full h-48 object-cover mb-4 rounded"
-                      />
-                    )}
+                    <img
+                      src={link.image_url ?? 'https://images.pexels.com/photos/1190298/pexels-photo-1190298.jpeg?auto=compress&cs=tinysrgb&w=800'}
+                      alt={link.text}
+                      className="w-full h-48 object-cover mb-4 rounded"
+                    />
                     <h3 className="font-bold text-xl">{link.text}</h3>
                     {(link.event_date || link.event_time) && (
                       <p className="opacity-60 mt-1">
@@ -108,6 +107,7 @@ function MinimalTemplate({ page }) {
                             })}
                       </p>
                     )}
+                    <EventCollaborators event={link} currentPageId={page.id} color={page.primary_color || '#3b82f6'} />
                   </div>
                 ))}
               </div>
@@ -261,6 +261,8 @@ function MinimalTemplate({ page }) {
                   </p>
                 </div>
               )}
+
+              <EventCollaborators event={modalEvent} currentPageId={page.id} color="#000000" />
 
               {modalEvent.url && (
                 <a

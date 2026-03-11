@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../App';
 
 function NotificationBell() {
   const { token, apiUrl } = useContext(AuthContext);
+  const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -78,7 +80,12 @@ function NotificationBell() {
     if (!notification.is_read) {
       markAsRead([notification.id]);
     }
-    window.location.href = `/${notification.page_slug}`;
+    setShowDropdown(false);
+    if (notification.type === 'collaboration_request' || notification.type === 'collaboration_response') {
+      navigate(`/page/${notification.page_id}`);
+    } else {
+      window.location.href = `/${notification.page_slug}`;
+    }
   };
 
   const formatDate = (dateString) => {
@@ -151,6 +158,9 @@ function NotificationBell() {
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-gray-900 text-sm mb-1">
                         {notification.title}
+                        {notification.type === 'collaboration_request' && (
+                          <span className="ml-2 text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded font-normal">Colaboración</span>
+                        )}
                       </p>
                       <p className="text-sm text-gray-600 mb-2">
                         {notification.message}
@@ -159,6 +169,12 @@ function NotificationBell() {
                         <span>{notification.page_title}</span>
                         <span>•</span>
                         <span>{formatDate(notification.created_at)}</span>
+                        {(notification.type === 'collaboration_request' || notification.type === 'collaboration_response') && (
+                          <>
+                            <span>•</span>
+                            <span className="text-orange-600 font-medium">Ver editor →</span>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
