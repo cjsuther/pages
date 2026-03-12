@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import FollowButton from '../FollowButton';
 import EventCollaborators from '../EventCollaborators';
-import { Users } from 'lucide-react';
+import FollowersPopup from '../FollowersPopup';
+import RezonarBadge from '../RezonarBadge';
 
 function CondensedTemplate({ page }) {
   const [modalImage, setModalImage] = useState(null);
@@ -22,6 +23,7 @@ function CondensedTemplate({ page }) {
 
   return (
     <div className="min-h-screen" style={{ ...backgroundStyle, color: textColor }}>
+      <RezonarBadge />
       <div className="max-w-3xl mx-auto px-4 py-8 md:py-12">
         <header className="text-center mb-8 md:mb-12">
           {page.profile_image && (
@@ -37,10 +39,7 @@ function CondensedTemplate({ page }) {
             <p className="text-sm md:text-base opacity-70 max-w-xl mx-auto px-4">{page.description}</p>
           )}
           <div className="flex flex-col items-center gap-3 mt-4 md:mt-6">
-            <div className="flex items-center gap-2 text-sm opacity-70">
-              <Users className="w-4 h-4" />
-              <span>{page.follower_count || 0} {page.follower_count === 1 ? 'seguidor' : 'seguidores'}</span>
-            </div>
+            <FollowersPopup pageId={page.id} followerCount={page.follower_count || 0} />
             <FollowButton pageId={page.id} />
           </div>
         </header>

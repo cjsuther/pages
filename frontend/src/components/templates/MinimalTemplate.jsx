@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { trackEvent } from '../../utils/analytics';
 import FollowButton from '../FollowButton';
 import EventCollaborators from '../EventCollaborators';
-import { Users } from 'lucide-react';
+import FollowersPopup from '../FollowersPopup';
+import RezonarBadge from '../RezonarBadge';
 
 function MinimalTemplate({ page }) {
   const [modalImage, setModalImage] = useState(null);
@@ -24,6 +25,7 @@ function MinimalTemplate({ page }) {
 
   return (
     <div className="min-h-screen py-16 px-6" style={containerStyle}>
+      <RezonarBadge />
       <div className="max-w-2xl mx-auto space-y-16">
         {page.profile_image && (
           <div className="flex justify-center">
@@ -41,10 +43,7 @@ function MinimalTemplate({ page }) {
             <p className="text-lg opacity-70">{page.description}</p>
           )}
           <div className="flex flex-col items-center gap-3 mt-4">
-            <div className="flex items-center gap-2 text-sm opacity-70">
-              <Users className="w-4 h-4" />
-              <span>{page.follower_count || 0} {page.follower_count === 1 ? 'seguidor' : 'seguidores'}</span>
-            </div>
+            <FollowersPopup pageId={page.id} followerCount={page.follower_count || 0} />
             <FollowButton pageId={page.id} />
           </div>
         </div>

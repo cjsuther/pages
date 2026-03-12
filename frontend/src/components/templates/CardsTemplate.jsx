@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import FollowButton from '../FollowButton';
 import EventCollaborators from '../EventCollaborators';
-import { Users } from 'lucide-react';
+import FollowersPopup from '../FollowersPopup';
+import RezonarBadge from '../RezonarBadge';
 
 function CardsTemplate({ page }) {
   const [modalImage, setModalImage] = useState(null);
@@ -24,6 +25,7 @@ function CardsTemplate({ page }) {
 
   return (
     <div className="min-h-screen py-16 px-6" style={containerStyle}>
+      <RezonarBadge />
       <div className="max-w-5xl mx-auto">
         <div className="text-center mb-16">
           {page.profile_image && (
@@ -38,10 +40,7 @@ function CardsTemplate({ page }) {
             <p className="text-xl opacity-70 max-w-2xl mx-auto">{page.description}</p>
           )}
           <div className="flex flex-col items-center gap-3 mt-6">
-            <div className="flex items-center gap-2 text-sm opacity-70">
-              <Users className="w-4 h-4" />
-              <span>{page.follower_count || 0} {page.follower_count === 1 ? 'seguidor' : 'seguidores'}</span>
-            </div>
+            <FollowersPopup pageId={page.id} followerCount={page.follower_count || 0} />
             <FollowButton pageId={page.id} />
           </div>
         </div>

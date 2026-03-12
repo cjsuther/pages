@@ -5,6 +5,7 @@ import { AuthContext } from '../App';
 import { Search, MapPin, Calendar, FileSymlink, ExternalLink, Users, ArrowUpDown, Map, Grid } from 'lucide-react';
 import EventsMap from '../components/EventsMap';
 import FollowButton from '../components/FollowButton';
+import FollowersPopup from '../components/FollowersPopup';
 import Navigation from '../components/Navigation';
 import { handleApiResponse } from '../utils/apiHandler';
 
@@ -384,10 +385,7 @@ function Home() {
                             <h3 className="text-2xl font-bold mb-2">{page.title}</h3>
                           </a>
                           <div className="flex items-center justify-between pt-4 border-t border-gray-800 mt-4">
-                            <div className="flex items-center gap-2 text-sm text-gray-500">
-                              <Users className="w-4 h-4" />
-                              <span>{page.follower_count || 0} {page.follower_count === 1 ? 'seguidor' : 'seguidores'}</span>
-                            </div>
+                            <FollowersPopup pageId={page.id} followerCount={page.follower_count || 0} className="text-gray-500" />
                             {token && <FollowButton pageId={page.id} />}
                           </div>
                         </div>
@@ -471,10 +469,7 @@ function Home() {
                       </p>
                     </a>
                     <div className="flex items-center justify-between pt-4 border-t border-gray-800 mt-4">
-                      <div className="flex items-center gap-2 text-sm text-gray-500">
-                        <Users className="w-4 h-4" />
-                        <span>{page.follower_count || 0} {page.follower_count === 1 ? 'seguidor' : 'seguidores'}</span>
-                      </div>
+                      <FollowersPopup pageId={page.id} followerCount={page.follower_count || 0} className="text-gray-500" />
                       <FollowButton pageId={page.id} />
                     </div>
                   </div>

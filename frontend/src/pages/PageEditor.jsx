@@ -711,26 +711,13 @@ function PageEditor() {
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-6">
             <div>
-              <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">COLOR PRIMARIO</label>
+              <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">COLOR DE TEXTO</label>
               <input
                 type="color"
-                value={page.primary_color}
+                value={page.text_color}
                 onChange={(e) => {
-                  setPage({ ...page, primary_color: e.target.value });
-                  updatePage({ primary_color: e.target.value });
-                }}
-                className="w-full h-10 rounded-lg cursor-pointer"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">COLOR SECUNDARIO</label>
-              <input
-                type="color"
-                value={page.secondary_color}
-                onChange={(e) => {
-                  setPage({ ...page, secondary_color: e.target.value });
-                  updatePage({ secondary_color: e.target.value });
+                  setPage({ ...page, text_color: e.target.value });
+                  updatePage({ text_color: e.target.value });
                 }}
                 className="w-full h-10 rounded-lg cursor-pointer"
               />
@@ -750,17 +737,18 @@ function PageEditor() {
             </div>
 
             <div>
-              <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">COLOR DE TEXTO</label>
+              <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">COLOR ELEMENTOS</label>
               <input
                 type="color"
-                value={page.text_color}
+                value={page.primary_color}
                 onChange={(e) => {
-                  setPage({ ...page, text_color: e.target.value });
-                  updatePage({ text_color: e.target.value });
+                  setPage({ ...page, primary_color: e.target.value });
+                  updatePage({ primary_color: e.target.value });
                 }}
                 className="w-full h-10 rounded-lg cursor-pointer"
               />
             </div>
+            
           </div>
 
           <div className="mt-8 pt-8 border-t border-gray-800">

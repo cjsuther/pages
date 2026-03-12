@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../App';
 import { Link } from 'react-router-dom';
+import FollowersPopup from './FollowersPopup';
 
 function PageSearch() {
   const { token, apiUrl } = useContext(AuthContext);
@@ -147,9 +148,7 @@ function PageSearch() {
                     <p className="text-sm text-gray-400 mt-2">{pg.description}</p>
                   )}
                   {pg.follower_count !== undefined && (
-                    <p className="text-xs text-gray-500 mt-2">
-                      {pg.follower_count} {pg.follower_count === 1 ? 'seguidor' : 'seguidores'}
-                    </p>
+                    <FollowersPopup pageId={pg.id} followerCount={pg.follower_count} className="text-gray-500 mt-2" />
                   )}
                 </div>
                 <button

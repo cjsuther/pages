@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import FollowButton from '../FollowButton';
 import EventCollaborators from '../EventCollaborators';
-import { Users } from 'lucide-react';
+import FollowersPopup from '../FollowersPopup';
+import RezonarBadge from '../RezonarBadge';
 
 function ModernTemplate({ page }) {
   const [modalImage, setModalImage] = useState(null);
@@ -24,6 +25,7 @@ function ModernTemplate({ page }) {
 
   return (
     <div className="min-h-screen" style={containerStyle}>
+      <RezonarBadge />
       <div className="max-w-7xl mx-auto px-6 py-20">
         <div className="grid md:grid-cols-12 gap-12">
           <div className="md:col-span-4">
@@ -41,10 +43,7 @@ function ModernTemplate({ page }) {
                   <p className="text-lg opacity-70 leading-relaxed">{page.description}</p>
                 )}
                 <div className="flex flex-col gap-3 mt-6">
-                  <div className="flex items-center gap-2 text-sm opacity-70">
-                    <Users className="w-4 h-4" />
-                    <span>{page.follower_count || 0} {page.follower_count === 1 ? 'seguidor' : 'seguidores'}</span>
-                  </div>
+                  <FollowersPopup pageId={page.id} followerCount={page.follower_count || 0} />
                   <FollowButton pageId={page.id} />
                 </div>
               </div>
