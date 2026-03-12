@@ -285,7 +285,7 @@ function Home() {
                 {events.map((event) => (
                   <Link
                     key={event.id}
-                    to={`/${event.page_slug}`}
+                    to={`/evento/${event.id}`}
                     className="bg-gray-900 border border-gray-800 overflow-hidden hover:border-gray-700 transition group"
                   >
                     <img
@@ -401,9 +401,7 @@ function Home() {
                       {searchResults.filter(r => r.type === 'event').map((event) => (
                         <a
                           key={event.id}
-                          href={`/${event.slug}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                          href={`/evento/${event.id}`}
                           className="bg-gray-900 border border-gray-800 overflow-hidden hover:border-gray-700 transition group"
                         >
                           <img

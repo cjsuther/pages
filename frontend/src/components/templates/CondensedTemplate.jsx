@@ -3,6 +3,7 @@ import FollowButton from '../FollowButton';
 import EventCollaborators from '../EventCollaborators';
 import FollowersPopup from '../FollowersPopup';
 import RezonarBadge from '../RezonarBadge';
+import { ExternalLink } from 'lucide-react';
 
 function CondensedTemplate({ page }) {
   const [modalImage, setModalImage] = useState(null);
@@ -89,6 +90,7 @@ function CondensedTemplate({ page }) {
                       onClick={() => setModalEvent(link)}
                       className="flex items-center gap-3 p-3 rounded-lg hover:bg-black hover:bg-opacity-5 transition cursor-pointer"
                     >
+
                       {link.image_url && (
                         <img
                           src={link.image_url}
@@ -113,6 +115,14 @@ function CondensedTemplate({ page }) {
                         )}
                         <EventCollaborators event={link} currentPageId={page.id} color={primaryColor} />
                       </div>
+                      <a
+                        href={`/evento/${link.id}`}
+                        onClick={e => e.stopPropagation()}
+                        className="flex-shrink-0 p-1.5 opacity-40 hover:opacity-80 transition"
+                        title="Ver enlace directo"
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                      </a>
                     </div>
                   ))}
                 </div>

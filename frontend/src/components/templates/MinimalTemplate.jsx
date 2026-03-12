@@ -4,6 +4,7 @@ import FollowButton from '../FollowButton';
 import EventCollaborators from '../EventCollaborators';
 import FollowersPopup from '../FollowersPopup';
 import RezonarBadge from '../RezonarBadge';
+import { ExternalLink } from 'lucide-react';
 
 function MinimalTemplate({ page }) {
   const [modalImage, setModalImage] = useState(null);
@@ -84,9 +85,17 @@ function MinimalTemplate({ page }) {
                       setModalEvent(link);
                       trackEvent.event('view_event_modal', { event_title: link.text });
                     }}
-                    className="border pb-6 p-4 rounded cursor-pointer hover:shadow-lg transition"
+                    className="border pb-6 p-4 rounded cursor-pointer hover:shadow-lg transition relative"
                     style={{ borderColor: textColor + '20' }}
                   >
+                    <a
+                      href={`/evento/${link.id}`}
+                      onClick={e => e.stopPropagation()}
+                      className="absolute top-2 right-2 p-1.5 rounded-full bg-black bg-opacity-40 text-white hover:bg-opacity-70 transition z-10"
+                      title="Ver enlace directo"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
                     <img
                       src={link.image_url ?? 'https://images.pexels.com/photos/1190298/pexels-photo-1190298.jpeg?auto=compress&cs=tinysrgb&w=800'}
                       alt={link.text}

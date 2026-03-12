@@ -57,7 +57,8 @@ try {
         'token' => $token,
         'user' => [
             'id' => $userId,
-            'email' => $email
+            'email' => $email,
+            'name' => null
         ]
     ]);
 

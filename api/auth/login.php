@@ -22,7 +22,7 @@ try {
     $database = new Database();
     $db = $database->connect();
 
-    $stmt = $db->prepare('SELECT id, email, password FROM users WHERE email = ?');
+    $stmt = $db->prepare('SELECT id, email, name, password FROM users WHERE email = ?');
     $stmt->execute([$data['email']]);
     $user = $stmt->fetch();
 
@@ -38,7 +38,8 @@ try {
         'token' => $token,
         'user' => [
             'id' => $user['id'],
-            'email' => $user['email']
+            'email' => $user['email'],
+            'name' => $user['name']
         ]
     ]);
 

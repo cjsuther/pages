@@ -187,12 +187,12 @@ function EventsMap({ events, userLocation, onEventClick }) {
                     📍 ${event.event_address}
                   </p>
                 ` : ''}
-                <button
-                  onclick="window.open('/${event.page_slug}', '_blank')"
-                  style="background: #10b981; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 13px; margin-top: 8px; width: 100%;"
+                <a
+                  href="/evento/${event.id}"
+                  style="display: block; background: #10b981; color: white; text-decoration: none; text-align: center; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 13px; margin-top: 8px;"
                 >
                   Ver evento
-                </button>
+                </a>
               </div>
             </div>
           `
@@ -201,8 +201,7 @@ function EventsMap({ events, userLocation, onEventClick }) {
         const eventsHtml = locationEvents.map(event => {
           const imageUrl = event.image_url || 'https://images.pexels.com/photos/1190298/pexels-photo-1190298.jpeg?auto=compress&cs=tinysrgb&w=200';
           return `
-            <div style="padding: 12px; border-bottom: 1px solid #e5e7eb; cursor: pointer; display: flex; gap: 12px; align-items: center;"
-                 onclick="window.open('/${event.page_slug}', '_blank')">
+            <a href="/evento/${event.id}" style="padding: 12px; border-bottom: 1px solid #e5e7eb; cursor: pointer; display: flex; gap: 12px; align-items: center; text-decoration: none; color: inherit;">
               <img
                 src="${imageUrl}"
                 alt="${event.text}"
@@ -222,7 +221,7 @@ function EventsMap({ events, userLocation, onEventClick }) {
                   })}
                 </p>
               </div>
-            </div>
+            </a>
           `;
         }).join('');
 

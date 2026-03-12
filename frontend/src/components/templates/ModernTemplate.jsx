@@ -3,6 +3,7 @@ import FollowButton from '../FollowButton';
 import EventCollaborators from '../EventCollaborators';
 import FollowersPopup from '../FollowersPopup';
 import RezonarBadge from '../RezonarBadge';
+import { ExternalLink } from 'lucide-react';
 
 function ModernTemplate({ page }) {
   const [modalImage, setModalImage] = useState(null);
@@ -88,9 +89,17 @@ function ModernTemplate({ page }) {
                       <div
                         key={(link.is_collaborated ? 'c-' : '') + link.id}
                         onClick={() => setModalEvent(link)}
-                        className="border-l-4 pl-6 py-4 cursor-pointer hover:bg-white hover:bg-opacity-5 transition-all rounded-r-lg"
+                        className="border-l-4 pl-6 py-4 cursor-pointer hover:bg-white hover:bg-opacity-5 transition-all rounded-r-lg relative"
                         style={{ borderColor: primaryColor }}
                       >
+                        <a
+                          href={`/evento/${link.id}`}
+                          onClick={e => e.stopPropagation()}
+                          className="absolute top-2 right-2 p-1.5 rounded-full bg-white bg-opacity-10 hover:bg-opacity-20 transition z-10"
+                          title="Ver enlace directo"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
                         <img
                           src={link.image_url ?? 'https://images.pexels.com/photos/1190298/pexels-photo-1190298.jpeg?auto=compress&cs=tinysrgb&w=800'}
                           alt={link.text}

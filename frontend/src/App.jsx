@@ -9,9 +9,10 @@ import Pages from './pages/Pages';
 import MyPages from './pages/MyPages';
 import PageEditor from './pages/PageEditor';
 import PublicPage from './pages/PublicPage';
+import EventDetail from './pages/EventDetail';
 
-const API_URL = 'http://localhost:8000/api';
-//const API_URL = 'https://rezon.ar/api';
+//const API_URL = 'http://localhost:8000/api';
+const API_URL = 'https://rezon.ar/api';
 
 export const AuthContext = React.createContext(null);
 
@@ -45,9 +46,14 @@ function App() {
     setUser(null);
   };
 
+  const updateUser = (updatedUser) => {
+    localStorage.setItem('user', JSON.stringify(updatedUser));
+    setUser(updatedUser);
+  };
+
   return (
     <HelmetProvider>
-      <AuthContext.Provider value={{ token, user, login, logout, apiUrl: API_URL }}>
+      <AuthContext.Provider value={{ token, user, login, logout, updateUser, apiUrl: API_URL }}>
         <BrowserRouter>
           <AppRoutes />
           <Routes>
@@ -57,6 +63,7 @@ function App() {
             <Route path="/pages" element={token ? <Pages /> : <Navigate to="/login" />} />
             <Route path="/my-pages" element={token ? <MyPages /> : <Navigate to="/login" />} />
             <Route path="/page/:id" element={token ? <PageEditor /> : <Navigate to="/login" />} />
+            <Route path="/evento/:id" element={<EventDetail />} />
             <Route path="/:slug" element={<PublicPage />} />
           </Routes>
         </BrowserRouter>

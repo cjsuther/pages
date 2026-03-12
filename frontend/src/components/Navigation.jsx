@@ -1,12 +1,104 @@
-import React, { useContext, useState } from 'react';
+import React, { useContext, useState, useRef, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, X } from 'lucide-react';
+import { Menu, X, ChevronDown, Check } from 'lucide-react';
 import { AuthContext } from '../App';
 import NotificationBell from './NotificationBell';
 import LocationIndicator from './LocationIndicator';
 
+function ProfileMenu() {
+  const { user, token, logout, updateUser, apiUrl } = useContext(AuthContext);
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState(user?.name || '');
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    setName(user?.name || '');
+  }, [user?.name]);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch(`${apiUrl}/users/profile.php`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ name: name.trim() })
+      });
+      const data = await res.json();
+      if (data.success) {
+        updateUser({ ...user, name: data.user.name });
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2000);
+      }
+    } catch (err) {
+      console.error('Error updating name:', err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const displayLabel = user?.name || user?.email;
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-1 text-gray-400 hover:text-white transition"
+      >
+        <span className="text-sm font-medium">{displayLabel}</span>
+        <ChevronDown className="w-3.5 h-3.5" />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 mt-2 w-72 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-50 p-4">
+          <p className="text-xs text-gray-500 mb-1">Email</p>
+          <p className="text-sm text-gray-300 mb-4 truncate">{user?.email}</p>
+
+          <p className="text-xs text-gray-500 mb-1">Nombre</p>
+          <input
+            type="text"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleSave()}
+            placeholder="Tu nombre"
+            className="w-full bg-gray-800 border border-gray-700 text-white text-sm px-3 py-2 rounded focus:border-gray-500 focus:outline-none mb-3"
+          />
+
+          <div className="flex items-center justify-between">
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="flex items-center gap-1.5 px-4 py-1.5 bg-white text-black text-sm font-bold rounded hover:bg-gray-200 transition disabled:opacity-50"
+            >
+              {saved ? <><Check className="w-3.5 h-3.5" /> Guardado</> : saving ? 'Guardando...' : 'Guardar'}
+            </button>
+            <button
+              onClick={() => { logout(); setOpen(false); }}
+              className="text-sm text-gray-500 hover:text-white transition"
+            >
+              Cerrar sesión
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Navigation() {
-  const { token, user, logout } = useContext(AuthContext);
+  const { token } = useContext(AuthContext);
   const location = useLocation();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
@@ -55,12 +147,7 @@ function Navigation() {
               <>
                 <LocationIndicator />
                 <NotificationBell />
-                <div className="text-right">
-                  <p className="text-gray-500 text-sm font-medium">{user?.email}</p>
-                </div>
-                <button onClick={logout} className="text-gray-400 hover:text-white transition font-medium">
-                  Salir de la Cuenta
-                </button>
+                <ProfileMenu />
               </>
             ) : (
               <Link to="/login" className="text-gray-300 hover:text-white transition font-medium">
@@ -113,16 +200,7 @@ function Navigation() {
               <NotificationBell />
             </div>
             <div className="pt-2">
-              <p className="text-gray-500 text-sm font-medium mb-3">{user?.email}</p>
-              <button
-                onClick={() => {
-                  logout();
-                  setIsMenuOpen(false);
-                }}
-                className="text-gray-400 hover:text-white transition font-medium"
-              >
-                Salir de la Cuenta
-              </button>
+              <ProfileMenu />
             </div>
           </div>
         )}
