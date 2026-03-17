@@ -11,8 +11,8 @@ import PageEditor from './pages/PageEditor';
 import PublicPage from './pages/PublicPage';
 import EventDetail from './pages/EventDetail';
 
-//const API_URL = 'http://localhost:8000/api';
-const API_URL = 'https://rezon.ar/api';
+const API_URL = 'http://localhost:8000/api';
+//const API_URL = 'https://rezon.ar/api';
 
 export const AuthContext = React.createContext(null);
 

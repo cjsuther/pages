@@ -2,6 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../App';
 import Navigation from '../components/Navigation';
+import PageQRDownload from '../components/PageQRDownload';
 
 function MyPages() {
   const { token, apiUrl } = useContext(AuthContext);
@@ -124,9 +125,12 @@ function MyPages() {
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
             {pages.map((page) => (
               <div key={page.id} className="bg-gray-900 border border-gray-800 p-8 hover:border-gray-700 transition group relative">
-                {pendingCollabPageIds.has(page.id) && (
-                  <span className="absolute top-4 right-4 w-3 h-3 bg-red-500 rounded-full" title="Tenés colaboraciones pendientes para aprobar" />
-                )}
+                <div className="absolute top-4 right-4 flex items-center gap-2">
+                  <PageQRDownload page={page} />
+                  {pendingCollabPageIds.has(page.id) && (
+                    <span className="w-3 h-3 bg-red-500 rounded-full" title="Tenés colaboraciones pendientes para aprobar" />
+                  )}
+                </div>
                 <h3 className="text-2xl font-bold mb-4">{page.title}</h3>
                 <p className="text-gray-400 mb-8 leading-relaxed">{page.description}</p>
                 <div className="mb-8">
