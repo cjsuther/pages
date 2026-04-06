@@ -21,19 +21,6 @@ function AppRoutes() {
   return null;
 }
 
-const SSO_ALLOWED_REDIRECTS = ['entradas.rezon.ar'];
-
-function doSSOHandoff(redirect, token) {
-  fetch('/api/auth/sso-init.php', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ token, redirect }),
-    redirect: 'follow'
-  }).then(response => {
-    if (response.redirected) window.location.href = response.url;
-  }).catch(err => console.error('SSO error:', err));
-}
-
 function App() {
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [user, setUser] = useState(null);
@@ -42,32 +29,6 @@ function App() {
     if (token) {
       const userData = JSON.parse(localStorage.getItem('user') || 'null');
       setUser(userData);
-    }
-  }, [token]);
-
-  // SSO Bridge: detectar ?sso_redirect= en la URL al cargar
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const redirectParam = params.get('sso_redirect');
-    if (redirectParam && SSO_ALLOWED_REDIRECTS.includes(redirectParam)) {
-      const currentToken = localStorage.getItem('token');
-      if (currentToken) {
-        doSSOHandoff(redirectParam, currentToken);
-      } else {
-        sessionStorage.setItem('sso_pending_redirect', redirectParam);
-        window.location.href = '/login';
-      }
-    }
-  }, []);
-
-  // SSO Bridge: completar redirect pendiente luego del login
-  useEffect(() => {
-    if (token) {
-      const pendingRedirect = sessionStorage.getItem('sso_pending_redirect');
-      if (pendingRedirect && SSO_ALLOWED_REDIRECTS.includes(pendingRedirect)) {
-        sessionStorage.removeItem('sso_pending_redirect');
-        doSSOHandoff(pendingRedirect, token);
-      }
     }
   }, [token]);
 

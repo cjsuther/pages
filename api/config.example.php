@@ -31,10 +31,6 @@ define('VAPID_SUBJECT', 'mailto:tu-email@ejemplo.com');
 
 define('CRON_SECRET_KEY', 'CAMBIA_ESTO_POR_UNA_CLAVE_SEGURA_PARA_CRON');
 
-// Secreto compartido con entradas.rezon.ar para validar requests SSO server-to-server
-// Generar con: bin2hex(random_bytes(32))
-define('SSO_SECRET', 'REEMPLAZAR_CON_STRING_ALEATORIO_SEGURO');
-
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
