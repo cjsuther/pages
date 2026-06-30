@@ -16,8 +16,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     }
 
     try {
-        $stmt = $db->prepare('SELECT * FROM pages WHERE user_id = ? ORDER BY created_at DESC');
-        $stmt->execute([$user['user_id']]);
+        $stmt = $db->prepare('
+            SELECT p.*, (p.user_id = ?) AS is_owner
+            FROM pages p
+            WHERE p.user_id = ?
+               OR EXISTS (
+                   SELECT 1 FROM page_admins pa
+                   WHERE pa.page_id = p.id AND pa.user_id = ? AND pa.status = "accepted"
+               )
+            ORDER BY p.created_at DESC
+        ');
+        $stmt->execute([$user['user_id'], $user['user_id'], $user['user_id']]);
         $pages = $stmt->fetchAll();
 
         echo json_encode(['pages' => $pages]);

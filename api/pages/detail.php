@@ -3,6 +3,7 @@
 require_once '../config.php';
 require_once '../Database.php';
 require_once '../JWT.php';
+require_once '../PageAccess.php';
 
 $database = new Database();
 $db = $database->connect();
@@ -24,15 +25,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     }
 
     try {
-        $stmt = $db->prepare('SELECT * FROM pages WHERE id = ? AND user_id = ?');
-        $stmt->execute([$pageId, $user['user_id']]);
-        $page = $stmt->fetch();
-
-        if (!$page) {
+        if (!PageAccess::canManage($db, $pageId, $user['user_id'])) {
             http_response_code(404);
             echo json_encode(['error' => 'Page not found']);
             exit();
         }
+
+        $stmt = $db->prepare('SELECT * FROM pages WHERE id = ?');
+        $stmt->execute([$pageId]);
+        $page = $stmt->fetch();
 
         $stmt = $db->prepare('SELECT * FROM link_groups WHERE page_id = ? ORDER BY position, id');
         $stmt->execute([$pageId]);
@@ -101,9 +102,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     $data = json_decode(file_get_contents('php://input'), true);
 
     try {
-        $stmt = $db->prepare('SELECT id FROM pages WHERE id = ? AND user_id = ?');
-        $stmt->execute([$pageId, $user['user_id']]);
-        if (!$stmt->fetch()) {
+        if (!PageAccess::canManage($db, $pageId, $user['user_id'])) {
             http_response_code(404);
             echo json_encode(['error' => 'Page not found']);
             exit();

@@ -3,6 +3,7 @@
 require_once '../config.php';
 require_once '../Database.php';
 require_once '../JWT.php';
+require_once '../PageAccess.php';
 
 $database = new Database();
 $db = $database->connect();
@@ -26,14 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
     $data = json_decode(file_get_contents('php://input'), true);
 
     try {
-        $stmt = $db->prepare('
-            SELECT lg.id
-            FROM link_groups lg
-            JOIN pages p ON lg.page_id = p.id
-            WHERE lg.id = ? AND p.user_id = ?
-        ');
-        $stmt->execute([$groupId, $user['user_id']]);
-        if (!$stmt->fetch()) {
+        if (!PageAccess::canManageGroup($db, $groupId, $user['user_id'])) {
             http_response_code(404);
             echo json_encode(['error' => 'Group not found']);
             exit();
@@ -79,18 +73,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
 
 } elseif ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
     try {
-        $stmt = $db->prepare('
-            DELETE lg FROM link_groups lg
-            JOIN pages p ON lg.page_id = p.id
-            WHERE lg.id = ? AND p.user_id = ?
-        ');
-        $stmt->execute([$groupId, $user['user_id']]);
-
-        if ($stmt->rowCount() === 0) {
+        if (!PageAccess::canManageGroup($db, $groupId, $user['user_id'])) {
             http_response_code(404);
             echo json_encode(['error' => 'Group not found']);
             exit();
         }
+
+        $stmt = $db->prepare('DELETE FROM link_groups WHERE id = ?');
+        $stmt->execute([$groupId]);
 
         echo json_encode(['message' => 'Group deleted successfully']);
 

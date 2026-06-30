@@ -7,7 +7,7 @@ import { MoreVertical } from 'lucide-react';
 
 function PageEditor() {
   const { id } = useParams();
-  const { token, apiUrl } = useContext(AuthContext);
+  const { token, apiUrl, user } = useContext(AuthContext);
   const navigate = useNavigate();
   const [page, setPage] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -47,6 +47,16 @@ function PageEditor() {
   const [pageSearchResults, setPageSearchResults] = useState([]);
   const [searchingPages, setSearchingPages] = useState(false);
 
+  // Page admins state
+  const [admins, setAdmins] = useState([]);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [adminError, setAdminError] = useState('');
+  const [adminMsg, setAdminMsg] = useState('');
+  const [invitingAdmin, setInvitingAdmin] = useState(false);
+
+  // ¿El usuario actual es el dueño de la página? (gestionar admins es solo del dueño)
+  const isOwner = page && user && Number(page.user_id) === Number(user.id);
+
   useEffect(() => {
     fetchPage();
   }, [id]);
@@ -54,6 +64,61 @@ function PageEditor() {
   useEffect(() => {
     if (page) loadPendingCollaborations();
   }, [page?.id]);
+
+  useEffect(() => {
+    if (isOwner) loadAdmins();
+  }, [isOwner, page?.id]);
+
+  const loadAdmins = async () => {
+    try {
+      const response = await fetch(`${apiUrl}/admins/index.php?page_id=${id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setAdmins(data.admins || []);
+      }
+    } catch (err) {
+      console.error('Error loading admins:', err);
+    }
+  };
+
+  const inviteAdmin = async (e) => {
+    e.preventDefault();
+    setAdminError('');
+    setAdminMsg('');
+    if (!inviteEmail.trim()) return;
+    setInvitingAdmin(true);
+    try {
+      const response = await fetch(`${apiUrl}/admins/index.php`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ page_id: Number(id), email: inviteEmail.trim() })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Error al invitar');
+      setInviteEmail('');
+      setAdminMsg('Invitación enviada a ' + (data.admin?.user_email || ''));
+      loadAdmins();
+    } catch (err) {
+      setAdminError(err.message);
+    } finally {
+      setInvitingAdmin(false);
+    }
+  };
+
+  const removeAdmin = async (adminId) => {
+    if (!confirm('¿Quitar a este administrador?')) return;
+    try {
+      await fetch(`${apiUrl}/admins/detail.php?id=${adminId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      loadAdmins();
+    } catch (err) {
+      console.error('Error removing admin:', err);
+    }
+  };
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -812,6 +877,60 @@ function PageEditor() {
             </div>
           </div>
         </div>
+
+        {isOwner && (
+          <div className="bg-gray-900 border border-gray-800 p-8 mb-8">
+            <h2 className="text-2xl font-black mb-2 tracking-tight">ADMINISTRADORES</h2>
+            <p className="text-sm text-gray-500 mb-6">
+              Invitá a otros usuarios (por email) a administrar esta página. Pueden editar contenido y ajustes, pero no borrar la página ni gestionar administradores.
+            </p>
+
+            <form onSubmit={inviteAdmin} className="flex flex-col sm:flex-row gap-3 mb-4">
+              <input
+                type="email"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                placeholder="email@ejemplo.com"
+                className="flex-1 px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+                required
+              />
+              <button
+                type="submit"
+                disabled={invitingAdmin}
+                className="bg-white text-black px-6 py-3 font-bold hover:bg-gray-200 transition disabled:opacity-50"
+              >
+                {invitingAdmin ? 'INVITANDO...' : 'INVITAR'}
+              </button>
+            </form>
+
+            {adminError && <p className="text-red-400 text-sm mb-4">{adminError}</p>}
+            {adminMsg && <p className="text-emerald-400 text-sm mb-4">{adminMsg}</p>}
+
+            {admins.length === 0 ? (
+              <p className="text-gray-600 text-sm">Todavía no invitaste a nadie.</p>
+            ) : (
+              <div className="space-y-2">
+                {admins.map((a) => (
+                  <div key={a.id} className="flex items-center justify-between bg-black border border-gray-800 px-4 py-3">
+                    <div>
+                      <span className="font-medium text-white">{a.user_name || a.user_email}</span>
+                      {a.user_name && <span className="text-gray-500 text-sm"> · {a.user_email}</span>}
+                      <span className={`ml-3 px-2 py-0.5 text-xs rounded-full ${a.status === 'accepted' ? 'bg-emerald-900 text-emerald-200' : 'bg-yellow-900 text-yellow-200'}`}>
+                        {a.status === 'accepted' ? 'Administrador' : 'Pendiente'}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => removeAdmin(a.id)}
+                      className="text-red-400 hover:text-red-300 text-sm font-bold transition"
+                    >
+                      {a.status === 'accepted' ? 'QUITAR' : 'CANCELAR'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {pendingCollaborations.filter(c => c.collaborator_page_id == id).length > 0 && (
           <div className="bg-gray-900 border border-orange-800 p-8 mb-8">

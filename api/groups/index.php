@@ -3,6 +3,7 @@
 require_once '../config.php';
 require_once '../Database.php';
 require_once '../JWT.php';
+require_once '../PageAccess.php';
 
 $database = new Database();
 $db = $database->connect();
@@ -24,9 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     try {
-        $stmt = $db->prepare('SELECT id FROM pages WHERE id = ? AND user_id = ?');
-        $stmt->execute([$data['page_id'], $user['user_id']]);
-        if (!$stmt->fetch()) {
+        if (!PageAccess::canManage($db, $data['page_id'], $user['user_id'])) {
             http_response_code(404);
             echo json_encode(['error' => 'Page not found']);
             exit();

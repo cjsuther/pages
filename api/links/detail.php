@@ -3,6 +3,7 @@
 require_once '../config.php';
 require_once '../Database.php';
 require_once '../JWT.php';
+require_once '../PageAccess.php';
 
 $database = new Database();
 $db = $database->connect();
@@ -26,20 +27,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
     $data = json_decode(file_get_contents('php://input'), true);
 
     try {
-        $stmt = $db->prepare('
-            SELECT l.id, lg.type
-            FROM links l
-            JOIN link_groups lg ON l.group_id = lg.id
-            JOIN pages p ON lg.page_id = p.id
-            WHERE l.id = ? AND p.user_id = ?
-        ');
-        $stmt->execute([$linkId, $user['user_id']]);
-        $linkData = $stmt->fetch();
-        if (!$linkData) {
+        if (!PageAccess::canManageLink($db, $linkId, $user['user_id'])) {
             http_response_code(404);
             echo json_encode(['error' => 'Link not found']);
             exit();
         }
+
+        $stmt = $db->prepare('
+            SELECT l.id, lg.type
+            FROM links l
+            JOIN link_groups lg ON l.group_id = lg.id
+            WHERE l.id = ?
+        ');
+        $stmt->execute([$linkId]);
+        $linkData = $stmt->fetch();
 
         if ($linkData['type'] === 'eventos') {
             $stmt = $db->prepare('SELECT event_latitude, event_longitude FROM links WHERE id = ?');
@@ -128,19 +129,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
 
 } elseif ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
     try {
-        $stmt = $db->prepare('
-            DELETE l FROM links l
-            JOIN link_groups lg ON l.group_id = lg.id
-            JOIN pages p ON lg.page_id = p.id
-            WHERE l.id = ? AND p.user_id = ?
-        ');
-        $stmt->execute([$linkId, $user['user_id']]);
-
-        if ($stmt->rowCount() === 0) {
+        if (!PageAccess::canManageLink($db, $linkId, $user['user_id'])) {
             http_response_code(404);
             echo json_encode(['error' => 'Link not found']);
             exit();
         }
+
+        $stmt = $db->prepare('DELETE FROM links WHERE id = ?');
+        $stmt->execute([$linkId]);
 
         echo json_encode(['message' => 'Link deleted successfully']);
 

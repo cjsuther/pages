@@ -3,6 +3,7 @@
 require_once '../config.php';
 require_once '../Database.php';
 require_once '../JWT.php';
+require_once '../PageAccess.php';
 
 $database = new Database();
 $db = $database->connect();
@@ -24,19 +25,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     try {
-        $stmt = $db->prepare('
-            SELECT lg.id, lg.type
-            FROM link_groups lg
-            JOIN pages p ON lg.page_id = p.id
-            WHERE lg.id = ? AND p.user_id = ?
-        ');
-        $stmt->execute([$data['group_id'], $user['user_id']]);
-        $group = $stmt->fetch();
-        if (!$group) {
+        if (!PageAccess::canManageGroup($db, $data['group_id'], $user['user_id'])) {
             http_response_code(404);
             echo json_encode(['error' => 'Group not found']);
             exit();
         }
+
+        $stmt = $db->prepare('SELECT id, type FROM link_groups WHERE id = ?');
+        $stmt->execute([$data['group_id']]);
+        $group = $stmt->fetch();
 
         if ($group['type'] === 'eventos') {
             if (empty($data['event_latitude']) || empty($data['event_longitude'])) {
