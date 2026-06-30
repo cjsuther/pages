@@ -22,6 +22,7 @@ $stmt = $db->prepare('
         l.description,
         l.image_url,
         l.url,
+        l.url_text,
         l.event_date,
         l.event_time,
         l.event_address,

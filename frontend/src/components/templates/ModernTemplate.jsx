@@ -289,7 +289,7 @@ function ModernTemplate({ page }) {
                   style={{ backgroundColor: primaryColor }}
                   onClick={(e) => e.stopPropagation()}
                 >
-                  Más información →
+                  {modalEvent.url_text || 'Más información →'}
                 </a>
               )}
               <EventCollaborators event={modalEvent} currentPageId={page.id} color={primaryColor} />

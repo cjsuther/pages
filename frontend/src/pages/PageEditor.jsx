@@ -22,6 +22,7 @@ function PageEditor() {
   const [newGroup, setNewGroup] = useState({ title: '', type: 'links' });
   const [newLink, setNewLink] = useState({
     url: '',
+    url_text: '',
     text: '',
     image_url: '',
     description: '',
@@ -338,6 +339,7 @@ function PageEditor() {
         setShowLinkModal(false);
         setNewLink({
           url: '',
+          url_text: '',
           text: '',
           image_url: '',
           description: '',
@@ -1386,18 +1388,40 @@ function PageEditor() {
                       required
                     />
                   </div>
-                  <div>
-                    <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">
-                      {selectedGroup.type === 'eventos' ? 'URL (OPCIONAL)' : 'URL'}
-                    </label>
-                    <input
-                      type="url"
-                      value={newLink.url}
-                      onChange={(e) => setNewLink({ ...newLink, url: e.target.value })}
-                      className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
-                      required={selectedGroup.type !== 'eventos'}
-                    />
-                  </div>
+                  {selectedGroup.type === 'eventos' ? (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">URL (OPCIONAL)</label>
+                        <input
+                          type="url"
+                          value={newLink.url}
+                          onChange={(e) => setNewLink({ ...newLink, url: e.target.value })}
+                          className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">TEXTO DEL BOTÓN (OPCIONAL)</label>
+                        <input
+                          type="text"
+                          value={newLink.url_text}
+                          onChange={(e) => setNewLink({ ...newLink, url_text: e.target.value })}
+                          placeholder="Más información"
+                          className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">URL</label>
+                      <input
+                        type="url"
+                        value={newLink.url}
+                        onChange={(e) => setNewLink({ ...newLink, url: e.target.value })}
+                        className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+                        required
+                      />
+                    </div>
+                  )}
                 </>
               )}
 
@@ -1569,18 +1593,40 @@ function PageEditor() {
                       required
                     />
                   </div>
-                  <div>
-                    <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">
-                      {selectedGroup.type === 'eventos' ? 'URL (OPCIONAL)' : 'URL'}
-                    </label>
-                    <input
-                      type="url"
-                      value={editingLink.url}
-                      onChange={(e) => setEditingLink({ ...editingLink, url: e.target.value })}
-                      className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
-                      required={selectedGroup.type !== 'eventos'}
-                    />
-                  </div>
+                  {selectedGroup.type === 'eventos' ? (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">URL (OPCIONAL)</label>
+                        <input
+                          type="url"
+                          value={editingLink.url}
+                          onChange={(e) => setEditingLink({ ...editingLink, url: e.target.value })}
+                          className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">TEXTO DEL BOTÓN (OPCIONAL)</label>
+                        <input
+                          type="text"
+                          value={editingLink.url_text || ''}
+                          onChange={(e) => setEditingLink({ ...editingLink, url_text: e.target.value })}
+                          placeholder="Más información"
+                          className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">URL</label>
+                      <input
+                        type="url"
+                        value={editingLink.url}
+                        onChange={(e) => setEditingLink({ ...editingLink, url: e.target.value })}
+                        className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+                        required
+                      />
+                    </div>
+                  )}
                 </>
               )}
 

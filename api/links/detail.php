@@ -64,6 +64,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
             $fields[] = 'url = ?';
             $values[] = $data['url'];
         }
+        if (array_key_exists('url_text', $data)) {
+            $fields[] = 'url_text = ?';
+            $values[] = ($data['url_text'] === '' || $data['url_text'] === null) ? null : $data['url_text'];
+        }
         if (isset($data['text'])) {
             $fields[] = 'text = ?';
             $values[] = $data['text'];

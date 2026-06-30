@@ -43,10 +43,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
-        $stmt = $db->prepare('INSERT INTO links (group_id, url, text, image_url, description, position, event_date, event_time, event_address, event_latitude, event_longitude, event_maps_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+        $stmt = $db->prepare('INSERT INTO links (group_id, url, url_text, text, image_url, description, position, event_date, event_time, event_address, event_latitude, event_longitude, event_maps_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
         $stmt->execute([
             $data['group_id'],
             $data['url'],
+            (isset($data['url_text']) && $data['url_text'] !== '') ? $data['url_text'] : null,
             $data['text'],
             $data['image_url'] ?? null,
             $data['description'] ?? null,

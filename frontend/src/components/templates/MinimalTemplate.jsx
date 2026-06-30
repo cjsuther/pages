@@ -280,7 +280,7 @@ function MinimalTemplate({ page }) {
                   className="inline-block mt-4 px-6 py-3 border-2 border-black font-bold hover:bg-black hover:text-white transition"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  Más información →
+                  {modalEvent.url_text || 'Más información →'}
                 </a>
               )}
             </div>

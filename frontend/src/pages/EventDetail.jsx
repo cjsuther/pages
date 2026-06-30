@@ -124,7 +124,7 @@ function EventDetail() {
             className="inline-flex items-center gap-2 mt-8 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded transition"
           >
             <ExternalLink className="w-4 h-4" />
-            Más información
+            {event.url_text || 'Más información'}
           </a>
         )}
       </main>
