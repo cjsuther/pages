@@ -3,6 +3,10 @@ api/vendor/
 
 # Config with credentials (copy from config.example.php)
 api/config.php
+api/config_prod.php
+
+# Local logs
+*.log
 
 # User uploads
 api/uploads/*
