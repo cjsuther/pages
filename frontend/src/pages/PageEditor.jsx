@@ -1368,7 +1368,7 @@ function PageEditor() {
       )}
 
       {showLinkModal && selectedGroup && (
-        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center p-4 z-50 overflow-y-auto">
+        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-start justify-center p-4 z-50 overflow-y-auto">
           <div className="bg-gray-900 border border-gray-800 max-w-lg w-full p-10 my-8">
             <h2 className="text-3xl font-black mb-8 text-white">
               {selectedGroup.type === 'galeria' ? 'NUEVA IMAGEN' : selectedGroup.type === 'eventos' ? 'NUEVO EVENTO' : 'NUEVO LINK'}
@@ -1573,7 +1573,7 @@ function PageEditor() {
       )}
 
       {showEditLinkModal && editingLink && selectedGroup && (
-        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center p-4 z-50 overflow-y-auto">
+        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-start justify-center p-4 z-50 overflow-y-auto">
           <div className="bg-gray-900 border border-gray-800 max-w-lg w-full p-10 my-8">
             <h2 className="text-3xl font-black mb-8 text-white">
               EDITAR {selectedGroup.type === 'galeria' ? 'IMAGEN' : selectedGroup.type === 'eventos' ? 'EVENTO' : 'LINK'}
