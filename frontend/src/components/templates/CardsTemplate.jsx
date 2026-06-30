@@ -62,7 +62,7 @@ function CardsTemplate({ page }) {
                       <img
                         src={link.image_url}
                         alt={link.text}
-                        className="w-full h-64 object-cover"
+                        className="w-full aspect-[1080/1350] object-cover"
                       />
                       {link.text && (
                         <div className="p-4">
@@ -95,7 +95,7 @@ function CardsTemplate({ page }) {
                       <img
                         src={link.image_url ?? 'https://images.pexels.com/photos/1190298/pexels-photo-1190298.jpeg?auto=compress&cs=tinysrgb&w=800'}
                         alt={link.text}
-                        className="w-full h-48 object-cover rounded-lg mb-4"
+                        className="w-full aspect-[1080/1350] object-cover rounded-lg mb-4"
                       />
                       <h3 className="font-bold text-xl mb-2">{link.text}</h3>
                       {(link.event_date || link.event_time) && (
