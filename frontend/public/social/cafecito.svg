@@ -1,0 +1,10 @@
+<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" role="img">
+  <title>Cafecito</title>
+  <g fill="none" stroke="#3FB8AF" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M7 2.5c-.7 1 .7 2 0 3"/>
+    <path d="M11 2.5c-.7 1 .7 2 0 3"/>
+    <path d="M4 8.5h11v5a4.5 4.5 0 0 1-4.5 4.5h-2A4.5 4.5 0 0 1 4 13.5z"/>
+    <path d="M15 10h1.8a2.7 2.7 0 0 1 0 5.4H15"/>
+    <path d="M4 21h11" stroke-width="1.4"/>
+  </g>
+</svg>

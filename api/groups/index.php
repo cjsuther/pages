@@ -42,6 +42,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $groupId = $db->lastInsertId();
 
+        // Para grupos de tipo "redes", pre-cargar los links de redes sociales con su logo
+        if (($data['type'] ?? 'links') === 'redes') {
+            $redes = [
+                ['Instagram', 'https://instagram.com/', '/social/instagram.svg'],
+                ['TikTok',    'https://tiktok.com/',    '/social/tiktok.svg'],
+                ['YouTube',   'https://youtube.com/',   '/social/youtube.svg'],
+                ['Facebook',  'https://facebook.com/',  '/social/facebook.svg'],
+                ['WhatsApp',  'https://wa.me/',         '/social/whatsapp.svg'],
+                ['Cafecito',  'https://cafecito.app/',  '/social/cafecito.svg'],
+            ];
+            $linkStmt = $db->prepare('INSERT INTO links (group_id, url, text, image_url, position) VALUES (?, ?, ?, ?, ?)');
+            foreach ($redes as $i => $r) {
+                $linkStmt->execute([$groupId, $r[1], $r[0], $r[2], $i]);
+            }
+        }
+
         $stmt = $db->prepare('SELECT * FROM link_groups WHERE id = ?');
         $stmt->execute([$groupId]);
         $group = $stmt->fetch();
