@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import FollowButton from '../FollowButton';
 import EventCollaborators from '../EventCollaborators';
 import FollowersPopup from '../FollowersPopup';
+import RedesSociales from '../RedesSociales';
 import RezonarBadge from '../RezonarBadge';
 import { ExternalLink } from 'lucide-react';
 
@@ -44,6 +45,7 @@ function ModernTemplate({ page }) {
                   <p className="text-lg opacity-70 leading-relaxed">{page.description}</p>
                 )}
                 <div className="flex flex-col gap-3 mt-6">
+                  <RedesSociales socials={page.socials} className="mb-1" />
                   <FollowersPopup pageId={page.id} followerCount={page.follower_count || 0} />
                   <FollowButton pageId={page.id} />
                 </div>

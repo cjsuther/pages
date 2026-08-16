@@ -70,7 +70,7 @@ function mockearEditor({ page = pagina(), admins = [], pending = [], results = [
   });
 }
 
-async function render(datos = {}) {
+async function render(datos = {}, seccion = null) {
   const mock = mockearEditor(datos);
   const resultado = renderConProviders(<PageEditor />, {
     auth: autenticado(),
@@ -78,6 +78,15 @@ async function render(datos = {}) {
     path: '/page/:id',
   });
   await screen.findByRole('heading', { name: 'EDITOR' });
+
+  if (seccion) {
+    // El nombre accesible puede incluir el badge de pendientes ("CONTENIDO 1").
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${seccion}`) }));
+    await screen.findByRole('heading', {
+      name: seccion === 'CONTENIDO' ? 'GRUPOS DE LINKS' : seccion,
+    });
+  }
+
   return { ...resultado, ...mock };
 }
 
@@ -291,7 +300,7 @@ describe('PageEditor — flujos de edición', () => {
     const accionDeGrupo = (etiqueta) => screen.getAllByText(etiqueta)[0];
 
     it('el menú contextual repite las acciones de la fila', async () => {
-      await render({ page: unGrupo() });
+      await render({ page: unGrupo() }, 'CONTENIDO');
 
       const conIcono = screen.getAllByRole('button').filter((b) => b.querySelector('svg'));
       fireEvent.click(conIcono[conIcono.length - 1]);
@@ -304,7 +313,7 @@ describe('PageEditor — flujos de edición', () => {
     });
 
     it('edita el título del grupo', async () => {
-      const { llamadas } = await render({ page: unGrupo() });
+      const { llamadas } = await render({ page: unGrupo() }, 'CONTENIDO');
 
       fireEvent.click(accionDeGrupo('Editar Título'));
 
@@ -319,7 +328,7 @@ describe('PageEditor — flujos de edición', () => {
     });
 
     it('elimina el grupo tras confirmar', async () => {
-      const { llamadas } = await render({ page: unGrupo() });
+      const { llamadas } = await render({ page: unGrupo() }, 'CONTENIDO');
 
       fireEvent.click(accionDeGrupo('Eliminar'));
 
@@ -334,7 +343,7 @@ describe('PageEditor — flujos de edición', () => {
 
     it('no elimina el grupo si se cancela', async () => {
       window.confirm = vi.fn(() => false);
-      const { llamadas } = await render({ page: unGrupo() });
+      const { llamadas } = await render({ page: unGrupo() }, 'CONTENIDO');
 
       fireEvent.click(accionDeGrupo('Eliminar'));
 
@@ -354,7 +363,7 @@ describe('PageEditor — flujos de edición', () => {
       pagina({ groups: [grupo({ id: 10, type: 'links', links: [link({ id: 100, text: 'Instagram' })] })] });
 
     it('crea un link con sus datos', async () => {
-      const { llamadas } = await render({ page: pagina({ groups: [grupo({ id: 10 })] }) });
+      const { llamadas } = await render({ page: pagina({ groups: [grupo({ id: 10 })] }) }, 'CONTENIDO');
 
       fireEvent.click(screen.getByRole('button', { name: '+ Link' }));
       const crear = await screen.findByRole('button', { name: 'CREAR' });
@@ -374,7 +383,7 @@ describe('PageEditor — flujos de edición', () => {
     });
 
     it('abre el modal de edición con los datos del link', async () => {
-      await render({ page: conLink() });
+      await render({ page: conLink() }, 'CONTENIDO');
 
       fireEvent.click(screen.getByRole('button', { name: 'Editar' }));
 
@@ -382,7 +391,7 @@ describe('PageEditor — flujos de edición', () => {
     });
 
     it('guarda los cambios del link', async () => {
-      const { llamadas } = await render({ page: conLink() });
+      const { llamadas } = await render({ page: conLink() }, 'CONTENIDO');
 
       fireEvent.click(screen.getByRole('button', { name: 'Editar' }));
       const campo = await screen.findByDisplayValue('Instagram');
@@ -397,7 +406,7 @@ describe('PageEditor — flujos de edición', () => {
     });
 
     it('elimina el link tras confirmar', async () => {
-      const { llamadas } = await render({ page: conLink() });
+      const { llamadas } = await render({ page: conLink() }, 'CONTENIDO');
 
       // [0] es el del grupo, [1] el del link.
       fireEvent.click(screen.getAllByRole('button', { name: 'Eliminar' })[1]);
@@ -413,7 +422,7 @@ describe('PageEditor — flujos de edición', () => {
 
     it('no elimina el link si se cancela', async () => {
       window.confirm = vi.fn(() => false);
-      const { llamadas } = await render({ page: conLink() });
+      const { llamadas } = await render({ page: conLink() }, 'CONTENIDO');
 
       fireEvent.click(screen.getAllByRole('button', { name: 'Eliminar' })[1]);
 
@@ -434,7 +443,7 @@ describe('PageEditor — flujos de edición', () => {
             }),
           ],
         }),
-      });
+      }, 'CONTENIDO');
 
       // [0] mueve el grupo; [1] es el primer link, el único que puede bajar.
       const bajar = screen.getAllByTitle('Mover abajo');
@@ -455,7 +464,7 @@ describe('PageEditor — flujos de edición', () => {
             grupo({ id: 20, type: 'eventos', links: [link({ id: 200, text: 'Viejo', event_due: '1' })] }),
           ],
         }),
-      });
+      }, 'CONTENIDO');
 
       expect(screen.getByText('¡Evento vencido!')).toBeInTheDocument();
     });
@@ -465,7 +474,7 @@ describe('PageEditor — flujos de edición', () => {
         page: pagina({
           groups: [grupo({ id: 20, type: 'eventos', links: [link({ id: 200 })] })],
         }),
-      });
+      }, 'CONTENIDO');
 
       // Sólo quedan las flechas del grupo, no las de los links.
       expect(screen.getAllByTitle('Mover arriba')).toHaveLength(1);
@@ -493,7 +502,7 @@ describe('PageEditor — flujos de edición', () => {
           { id: 2, status: 'pending', page_title: 'Pendiente', collaborator_page_id: 8 },
           { id: 3, status: 'rejected', page_title: 'Rechazada', collaborator_page_id: 9 },
         ]),
-      });
+      }, 'CONTENIDO');
 
       expect(screen.getByText(/aceptó/)).toBeInTheDocument();
       expect(screen.getByText(/pendiente/)).toBeInTheDocument();
@@ -503,7 +512,7 @@ describe('PageEditor — flujos de edición', () => {
     it('quita un colaborador', async () => {
       const { llamadas } = await render({
         page: conEvento([{ id: 1, status: 'accepted', page_title: 'Otra', collaborator_page_id: 7 }]),
-      });
+      }, 'CONTENIDO');
 
       fireEvent.click(screen.getByTitle('Quitar colaborador'));
 
@@ -519,7 +528,7 @@ describe('PageEditor — flujos de edición', () => {
       const { llamadas } = await render({
         page: conEvento(),
         results: [{ id: 7, type: 'page', title: 'Otra Página', slug: 'otra' }],
-      });
+      }, 'CONTENIDO');
 
       fireEvent.click(screen.getByRole('button', { name: 'Editar' }));
       const buscador = await screen.findByPlaceholderText('Buscar página para invitar...');
@@ -548,7 +557,7 @@ describe('PageEditor — flujos de edición', () => {
 
     /** Con un único grupo de eventos el modal lo asigna solo, sin preguntar. */
     it('con un solo grupo de eventos no pregunta y lo asigna', async () => {
-      const { llamadas } = await render(conPendiente());
+      const { llamadas } = await render(conPendiente(), 'CONTENIDO');
 
       fireEvent.click(await screen.findByRole('button', { name: 'Aceptar' }));
       await screen.findByRole('heading', { name: 'ACEPTAR COLABORACIÓN' });
@@ -576,7 +585,7 @@ describe('PageEditor — flujos de edición', () => {
           ],
         }),
         pending: conPendiente().pending,
-      });
+      }, 'CONTENIDO');
 
       fireEvent.click(await screen.findByRole('button', { name: 'Aceptar' }));
       await screen.findByRole('heading', { name: 'ACEPTAR COLABORACIÓN' });
@@ -596,7 +605,7 @@ describe('PageEditor — flujos de edición', () => {
     });
 
     it('rechaza la colaboración', async () => {
-      const { llamadas } = await render(conPendiente());
+      const { llamadas } = await render(conPendiente(), 'CONTENIDO');
 
       fireEvent.click(await screen.findByRole('button', { name: 'Rechazar' }));
 
@@ -607,7 +616,7 @@ describe('PageEditor — flujos de edición', () => {
     });
 
     it('se puede cancelar el modal de aceptación', async () => {
-      const { llamadas } = await render(conPendiente());
+      const { llamadas } = await render(conPendiente(), 'CONTENIDO');
 
       fireEvent.click(await screen.findByRole('button', { name: 'Aceptar' }));
       await screen.findByRole('heading', { name: 'ACEPTAR COLABORACIÓN' });
@@ -630,7 +639,7 @@ describe('PageEditor — flujos de edición', () => {
         admins: [
           { id: 3, user_id: 11, user_name: 'Beto', user_email: 'beto@test.local', status: 'accepted' },
         ],
-      });
+      }, 'ADMINISTRADORES');
 
       fireEvent.click(await screen.findByRole('button', { name: 'QUITAR' }));
 
@@ -647,7 +656,7 @@ describe('PageEditor — flujos de edición', () => {
         admins: [
           { id: 4, user_id: 12, user_name: null, user_email: 'pend@test.local', status: 'pending' },
         ],
-      });
+      }, 'ADMINISTRADORES');
 
       fireEvent.click(await screen.findByRole('button', { name: 'CANCELAR' }));
 

@@ -3,12 +3,22 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../App';
 import LoadingSpinner from '../components/LoadingSpinner';
 import GooglePlacesAutocomplete from '../components/GooglePlacesAutocomplete';
+import SeccionRedes from '../components/SeccionRedes';
 import { MoreVertical } from 'lucide-react';
+
+/** Secciones del editor, en el orden en que se muestran. */
+const SECCIONES = [
+  { clave: 'general',   etiqueta: 'CONFIGURACIÓN' },
+  { clave: 'contenido', etiqueta: 'CONTENIDO' },
+  { clave: 'redes',     etiqueta: 'REDES SOCIALES' },
+  { clave: 'admins',    etiqueta: 'ADMINISTRADORES', soloDueno: true },
+];
 
 function PageEditor() {
   const { id } = useParams();
   const { token, apiUrl, user } = useContext(AuthContext);
   const navigate = useNavigate();
+  const [seccion, setSeccion] = useState('general');
   const [page, setPage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [globalLoading, setGlobalLoading] = useState(false);
@@ -57,6 +67,10 @@ function PageEditor() {
 
   // ¿El usuario actual es el dueño de la página? (gestionar admins es solo del dueño)
   const isOwner = page && user && Number(page.user_id) === Number(user.id);
+
+  // Se muestra en el submenú para que las colaboraciones pendientes no queden
+  // escondidas dentro de una solapa que el usuario no abrió.
+  const pendientesDeColaborar = pendingCollaborations.filter(c => c.collaborator_page_id == id).length;
 
   useEffect(() => {
     fetchPage();
@@ -683,390 +697,388 @@ function PageEditor() {
       </nav>
 
       <div className="max-w-7xl mx-auto px-6 py-16">
-        <div className="bg-gray-900 border border-gray-800 p-8 mb-8">
-          <h2 className="text-2xl font-black mb-8 tracking-tight">CONFIGURACIÓN</h2>
 
-          <div className="grid md:grid-cols-2 gap-6 mb-6">
-            <div>
-              <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">TÍTULO</label>
-              <input
-                type="text"
-                value={page.title}
-                onChange={(e) => setPage({ ...page, title: e.target.value })}
-                onBlur={() => updatePage({ title: page.title })}
-                className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">URL</label>
-              <input
-                type="text"
-                value={page.url_slug}
-                disabled
-                className="w-full px-4 py-3 bg-gray-800 border border-gray-700 text-gray-500"
-              />
-            </div>
-          </div>
-
-          <div className="mb-6">
-            <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">DESCRIPCIÓN</label>
-            <textarea
-              value={page.description}
-              onChange={(e) => setPage({ ...page, description: e.target.value })}
-              onBlur={() => updatePage({ description: page.description })}
-              className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
-              rows="3"
-            />
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-6 mb-6">
-            <div>
-              <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">IMAGEN DE PERFIL</label>
-              <div className="flex items-center gap-4">
-                {page.profile_image && (
-                  <div className="relative">
-                    <img src={page.profile_image} alt="Perfil" className="w-20 h-20 object-cover rounded-full" />
-                    <button
-                      onClick={() => {
-                        setPage({ ...page, profile_image: null });
-                        updatePage({ profile_image: null });
-                      }}
-                      className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-700"
-                    >
-                      ×
-                    </button>
-                  </div>
-                )}
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleProfileImageUpload}
-                  className="text-sm text-gray-400"
-                />
-              </div>
-              <p className="text-xs text-gray-600 mt-1">JPG, PNG, GIF o WebP. Máximo 5MB</p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">IMAGEN DE FONDO</label>
-              <div className="flex items-center gap-4">
-                {page.background_image && (
-                  <div className="relative">
-                    <img src={page.background_image} alt="Fondo" className="w-20 h-20 object-cover rounded" />
-                    <button
-                      onClick={() => {
-                        setPage({ ...page, background_image: null });
-                        updatePage({ background_image: null });
-                      }}
-                      className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-700"
-                    >
-                      ×
-                    </button>
-                  </div>
-                )}
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleBackgroundImageUpload}
-                  className="text-sm text-gray-400"
-                />
-              </div>
-              <p className="text-xs text-gray-600 mt-1">JPG, PNG, GIF o WebP. Máximo 5MB</p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-6">
-            <div>
-              <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">COLOR DE TEXTO</label>
-              <input
-                type="color"
-                value={page.text_color}
-                onChange={(e) => {
-                  setPage({ ...page, text_color: e.target.value });
-                  updatePage({ text_color: e.target.value });
-                }}
-                className="w-full h-10 rounded-lg cursor-pointer"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">COLOR DE FONDO</label>
-              <input
-                type="color"
-                value={page.background_color}
-                onChange={(e) => {
-                  setPage({ ...page, background_color: e.target.value });
-                  updatePage({ background_color: e.target.value });
-                }}
-                className="w-full h-10 rounded-lg cursor-pointer"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">COLOR ELEMENTOS</label>
-              <input
-                type="color"
-                value={page.primary_color}
-                onChange={(e) => {
-                  setPage({ ...page, primary_color: e.target.value });
-                  updatePage({ primary_color: e.target.value });
-                }}
-                className="w-full h-10 rounded-lg cursor-pointer"
-              />
-            </div>
-            
-          </div>
-
-          <div className="mt-8 pt-8 border-t border-gray-800">
-            <label className="block text-sm font-bold text-gray-400 mb-4 tracking-wide">TEMPLATE DE DISEÑO</label>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <button
-                onClick={() => {
-                  setPage({ ...page, template: 'minimal' });
-                  updatePage({ template: 'minimal' });
-                }}
-                className={`p-4 border-2 transition ${(page.template || 'minimal') === 'minimal'
-                    ? 'border-white bg-gray-800'
-                    : 'border-gray-700 hover:border-gray-600'
-                  }`}
-              >
-                <div className="font-bold mb-2 text-white">Minimal</div>
-                <div className="text-xs text-gray-500">Diseño limpio y centrado</div>
-              </button>
-
-              <button
-                onClick={() => {
-                  setPage({ ...page, template: 'cards' });
-                  updatePage({ template: 'cards' });
-                }}
-                className={`p-4 border-2 transition ${page.template === 'cards'
-                    ? 'border-white bg-gray-800'
-                    : 'border-gray-700 hover:border-gray-600'
-                  }`}
-              >
-                <div className="font-bold mb-2 text-white">Cards</div>
-                <div className="text-xs text-gray-500">Tarjetas con sombras</div>
-              </button>
-
-              <button
-                onClick={() => {
-                  setPage({ ...page, template: 'modern' });
-                  updatePage({ template: 'modern' });
-                }}
-                className={`p-4 border-2 transition ${page.template === 'modern'
-                    ? 'border-white bg-gray-800'
-                    : 'border-gray-700 hover:border-gray-600'
-                  }`}
-              >
-                <div className="font-bold mb-2 text-white">Modern</div>
-                <div className="text-xs text-gray-500">Estilo audaz y oscuro</div>
-              </button>
-
-              <button
-                onClick={() => {
-                  setPage({ ...page, template: 'condensed' });
-                  updatePage({ template: 'condensed' });
-                }}
-                className={`p-4 border-2 transition ${page.template === 'condensed'
-                    ? 'border-white bg-gray-800'
-                    : 'border-gray-700 hover:border-gray-600'
-                  }`}
-              >
-                <div className="font-bold mb-2 text-white">Condensado</div>
-                <div className="text-xs text-gray-500">Lista compacta de 2 líneas</div>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {isOwner && (
-          <div className="bg-gray-900 border border-gray-800 p-8 mb-8">
-            <h2 className="text-2xl font-black mb-2 tracking-tight">ADMINISTRADORES</h2>
-            <p className="text-sm text-gray-500 mb-6">
-              Invitá a otros usuarios (por email) a administrar esta página. Pueden editar contenido y ajustes, pero no borrar la página ni gestionar administradores.
-            </p>
-
-            <form onSubmit={inviteAdmin} className="flex flex-col sm:flex-row gap-3 mb-4">
-              <input
-                type="email"
-                value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
-                placeholder="email@ejemplo.com"
-                className="flex-1 px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
-                required
-              />
-              <button
-                type="submit"
-                disabled={invitingAdmin}
-                className="bg-white text-black px-6 py-3 font-bold hover:bg-gray-200 transition disabled:opacity-50"
-              >
-                {invitingAdmin ? 'INVITANDO...' : 'INVITAR'}
-              </button>
-            </form>
-
-            {adminError && <p className="text-red-400 text-sm mb-4">{adminError}</p>}
-            {adminMsg && <p className="text-emerald-400 text-sm mb-4">{adminMsg}</p>}
-
-            {admins.length === 0 ? (
-              <p className="text-gray-600 text-sm">Todavía no invitaste a nadie.</p>
-            ) : (
-              <div className="space-y-2">
-                {admins.map((a) => (
-                  <div key={a.id} className="flex items-center justify-between bg-black border border-gray-800 px-4 py-3">
-                    <div>
-                      <span className="font-medium text-white">{a.user_name || a.user_email}</span>
-                      {a.user_name && <span className="text-gray-500 text-sm"> · {a.user_email}</span>}
-                      <span className={`ml-3 px-2 py-0.5 text-xs rounded-full ${a.status === 'accepted' ? 'bg-emerald-900 text-emerald-200' : 'bg-yellow-900 text-yellow-200'}`}>
-                        {a.status === 'accepted' ? 'Administrador' : 'Pendiente'}
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => removeAdmin(a.id)}
-                      className="text-red-400 hover:text-red-300 text-sm font-bold transition"
-                    >
-                      {a.status === 'accepted' ? 'QUITAR' : 'CANCELAR'}
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {pendingCollaborations.filter(c => c.collaborator_page_id == id).length > 0 && (
-          <div className="bg-gray-900 border border-orange-800 p-8 mb-8">
-            <h2 className="text-2xl font-black tracking-tight mb-6 text-orange-400">COLABORACIONES PENDIENTES</h2>
-            <div className="space-y-4">
-              {pendingCollaborations.filter(c => c.collaborator_page_id == id).map((collab) => (
-                <div key={collab.id} className="bg-black border border-gray-800 p-4 flex flex-col sm:flex-row sm:items-center gap-4">
-                  <div className="flex items-center gap-3 flex-1">
-                    {collab.requester_page_image && (
-                      <img src={collab.requester_page_image} alt={collab.requester_page_title} className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
-                    )}
-                    <div>
-                      <p className="font-bold text-white">{collab.requester_page_title}</p>
-                      <p className="text-sm text-gray-400">te invita a colaborar en <span className="text-white">{collab.event_title}</span></p>
-                      {collab.event_date && (
-                        <p className="text-xs text-gray-600 mt-1">
-                          {new Date(collab.event_date + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
-                          {collab.event_time && ' · ' + collab.event_time}
-                        </p>
-                      )}
-                      <p className="text-xs text-gray-500 mt-1">Para tu página: <span className="text-gray-300">{collab.collaborator_page_title}</span></p>
-                    </div>
-                  </div>
-                  <div className="flex gap-2 flex-shrink-0">
-                    <button
-                      onClick={() => openAcceptCollabModal(collab)}
-                      className="px-4 py-2 bg-green-700 text-white text-sm font-bold hover:bg-green-600 transition"
-                    >
-                      Aceptar
-                    </button>
-                    <button
-                      onClick={() => rejectCollaboration(collab)}
-                      className="px-4 py-2 bg-gray-800 text-red-400 text-sm font-bold hover:bg-gray-700 transition"
-                    >
-                      Rechazar
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div className="bg-gray-900 border border-gray-800 p-8 mb-8">
-          <div className="flex justify-between items-center mb-8">
-            <h2 className="text-2xl font-black tracking-tight">GRUPOS DE LINKS</h2>
+        {/* Secciones del editor. Antes todo se apilaba en una sola columna y
+            había que bajar mucho para llegar a los administradores. */}
+        <nav className="flex flex-wrap gap-2 mb-8 border-b border-gray-800">
+          {SECCIONES.filter(s => !s.soloDueno || isOwner).map((s) => (
             <button
-              onClick={() => setShowGroupModal(true)}
-              className="bg-white text-black px-6 py-3 font-bold hover:bg-gray-200 transition"
+              key={s.clave}
+              onClick={() => setSeccion(s.clave)}
+              className={`px-5 py-3 font-bold text-sm tracking-wide transition border-b-2 -mb-px flex items-center gap-2 ${
+                seccion === s.clave
+                  ? 'border-white text-white'
+                  : 'border-transparent text-gray-500 hover:text-gray-300'
+              }`}
             >
-              + NUEVO GRUPO
+              {s.etiqueta}
+              {s.clave === 'contenido' && pendientesDeColaborar > 0 && (
+                <span className="bg-orange-500 text-black text-xs font-black rounded-full w-5 h-5 flex items-center justify-center">
+                  {pendientesDeColaborar}
+                </span>
+              )}
             </button>
-          </div>
+          ))}
+        </nav>
 
-          {page.groups && page.groups.length === 0 ? (
-            <p className="text-gray-500 text-center py-8">No hay grupos todavía</p>
-          ) : (
-            <div className="space-y-6">
-              {page.groups?.map((group, index) => (
-                <div key={group.id} className="bg-black rounded-lg shadow-md p-6">
-                  <div className="flex justify-between items-center mb-4">
-                    <div className="flex items-center gap-3">
-                      <h3 className="text-xl font-semibold">{group.title}</h3>
-                      <span className={`px-2 py-1 text-xs rounded-full ${group.type === 'galeria' ? 'bg-purple-100 text-purple-700' :
-                          group.type === 'eventos' ? 'bg-orange-100 text-orange-700' :
-                            group.type === 'redes' ? 'bg-pink-100 text-pink-700' :
-                              'bg-blue-100 text-blue-700'
-                        }`}>
-                        {group.type === 'galeria' ? 'Galería' :
-                          group.type === 'eventos' ? 'Eventos' :
-                            group.type === 'redes' ? 'Redes Sociales' :
-                              'Links'}
-                      </span>
+        {seccion === 'general' && (
+          <div className="bg-gray-900 border border-gray-800 p-8 mb-8">
+            <h2 className="text-2xl font-black mb-8 tracking-tight">CONFIGURACIÓN</h2>
+
+            <div className="grid md:grid-cols-2 gap-6 mb-6">
+              <div>
+                <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">TÍTULO</label>
+                <input
+                  type="text"
+                  value={page.title}
+                  onChange={(e) => setPage({ ...page, title: e.target.value })}
+                  onBlur={() => updatePage({ title: page.title })}
+                  className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">URL</label>
+                <input
+                  type="text"
+                  value={page.url_slug}
+                  disabled
+                  className="w-full px-4 py-3 bg-gray-800 border border-gray-700 text-gray-500"
+                />
+              </div>
+            </div>
+
+            <div className="mb-6">
+              <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">DESCRIPCIÓN</label>
+              <textarea
+                value={page.description}
+                onChange={(e) => setPage({ ...page, description: e.target.value })}
+                onBlur={() => updatePage({ description: page.description })}
+                className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+                rows="3"
+              />
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-6 mb-6">
+              <div>
+                <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">IMAGEN DE PERFIL</label>
+                <div className="flex items-center gap-4">
+                  {page.profile_image && (
+                    <div className="relative">
+                      <img src={page.profile_image} alt="Perfil" className="w-20 h-20 object-cover rounded-full" />
+                      <button
+                        onClick={() => {
+                          setPage({ ...page, profile_image: null });
+                          updatePage({ profile_image: null });
+                        }}
+                        className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-700"
+                      >
+                        ×
+                      </button>
                     </div>
-                    <div className="flex gap-2 items-center">
-                      <button
-                        onClick={() => moveGroup(group.id, 'up')}
-                        disabled={index === 0}
-                        className="px-3 py-1 rounded-lg hover:bg-gray-100 transition text-sm disabled:opacity-30 disabled:cursor-not-allowed"
-                        title="Mover arriba"
-                      >
-                        ↑
-                      </button>
-                      <button
-                        onClick={() => moveGroup(group.id, 'down')}
-                        disabled={index === page.groups.length - 1}
-                        className="px-3 py-1 rounded-lg hover:bg-gray-100 transition text-sm disabled:opacity-30 disabled:cursor-not-allowed"
-                        title="Mover abajo"
-                      >
-                        ↓
-                      </button>
+                  )}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleProfileImageUpload}
+                    className="text-sm text-gray-400"
+                  />
+                </div>
+                <p className="text-xs text-gray-600 mt-1">JPG, PNG, GIF o WebP. Máximo 5MB</p>
+              </div>
 
-                      <div className="hidden md:flex gap-2">
+              <div>
+                <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">IMAGEN DE FONDO</label>
+                <div className="flex items-center gap-4">
+                  {page.background_image && (
+                    <div className="relative">
+                      <img src={page.background_image} alt="Fondo" className="w-20 h-20 object-cover rounded" />
+                      <button
+                        onClick={() => {
+                          setPage({ ...page, background_image: null });
+                          updatePage({ background_image: null });
+                        }}
+                        className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-700"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  )}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleBackgroundImageUpload}
+                    className="text-sm text-gray-400"
+                  />
+                </div>
+                <p className="text-xs text-gray-600 mt-1">JPG, PNG, GIF o WebP. Máximo 5MB</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-6">
+              <div>
+                <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">COLOR DE TEXTO</label>
+                <input
+                  type="color"
+                  value={page.text_color}
+                  onChange={(e) => {
+                    setPage({ ...page, text_color: e.target.value });
+                    updatePage({ text_color: e.target.value });
+                  }}
+                  className="w-full h-10 rounded-lg cursor-pointer"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">COLOR DE FONDO</label>
+                <input
+                  type="color"
+                  value={page.background_color}
+                  onChange={(e) => {
+                    setPage({ ...page, background_color: e.target.value });
+                    updatePage({ background_color: e.target.value });
+                  }}
+                  className="w-full h-10 rounded-lg cursor-pointer"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">COLOR ELEMENTOS</label>
+                <input
+                  type="color"
+                  value={page.primary_color}
+                  onChange={(e) => {
+                    setPage({ ...page, primary_color: e.target.value });
+                    updatePage({ primary_color: e.target.value });
+                  }}
+                  className="w-full h-10 rounded-lg cursor-pointer"
+                />
+              </div>
+            
+            </div>
+
+            <div className="mt-8 pt-8 border-t border-gray-800">
+              <label className="block text-sm font-bold text-gray-400 mb-4 tracking-wide">TEMPLATE DE DISEÑO</label>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <button
+                  onClick={() => {
+                    setPage({ ...page, template: 'minimal' });
+                    updatePage({ template: 'minimal' });
+                  }}
+                  className={`p-4 border-2 transition ${(page.template || 'minimal') === 'minimal'
+                      ? 'border-white bg-gray-800'
+                      : 'border-gray-700 hover:border-gray-600'
+                    }`}
+                >
+                  <div className="font-bold mb-2 text-white">Minimal</div>
+                  <div className="text-xs text-gray-500">Diseño limpio y centrado</div>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setPage({ ...page, template: 'cards' });
+                    updatePage({ template: 'cards' });
+                  }}
+                  className={`p-4 border-2 transition ${page.template === 'cards'
+                      ? 'border-white bg-gray-800'
+                      : 'border-gray-700 hover:border-gray-600'
+                    }`}
+                >
+                  <div className="font-bold mb-2 text-white">Cards</div>
+                  <div className="text-xs text-gray-500">Tarjetas con sombras</div>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setPage({ ...page, template: 'modern' });
+                    updatePage({ template: 'modern' });
+                  }}
+                  className={`p-4 border-2 transition ${page.template === 'modern'
+                      ? 'border-white bg-gray-800'
+                      : 'border-gray-700 hover:border-gray-600'
+                    }`}
+                >
+                  <div className="font-bold mb-2 text-white">Modern</div>
+                  <div className="text-xs text-gray-500">Estilo audaz y oscuro</div>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setPage({ ...page, template: 'condensed' });
+                    updatePage({ template: 'condensed' });
+                  }}
+                  className={`p-4 border-2 transition ${page.template === 'condensed'
+                      ? 'border-white bg-gray-800'
+                      : 'border-gray-700 hover:border-gray-600'
+                    }`}
+                >
+                  <div className="font-bold mb-2 text-white">Condensado</div>
+                  <div className="text-xs text-gray-500">Lista compacta de 2 líneas</div>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {seccion === 'redes' && (
+          <SeccionRedes
+            socials={page.socials || []}
+            guardando={globalLoading}
+            onGuardar={(socials) => updatePage({ socials })}
+          />
+        )}
+
+        {seccion === 'admins' && isOwner && (
+            <div className="bg-gray-900 border border-gray-800 p-8 mb-8">
+              <h2 className="text-2xl font-black mb-2 tracking-tight">ADMINISTRADORES</h2>
+              <p className="text-sm text-gray-500 mb-6">
+                Invitá a otros usuarios (por email) a administrar esta página. Pueden editar contenido y ajustes, pero no borrar la página ni gestionar administradores.
+              </p>
+
+              <form onSubmit={inviteAdmin} className="flex flex-col sm:flex-row gap-3 mb-4">
+                <input
+                  type="email"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  placeholder="email@ejemplo.com"
+                  className="flex-1 px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+                  required
+                />
+                <button
+                  type="submit"
+                  disabled={invitingAdmin}
+                  className="bg-white text-black px-6 py-3 font-bold hover:bg-gray-200 transition disabled:opacity-50"
+                >
+                  {invitingAdmin ? 'INVITANDO...' : 'INVITAR'}
+                </button>
+              </form>
+
+              {adminError && <p className="text-red-400 text-sm mb-4">{adminError}</p>}
+              {adminMsg && <p className="text-emerald-400 text-sm mb-4">{adminMsg}</p>}
+
+              {admins.length === 0 ? (
+                <p className="text-gray-600 text-sm">Todavía no invitaste a nadie.</p>
+              ) : (
+                <div className="space-y-2">
+                  {admins.map((a) => (
+                    <div key={a.id} className="flex items-center justify-between bg-black border border-gray-800 px-4 py-3">
+                      <div>
+                        <span className="font-medium text-white">{a.user_name || a.user_email}</span>
+                        {a.user_name && <span className="text-gray-500 text-sm"> · {a.user_email}</span>}
+                        <span className={`ml-3 px-2 py-0.5 text-xs rounded-full ${a.status === 'accepted' ? 'bg-emerald-900 text-emerald-200' : 'bg-yellow-900 text-yellow-200'}`}>
+                          {a.status === 'accepted' ? 'Administrador' : 'Pendiente'}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => removeAdmin(a.id)}
+                        className="text-red-400 hover:text-red-300 text-sm font-bold transition"
+                      >
+                        {a.status === 'accepted' ? 'QUITAR' : 'CANCELAR'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+        )}
+
+        {seccion === 'contenido' && (
+          <>
+            {pendingCollaborations.filter(c => c.collaborator_page_id == id).length > 0 && (
+              <div className="bg-gray-900 border border-orange-800 p-8 mb-8">
+                <h2 className="text-2xl font-black tracking-tight mb-6 text-orange-400">COLABORACIONES PENDIENTES</h2>
+                <div className="space-y-4">
+                  {pendingCollaborations.filter(c => c.collaborator_page_id == id).map((collab) => (
+                    <div key={collab.id} className="bg-black border border-gray-800 p-4 flex flex-col sm:flex-row sm:items-center gap-4">
+                      <div className="flex items-center gap-3 flex-1">
+                        {collab.requester_page_image && (
+                          <img src={collab.requester_page_image} alt={collab.requester_page_title} className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
+                        )}
+                        <div>
+                          <p className="font-bold text-white">{collab.requester_page_title}</p>
+                          <p className="text-sm text-gray-400">te invita a colaborar en <span className="text-white">{collab.event_title}</span></p>
+                          {collab.event_date && (
+                            <p className="text-xs text-gray-600 mt-1">
+                              {new Date(collab.event_date + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                              {collab.event_time && ' · ' + collab.event_time}
+                            </p>
+                          )}
+                          <p className="text-xs text-gray-500 mt-1">Para tu página: <span className="text-gray-300">{collab.collaborator_page_title}</span></p>
+                        </div>
+                      </div>
+                      <div className="flex gap-2 flex-shrink-0">
                         <button
-                          onClick={() => openEditGroupModal(group)}
-                          className="text-blue-600 hover:bg-blue-50 px-3 py-1 rounded-lg transition text-sm"
+                          onClick={() => openAcceptCollabModal(collab)}
+                          className="px-4 py-2 bg-green-700 text-white text-sm font-bold hover:bg-green-600 transition"
                         >
-                          Editar Título
+                          Aceptar
                         </button>
                         <button
-                          onClick={() => {
-                            setSelectedGroup(group);
-                            setShowLinkModal(true);
-                          }}
-                          className="bg-green-600 text-white px-3 py-1 rounded-lg hover:bg-green-700 transition text-sm"
+                          onClick={() => rejectCollaboration(collab)}
+                          className="px-4 py-2 bg-gray-800 text-red-400 text-sm font-bold hover:bg-gray-700 transition"
                         >
-                          {group.type === 'galeria' ? '+ Imagen' :
-                            group.type === 'eventos' ? '+ Evento' :
-                              '+ Link'}
-                        </button>
-                        <button
-                          onClick={() => deleteGroup(group.id)}
-                          className="bg-red-50 text-red-600 px-3 py-1 rounded-lg hover:bg-red-100 transition text-sm"
-                        >
-                          Eliminar
+                          Rechazar
                         </button>
                       </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
-                      <div className="relative md:hidden" ref={openGroupMenu === group.id ? groupMenuRef : null}>
-                        <button
-                          onClick={() => setOpenGroupMenu(openGroupMenu === group.id ? null : group.id)}
-                          className="p-2 hover:bg-gray-200 rounded-lg transition text-gray-900"
-                        >
-                          <MoreVertical className="w-5 h-5" />
-                        </button>
+            <div className="bg-gray-900 border border-gray-800 p-8 mb-8">
+              <div className="flex justify-between items-center mb-8">
+                <h2 className="text-2xl font-black tracking-tight">GRUPOS DE LINKS</h2>
+                <button
+                  onClick={() => setShowGroupModal(true)}
+                  className="bg-white text-black px-6 py-3 font-bold hover:bg-gray-200 transition"
+                >
+                  + NUEVO GRUPO
+                </button>
+              </div>
 
-                        {openGroupMenu === group.id && (
-                          <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 w-48">
+              {page.groups && page.groups.length === 0 ? (
+                <p className="text-gray-500 text-center py-8">No hay grupos todavía</p>
+              ) : (
+                <div className="space-y-6">
+                  {page.groups?.map((group, index) => (
+                    <div key={group.id} className="bg-black rounded-lg shadow-md p-6">
+                      <div className="flex justify-between items-center mb-4">
+                        <div className="flex items-center gap-3">
+                          <h3 className="text-xl font-semibold">{group.title}</h3>
+                          <span className={`px-2 py-1 text-xs rounded-full ${group.type === 'galeria' ? 'bg-purple-100 text-purple-700' :
+                              group.type === 'eventos' ? 'bg-orange-100 text-orange-700' :
+                                group.type === 'redes' ? 'bg-pink-100 text-pink-700' :
+                                  'bg-blue-100 text-blue-700'
+                            }`}>
+                            {group.type === 'galeria' ? 'Galería' :
+                              group.type === 'eventos' ? 'Eventos' :
+                                group.type === 'redes' ? 'Redes Sociales' :
+                                  'Links'}
+                          </span>
+                        </div>
+                        <div className="flex gap-2 items-center">
+                          <button
+                            onClick={() => moveGroup(group.id, 'up')}
+                            disabled={index === 0}
+                            className="px-3 py-1 rounded-lg hover:bg-gray-100 transition text-sm disabled:opacity-30 disabled:cursor-not-allowed"
+                            title="Mover arriba"
+                          >
+                            ↑
+                          </button>
+                          <button
+                            onClick={() => moveGroup(group.id, 'down')}
+                            disabled={index === page.groups.length - 1}
+                            className="px-3 py-1 rounded-lg hover:bg-gray-100 transition text-sm disabled:opacity-30 disabled:cursor-not-allowed"
+                            title="Mover abajo"
+                          >
+                            ↓
+                          </button>
+
+                          <div className="hidden md:flex gap-2">
                             <button
-                              onClick={() => {
-                                openEditGroupModal(group);
-                                setOpenGroupMenu(null);
-                              }}
-                              className="w-full text-left px-4 py-2 hover:bg-gray-100 text-sm text-blue-600"
+                              onClick={() => openEditGroupModal(group)}
+                              className="text-blue-600 hover:bg-blue-50 px-3 py-1 rounded-lg transition text-sm"
                             >
                               Editar Título
                             </button>
@@ -1074,204 +1086,244 @@ function PageEditor() {
                               onClick={() => {
                                 setSelectedGroup(group);
                                 setShowLinkModal(true);
-                                setOpenGroupMenu(null);
                               }}
-                              className="w-full text-left px-4 py-2 hover:bg-gray-100 text-sm text-green-600"
+                              className="bg-green-600 text-white px-3 py-1 rounded-lg hover:bg-green-700 transition text-sm"
                             >
                               {group.type === 'galeria' ? '+ Imagen' :
                                 group.type === 'eventos' ? '+ Evento' :
                                   '+ Link'}
                             </button>
                             <button
-                              onClick={() => {
-                                deleteGroup(group.id);
-                                setOpenGroupMenu(null);
-                              }}
-                              className="w-full text-left px-4 py-2 hover:bg-gray-100 text-sm text-red-600"
+                              onClick={() => deleteGroup(group.id)}
+                              className="bg-red-50 text-red-600 px-3 py-1 rounded-lg hover:bg-red-100 transition text-sm"
                             >
                               Eliminar
                             </button>
                           </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
 
-                  {group.links && group.links.length === 0 && (!group.collaborated_events || group.collaborated_events.length === 0) ? (
-                    <p className="text-gray-400 text-sm">No hay links en este grupo</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {(group.type === 'eventos'
-                        ? [
-                            ...group.links.map(l => ({ ...l, _isCollaboration: false })),
-                            ...(group.collaborated_events || []).map(e => ({ ...e, _isCollaboration: true }))
-                          ].sort((a, b) => {
-                            const dateA = new Date((a.event_date || '9999-12-31') + ' ' + (a.event_time || '00:00'));
-                            const dateB = new Date((b.event_date || '9999-12-31') + ' ' + (b.event_time || '00:00'));
-                            return dateA - dateB;
-                          })
-                        : group.links
-                      )?.map((link, linkIndex) => (
-                        link._isCollaboration ? (
-                        <div key={`collab-${link.collaboration_id}`} className="flex items-center gap-4 p-3 bg-gray-800 rounded-lg border border-orange-900">
-                          {link.image_url && (
-                            <img src={link.image_url} alt={link.text} className="w-12 h-12 object-cover rounded" />
-                          )}
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="text-xs bg-orange-900 text-orange-300 px-2 py-0.5 rounded font-medium">Colaboración</span>
-                              {link.source_page_image && <img src={link.source_page_image} alt={link.source_page_title} className="w-4 h-4 rounded-full object-cover" />}
-                              <span className="text-xs text-gray-400">{link.source_page_title}</span>
-                            </div>
-                            <p className="text-white font-medium">{link.text}</p>
-                            {link.event_date && (
-                              <p className="text-xs text-gray-500 mt-0.5">
-                                {new Date(link.event_date + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
-                                {link.event_time && ' · ' + link.event_time}
-                              </p>
-                            )}
-                            {link.event_due == '1' && (
-                              <p className="text-sm text-red-400 font-semibold mt-1">¡Evento vencido!</p>
-                            )}
-                          </div>
-                          <button
-                            onClick={() => removeCollaboration(link.collaboration_id)}
-                            className="text-red-400 hover:bg-red-900 px-3 py-1 rounded transition text-sm flex-shrink-0"
-                          >
-                            Quitar
-                          </button>
-                        </div>
-                        ) : (
-                        <div
-                          key={link.id}
-                          className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg hover:bg-gray-100"
-                        >
-                          {link.image_url && (
-                            <img
-                              src={link.image_url}
-                              alt={link.text}
-                              className="w-12 h-12 object-cover rounded"
-                            />
-                          )}
-                          <div className="flex-1">
-                            <a
-                              href={link.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-blue-600 hover:underline font-medium"
+                          <div className="relative md:hidden" ref={openGroupMenu === group.id ? groupMenuRef : null}>
+                            <button
+                              onClick={() => setOpenGroupMenu(openGroupMenu === group.id ? null : group.id)}
+                              className="p-2 hover:bg-gray-200 rounded-lg transition text-gray-900"
                             >
-                              {link.text}
-                            </a>
-                            {link.description && (
-                              <p className="text-sm text-gray-600">{link.description}</p>
-                            )}
-                            {link.event_due == '1' && (
-                              <p className="text-sm text-red-600 font-semibold mt-1">¡Evento vencido!</p>
-                            )}
-                            {group.type === 'eventos' && link.collaborations && link.collaborations.length > 0 && (
-                              <div className="flex flex-wrap gap-1 mt-2">
-                                {link.collaborations.map(c => (
-                                  <span
-                                    key={c.id}
-                                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${
-                                      c.status === 'accepted' ? 'bg-green-100 text-green-700' :
-                                      c.status === 'rejected' ? 'bg-red-100 text-red-600' :
-                                      'bg-yellow-100 text-yellow-700'
-                                    }`}
-                                  >
-                                    {c.page_image && <img src={c.page_image} alt="" className="w-3 h-3 rounded-full object-cover" />}
-                                    {c.page_title}
-                                    {' · '}
-                                    {c.status === 'accepted' ? 'aceptó' : c.status === 'rejected' ? 'rechazó' : 'pendiente'}
-                                    <button
-                                      onClick={() => removeCollaboration(c.id)}
-                                      className="ml-1 opacity-60 hover:opacity-100"
-                                      title="Quitar colaborador"
-                                    >×</button>
-                                  </span>
-                                ))}
+                              <MoreVertical className="w-5 h-5" />
+                            </button>
+
+                            {openGroupMenu === group.id && (
+                              <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 w-48">
+                                <button
+                                  onClick={() => {
+                                    openEditGroupModal(group);
+                                    setOpenGroupMenu(null);
+                                  }}
+                                  className="w-full text-left px-4 py-2 hover:bg-gray-100 text-sm text-blue-600"
+                                >
+                                  Editar Título
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setSelectedGroup(group);
+                                    setShowLinkModal(true);
+                                    setOpenGroupMenu(null);
+                                  }}
+                                  className="w-full text-left px-4 py-2 hover:bg-gray-100 text-sm text-green-600"
+                                >
+                                  {group.type === 'galeria' ? '+ Imagen' :
+                                    group.type === 'eventos' ? '+ Evento' :
+                                      '+ Link'}
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    deleteGroup(group.id);
+                                    setOpenGroupMenu(null);
+                                  }}
+                                  className="w-full text-left px-4 py-2 hover:bg-gray-100 text-sm text-red-600"
+                                >
+                                  Eliminar
+                                </button>
                               </div>
                             )}
                           </div>
-                          <div className="flex gap-1 items-center">
-                            {group.type !== 'eventos' && (
-                              <>
-                                <button
-                                  onClick={() => moveLink(link.id, group.id, 'up')}
-                                  disabled={linkIndex === 0}
-                                  className="px-2 py-1 rounded bg-black transition text-sm disabled:opacity-30 disabled:cursor-not-allowed"
-                                  title="Mover arriba"
-                                >
-                                  ↑
-                                </button>
-                                <button
-                                  onClick={() => moveLink(link.id, group.id, 'down')}
-                                  disabled={linkIndex === group.links.length - 1}
-                                  className="px-2 py-1 rounded bg-black transition text-sm disabled:opacity-30 disabled:cursor-not-allowed"
-                                  title="Mover abajo"
-                                >
-                                  ↓
-                                </button>
-                              </>
-                            )}
+                        </div>
+                      </div>
 
-                            <div className="hidden md:flex gap-1">
+                      {group.links && group.links.length === 0 && (!group.collaborated_events || group.collaborated_events.length === 0) ? (
+                        <p className="text-gray-400 text-sm">No hay links en este grupo</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {(group.type === 'eventos'
+                            ? [
+                                ...group.links.map(l => ({ ...l, _isCollaboration: false })),
+                                ...(group.collaborated_events || []).map(e => ({ ...e, _isCollaboration: true }))
+                              ].sort((a, b) => {
+                                const dateA = new Date((a.event_date || '9999-12-31') + ' ' + (a.event_time || '00:00'));
+                                const dateB = new Date((b.event_date || '9999-12-31') + ' ' + (b.event_time || '00:00'));
+                                return dateA - dateB;
+                              })
+                            : group.links
+                          )?.map((link, linkIndex) => (
+                            link._isCollaboration ? (
+                            <div key={`collab-${link.collaboration_id}`} className="flex items-center gap-4 p-3 bg-gray-800 rounded-lg border border-orange-900">
+                              {link.image_url && (
+                                <img src={link.image_url} alt={link.text} className="w-12 h-12 object-cover rounded" />
+                              )}
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="text-xs bg-orange-900 text-orange-300 px-2 py-0.5 rounded font-medium">Colaboración</span>
+                                  {link.source_page_image && <img src={link.source_page_image} alt={link.source_page_title} className="w-4 h-4 rounded-full object-cover" />}
+                                  <span className="text-xs text-gray-400">{link.source_page_title}</span>
+                                </div>
+                                <p className="text-white font-medium">{link.text}</p>
+                                {link.event_date && (
+                                  <p className="text-xs text-gray-500 mt-0.5">
+                                    {new Date(link.event_date + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                                    {link.event_time && ' · ' + link.event_time}
+                                  </p>
+                                )}
+                                {link.event_due == '1' && (
+                                  <p className="text-sm text-red-400 font-semibold mt-1">¡Evento vencido!</p>
+                                )}
+                              </div>
                               <button
-                                onClick={() => openEditLinkModal(link, group)}
-                                className="text-blue-600 hover:bg-blue-50 px-3 py-1 rounded transition text-sm"
+                                onClick={() => removeCollaboration(link.collaboration_id)}
+                                className="text-red-400 hover:bg-red-900 px-3 py-1 rounded transition text-sm flex-shrink-0"
                               >
-                                Editar
-                              </button>
-                              <button
-                                onClick={() => deleteLink(link.id)}
-                                className="text-red-600 hover:bg-red-50 px-3 py-1 rounded transition text-sm"
-                              >
-                                Eliminar
+                                Quitar
                               </button>
                             </div>
+                            ) : (
+                            <div
+                              key={link.id}
+                              className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg hover:bg-gray-100"
+                            >
+                              {link.image_url && (
+                                <img
+                                  src={link.image_url}
+                                  alt={link.text}
+                                  className="w-12 h-12 object-cover rounded"
+                                />
+                              )}
+                              <div className="flex-1">
+                                <a
+                                  href={link.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-600 hover:underline font-medium"
+                                >
+                                  {link.text}
+                                </a>
+                                {link.description && (
+                                  <p className="text-sm text-gray-600">{link.description}</p>
+                                )}
+                                {link.event_due == '1' && (
+                                  <p className="text-sm text-red-600 font-semibold mt-1">¡Evento vencido!</p>
+                                )}
+                                {group.type === 'eventos' && link.collaborations && link.collaborations.length > 0 && (
+                                  <div className="flex flex-wrap gap-1 mt-2">
+                                    {link.collaborations.map(c => (
+                                      <span
+                                        key={c.id}
+                                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${
+                                          c.status === 'accepted' ? 'bg-green-100 text-green-700' :
+                                          c.status === 'rejected' ? 'bg-red-100 text-red-600' :
+                                          'bg-yellow-100 text-yellow-700'
+                                        }`}
+                                      >
+                                        {c.page_image && <img src={c.page_image} alt="" className="w-3 h-3 rounded-full object-cover" />}
+                                        {c.page_title}
+                                        {' · '}
+                                        {c.status === 'accepted' ? 'aceptó' : c.status === 'rejected' ? 'rechazó' : 'pendiente'}
+                                        <button
+                                          onClick={() => removeCollaboration(c.id)}
+                                          className="ml-1 opacity-60 hover:opacity-100"
+                                          title="Quitar colaborador"
+                                        >×</button>
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="flex gap-1 items-center">
+                                {group.type !== 'eventos' && (
+                                  <>
+                                    <button
+                                      onClick={() => moveLink(link.id, group.id, 'up')}
+                                      disabled={linkIndex === 0}
+                                      className="px-2 py-1 rounded bg-black transition text-sm disabled:opacity-30 disabled:cursor-not-allowed"
+                                      title="Mover arriba"
+                                    >
+                                      ↑
+                                    </button>
+                                    <button
+                                      onClick={() => moveLink(link.id, group.id, 'down')}
+                                      disabled={linkIndex === group.links.length - 1}
+                                      className="px-2 py-1 rounded bg-black transition text-sm disabled:opacity-30 disabled:cursor-not-allowed"
+                                      title="Mover abajo"
+                                    >
+                                      ↓
+                                    </button>
+                                  </>
+                                )}
 
-                            <div className="relative md:hidden" ref={openLinkMenu === link.id ? linkMenuRef : null}>
-                              <button
-                                onClick={() => setOpenLinkMenu(openLinkMenu === link.id ? null : link.id)}
-                                className="p-2 hover:bg-gray-300 rounded transition text-gray-900"
-                              >
-                                <MoreVertical className="w-4 h-4" />
-                              </button>
-
-                              {openLinkMenu === link.id && (
-                                <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 w-40">
+                                <div className="hidden md:flex gap-1">
                                   <button
-                                    onClick={() => {
-                                      openEditLinkModal(link, group);
-                                      setOpenLinkMenu(null);
-                                    }}
-                                    className="w-full text-left px-4 py-2 hover:bg-gray-100 text-sm text-blue-600"
+                                    onClick={() => openEditLinkModal(link, group)}
+                                    className="text-blue-600 hover:bg-blue-50 px-3 py-1 rounded transition text-sm"
                                   >
                                     Editar
                                   </button>
                                   <button
-                                    onClick={() => {
-                                      deleteLink(link.id);
-                                      setOpenLinkMenu(null);
-                                    }}
-                                    className="w-full text-left px-4 py-2 hover:bg-gray-100 text-sm text-red-600"
+                                    onClick={() => deleteLink(link.id)}
+                                    className="text-red-600 hover:bg-red-50 px-3 py-1 rounded transition text-sm"
                                   >
                                     Eliminar
                                   </button>
                                 </div>
-                              )}
+
+                                <div className="relative md:hidden" ref={openLinkMenu === link.id ? linkMenuRef : null}>
+                                  <button
+                                    onClick={() => setOpenLinkMenu(openLinkMenu === link.id ? null : link.id)}
+                                    className="p-2 hover:bg-gray-300 rounded transition text-gray-900"
+                                  >
+                                    <MoreVertical className="w-4 h-4" />
+                                  </button>
+
+                                  {openLinkMenu === link.id && (
+                                    <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 w-40">
+                                      <button
+                                        onClick={() => {
+                                          openEditLinkModal(link, group);
+                                          setOpenLinkMenu(null);
+                                        }}
+                                        className="w-full text-left px-4 py-2 hover:bg-gray-100 text-sm text-blue-600"
+                                      >
+                                        Editar
+                                      </button>
+                                      <button
+                                        onClick={() => {
+                                          deleteLink(link.id);
+                                          setOpenLinkMenu(null);
+                                        }}
+                                        className="w-full text-left px-4 py-2 hover:bg-gray-100 text-sm text-red-600"
+                                      >
+                                        Eliminar
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
                             </div>
-                          </div>
+                            )
+                          ))}
                         </div>
-                        )
-                      ))}
+                      )}
                     </div>
-                  )}
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
-          )}
-        </div>
+          </>
+        )}
       </div>
 
       {showGroupModal && (

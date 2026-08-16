@@ -194,6 +194,7 @@ class PagesHandler
 
             if (is_array($page)) {
                 $page['groups'] = $groups;
+                $page['socials'] = Redes::deLaPagina($db, $pageId);
             }
 
             return Response::ok(['page' => $page]);
@@ -276,18 +277,32 @@ class PagesHandler
                 $values[] = $req->body[$campo];
             }
 
-            if (empty($fields)) {
+            // Las redes se sincronizan aparte: no son columnas de `pages`.
+            $tieneRedes = is_array($req->input('socials'));
+
+            if (empty($fields) && !$tieneRedes) {
                 return Response::error(400, 'No fields to update');
             }
 
-            $values[] = $pageId;
-            $stmt = $db->prepare('UPDATE pages SET ' . implode(', ', $fields) . ' WHERE id = ?');
-            $stmt->execute($values);
+            if (!empty($fields)) {
+                $values[] = $pageId;
+                $stmt = $db->prepare('UPDATE pages SET ' . implode(', ', $fields) . ' WHERE id = ?');
+                $stmt->execute($values);
+            }
+
+            if ($tieneRedes) {
+                Redes::reemplazar($db, $pageId, $req->input('socials'));
+            }
 
             $stmt = $db->prepare('SELECT * FROM pages WHERE id = ?');
             $stmt->execute([$pageId]);
+            $page = $stmt->fetch();
 
-            return Response::ok(['page' => $stmt->fetch()]);
+            if (is_array($page)) {
+                $page['socials'] = Redes::deLaPagina($db, $pageId);
+            }
+
+            return Response::ok(['page' => $page]);
 
         } catch (Exception $e) {
             return Response::serverError($e->getMessage());

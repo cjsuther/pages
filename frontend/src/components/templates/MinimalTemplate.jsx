@@ -3,6 +3,7 @@ import { trackEvent } from '../../utils/analytics';
 import FollowButton from '../FollowButton';
 import EventCollaborators from '../EventCollaborators';
 import FollowersPopup from '../FollowersPopup';
+import RedesSociales from '../RedesSociales';
 import RezonarBadge from '../RezonarBadge';
 import { ExternalLink } from 'lucide-react';
 
@@ -44,6 +45,7 @@ function MinimalTemplate({ page }) {
             <p className="text-lg opacity-70">{page.description}</p>
           )}
           <div className="flex flex-col items-center gap-3 mt-4">
+            <RedesSociales socials={page.socials} className="mb-1" />
             <FollowersPopup pageId={page.id} followerCount={page.follower_count || 0} />
             <FollowButton pageId={page.id} />
           </div>

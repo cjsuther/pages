@@ -55,6 +55,7 @@ class PublicHandler
             unset($group);
 
             $page['groups'] = $groups;
+            $page['socials'] = Redes::deLaPagina($db, $page['id']);
 
             $stmt = $db->prepare('SELECT COUNT(*) as count FROM page_followers WHERE page_id = ?');
             $stmt->execute([$page['id']]);

@@ -251,6 +251,65 @@ describe.each(PLANTILLAS)('%s', (nombre, Plantilla) => {
     });
   });
 
+  describe('redes sociales', () => {
+    it('no ocupa espacio si la página no cargó ninguna', () => {
+      renderConProviders(<Plantilla page={pagina({ socials: [] })} />);
+
+      expect(screen.queryByRole('link', { name: 'Instagram' })).not.toBeInTheDocument();
+    });
+
+    it('no rompe si la página ni siquiera trae el campo', () => {
+      expect(() => renderConProviders(<Plantilla page={pagina()} />)).not.toThrow();
+    });
+
+    it('muestra un icono por cada red cargada', () => {
+      renderConProviders(
+        <Plantilla
+          page={pagina({
+            socials: [
+              { red: 'instagram', url: 'https://instagram.com/yo' },
+              { red: 'youtube', url: 'https://youtube.com/@yo' },
+            ],
+          })}
+        />
+      );
+
+      expect(screen.getByRole('link', { name: 'Instagram' })).toHaveAttribute(
+        'href',
+        'https://instagram.com/yo'
+      );
+      expect(screen.getByRole('link', { name: 'YouTube' })).toBeInTheDocument();
+    });
+
+    it('sólo muestra las cargadas, no todo el catálogo', () => {
+      renderConProviders(
+        <Plantilla page={pagina({ socials: [{ red: 'instagram', url: 'https://instagram.com/yo' }] })} />
+      );
+
+      expect(screen.getByRole('link', { name: 'Instagram' })).toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'TikTok' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'Facebook' })).not.toBeInTheDocument();
+    });
+
+    it('los iconos van arriba, antes del contenido', () => {
+      renderConProviders(
+        <Plantilla
+          page={pagina({
+            socials: [{ red: 'instagram', url: 'https://instagram.com/yo' }],
+            groups: [grupoDeLinks([link({ url: 'https://un-link.test' })])],
+          })}
+        />
+      );
+
+      const iconoRed = screen.getByRole('link', { name: 'Instagram' });
+      // Por destino, porque cada plantilla maqueta el texto del link distinto.
+      const contenido = porHref('https://un-link.test');
+
+      // compareDocumentPosition: 4 = el segundo va después del primero.
+      expect(iconoRed.compareDocumentPosition(contenido) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+  });
+
   describe('personalización', () => {
     it('aplica los colores de la página', () => {
       const { container } = renderConProviders(

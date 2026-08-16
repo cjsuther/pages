@@ -77,6 +77,11 @@ async function render(datos = {}) {
     path: '/page/:id',
   });
   await screen.findByRole('heading', { name: 'EDITOR' });
+
+  // Todo lo que prueba este archivo vive en la solapa de contenido.
+  fireEvent.click(screen.getByRole('button', { name: /^CONTENIDO/ }));
+  await screen.findByRole('heading', { name: 'GRUPOS DE LINKS' });
+
   return { ...resultado, ...mock };
 }
 

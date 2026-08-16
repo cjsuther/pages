@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import FollowButton from '../FollowButton';
 import EventCollaborators from '../EventCollaborators';
 import FollowersPopup from '../FollowersPopup';
+import RedesSociales from '../RedesSociales';
 import RezonarBadge from '../RezonarBadge';
 import { ExternalLink } from 'lucide-react';
 
@@ -41,6 +42,7 @@ function CardsTemplate({ page }) {
             <p className="text-xl opacity-70 max-w-2xl mx-auto">{page.description}</p>
           )}
           <div className="flex flex-col items-center gap-3 mt-6">
+            <RedesSociales socials={page.socials} className="mb-1" />
             <FollowersPopup pageId={page.id} followerCount={page.follower_count || 0} />
             <FollowButton pageId={page.id} />
           </div>
