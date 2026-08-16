@@ -212,25 +212,49 @@ class Notificador
         $enviadoEn = (int) round(microtime(true) * 1000);
         $porEndpoint = [];
 
-        foreach ($pendientes as $envio) {
-            $porEndpoint[$envio['endpoint']] = $envio;
-
-            $sender->encolar($envio, [
-                'titulo'    => $envio['title'],
-                'cuerpo'    => $envio['message'],
-                'id'        => $envio['envio_id'],
-                'enviadoEn' => $enviadoEn,
-                'url'       => self::urlDestino($envio),
-                'tag'       => 'evento-' . (int) $envio['link_id'],
-            ]);
-        }
-
         $marcarEnviado = $db->prepare("UPDATE push_deliveries SET estado='enviado', enviado_en=?, intentos=intentos+1 WHERE id=?");
         $marcarFallido = $db->prepare("UPDATE push_deliveries SET estado='fallido', intentos=intentos+1, error=? WHERE id=?");
         $marcarExpirado = $db->prepare("UPDATE push_deliveries SET estado='expirado', intentos=intentos+1, error=? WHERE id=?");
         $borrarSuscripcion = $db->prepare('DELETE FROM push_subscriptions WHERE endpoint = ?');
 
         $resumen = ['enviados' => 0, 'fallidos' => 0, 'expiradas' => 0, 'total' => count($pendientes)];
+
+        foreach ($pendientes as $envio) {
+            // Una clave corrupta hace explotar el cifrado de la tanda entera,
+            // no sólo el de su propio envío: nada se manda, todo queda
+            // pendiente con intentos=0 y el cron vuelve a romper en cada
+            // corrida. Se descarta acá, antes de mezclarla con las sanas.
+            if (!PushSender::claveUtilizable($envio['p256dh_key'])) {
+                $marcarFallido->execute(['clave de suscripción inválida', $envio['id']]);
+                $resumen['fallidos']++;
+                continue;
+            }
+
+            // Red de contención por si la librería rechaza algo que el chequeo
+            // de arriba dio por bueno.
+            try {
+                $sender->encolar($envio, [
+                    'titulo'    => $envio['title'],
+                    'cuerpo'    => $envio['message'],
+                    'id'        => $envio['envio_id'],
+                    'enviadoEn' => $enviadoEn,
+                    'url'       => self::urlDestino($envio),
+                    'tag'       => 'evento-' . (int) $envio['link_id'],
+                ]);
+            } catch (Throwable $e) {
+                $marcarFallido->execute([substr($e->getMessage(), 0, 255), $envio['id']]);
+                $resumen['fallidos']++;
+                continue;
+            }
+
+            $porEndpoint[$envio['endpoint']] = $envio;
+        }
+
+        // Si ninguna suscripción resultó utilizable no hay nada que mandar, y
+        // flush() sobre una cola vacía no aporta.
+        if (empty($porEndpoint)) {
+            return $resumen;
+        }
 
         foreach ($sender->enviar() as $reporte) {
             $envio = self::buscarPorEndpoint($porEndpoint, $reporte['endpoint']);

@@ -36,8 +36,24 @@ class FakePushSender extends PushSender
         return $this;
     }
 
+    /** Endpoints que hacen fallar a encolar(), como una clave corrupta. */
+    private $rechazaAlEncolar = [];
+
+    /** Declara que encolar() va a tirar excepción para ese endpoint. */
+    public function rechazarAlEncolar($endpoint, $motivo = 'Invalid data: only uncompressed keys are supported.')
+    {
+        $this->rechazaAlEncolar[$endpoint] = $motivo;
+        return $this;
+    }
+
     public function encolar(array $suscripcion, array $payload)
     {
+        $endpoint = $suscripcion['endpoint'];
+
+        if (isset($this->rechazaAlEncolar[$endpoint])) {
+            throw new \ErrorException($this->rechazaAlEncolar[$endpoint]);
+        }
+
         $this->encolados[] = ['suscripcion' => $suscripcion, 'payload' => $payload];
     }
 

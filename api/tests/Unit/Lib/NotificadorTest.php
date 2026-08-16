@@ -275,6 +275,64 @@ class NotificadorTest extends HandlerTestCase
         $this->assertTrue($this->db->ran("UPDATE push_deliveries SET estado='fallido'"));
     }
 
+    /**
+     * Pasó en producción: una suscripción con la clave corrupta hacía tirar
+     * excepción a encolar(), la tanda entera moría antes de enviar nada y el
+     * envío quedaba pendiente con intentos=0, así que el cron volvía a romper
+     * en cada corrida. Una suscripción rota no puede bloquear a las demás.
+     */
+    public function testUnaSuscripcionCorruptaNoTumbaLaTanda()
+    {
+        $this->hayDosEnviosPendientes();
+        $sender = (new FakePushSender())->rechazarAlEncolar('https://push.example/rota');
+
+        $resumen = Notificador::procesarCola($this->db, $sender);
+
+        $this->assertSame(1, $resumen['enviados'], 'la sana se envía igual');
+        $this->assertSame(1, $resumen['fallidos'], 'la rota se cuenta como fallida');
+        $this->assertSame(2, $resumen['total']);
+    }
+
+    public function testLaSuscripcionCorruptaQuedaMarcadaConSuError()
+    {
+        $this->hayDosEnviosPendientes();
+        $sender = (new FakePushSender())->rechazarAlEncolar('https://push.example/rota');
+
+        Notificador::procesarCola($this->db, $sender);
+
+        $params = $this->db->paramsFor("UPDATE push_deliveries SET estado='fallido'");
+
+        $this->assertStringContainsString('uncompressed keys', $params[0]);
+        $this->assertSame(2, $params[1], 'el id del envío roto, no el del sano');
+    }
+
+    /** Marcada como fallida ya no se vuelve a tomar: no reintenta para siempre. */
+    public function testLaCorruptaNoSeReencolaEnLaSiguienteCorrida()
+    {
+        $this->hayDosEnviosPendientes();
+        $sender = (new FakePushSender())->rechazarAlEncolar('https://push.example/rota');
+
+        Notificador::procesarCola($this->db, $sender);
+
+        $this->assertTrue($this->db->ran("UPDATE push_deliveries SET estado='fallido'"));
+        $this->assertStringContainsString(
+            "d.estado = 'pendiente'",
+            $this->db->callsFor('FROM push_deliveries d')[0]['sql']
+        );
+    }
+
+    public function testSiTodasLasSuscripcionesEstanRotasNoSeIntentaEnviar()
+    {
+        $this->hayUnEnvioPendiente();
+        $sender = (new FakePushSender())->rechazarAlEncolar('https://push.example/abc');
+
+        $resumen = Notificador::procesarCola($this->db, $sender);
+
+        $this->assertSame(0, $resumen['enviados']);
+        $this->assertSame(1, $resumen['fallidos']);
+        $this->assertSame([], $sender->encolados);
+    }
+
     public function testSoloTomaEnviosPendientesYConReintentosDisponibles()
     {
         Notificador::procesarCola($this->db, new FakePushSender());
@@ -296,6 +354,35 @@ class NotificadorTest extends HandlerTestCase
         ];
     }
 
+    /**
+     * Clave con la forma que exige el cifrado: 65 bytes que arrancan con
+     * 0x04, en base64url. Una cadena cualquiera la rechaza claveUtilizable().
+     */
+    const CLAVE_VALIDA = 'BCoqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKio';
+
+    /** Dos envíos pendientes: el primero sano, el segundo con la clave rota. */
+    private function hayDosEnviosPendientes()
+    {
+        $base = [
+            'notification_id' => 7,
+            'p256dh_key' => self::CLAVE_VALIDA,
+            'auth_key' => 'clave-a',
+            'platform' => 'Android',
+            'title' => 'Nuevo evento: Mi Evento',
+            'message' => 'La página Mi Página publicó un evento',
+            'page_id' => 5,
+            'link_id' => 100,
+            'url_slug' => 'mi-pagina',
+        ];
+
+        $this->db->onSelect('FROM push_deliveries d', [
+            $base + ['id' => 1, 'envio_id' => 'abc1234567', 'subscription_id' => 3,
+                     'endpoint' => 'https://push.example/sana'],
+            $base + ['id' => 2, 'envio_id' => 'def1234567', 'subscription_id' => 4,
+                     'endpoint' => 'https://push.example/rota'],
+        ]);
+    }
+
     private function hayUnEnvioPendiente()
     {
         $this->db->onSelect('FROM push_deliveries d', [[
@@ -304,7 +391,7 @@ class NotificadorTest extends HandlerTestCase
             'notification_id' => 7,
             'subscription_id' => 3,
             'endpoint' => 'https://push.example/abc',
-            'p256dh_key' => 'clave-p',
+            'p256dh_key' => self::CLAVE_VALIDA,
             'auth_key' => 'clave-a',
             'platform' => 'Android',
             'title' => 'Nuevo evento: Mi Evento',

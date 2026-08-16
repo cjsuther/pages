@@ -44,6 +44,40 @@ class PushSender
         return class_exists(WebPush::class) && extension_loaded('gmp');
     }
 
+    /**
+     * true si la clave pública de la suscripción se puede cifrar.
+     *
+     * La librería valida esto recién al cifrar, dentro de flush(), y lo hace
+     * tirando una excepción que no distingue de qué dispositivo vino. Como
+     * flush() cifra toda la tanda junta, un solo registro corrupto impide que
+     * se envíe cualquier otra notificación. Se descarta antes de encolar.
+     *
+     * P-256 sin comprimir: 65 bytes que arrancan con 0x04 (un byte de
+     * prefijo más las coordenadas X e Y de 32 bytes cada una).
+     */
+    public static function claveUtilizable($p256dh)
+    {
+        $bytes = self::decodificarBase64Url((string) $p256dh);
+
+        return $bytes !== false && strlen($bytes) === 65 && $bytes[0] === "\x04";
+    }
+
+    private static function decodificarBase64Url($texto)
+    {
+        if ($texto === '') {
+            return false;
+        }
+
+        $normalizado = strtr($texto, '-_', '+/');
+        $relleno = strlen($normalizado) % 4;
+
+        if ($relleno) {
+            $normalizado .= str_repeat('=', 4 - $relleno);
+        }
+
+        return base64_decode($normalizado, true);
+    }
+
     private function cliente()
     {
         if ($this->webPush === null) {
