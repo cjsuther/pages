@@ -91,6 +91,7 @@ class MercadoPago
      *   @type string $urlRetorno  A dónde vuelve el comprador
      *   @type string $urlAviso    A dónde Mercado Pago avisa el pago
      *   @type array  $comprador   ['nombre', 'email', 'telefono']
+     *   @type float  $comision    Monto para la plataforma (0 si no hay split)
      * }
      * @return array{ok: bool, error: string|null, id: string|null, url: string|null}
      */
@@ -124,6 +125,19 @@ class MercadoPago
                 'excluded_payment_types' => [['id' => 'ticket'], ['id' => 'atm']],
             ],
         ];
+
+        // Comisión de la plataforma. Mercado Pago la descuenta del total y la
+        // deposita en la cuenta de la aplicación: el comprador paga una sola
+        // vez y el reparto lo hace Mercado Pago.
+        //
+        // Sólo tiene efecto si el token es de una cuenta conectada por OAuth
+        // desde esta aplicación. Con un token pegado a mano se ignora sin dar
+        // error, así que quien llama tiene que haberlo verificado antes.
+        $comision = isset($datos['comision']) ? round((float) $datos['comision'], 2) : 0.0;
+
+        if ($comision > 0) {
+            $cuerpo['marketplace_fee'] = $comision;
+        }
 
         $r = $this->http->postJson(self::BASE . '/checkout/preferences', $cuerpo, $this->cabeceras());
 

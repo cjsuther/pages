@@ -79,10 +79,17 @@ function PanelVentas({ linkId, apiUrl, token }) {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Dato etiqueta="VENDIDAS" valor={capacidad ? `${resumen.vendidas}/${capacidad}` : resumen.vendidas} />
         <Dato etiqueta="RESERVANDO" valor={resumen.reservadas} />
         <Dato etiqueta="RECAUDADO" valor={formatearPrecio(resumen.recaudado)} />
+        {/* Lo que efectivamente entra a la cuenta, ya descontada la comisión:
+            es el número con el que el dueño hace sus cuentas. */}
+        <Dato
+          etiqueta="TE QUEDA"
+          valor={formatearPrecio(resumen.neto !== undefined ? resumen.neto : resumen.recaudado)}
+          detalle={resumen.comision > 0 ? `comisión ${formatearPrecio(resumen.comision)}` : null}
+        />
       </div>
 
       <div className="flex items-center gap-3">
@@ -183,11 +190,12 @@ function Telefono({ numero, nombre }) {
   );
 }
 
-function Dato({ etiqueta, valor }) {
+function Dato({ etiqueta, valor, detalle }) {
   return (
     <div className="border border-gray-800 bg-black p-4">
       <p className="text-xs text-gray-500 tracking-wide mb-1">{etiqueta}</p>
       <p className="text-xl font-black text-white">{valor}</p>
+      {detalle && <p className="text-xs text-gray-600 mt-1">{detalle}</p>}
     </div>
   );
 }

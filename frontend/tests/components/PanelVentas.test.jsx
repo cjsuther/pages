@@ -52,9 +52,12 @@ describe('PanelVentas', () => {
     });
 
     it('muestra lo recaudado', async () => {
-      await montar({ resumen: { recaudado: 67500 } });
+      await montar({ resumen: { recaudado: 67500, comision: 6750, neto: 60750 } });
 
-      expect(screen.getByText(/67\.500/)).toBeInTheDocument();
+      // Hay varias tarjetas con importes: se busca dentro de la que corresponde.
+      const tarjeta = screen.getByText('RECAUDADO').closest('div');
+
+      expect(tarjeta).toHaveTextContent('67.500');
     });
 
     /** Lo reservado no está cobrado todavía: no puede sumarse a lo vendido. */
@@ -65,6 +68,30 @@ describe('PanelVentas', () => {
       expect(screen.getByText('3')).toBeInTheDocument();
     });
   });
+
+
+    /**
+     * Es el número con el que el dueño hace sus cuentas: lo recaudado no es lo
+     * que le entra si hay comisión de por medio.
+     */
+    it('muestra lo que le queda después de la comisión', async () => {
+      await montar({ resumen: { recaudado: 10000, comision: 1000, neto: 9000 } });
+
+      expect(screen.getByText('TE QUEDA')).toBeInTheDocument();
+      expect(screen.getByText(/9\.000/)).toBeInTheDocument();
+    });
+
+    it('detalla cuánto se llevó la comisión', async () => {
+      await montar({ resumen: { recaudado: 10000, comision: 1000, neto: 9000 } });
+
+      expect(screen.getByText(/comisión.*1\.000/)).toBeInTheDocument();
+    });
+
+    it('sin comisión no muestra el detalle', async () => {
+      await montar({ resumen: { recaudado: 10000, comision: 0, neto: 10000 } });
+
+      expect(screen.queryByText(/comisión/)).not.toBeInTheDocument();
+    });
 
   describe('listado', () => {
     it('avisa cuando todavía no hay ventas', async () => {

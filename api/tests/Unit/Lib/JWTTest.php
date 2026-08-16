@@ -187,4 +187,33 @@ class JWTTest extends TestCase
 
         $this->assertNull(JWT::getUserFromHeaders(['Authorization' => 'Bearer ' . $tokenAjeno]));
     }
+
+    /**
+     * encode() pisaba el exp que le pasaran, así que un token pensado para
+     * durar minutos —el estado del OAuth de Mercado Pago— duraba un día entero.
+     */
+    public function testSeRespetaUnVencimientoExplicito()
+    {
+        $token = JWT::encode(['user_id' => 7, 'exp' => time() + 60], JWT_SECRET);
+        $datos = JWT::decode($token, JWT_SECRET);
+
+        $this->assertLessThan(time() + 120, $datos['exp'], 'no puede durar más de lo pedido');
+    }
+
+    public function testUnTokenConVencimientoPasadoNoSeAcepta()
+    {
+        $token = JWT::encode(['user_id' => 7, 'exp' => time() - 10], JWT_SECRET);
+
+        $this->assertFalse(JWT::decode($token, JWT_SECRET));
+    }
+
+    /** Los tokens de sesión no traen exp y siguen usando el general. */
+    public function testSinVencimientoExplicitoSeUsaElDeLaConfiguracion()
+    {
+        $token = JWT::encode(['user_id' => 7], JWT_SECRET);
+        $datos = JWT::decode($token, JWT_SECRET);
+
+        $this->assertEqualsWithDelta(time() + JWT_EXPIRATION, $datos['exp'], 5);
+    }
+
 }

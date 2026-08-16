@@ -4,7 +4,9 @@ namespace Tests\Unit\Handlers;
 
 use Cripto;
 use EntradasHandler;
+use MercadoPagoOAuth;
 use Request;
+use Tests\Support\FakeHttpClient;
 use Tests\Support\HandlerTestCase;
 
 class EntradasHandlerTest extends HandlerTestCase
@@ -57,59 +59,8 @@ class EntradasHandlerTest extends HandlerTestCase
         $this->assertFalse($r->body['cobros']['configurado']);
     }
 
-    /**
-     * El access token permite cobrar en nombre del dueño: no puede volver al
-     * frontend ni siquiera para quien lo cargó.
-     */
-    public function testElAccessTokenNuncaVuelveEnLaRespuesta()
-    {
-        $this->puedeAdministrar();
-        $this->db->onSelect('FROM page_payment_settings', [[
-            'page_id' => 5,
-            'access_token_cifrado' => Cripto::cifrar(self::TOKEN),
-            'token_ultimos4' => 'x123',
-            'public_key' => 'APP_USR-publica',
-            'modo' => 'produccion',
-            'verificado_en' => '2026-08-16 20:00:00',
-        ]]);
 
-        $r = EntradasHandler::credenciales($this->db, new Request('GET', [], ['page_id' => 5], $this->sesion()));
-        $serializado = json_encode($r->body);
 
-        $this->assertStringNotContainsString(self::TOKEN, $serializado);
-        $this->assertStringNotContainsString('access_token', $serializado);
-        $this->assertSame('x123', $r->body['cobros']['token_ultimos4']);
-    }
-
-    public function testGuardarRechazaUnTokenConFormatoInvalido()
-    {
-        $this->puedeAdministrar();
-
-        $r = EntradasHandler::credenciales($this->db, new Request('POST', [
-            'access_token' => 'no-es-un-token',
-            'public_key'   => 'APP_USR-1234567890123456789012345',
-        ], ['page_id' => 5], $this->sesion()));
-
-        $this->assertSame(400, $r->status);
-        $this->assertSame(0, $this->db->countCalls('INSERT INTO page_payment_settings'));
-    }
-
-    /**
-     * Mezclar una credencial de prueba con una de producción abre el checkout
-     * igual, pero el cobro nunca llega a la cuenta real.
-     */
-    public function testNoSePuedenMezclarCredencialesDePruebaYProduccion()
-    {
-        $this->puedeAdministrar();
-
-        $r = EntradasHandler::credenciales($this->db, new Request('POST', [
-            'access_token' => self::TOKEN,
-            'public_key'   => 'TEST-1234567890123456789012345678',
-        ], ['page_id' => 5], $this->sesion()));
-
-        $this->assertSame(400, $r->status);
-        $this->assertStringContainsString('mismo par', $r->body['error']);
-    }
 
     /**
      * Los eventos que ya venden quedarían con el checkout roto, y el dueño se
@@ -137,6 +88,182 @@ class EntradasHandlerTest extends HandlerTestCase
 
         $this->assertSame(200, $r->status);
         $this->assertTrue($this->db->ran('DELETE FROM page_payment_settings'));
+    }
+
+
+    /**
+     * Ni el access token ni el refresh token pueden volver al frontend, ni
+     * siquiera para quien conectó la cuenta.
+     */
+    public function testNingunSecretoVuelveEnLaRespuesta()
+    {
+        $this->puedeAdministrar();
+        $this->db->onSelect('FROM page_payment_settings', [[
+            'page_id' => 5,
+            'mp_user_id' => '987654321',
+            'access_token_cifrado' => Cripto::cifrar(self::TOKEN),
+            'refresh_token_cifrado' => Cripto::cifrar('TG-refresh'),
+            'modo' => 'produccion',
+            'conectado_por' => 'oauth',
+            'verificado_en' => '2026-08-16 20:00:00',
+        ]]);
+
+        $r = EntradasHandler::credenciales($this->db, new Request('GET', [], ['page_id' => 5], $this->sesion()));
+        $serializado = json_encode($r->body);
+
+        $this->assertStringNotContainsString(self::TOKEN, $serializado);
+        $this->assertStringNotContainsString('TG-refresh', $serializado);
+        $this->assertStringNotContainsString('cifrado', $serializado);
+    }
+
+    /** El dueño tiene que saber qué porcentaje se le descuenta. */
+    public function testSeInformaElPorcentajeDeComision()
+    {
+        $this->puedeAdministrar();
+
+        $r = EntradasHandler::credenciales($this->db, new Request('GET', [], ['page_id' => 5], $this->sesion()));
+
+        $this->assertSame(10.0, $r->body['comision']);
+    }
+
+    public function testSeInformaSiLaCuentaAdmiteSplit()
+    {
+        $this->puedeAdministrar();
+        $this->db->onSelect('FROM page_payment_settings', [[
+            'page_id' => 5, 'mp_user_id' => '1', 'conectado_por' => 'oauth',
+            'modo' => 'produccion', 'verificado_en' => null,
+        ]]);
+
+        $r = EntradasHandler::credenciales($this->db, new Request('GET', [], ['page_id' => 5], $this->sesion()));
+
+        $this->assertTrue($r->body['cobros']['admite_split']);
+    }
+
+    // ------------------------------------------------------------------ OAuth
+
+    public function testConectarExigeSesion()
+    {
+        $this->assertSame(401, EntradasHandler::conectar($this->db, new Request('POST', [], ['page_id' => 5]))->status);
+    }
+
+    /** Sin esto cualquiera podría empezar a conectar cuentas a páginas ajenas. */
+    public function testUnExtranoNoPuedeIniciarLaConexion()
+    {
+        $this->db->onSelect('FROM pages', []);
+
+        $r = EntradasHandler::conectar($this->db, new Request('POST', [], ['page_id' => 5], $this->sesion()));
+
+        $this->assertSame(403, $r->status);
+    }
+
+    public function testConectarDevuelveLaUrlDeMercadoPago()
+    {
+        $this->puedeAdministrar();
+
+        $r = EntradasHandler::conectar($this->db, new Request('POST', [], ['page_id' => 5], $this->sesion()));
+
+        $this->assertSame(200, $r->status);
+        $this->assertStringContainsString('auth.mercadopago', $r->body['url']);
+        $this->assertStringContainsString('client_id=' . MP_APP_ID, $r->body['url']);
+    }
+
+    /**
+     * El estado firmado es lo que impide que alguien arme el link con el
+     * page_id de otro y le conecte la cuenta a una página que no le pertenece.
+     */
+    public function testLaUrlLlevaUnEstadoFirmadoConLaPagina()
+    {
+        $this->puedeAdministrar();
+
+        $r = EntradasHandler::conectar($this->db, new Request('POST', [], ['page_id' => 5], $this->sesion()));
+
+        parse_str(parse_url($r->body['url'], PHP_URL_QUERY), $query);
+        $estado = MercadoPagoOAuth::leerEstado($query['state']);
+
+        $this->assertSame(5, $estado['page_id']);
+        $this->assertSame(7, $estado['user_id']);
+    }
+
+    // -------------------------------------------------------- oauth callback
+
+    private function estadoValido()
+    {
+        return MercadoPagoOAuth::firmarEstado(5, 7);
+    }
+
+    private function httpQueCanjea()
+    {
+        return (new FakeHttpClient())->responde('/oauth/token', 200, [
+            'access_token' => 'APP_USR-token-nuevo-del-vendedor',
+            'refresh_token' => 'TG-refresh-nuevo',
+            'public_key' => 'APP_USR-publica',
+            'user_id' => 987654321,
+            'live_mode' => true,
+            'expires_in' => 15552000,
+        ]);
+    }
+
+    public function testElCallbackGuardaLasCredencialesYVuelveAlEditor()
+    {
+        $this->puedeAdministrar();
+        $this->db->onWrite('INSERT INTO page_payment_settings', 1);
+
+        $r = EntradasHandler::oauthCallback($this->db,
+            new Request('GET', [], ['code' => 'CODIGO-123', 'state' => $this->estadoValido()]),
+            $this->httpQueCanjea());
+
+        $this->assertTrue($r->isRedirect());
+        $this->assertStringContainsString('conectado=1', $r->redirectUrl);
+        $this->assertTrue($this->db->ran('INSERT INTO page_payment_settings'));
+    }
+
+    /** Un estado inventado no puede conectar nada. */
+    public function testUnEstadoInvalidoNoGuardaNada()
+    {
+        $r = EntradasHandler::oauthCallback($this->db,
+            new Request('GET', [], ['code' => 'CODIGO-123', 'state' => 'inventado']),
+            $this->httpQueCanjea());
+
+        $this->assertStringContainsString('error=estado_invalido', $r->redirectUrl);
+        $this->assertNoWrites();
+    }
+
+    /**
+     * Entre que se firmó el estado y la vuelta pueden haberle sacado el acceso
+     * a la página.
+     */
+    public function testSeVuelveAComprobarElPermisoAlVolver()
+    {
+        $this->db->onSelect('FROM pages', []);
+
+        $r = EntradasHandler::oauthCallback($this->db,
+            new Request('GET', [], ['code' => 'CODIGO-123', 'state' => $this->estadoValido()]),
+            $this->httpQueCanjea());
+
+        $this->assertStringContainsString('error=sin_permiso', $r->redirectUrl);
+        $this->assertNoWrites();
+    }
+
+    public function testSiElDuenoCancelaSeVuelveSinConectarNada()
+    {
+        $r = EntradasHandler::oauthCallback($this->db,
+            new Request('GET', [], ['error' => 'access_denied', 'state' => $this->estadoValido()]),
+            new FakeHttpClient());
+
+        $this->assertStringContainsString('error=cancelado', $r->redirectUrl);
+        $this->assertNoWrites();
+    }
+
+    public function testSiMercadoPagoRechazaElCodigoNoSeGuardaNada()
+    {
+        $this->puedeAdministrar();
+        $http = (new FakeHttpClient())->responde('/oauth/token', 400, ['message' => 'invalid_grant']);
+
+        $r = EntradasHandler::oauthCallback($this->db,
+            new Request('GET', [], ['code' => 'VIEJO', 'state' => $this->estadoValido()]), $http);
+
+        $this->assertStringContainsString('error=fallo_mercadopago', $r->redirectUrl);
+        $this->assertSame(0, $this->db->countCalls('INSERT INTO page_payment_settings'));
     }
 
     // ---------------------------------------------------------------- config
@@ -215,6 +342,7 @@ class EntradasHandlerTest extends HandlerTestCase
             'id' => 1, 'codigo' => 'ABC123DEF456', 'nombre' => 'Ana Gómez',
             'email' => 'ana@example.com', 'telefono' => '1122334455',
             'cantidad' => 2, 'precio_unitario' => '1500.00', 'total' => '3000.00',
+            'comision' => '300.00', 'comision_porcentaje' => '10.00',
             'moneda' => 'ARS', 'estado' => 'pagada', 'reserva_vence_en' => null,
             'mp_payment_id' => '99', 'pagada_en' => '2026-08-16 20:00:00',
             'created_at' => '2026-08-16 19:58:00', 'vencida' => 0,

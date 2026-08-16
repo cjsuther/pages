@@ -506,6 +506,7 @@ class EntradasTest extends HandlerTestCase
             'id' => 1, 'codigo' => 'ABC123DEF456', 'nombre' => 'Ana Gómez',
             'email' => 'ana@example.com', 'telefono' => '1122334455',
             'cantidad' => 2, 'precio_unitario' => '1500.00', 'total' => '3000.00',
+            'comision' => '300.00', 'comision_porcentaje' => '10.00',
             'moneda' => 'ARS', 'estado' => 'pagada', 'reserva_vence_en' => null,
             'mp_payment_id' => '99', 'pagada_en' => '2026-08-16 20:00:00',
             'created_at' => '2026-08-16 19:58:00', 'vencida' => 0,

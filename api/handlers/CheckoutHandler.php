@@ -56,13 +56,20 @@ class CheckoutHandler
             ]);
         }
 
-        $token = Cobros::tokenDelEvento($db, $linkId);
+        $token = Cobros::tokenDelEvento($db, $linkId, $http);
 
         if ($token === null) {
             self::cancelar($db, $orden['codigo']);
 
             return Response::error(503, 'Este evento no puede cobrar en este momento. Probá más tarde.');
         }
+
+        // La comisión sólo se manda si la página conectó por OAuth: con una
+        // credencial pegada a mano Mercado Pago la ignora, y mandarla igual
+        // haría creer que se está cobrando algo que no se cobra.
+        $comision = Cobros::eventoAdmiteSplit($db, $linkId)
+            ? Comision::sobre($orden['total'])
+            : 0.0;
 
         $preferencia = (new MercadoPago($token, $http))->crearPreferencia([
             'titulo'     => $evento['text'],
@@ -72,6 +79,7 @@ class CheckoutHandler
             'referencia' => $orden['codigo'],
             'urlRetorno' => self::urlDeRetorno($orden['codigo']),
             'urlAviso'   => self::urlDeAviso($orden['codigo']),
+            'comision'   => $comision,
             'comprador'  => [
                 'nombre'   => $req->input('nombre'),
                 'email'    => $req->input('email'),
@@ -88,6 +96,10 @@ class CheckoutHandler
         }
 
         Entradas::guardarPreferencia($db, $orden['id'], $preferencia['id']);
+
+        // Se congela lo cobrado: si mañana cambia el porcentaje, esta venta
+        // tiene que seguir mostrando lo que efectivamente se descontó.
+        Entradas::guardarComision($db, $orden['id'], $comision, $comision > 0 ? Comision::porcentaje() : 0);
 
         return Response::created([
             'success' => true,

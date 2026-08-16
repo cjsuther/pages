@@ -12,7 +12,13 @@ class JWT {
 
     public static function encode($payload, $secret) {
         $header = json_encode(['typ' => 'JWT', 'alg' => 'HS256']);
-        $payload['exp'] = time() + JWT_EXPIRATION;
+
+        // Se respeta el vencimiento que venga: los tokens de sesión no lo
+        // traen y usan el general, pero un token de un solo uso —como el
+        // estado del OAuth de Mercado Pago— necesita durar minutos, no un día.
+        if (!isset($payload['exp'])) {
+            $payload['exp'] = time() + JWT_EXPIRATION;
+        }
         $payload = json_encode($payload);
 
         $base64UrlHeader = self::base64UrlEncode($header);

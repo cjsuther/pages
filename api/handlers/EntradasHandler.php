@@ -12,6 +12,12 @@ class EntradasHandler
 {
     // ----------------------------------------------------------- credenciales
 
+    /**
+     * Estado del cobro de una página y desconexión.
+     *
+     * El alta ya no admite pegar credenciales: se hace por OAuth, que es lo
+     * único que permite descontar la comisión de la plataforma.
+     */
     public static function credenciales($db, Request $req)
     {
         if (!$req->user) {
@@ -29,25 +35,13 @@ class EntradasHandler
         }
 
         if ($req->method === 'GET') {
-            return Response::ok(['cobros' => Cobros::estado($db, $pageId)]);
-        }
-
-        if ($req->method === 'POST' || $req->method === 'PUT') {
-            $resultado = Cobros::guardar(
-                $db,
-                $pageId,
-                $req->input('access_token'),
-                $req->input('public_key')
-            );
-
-            if (!$resultado['ok']) {
-                return Response::error(400, $resultado['error']);
-            }
-
             return Response::ok([
-                'success' => true,
-                'cuenta'  => $resultado['cuenta'],
-                'cobros'  => Cobros::estado($db, $pageId),
+                'cobros'     => Cobros::estado($db, $pageId),
+                'comision'   => Comision::porcentaje(),
+                // Sin la aplicación de marketplace configurada no hay forma de
+                // conectar ninguna cuenta, y conviene decirlo en vez de mostrar
+                // un botón que lleva a un error de Mercado Pago.
+                'disponible' => MercadoPagoOAuth::configurado(),
             ]);
         }
 
@@ -57,7 +51,7 @@ class EntradasHandler
             $enVenta = self::eventosPagosEnVenta($db, $pageId);
 
             if ($enVenta > 0 && !$req->input('confirmar')) {
-                return Response::error(409, "Hay $enVenta evento(s) cobrando entradas con esta credencial. "
+                return Response::error(409, "Hay $enVenta evento(s) cobrando entradas con esta cuenta. "
                     . 'Volvé a enviar con confirmar=true si querés desconectarla igual.');
             }
 
@@ -67,6 +61,92 @@ class EntradasHandler
         }
 
         return Response::methodNotAllowed();
+    }
+
+    // ------------------------------------------------------------------ OAuth
+
+    /** Devuelve a dónde mandar al dueño para que autorice su cuenta. */
+    public static function conectar($db, Request $req)
+    {
+        if (!$req->user) {
+            return Response::unauthorized();
+        }
+
+        if ($req->method !== 'POST' && $req->method !== 'GET') {
+            return Response::methodNotAllowed();
+        }
+
+        $pageId = (int) $req->param('page_id');
+
+        if (!$pageId) {
+            return Response::error(400, 'page_id requerido');
+        }
+
+        if (!PageAccess::canManage($db, $pageId, $req->userId())) {
+            return Response::error(403, 'No podés administrar esta página');
+        }
+
+        if (!MercadoPagoOAuth::configurado()) {
+            return Response::error(503, 'La plataforma todavía no tiene configurada su aplicación de Mercado Pago');
+        }
+
+        $estado = MercadoPagoOAuth::firmarEstado($pageId, $req->userId());
+
+        return Response::ok(['url' => MercadoPagoOAuth::urlDeAutorizacion($estado)]);
+    }
+
+    /**
+     * Vuelta desde Mercado Pago con el código de autorización.
+     *
+     * No lleva sesión: el navegador viene redirigido desde Mercado Pago. Quién
+     * autorizó y para qué página lo dice el `state` firmado, que es lo que
+     * impide que alguien conecte una cuenta a una página ajena.
+     */
+    public static function oauthCallback($db, Request $req, $http = null)
+    {
+        $estado = MercadoPagoOAuth::leerEstado($req->param('state'));
+
+        if ($estado === null) {
+            return self::volverAlEditor(null, 'estado_invalido');
+        }
+
+        if ($req->param('error')) {
+            // El dueño canceló en la pantalla de Mercado Pago.
+            return self::volverAlEditor($estado['page_id'], 'cancelado');
+        }
+
+        $codigo = $req->param('code');
+
+        if (!$codigo) {
+            return self::volverAlEditor($estado['page_id'], 'sin_codigo');
+        }
+
+        // Se vuelve a comprobar el permiso: entre que se firmó el estado y la
+        // vuelta pudieron sacarle el acceso a la página.
+        if (!PageAccess::canManage($db, $estado['page_id'], $estado['user_id'])) {
+            return self::volverAlEditor($estado['page_id'], 'sin_permiso');
+        }
+
+        $canje = (new MercadoPagoOAuth($http))->canjearCodigo($codigo);
+
+        if (!$canje['ok']) {
+            return self::volverAlEditor($estado['page_id'], 'fallo_mercadopago');
+        }
+
+        $guardado = Cobros::guardarDesdeOAuth($db, $estado['page_id'], $canje['credenciales']);
+
+        if (!$guardado['ok']) {
+            return self::volverAlEditor($estado['page_id'], 'no_se_pudo_guardar');
+        }
+
+        return self::volverAlEditor($estado['page_id'], null);
+    }
+
+    private static function volverAlEditor($pageId, $error)
+    {
+        $destino = rtrim(FRONTEND_URL, '/') . '/page/' . (int) $pageId . '?seccion=entradas';
+
+        return Response::redirect($destino . ($error === null ? '&conectado=1' : '&error=' . $error));
     }
 
     // ------------------------------------------------------------------ config

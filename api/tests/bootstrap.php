@@ -50,6 +50,11 @@ define('VAPID_SUBJECT', 'mailto:test@test.local');
 
 define('PAYMENTS_ENCRYPTION_KEY', 'clave-de-prueba-para-cifrar-credenciales-de-cobro');
 
+define('PLATFORM_FEE_PERCENT', 10);
+define('MP_APP_ID', '1234567890123456');
+define('MP_APP_SECRET', 'secreto-de-prueba-de-la-aplicacion');
+define('MP_OAUTH_REDIRECT_URI', 'https://api.test/api/entradas/oauth-callback.php');
+
 define('CRON_SECRET_KEY', 'test-cron-secret');
 
 // Clases del dominio y autoload de lib/ + handlers/.

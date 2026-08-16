@@ -241,6 +241,13 @@ class Entradas
         }
     }
 
+    /** Congela la comisión con la que se creó el cobro. */
+    public static function guardarComision($db, $ordenId, $comision, $porcentaje)
+    {
+        $stmt = $db->prepare('UPDATE ticket_orders SET comision = ?, comision_porcentaje = ? WHERE id = ?');
+        $stmt->execute([round((float) $comision, 2), round((float) $porcentaje, 2), (int) $ordenId]);
+    }
+
     /** Guarda la preferencia de Mercado Pago asociada a la orden. */
     public static function guardarPreferencia($db, $ordenId, $preferenciaId)
     {
@@ -332,7 +339,8 @@ class Entradas
     {
         $stmt = $db->prepare("
             SELECT id, codigo, nombre, email, telefono, cantidad,
-                   precio_unitario, total, moneda, estado, reserva_vence_en,
+                   precio_unitario, total, comision, comision_porcentaje,
+                   moneda, estado, reserva_vence_en,
                    mp_payment_id, pagada_en, created_at,
                    (estado = 'reservada' AND reserva_vence_en <= NOW()) AS vencida
             FROM ticket_orders
@@ -344,6 +352,7 @@ class Entradas
 
         $vendidas = 0;
         $recaudado = 0.0;
+        $comisiones = 0.0;
         $reservadas = 0;
 
         foreach ($ordenes as &$orden) {
@@ -355,6 +364,7 @@ class Entradas
             if ($orden['estado'] === 'pagada') {
                 $vendidas += (int) $orden['cantidad'];
                 $recaudado += (float) $orden['total'];
+                $comisiones += (float) $orden['comision'];
             } elseif ($orden['estado'] === 'reservada') {
                 $reservadas += (int) $orden['cantidad'];
             }
@@ -367,6 +377,9 @@ class Entradas
                 'vendidas'   => $vendidas,
                 'reservadas' => $reservadas,
                 'recaudado'  => round($recaudado, 2),
+                'comision'   => round($comisiones, 2),
+                // Lo que realmente le queda al dueño después del split.
+                'neto'       => round($recaudado - $comisiones, 2),
             ],
         ];
     }

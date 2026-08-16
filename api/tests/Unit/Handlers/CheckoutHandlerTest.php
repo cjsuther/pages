@@ -28,10 +28,30 @@ class CheckoutHandlerTest extends HandlerTestCase
         $this->db->onWrite('INSERT INTO ticket_orders', 1);
     }
 
-    private function hayCredencialesDeCobro()
+    private function hayCredencialesDeCobro($conectadoPor = 'oauth')
     {
+        // Cobros resuelve la página del evento y después lee sus credenciales.
         $this->db->onSelect('lg.page_id', [[5]]);
-        $this->db->onSelect('access_token_cifrado', [[Cripto::cifrar(self::TOKEN)]]);
+        $this->db->onSelect('FROM page_payment_settings WHERE page_id', [[
+            'page_id' => 5,
+            'mp_user_id' => '987654321',
+            'access_token_cifrado' => Cripto::cifrar(self::TOKEN),
+            'refresh_token_cifrado' => null,
+            'modo' => 'produccion',
+            'conectado_por' => $conectadoPor,
+            'token_expira_en' => date('Y-m-d H:i:s', time() + 86400 * 180),
+            'verificado_en' => '2026-08-16 20:00:00',
+        ]]);
+
+        // eventoAdmiteSplit vuelve a resolver la página y la credencial.
+        $this->db->onSelect('lg.page_id', [[5]]);
+        $this->db->onSelect('FROM page_payment_settings WHERE page_id', [[
+            'page_id' => 5,
+            'conectado_por' => $conectadoPor,
+            'access_token_cifrado' => Cripto::cifrar(self::TOKEN),
+            'refresh_token_cifrado' => null,
+            'token_expira_en' => date('Y-m-d H:i:s', time() + 86400 * 180),
+        ]]);
     }
 
     private function pedido(array $overrides = [])
@@ -59,6 +79,7 @@ class CheckoutHandlerTest extends HandlerTestCase
     {
         $this->hayEventoQueVende();
         $this->hayCredencialesDeCobro();
+        $this->db->onWrite('UPDATE ticket_orders SET comision', 1);
 
         $r = CheckoutHandler::comprar($this->db, $this->pedido(), $this->httpQueCreaLaPreferencia());
 
@@ -140,6 +161,93 @@ class CheckoutHandlerTest extends HandlerTestCase
 
         $this->assertSame(503, $r->status);
         $this->assertTrue($this->db->ran("estado = 'cancelada'"));
+    }
+
+
+    // ----------------------------------------------------------------- split
+
+    /**
+     * El comprador paga el total; la comisión sale de lo que recibe el dueño.
+     * Mandarla como un monto y no como porcentaje es lo que espera Mercado Pago.
+     */
+    public function testLaPreferenciaLlevaLaComisionDeLaPlataforma()
+    {
+        $this->hayEventoQueVende(['precio' => '1500.00']);
+        $this->hayCredencialesDeCobro('oauth');
+        $this->db->onWrite('UPDATE ticket_orders SET comision', 1);
+        $http = $this->httpQueCreaLaPreferencia();
+
+        CheckoutHandler::comprar($this->db, $this->pedido(['cantidad' => 2]), $http);
+        $enviado = $http->jsonDe('/checkout/preferences');
+
+        // 2 entradas de 1500 = 3000; el 10% son 300.
+        $this->assertSame(300.0, $enviado['marketplace_fee']);
+    }
+
+    public function testElCompradorPagaElTotalSinRecargo()
+    {
+        $this->hayEventoQueVende(['precio' => '1500.00']);
+        $this->hayCredencialesDeCobro('oauth');
+        $this->db->onWrite('UPDATE ticket_orders SET comision', 1);
+        $http = $this->httpQueCreaLaPreferencia();
+
+        CheckoutHandler::comprar($this->db, $this->pedido(['cantidad' => 2]), $http);
+        $item = $http->jsonDe('/checkout/preferences')['items'][0];
+
+        $this->assertSame(1500.0, $item['unit_price'], 'la comisión no se le suma al comprador');
+        $this->assertSame(2, $item['quantity']);
+    }
+
+    /**
+     * Con una credencial pegada a mano Mercado Pago ignora la comisión. Mandarla
+     * igual haría creer que se está cobrando algo que no se cobra.
+     */
+    public function testSinOauthNoSeMandaComision()
+    {
+        $this->hayEventoQueVende(['precio' => '1500.00']);
+        $this->hayCredencialesDeCobro('manual');
+        $this->db->onWrite('UPDATE ticket_orders SET comision', 1);
+        $http = $this->httpQueCreaLaPreferencia();
+
+        CheckoutHandler::comprar($this->db, $this->pedido(), $http);
+
+        $this->assertArrayNotHasKey('marketplace_fee', $http->jsonDe('/checkout/preferences'));
+    }
+
+    public function testLaComisionQuedaCongeladaEnLaOrden()
+    {
+        $this->hayEventoQueVende(['precio' => '1500.00']);
+        $this->hayCredencialesDeCobro('oauth');
+        $this->db->onWrite('UPDATE ticket_orders SET comision', 1);
+
+        CheckoutHandler::comprar($this->db, $this->pedido(['cantidad' => 2]), $this->httpQueCreaLaPreferencia());
+        $params = $this->db->paramsFor('UPDATE ticket_orders SET comision');
+
+        $this->assertSame(300.0, $params[0], 'el monto cobrado');
+        $this->assertSame(10.0, $params[1], 'el porcentaje con el que se calculó');
+    }
+
+    public function testSinSplitSeGuardaComisionCero()
+    {
+        $this->hayEventoQueVende(['precio' => '1500.00']);
+        $this->hayCredencialesDeCobro('manual');
+        $this->db->onWrite('UPDATE ticket_orders SET comision', 1);
+
+        CheckoutHandler::comprar($this->db, $this->pedido(), $this->httpQueCreaLaPreferencia());
+        $params = $this->db->paramsFor('UPDATE ticket_orders SET comision');
+
+        $this->assertSame(0.0, $params[0]);
+        $this->assertSame(0.0, $params[1]);
+    }
+
+    /** Una reserva sin costo no tiene nada que repartir. */
+    public function testUnaReservaSinPrecioNoGeneraComision()
+    {
+        $this->hayEventoQueVende(['precio' => '0.00']);
+
+        CheckoutHandler::comprar($this->db, $this->pedido(), new FakeHttpClient());
+
+        $this->assertSame(0, $this->db->countCalls('UPDATE ticket_orders SET comision'));
     }
 
     // ---------------------------------------------------------------- aviso

@@ -11,6 +11,7 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio }) {
   const [config, setConfig] = useState(null);
   const [cobros, setCobros] = useState(null);
   const [ocupadas, setOcupadas] = useState(0);
+  const [comision, setComision] = useState(0);
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState(null);
@@ -34,6 +35,7 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio }) {
 
         setCobros(cuerpo.cobros);
         setOcupadas(cuerpo.ocupadas || 0);
+        setComision(cuerpo.comision || 0);
         setConfig(cuerpo.entradas);
 
         if (cuerpo.entradas) {
@@ -148,6 +150,15 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio }) {
                   ? 'En 0 es una reserva sin costo'
                   : formatearPrecio(form.precio)}
               </p>
+
+              {/* Lo que importa a la hora de poner el precio no es lo que paga
+                  el comprador sino lo que termina entrando a la cuenta. */}
+              {!esGratis(form.precio) && comision > 0 && cobros && cobros.admite_split && (
+                <p className="text-xs text-emerald-400 mt-1">
+                  Recibís {formatearPrecio(form.precio * (100 - comision) / 100)} por entrada
+                  <span className="text-gray-600"> (comisión {comision}%)</span>
+                </p>
+              )}
             </div>
           </div>
 

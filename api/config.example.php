@@ -40,6 +40,22 @@ define('CRON_SECRET_KEY', 'CAMBIA_ESTO_POR_UNA_CLAVE_SEGURA_PARA_CRON');
 // cada dueño tiene que volver a cargarlas.
 define('PAYMENTS_ENCRYPTION_KEY', 'CAMBIA_ESTO_POR_UNA_CLAVE_LARGA_Y_ALEATORIA');
 
+// --------------------------------------------------------------------- Cobros
+// Porcentaje que la plataforma se queda de cada venta de entradas. Mercado Pago
+// lo descuenta solo, en la misma operación: el comprador paga una vez y el
+// reparto lo hace Mercado Pago.
+//
+// Sólo se aplica a las páginas que conectaron su cuenta por OAuth. Con un
+// access token pegado a mano la comisión se ignora, así que el alta manual
+// quedó deshabilitada.
+define('PLATFORM_FEE_PERCENT', 10);
+
+// Aplicación de marketplace, desde Mercado Pago -> Tus integraciones. Es la
+// cuenta a la que llega la comisión.
+define('MP_APP_ID', 'TU_CLIENT_ID_DE_MERCADO_PAGO');
+define('MP_APP_SECRET', 'TU_CLIENT_SECRET_DE_MERCADO_PAGO');
+define('MP_OAUTH_REDIRECT_URI', 'https://tu-dominio.com/api/entradas/oauth-callback.php');
+
 // En CLI (el cron) no hay request HTTP: ni las cabeceras ni el preflight
 // tienen sentido, y tocar REQUEST_METHOD ahí sólo genera warnings.
 if (php_sapi_name() !== 'cli') {
