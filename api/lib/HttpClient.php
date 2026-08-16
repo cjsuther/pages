@@ -27,6 +27,26 @@ class HttpClient
     }
 
     /**
+     * POST con cuerpo JSON. Mercado Pago no acepta formularios.
+     *
+     * @return array{status: int, body: string}
+     */
+    public function postJson($url, array $body, array $headers = [])
+    {
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($body, JSON_UNESCAPED_UNICODE));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, array_merge(['Content-Type: application/json'], $headers));
+
+        $respuesta = curl_exec($ch);
+        $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        return ['status' => (int) $status, 'body' => $respuesta === false ? '' : $respuesta];
+    }
+
+    /**
      * @return array{status: int, body: string}
      */
     public function get($url, array $headers = [])

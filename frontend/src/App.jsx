@@ -10,6 +10,7 @@ import MyPages from './pages/MyPages';
 import PageEditor from './pages/PageEditor';
 import PublicPage from './pages/PublicPage';
 import EventDetail from './pages/EventDetail';
+import EstadoOrden from './pages/EstadoOrden';
 
 // La URL de la API sale de VITE_API_URL (ver .env.production). El valor por
 // defecto es el de desarrollo, así que `npm run dev` funciona sin configurar
@@ -66,6 +67,7 @@ function App() {
             <Route path="/my-pages" element={token ? <MyPages /> : <Navigate to="/login" />} />
             <Route path="/page/:id" element={token ? <PageEditor /> : <Navigate to="/login" />} />
             <Route path="/evento/:id" element={<EventDetail />} />
+            <Route path="/entrada/:codigo" element={<EstadoOrden apiUrl={API_URL} />} />
             <Route path="/:slug" element={<PublicPage />} />
           </Routes>
         </BrowserRouter>

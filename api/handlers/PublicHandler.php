@@ -78,6 +78,9 @@ class PublicHandler
 
         foreach ($links as &$link) {
             $link['collaborators'] = self::colaboradoresDe($db, $link['id']);
+            // Si el evento vende entradas, el modal usa la compra interna en
+            // lugar del link que tenga cargado.
+            $link['entradas'] = Entradas::disponibilidad($db, $link['id']);
         }
         unset($link);
 
@@ -161,6 +164,8 @@ class PublicHandler
         if (!$event) {
             return Response::notFound('Evento no encontrado');
         }
+
+        $event['entradas'] = Entradas::disponibilidad($db, $event['id']);
 
         return Response::ok(['event' => $event]);
     }

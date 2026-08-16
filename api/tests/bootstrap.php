@@ -48,6 +48,8 @@ define('VAPID_PUBLIC_KEY', 'test-vapid-public');
 define('VAPID_PRIVATE_KEY', 'test-vapid-private');
 define('VAPID_SUBJECT', 'mailto:test@test.local');
 
+define('PAYMENTS_ENCRYPTION_KEY', 'clave-de-prueba-para-cifrar-credenciales-de-cobro');
+
 define('CRON_SECRET_KEY', 'test-cron-secret');
 
 // Clases del dominio y autoload de lib/ + handlers/.

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { AuthContext } from '../App';
+import BotonEntradas, { vendeEntradas } from '../components/BotonEntradas';
 import { Calendar, MapPin, ExternalLink, ArrowLeft } from 'lucide-react';
 
 function EventDetail() {
@@ -116,7 +117,9 @@ function EventDetail() {
           </p>
         )}
 
-        {event.url && (
+        <BotonEntradas evento={event} color="#059669" />
+
+        {event.url && !vendeEntradas(event) && (
           <a
             href={event.url}
             target="_blank"

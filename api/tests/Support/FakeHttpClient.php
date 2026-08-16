@@ -34,10 +34,27 @@ class FakeHttpClient extends HttpClient
         return $this->respuestaPara($url);
     }
 
+    public function postJson($url, array $body, array $headers = [])
+    {
+        $this->llamadas[] = ['method' => 'POST', 'url' => $url, 'json' => $body, 'headers' => $headers];
+        return $this->respuestaPara($url);
+    }
+
     public function get($url, array $headers = [])
     {
         $this->llamadas[] = ['method' => 'GET', 'url' => $url, 'headers' => $headers];
         return $this->respuestaPara($url);
+    }
+
+    /** Cuerpo JSON con el que se llamó a la primera petición que matchea $fragmento. */
+    public function jsonDe($fragmento)
+    {
+        foreach ($this->llamadas as $llamada) {
+            if (strpos($llamada['url'], $fragmento) !== false && isset($llamada['json'])) {
+                return $llamada['json'];
+            }
+        }
+        return null;
     }
 
     /** Campos con los que se llamó a la primera petición que matchea $fragmento. */

@@ -4,6 +4,9 @@ import { AuthContext } from '../App';
 import LoadingSpinner from '../components/LoadingSpinner';
 import GooglePlacesAutocomplete from '../components/GooglePlacesAutocomplete';
 import SeccionRedes from '../components/SeccionRedes';
+import SeccionEntradas from '../components/SeccionEntradas';
+import PanelEntradas from '../components/PanelEntradas';
+import PanelVentas from '../components/PanelVentas';
 import { MoreVertical } from 'lucide-react';
 
 /** Secciones del editor, en el orden en que se muestran. */
@@ -11,6 +14,7 @@ const SECCIONES = [
   { clave: 'general',   etiqueta: 'CONFIGURACIÓN' },
   { clave: 'contenido', etiqueta: 'CONTENIDO' },
   { clave: 'redes',     etiqueta: 'REDES SOCIALES' },
+  { clave: 'entradas',  etiqueta: 'ENTRADAS' },
   { clave: 'admins',    etiqueta: 'ADMINISTRADORES', soloDueno: true },
 ];
 
@@ -29,6 +33,8 @@ function PageEditor() {
   const [selectedGroup, setSelectedGroup] = useState(null);
   const [editingGroup, setEditingGroup] = useState(null);
   const [editingLink, setEditingLink] = useState(null);
+  // Tab activo del modal de evento: datos | entradas | ventas.
+  const [tabEvento, setTabEvento] = useState('datos');
   const [newGroup, setNewGroup] = useState({ title: '', type: 'links' });
   const [newLink, setNewLink] = useState({
     url: '',
@@ -495,6 +501,7 @@ function PageEditor() {
   const openEditLinkModal = (link, group) => {
     setEditingLink({ ...link });
     setSelectedGroup(group);
+    setTabEvento('datos');
     setShowEditLinkModal(true);
   };
 
@@ -926,6 +933,10 @@ function PageEditor() {
             guardando={globalLoading}
             onGuardar={(socials) => updatePage({ socials })}
           />
+        )}
+
+        {seccion === 'entradas' && (
+          <SeccionEntradas pageId={id} apiUrl={apiUrl} token={token} />
         )}
 
         {seccion === 'admins' && isOwner && (
@@ -1630,6 +1641,39 @@ function PageEditor() {
             <h2 className="text-3xl font-black mb-8 text-white">
               EDITAR {selectedGroup.type === 'galeria' ? 'IMAGEN' : selectedGroup.type === 'eventos' ? 'EVENTO' : 'LINK'}
             </h2>
+
+            {selectedGroup.type === 'eventos' && (
+              <nav className="flex gap-1 border-b border-gray-800 mb-8 -mt-4" aria-label="Secciones del evento">
+                {[
+                  { clave: 'datos', etiqueta: 'DATOS' },
+                  { clave: 'entradas', etiqueta: 'ENTRADAS' },
+                  { clave: 'ventas', etiqueta: 'VENTAS' },
+                ].map((t) => (
+                  <button
+                    key={t.clave}
+                    type="button"
+                    onClick={() => setTabEvento(t.clave)}
+                    className={`px-4 py-3 text-sm font-bold tracking-wide transition border-b-2 -mb-px ${
+                      tabEvento === t.clave
+                        ? 'border-white text-white'
+                        : 'border-transparent text-gray-500 hover:text-gray-300'
+                    }`}
+                  >
+                    {t.etiqueta}
+                  </button>
+                ))}
+              </nav>
+            )}
+
+            {tabEvento === 'entradas' && selectedGroup.type === 'eventos' && (
+              <PanelEntradas linkId={editingLink.id} apiUrl={apiUrl} token={token} />
+            )}
+
+            {tabEvento === 'ventas' && selectedGroup.type === 'eventos' && (
+              <PanelVentas linkId={editingLink.id} apiUrl={apiUrl} token={token} />
+            )}
+
+            {(tabEvento === 'datos' || selectedGroup.type !== 'eventos') && (
             <form onSubmit={updateLink} className="space-y-6">
               {selectedGroup.type !== 'galeria' && (
                 <>
@@ -1891,6 +1935,23 @@ function PageEditor() {
                 </button>
               </div>
             </form>
+            )}
+
+            {tabEvento !== 'datos' && selectedGroup.type === 'eventos' && (
+              <div className="flex gap-3 pt-8">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEditLinkModal(false);
+                    setEditingLink(null);
+                    setSelectedGroup(null);
+                  }}
+                  className="flex-1 px-4 py-3 border border-gray-700 text-white hover:bg-gray-800 transition font-bold"
+                >
+                  CERRAR
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -3,6 +3,7 @@ import FollowButton from '../FollowButton';
 import EventCollaborators from '../EventCollaborators';
 import FollowersPopup from '../FollowersPopup';
 import RedesSociales from '../RedesSociales';
+import BotonEntradas, { vendeEntradas } from '../BotonEntradas';
 import RezonarBadge from '../RezonarBadge';
 import { ExternalLink } from 'lucide-react';
 
@@ -269,7 +270,9 @@ function CardsTemplate({ page }) {
                 </div>
               )}
 
-              {modalEvent.url && (
+              <BotonEntradas evento={modalEvent} color={primaryColor} />
+
+              {modalEvent.url && !vendeEntradas(modalEvent) && (
                 <a
                   href={modalEvent.url}
                   target="_blank"

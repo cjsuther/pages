@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { screen, within } from '@testing-library/react';
+import { screen, within, fireEvent } from '@testing-library/react';
 import MinimalTemplate from '../../../src/components/templates/MinimalTemplate';
 import ModernTemplate from '../../../src/components/templates/ModernTemplate';
 import CardsTemplate from '../../../src/components/templates/CardsTemplate';
@@ -248,6 +248,89 @@ describe.each(PLANTILLAS)('%s', (nombre, Plantilla) => {
 
     it('no rompe con una galería vacía', () => {
       expect(() => renderConProviders(<Plantilla page={conGaleria([])} />)).not.toThrow();
+    });
+  });
+
+  describe('venta de entradas', () => {
+    const conVenta = {
+      activo: true, es_gratis: false, precio: 1500, moneda: 'ARS',
+      disponibles: 50, max_por_compra: 6, agotado: false,
+    };
+
+    /** Página con un solo evento que además tiene un link cargado a mano. */
+    const conEntradas = (entradas) =>
+      pagina({
+        groups: [{
+          id: 20,
+          title: 'Agenda',
+          type: 'eventos',
+          links: [evento({
+            url: 'https://entradas-externas.test',
+            url_text: 'Comprar afuera',
+            entradas,
+          })],
+          collaborated_events: [],
+        }],
+      });
+
+    /** Cada plantilla maqueta la tarjeta distinto, pero todas abren al click. */
+    const abrirElEvento = () => fireEvent.click(screen.getByText('Mi Evento'));
+
+    it('un evento sin venta muestra el link cargado a mano', () => {
+      renderConProviders(<Plantilla page={conEntradas(null)} />);
+      abrirElEvento();
+
+      expect(porHref('https://entradas-externas.test')).toBeTruthy();
+    });
+
+    it('con venta activa aparece el botón de compra', () => {
+      renderConProviders(<Plantilla page={conEntradas(conVenta)} />);
+      abrirElEvento();
+
+      expect(screen.getByRole('button', { name: /COMPRAR ENTRADAS/ })).toBeInTheDocument();
+    });
+
+    /**
+     * Es lo pedido explícitamente: la venta interna reemplaza al link, no
+     * convive con él. Dos botones compitiendo confunden a quien va a comprar.
+     */
+    it('el botón de compra reemplaza al link, no se suma', () => {
+      renderConProviders(<Plantilla page={conEntradas(conVenta)} />);
+      abrirElEvento();
+
+      expect(porHref('https://entradas-externas.test')).toBeUndefined();
+      expect(screen.queryByText('Comprar afuera')).not.toBeInTheDocument();
+    });
+
+    it('una reserva sin costo invita a reservar', () => {
+      renderConProviders(<Plantilla page={conEntradas({ ...conVenta, es_gratis: true, precio: 0 })} />);
+      abrirElEvento();
+
+      expect(screen.getByRole('button', { name: /RESERVAR LUGAR/ })).toBeInTheDocument();
+    });
+
+    it('agotado no deja comprar y tampoco devuelve el link', () => {
+      renderConProviders(<Plantilla page={conEntradas({ ...conVenta, agotado: true, disponibles: 0 })} />);
+      abrirElEvento();
+
+      expect(screen.getByText('AGOTADO')).toBeInTheDocument();
+      expect(porHref('https://entradas-externas.test')).toBeUndefined();
+    });
+
+    it('la venta desactivada devuelve el link', () => {
+      renderConProviders(<Plantilla page={conEntradas({ ...conVenta, activo: false })} />);
+      abrirElEvento();
+
+      expect(porHref('https://entradas-externas.test')).toBeTruthy();
+    });
+
+    it('se abre el formulario de compra desde el detalle', () => {
+      renderConProviders(<Plantilla page={conEntradas(conVenta)} />);
+      abrirElEvento();
+
+      fireEvent.click(screen.getByRole('button', { name: /COMPRAR ENTRADAS/ }));
+
+      expect(screen.getByLabelText('NOMBRE Y APELLIDO')).toBeInTheDocument();
     });
   });
 

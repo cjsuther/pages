@@ -4,6 +4,7 @@ import FollowButton from '../FollowButton';
 import EventCollaborators from '../EventCollaborators';
 import FollowersPopup from '../FollowersPopup';
 import RedesSociales from '../RedesSociales';
+import BotonEntradas, { vendeEntradas } from '../BotonEntradas';
 import RezonarBadge from '../RezonarBadge';
 import { ExternalLink } from 'lucide-react';
 
@@ -274,7 +275,9 @@ function MinimalTemplate({ page }) {
 
               <EventCollaborators event={modalEvent} currentPageId={page.id} color="#000000" />
 
-              {modalEvent.url && (
+              <BotonEntradas evento={modalEvent} color={textColor} />
+
+              {modalEvent.url && !vendeEntradas(modalEvent) && (
                 <a
                   href={modalEvent.url}
                   target="_blank"

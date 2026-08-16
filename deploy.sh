@@ -156,9 +156,12 @@ if hacer_api; then
 
   # config.php y uploads/ quedan fuera: son estado del servidor.
   # tests/, phpunit.xml y vendor/ no van a producción.
+  #
+  # Las exclusiones de config van ancladas con /: sin la barra inicial rsync
+  # las aplica en cualquier nivel, y se llevó puesto api/entradas/config.php.
   sincronizar "$API_DIR/" "$REMOTE_ROOT/api/" \
-    --exclude 'config.php' \
-    --exclude 'config_prod.php' \
+    --exclude '/config.php' \
+    --exclude '/config_prod.php' \
     --exclude 'uploads/' \
     --exclude 'tests/' \
     --exclude 'phpunit.xml' \

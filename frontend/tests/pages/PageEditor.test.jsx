@@ -118,12 +118,20 @@ describe('PageEditor', () => {
       expect(llamadaA(llamadas, 'pages/detail.php').url).toContain('id=5');
     });
 
-    it('ofrece las cuatro secciones en el submenú', async () => {
+    it('ofrece las cinco secciones en el submenú', async () => {
       await render();
 
-      ['CONFIGURACIÓN', 'CONTENIDO', 'REDES SOCIALES', 'ADMINISTRADORES'].forEach((s) => {
+      ['CONFIGURACIÓN', 'CONTENIDO', 'REDES SOCIALES', 'ENTRADAS', 'ADMINISTRADORES'].forEach((s) => {
         expect(screen.getByRole('button', { name: new RegExp(`^${s}`) })).toBeInTheDocument();
       });
+    });
+
+    it('la solapa de entradas abre la configuración de cobros', async () => {
+      await render();
+
+      fireEvent.click(screen.getByRole('button', { name: /^ENTRADAS/ }));
+
+      expect(await screen.findByRole('heading', { name: 'ENTRADAS' })).toBeInTheDocument();
     });
 
     it('abre en configuración', async () => {

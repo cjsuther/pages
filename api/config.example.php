@@ -35,6 +35,11 @@ define('VAPID_SUBJECT', 'mailto:tu-email@ejemplo.com');
 
 define('CRON_SECRET_KEY', 'CAMBIA_ESTO_POR_UNA_CLAVE_SEGURA_PARA_CRON');
 
+// Cifra las credenciales de cobro de terceros (Mercado Pago) guardadas en la
+// base. Si se cambia, las credenciales ya guardadas dejan de poder leerse y
+// cada dueño tiene que volver a cargarlas.
+define('PAYMENTS_ENCRYPTION_KEY', 'CAMBIA_ESTO_POR_UNA_CLAVE_LARGA_Y_ALEATORIA');
+
 // En CLI (el cron) no hay request HTTP: ni las cabeceras ni el preflight
 // tienen sentido, y tocar REQUEST_METHOD ahí sólo genera warnings.
 if (php_sapi_name() !== 'cli') {
