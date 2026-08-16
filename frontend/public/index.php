@@ -61,7 +61,7 @@ if (file_exists($manifestPath)) {
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 
   <title><?php echo $title; ?></title>
   <meta name="description" content="<?php echo $description; ?>">
@@ -82,6 +82,17 @@ if (file_exists($manifestPath)) {
   <?php if ($ogImage): ?>
   <meta name="twitter:image" content="<?php echo $ogImage; ?>">
   <?php endif; ?>
+
+
+  <!-- PWA: sin manifiesto con display standalone iOS no permite instalar,
+       y sin instalar no existe la API de push (GUIA-PUSH-PWA.md §4.2). -->
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Rezonar">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#000000">
 
   <meta name="robots" content="index, follow">
   <meta name="author" content="Rezonar">

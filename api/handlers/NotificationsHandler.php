@@ -282,52 +282,15 @@ class NotificationsHandler
         $log[] = 'Eventos nuevos encontrados: ' . count($eventos);
 
         foreach ($eventos as $evento) {
-            $seguidoresStmt = $db->prepare('
-                SELECT
-                    pf.user_id,
-                    pf.notify_all_events,
-                    pf.max_distance_km,
-                    u.location_latitude,
-                    u.location_longitude,
-                    u.email
-                FROM page_followers pf
-                INNER JOIN users u ON pf.user_id = u.id
-                WHERE pf.page_id = ?
-            ');
-            $seguidoresStmt->execute([$evento['page_id']]);
-            $seguidores = $seguidoresStmt->fetchAll(PDO::FETCH_ASSOC);
+            // Se delega en Notificador para que exista una sola definición de
+            // a quién se avisa y con qué clave de deduplicación. Cuando este
+            // cron tenía su propia copia, notificaba también al dueño de la
+            // página —que suele seguirse a sí mismo— y el alta del evento no.
+            $creadas = Notificador::avisarEventoNuevo($db, $evento['id']);
 
-            $log[] = '  Procesando evento: ' . $evento['title'] . ' (' . $evento['id'] . ') - Seguidores: ' . count($seguidores);
+            $log[] = '  Procesando evento: ' . $evento['title'] . ' (' . $evento['id'] . ') - Avisos nuevos: ' . $creadas;
 
-            foreach ($seguidores as $seguidor) {
-                if (!self::debeNotificar($evento, $seguidor)) {
-                    continue;
-                }
-
-                // Evita duplicar el aviso si el evento se editó dentro de las 24 h.
-                $yaExiste = $db->prepare('SELECT id FROM notifications WHERE user_id = ? AND link_id = ?');
-                $yaExiste->execute([$seguidor['user_id'], $evento['id']]);
-
-                if ($yaExiste->fetch()) {
-                    continue;
-                }
-
-                $insert = $db->prepare('
-                    INSERT INTO notifications (user_id, page_id, link_id, title, message)
-                    VALUES (?, ?, ?, ?, ?)
-                ');
-                $insert->execute([
-                    $seguidor['user_id'],
-                    $evento['page_id'],
-                    $evento['id'],
-                    self::tituloDeAviso($evento),
-                    self::mensajeDeAviso($evento),
-                ]);
-
-                $notificacionesCreadas++;
-                $log[] = '    Notificación creada para usuario ' . $seguidor['user_id'];
-            }
-
+            $notificacionesCreadas += $creadas;
             $eventosProcesados++;
         }
 

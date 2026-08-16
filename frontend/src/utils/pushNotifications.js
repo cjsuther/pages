@@ -1,157 +1,173 @@
-const apiUrl = import.meta.env.VITE_API_URL;
+/**
+ * Suscripción a notificaciones push.
+ *
+ * Ver GUIA-PUSH-PWA.md §5. La regla que ordena este archivo: el permiso se
+ * pide *después* de que el usuario entendió para qué sirve, y pedirlo sin
+ * encadenar la suscripción no sirve de nada. Un "no" prematuro es permanente:
+ * requestPermission() sólo abre el diálogo si el estado es `default`.
+ */
 
-export async function registerServiceWorker() {
+import { estaInstalada, base64UrlABytes } from './pwa';
+
+/** Registra el service worker en el scope raíz y espera a que esté activo. */
+export async function registrarServiceWorker() {
   if (!('serviceWorker' in navigator)) {
-    console.log('Service Worker no soportado');
     return null;
   }
 
   try {
-    const registration = await navigator.serviceWorker.register('/sw.js');
-    console.log('Service Worker registrado:', registration);
-    return registration;
-  } catch (error) {
-    console.error('Error registrando Service Worker:', error);
+    const registro = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+    await navigator.serviceWorker.ready;
+    return registro;
+  } catch (err) {
+    console.error('No se pudo registrar el service worker:', err);
     return null;
   }
 }
 
-export async function requestNotificationPermission() {
+/**
+ * Pide el permiso de notificaciones.
+ *
+ * @returns {'granted'|'denied'|'default'|'no-soportado'}
+ */
+export async function pedirPermiso() {
   if (!('Notification' in window)) {
-    console.log('Notificaciones no soportadas');
-    return false;
+    return 'no-soportado';
   }
 
-  if (Notification.permission === 'granted') {
+  // Ya resuelto: el diálogo no se vuelve a abrir.
+  if (Notification.permission !== 'default') {
+    return Notification.permission;
+  }
+
+  return Notification.requestPermission();
+}
+
+/** Clave pública VAPID del servidor. */
+export async function obtenerClaveVapid(apiUrl) {
+  const respuesta = await fetch(`${apiUrl}/push/vapid.php`);
+  const datos = await respuesta.json();
+
+  if (!respuesta.ok || !datos.public_key) {
+    throw new Error(datos.error || 'El servidor no tiene configuradas las notificaciones');
+  }
+
+  return datos;
+}
+
+/**
+ * Pide permiso y, si lo concede, suscribe el dispositivo.
+ *
+ * Los dos pasos van juntos a propósito: pedir el permiso sin registrar la
+ * suscripción deja al usuario creyendo que activó algo que no funciona.
+ *
+ * @returns {{ok: boolean, motivo?: string, permiso?: string}}
+ */
+export async function activarNotificaciones(apiUrl, token) {
+  const permiso = await pedirPermiso();
+
+  if (permiso !== 'granted') {
+    return { ok: false, motivo: 'permiso', permiso };
+  }
+
+  const registro = await registrarServiceWorker();
+
+  if (!registro) {
+    return { ok: false, motivo: 'service-worker' };
+  }
+
+  let suscripcion;
+
+  try {
+    const { public_key: clavePublica } = await obtenerClaveVapid(apiUrl);
+
+    suscripcion = await registro.pushManager.getSubscription();
+
+    if (!suscripcion) {
+      suscripcion = await registro.pushManager.subscribe({
+        // Obligatorio: los navegadores no permiten push silencioso.
+        userVisibleOnly: true,
+        applicationServerKey: base64UrlABytes(clavePublica),
+      });
+    }
+  } catch (err) {
+    console.error('No se pudo suscribir al push:', err);
+    return { ok: false, motivo: 'suscripcion' };
+  }
+
+  const respuesta = await fetch(`${apiUrl}/push/subscribe.php`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      suscripcion: suscripcion.toJSON(),
+      standalone: estaInstalada(),
+    }),
+  });
+
+  if (!respuesta.ok) {
+    return { ok: false, motivo: 'servidor' };
+  }
+
+  return { ok: true, permiso };
+}
+
+/** Da de baja el dispositivo, local y en el servidor. */
+export async function desactivarNotificaciones(apiUrl, token) {
+  if (!('serviceWorker' in navigator)) {
     return true;
   }
 
-  if (Notification.permission === 'denied') {
-    return false;
-  }
-
-  const permission = await Notification.requestPermission();
-  return permission === 'granted';
-}
-
-export async function subscribeToPushNotifications(token) {
   try {
-    const hasPermission = await requestNotificationPermission();
-    if (!hasPermission) {
-      console.log('Permiso de notificaciones denegado');
-      return false;
-    }
+    const registro = await navigator.serviceWorker.getRegistration();
 
-    const registration = await registerServiceWorker();
-    if (!registration) {
-      console.log('No se pudo registrar el Service Worker');
-      return false;
-    }
-
-    // Obtener la clave pública VAPID del servidor
-    const vapidResponse = await fetch(`${apiUrl}/notifications/subscribe.php`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    const vapidData = await vapidResponse.json();
-    const publicKey = vapidData.public_key;
-
-    if (!publicKey) {
-      console.error('No se pudo obtener la clave pública VAPID');
-      return false;
-    }
-
-    // Suscribirse a push notifications
-    const subscription = await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(publicKey)
-    });
-
-    // Enviar la suscripción al servidor
-    const response = await fetch(`${apiUrl}/notifications/subscribe.php`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify(subscription)
-    });
-
-    if (response.ok) {
-      console.log('Suscrito a push notifications');
-      return true;
-    } else {
-      console.error('Error al guardar suscripción en el servidor');
-      return false;
-    }
-  } catch (error) {
-    console.error('Error en subscribeToPushNotifications:', error);
-    return false;
-  }
-}
-
-export async function unsubscribeFromPushNotifications(token) {
-  try {
-    const registration = await navigator.serviceWorker.getRegistration();
-    if (!registration) {
+    if (!registro) {
       return true;
     }
 
-    const subscription = await registration.pushManager.getSubscription();
-    if (!subscription) {
+    const suscripcion = await registro.pushManager.getSubscription();
+
+    if (!suscripcion) {
       return true;
     }
 
-    // Desuscribirse localmente
-    await subscription.unsubscribe();
+    const { endpoint } = suscripcion;
+    await suscripcion.unsubscribe();
 
-    // Eliminar del servidor
-    await fetch(`${apiUrl}/notifications/subscribe.php`, {
+    await fetch(`${apiUrl}/push/subscribe.php`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
+        Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ endpoint: subscription.endpoint })
+      body: JSON.stringify({ endpoint }),
     });
 
-    console.log('Desuscrito de push notifications');
     return true;
-  } catch (error) {
-    console.error('Error al desuscribirse:', error);
+  } catch (err) {
+    console.error('No se pudo desactivar el push:', err);
     return false;
   }
 }
 
-export async function isPushNotificationSubscribed() {
+/** ¿Este dispositivo ya está suscrito? */
+export async function estaSuscrito() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    return false;
+  }
+
   try {
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    const registro = await navigator.serviceWorker.getRegistration();
+
+    if (!registro) {
       return false;
     }
 
-    const registration = await navigator.serviceWorker.getRegistration();
-    if (!registration) {
-      return false;
-    }
-
-    const subscription = await registration.pushManager.getSubscription();
-    return subscription !== null;
-  } catch (error) {
-    console.error('Error verificando suscripción:', error);
+    return (await registro.pushManager.getSubscription()) !== null;
+  } catch (err) {
+    console.error('No se pudo verificar la suscripción:', err);
     return false;
   }
-}
-
-function urlBase64ToUint8Array(base64String) {
-  const padding = '='.repeat((4 - base64String.length % 4) % 4);
-  const base64 = (base64String + padding)
-    .replace(/\-/g, '+')
-    .replace(/_/g, '/');
-
-  const rawData = window.atob(base64);
-  const outputArray = new Uint8Array(rawData.length);
-
-  for (let i = 0; i < rawData.length; ++i) {
-    outputArray[i] = rawData.charCodeAt(i);
-  }
-  return outputArray;
 }

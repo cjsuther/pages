@@ -2,6 +2,7 @@
 
 namespace Tests\Unit\Handlers;
 
+use Notificador;
 use NotificationsHandler;
 use Request;
 use Tests\Support\HandlerTestCase;
@@ -393,22 +394,38 @@ class NotificationsHandlerTest extends HandlerTestCase
         $this->assertSame(1, $resumen['events_processed']);
         $this->assertSame(1, $resumen['notifications_sent']);
 
-        $params = $this->db->paramsFor('INSERT INTO notifications');
+        $params = $this->db->paramsFor('INSERT IGNORE INTO notifications');
         $this->assertSame(11, $params[0], 'user_id del seguidor');
         $this->assertSame(3, $params[1], 'page_id');
         $this->assertSame(100, $params[2], 'link_id');
         $this->assertStringContainsString('Mi evento', $params[3]);
     }
 
+    /**
+     * La unicidad la impone el índice sobre dedupe_key: si la notificación ya
+     * existía, el INSERT IGNORE no afecta filas y no se cuenta como enviada.
+     */
     public function testNoDuplicaNotificacionesYaExistentes()
     {
-        $this->unEventoConUnSeguidor(['notify_all_events' => 1]);
-        $this->db->onSelect('SELECT id FROM notifications WHERE user_id = ? AND link_id = ?', [['id' => 1]]);
+        $this->unEventoConUnSeguidor(['notify_all_events' => 1], 0);
 
         $resumen = NotificationsHandler::procesarEventosNuevos($this->db);
 
         $this->assertSame(0, $resumen['notifications_sent']);
-        $this->assertSame(0, $this->db->countCalls('INSERT INTO notifications'));
+    }
+
+    public function testLaInsercionLlevaLaClaveDeDeduplicacion()
+    {
+        $this->unEventoConUnSeguidor(['notify_all_events' => 1]);
+
+        NotificationsHandler::procesarEventosNuevos($this->db);
+
+        $params = $this->db->paramsFor('INSERT IGNORE INTO notifications');
+
+        $this->assertSame(11, $params[0], 'user_id del seguidor');
+        $this->assertSame(100, $params[2], 'link_id del evento');
+        $this->assertSame(Notificador::TIPO_EVENTO, $params[5]);
+        $this->assertSame('evento:100:11', $params[6], 'clave de deduplicación');
     }
 
     public function testNoNotificaEventoLejanoSiElSeguidorNoQuiereTodo()
@@ -511,6 +528,7 @@ class NotificationsHandlerTest extends HandlerTestCase
             'title' => 'Mi evento',
             'page_title' => 'Mi página',
             'url_slug' => 'mi-pagina',
+            'owner_id' => 9,
             'event_date' => '2026-12-01',
             'event_address' => 'Alguna dirección',
             'event_latitude' => '-34.6037',
@@ -530,9 +548,19 @@ class NotificationsHandlerTest extends HandlerTestCase
         ], $overrides);
     }
 
-    private function unEventoConUnSeguidor(array $seguidor)
+    /**
+     * @param array $seguidor  preferencias del seguidor
+     * @param int   $insertadas 1 si el INSERT IGNORE crea la fila, 0 si la
+     *                          clave de deduplicación ya existía
+     */
+    private function unEventoConUnSeguidor(array $seguidor, $insertadas = 1)
     {
+        // El cron consulta los eventos recientes y después delega en
+        // Notificador, que vuelve a consultar ese evento por su id: por eso
+        // la fila del evento se declara dos veces.
+        $this->db->onSelect('FROM links l INNER JOIN link_groups lg', [$this->evento()]);
         $this->db->onSelect('FROM links l INNER JOIN link_groups lg', [$this->evento()]);
         $this->db->onSelect('FROM page_followers pf INNER JOIN users u', [$this->seguidor($seguidor)]);
+        $this->db->onWrite('INSERT IGNORE INTO notifications', $insertadas);
     }
 }

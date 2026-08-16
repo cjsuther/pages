@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 
   <title>Rezonar - Crea tu Espacio, Comparte Eventos, Conecta</title>
   <meta name="description" content="Rezonar te permite centralizar tus enlaces, compartir eventos con ubicación en mapa y conectar con tu comunidad. Crea tu página personalizada gratis.">
@@ -16,6 +16,17 @@
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Rezonar - Crea tu Espacio, Comparte Eventos, Conecta">
   <meta name="twitter:description" content="Centraliza tus enlaces, comparte eventos y conecta con tu comunidad">
+
+
+  <!-- PWA: sin manifiesto con display standalone iOS no permite instalar,
+       y sin instalar no existe la API de push (GUIA-PUSH-PWA.md §4.2). -->
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Rezonar">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#000000">
 
   <meta name="robots" content="index, follow">
   <meta name="author" content="Rezonar">

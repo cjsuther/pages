@@ -61,4 +61,5 @@ require_once realpath(__DIR__ . '/../lib/autoload.php');
 require_once __DIR__ . '/Support/FakePdo.php';
 require_once __DIR__ . '/Support/FakeStatement.php';
 require_once __DIR__ . '/Support/FakeHttpClient.php';
+require_once __DIR__ . '/Support/FakePushSender.php';
 require_once __DIR__ . '/Support/HandlerTestCase.php';

@@ -3,6 +3,7 @@
 namespace Tests\Unit\Handlers;
 
 use LinksHandler;
+use Notificador;
 use Tests\Support\HandlerTestCase;
 
 class LinksHandlerTest extends HandlerTestCase
@@ -194,6 +195,63 @@ class LinksHandlerTest extends HandlerTestCase
         $this->assertSame('2026-12-01', $params[7], 'event_date');
         $this->assertSame('-34.6037', $params[10], 'event_latitude');
         $this->assertSame('-58.3816', $params[11], 'event_longitude');
+    }
+
+    // ------------------------------------------- aviso a los seguidores
+
+    public function testCrearUnEventoAvisaALosSeguidores()
+    {
+        $this->autorizarGrupo();
+        $this->db->onSelect('SELECT id, type FROM link_groups', [['id' => 7, 'type' => 'eventos']]);
+        $this->db->onInsert('INSERT INTO links', 60);
+        $this->db->onSelect('FROM links l INNER JOIN link_groups lg', [[
+            'id' => 60, 'title' => 'Mi Evento', 'event_date' => '2026-12-01',
+            'event_latitude' => '-34.6', 'event_longitude' => '-58.4',
+            'page_id' => 5, 'page_title' => 'Mi Página', 'url_slug' => 'mi-pagina', 'owner_id' => 9,
+        ]]);
+        $this->db->onSelect('FROM page_followers pf INNER JOIN users u', [[
+            'user_id' => 11, 'notify_all_events' => 1, 'max_distance_km' => 50,
+            'location_latitude' => null, 'location_longitude' => null,
+        ]]);
+        $this->db->onWrite('INSERT IGNORE INTO notifications', 1);
+
+        LinksHandler::index($this->db, $this->post([
+            'group_id' => 7, 'url' => 'u', 'text' => 'Mi Evento',
+            'event_latitude' => '-34.6', 'event_longitude' => '-58.4',
+        ], $this->user()));
+
+        $this->assertSame('evento:60:11', $this->db->paramsFor('INSERT IGNORE INTO notifications')[6]);
+    }
+
+    public function testCrearUnLinkComunNoAvisaANadie()
+    {
+        $this->autorizarGrupo();
+        $this->db->onSelect('SELECT id, type FROM link_groups', [['id' => 7, 'type' => 'links']]);
+        $this->db->onInsert('INSERT INTO links', 55);
+
+        LinksHandler::index($this->db, $this->post([
+            'group_id' => 7, 'url' => 'u', 'text' => 't',
+        ], $this->user()));
+
+        $this->assertSame(0, $this->db->countCalls('FROM page_followers'));
+        $this->assertSame(0, $this->db->countCalls('INSERT IGNORE INTO notifications'));
+    }
+
+    /** Un fallo al notificar no puede impedir que el evento se cree. */
+    public function testSiFallaElAvisoElEventoIgualSeCrea()
+    {
+        $this->autorizarGrupo();
+        $this->db->onSelect('SELECT id, type FROM link_groups', [['id' => 7, 'type' => 'eventos']]);
+        $this->db->onInsert('INSERT INTO links', 60);
+        $this->db->failOn('FROM links l INNER JOIN link_groups lg', 'tabla bloqueada');
+        $this->db->onSelect('SELECT * FROM links WHERE id = ?', [['id' => 60, 'text' => 'Mi Evento']]);
+
+        $res = LinksHandler::index($this->db, $this->post([
+            'group_id' => 7, 'url' => 'u', 'text' => 'Mi Evento',
+            'event_latitude' => '-34.6', 'event_longitude' => '-58.4',
+        ], $this->user()));
+
+        $this->assertStatus(201, $res);
     }
 
     public function testIndexDevuelve500SiLaBaseFalla()

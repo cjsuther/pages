@@ -1,25 +1,28 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
-  registerServiceWorker,
-  requestNotificationPermission,
-  subscribeToPushNotifications,
-  unsubscribeFromPushNotifications,
-  isPushNotificationSubscribed,
+  registrarServiceWorker,
+  pedirPermiso,
+  obtenerClaveVapid,
+  activarNotificaciones,
+  desactivarNotificaciones,
+  estaSuscrito,
 } from '../../src/utils/pushNotifications';
 import { respuesta } from '../helpers/api';
 
-/** Suscripción push como la devuelve el navegador. */
-const suscripcion = () => ({
-  endpoint: 'https://push.example/abc',
+const API = 'https://rezon.ar/api';
+const CLAVE_VAPID = 'aGVsbG8'; // base64url de "hello"
+
+const suscripcion = (endpoint = 'https://push.example/abc') => ({
+  endpoint,
   unsubscribe: vi.fn(() => Promise.resolve(true)),
-  toJSON: () => ({ endpoint: 'https://push.example/abc' }),
+  toJSON: () => ({ endpoint, keys: { p256dh: 'clave-p', auth: 'clave-a' } }),
 });
 
-function instalarServiceWorker({ registration = null, subscription = null } = {}) {
-  const reg = registration || {
+function instalarServiceWorker({ registro = null, suscripcionActual = null } = {}) {
+  const reg = registro || {
     pushManager: {
-      subscribe: vi.fn(() => Promise.resolve(subscription || suscripcion())),
-      getSubscription: vi.fn(() => Promise.resolve(subscription)),
+      subscribe: vi.fn(() => Promise.resolve(suscripcion())),
+      getSubscription: vi.fn(() => Promise.resolve(suscripcionActual)),
     },
   };
 
@@ -27,6 +30,7 @@ function instalarServiceWorker({ registration = null, subscription = null } = {}
     value: {
       register: vi.fn(() => Promise.resolve(reg)),
       getRegistration: vi.fn(() => Promise.resolve(reg)),
+      ready: Promise.resolve(reg),
     },
     writable: true,
     configurable: true,
@@ -39,19 +43,29 @@ function quitarServiceWorker() {
   delete navigator.serviceWorker;
 }
 
-function instalarNotification(permission, requestResult = permission) {
+function instalarNotification(permiso, resultado = permiso) {
   window.Notification = {
-    permission,
-    requestPermission: vi.fn(() => Promise.resolve(requestResult)),
+    permission: permiso,
+    requestPermission: vi.fn(() => Promise.resolve(resultado)),
   };
   global.Notification = window.Notification;
 }
 
+/** fetch que responde la clave VAPID y acepta el registro de la suscripción. */
+function fetchFeliz() {
+  return vi.fn((url, opciones = {}) => {
+    if (String(url).includes('/push/vapid.php')) {
+      return Promise.resolve(respuesta(200, { public_key: CLAVE_VAPID, disponible: true }));
+    }
+    return Promise.resolve(respuesta(200, { success: true }));
+  });
+}
+
 describe('pushNotifications', () => {
   beforeEach(() => {
-    vi.spyOn(console, 'log').mockImplementation(() => {});
     vi.spyOn(console, 'error').mockImplementation(() => {});
     window.PushManager = function PushManager() {};
+    window.matchMedia = vi.fn(() => ({ matches: false }));
   });
 
   afterEach(() => {
@@ -61,189 +75,217 @@ describe('pushNotifications', () => {
     delete window.PushManager;
   });
 
-  // ------------------------------------------------- registerServiceWorker
+  // ================================================== registrarServiceWorker
 
-  describe('registerServiceWorker', () => {
+  describe('registrarServiceWorker', () => {
     it('devuelve null si el navegador no lo soporta', async () => {
       quitarServiceWorker();
 
-      await expect(registerServiceWorker()).resolves.toBeNull();
+      await expect(registrarServiceWorker()).resolves.toBeNull();
     });
 
-    it('registra /sw.js y devuelve el registration', async () => {
+    it('registra /sw.js en el scope raíz', async () => {
       const reg = instalarServiceWorker();
 
-      await expect(registerServiceWorker()).resolves.toBe(reg);
-      expect(navigator.serviceWorker.register).toHaveBeenCalledWith('/sw.js');
+      await expect(registrarServiceWorker()).resolves.toBe(reg);
+      expect(navigator.serviceWorker.register).toHaveBeenCalledWith('/sw.js', { scope: '/' });
     });
 
     it('devuelve null si el registro falla', async () => {
       Object.defineProperty(navigator, 'serviceWorker', {
-        value: { register: vi.fn(() => Promise.reject(new Error('falló'))) },
+        value: { register: vi.fn(() => Promise.reject(new Error('MIME incorrecto'))) },
         writable: true,
         configurable: true,
       });
 
-      await expect(registerServiceWorker()).resolves.toBeNull();
+      await expect(registrarServiceWorker()).resolves.toBeNull();
     });
   });
 
-  // ------------------------------------------ requestNotificationPermission
+  // ============================================================= pedirPermiso
 
-  describe('requestNotificationPermission', () => {
-    it('devuelve false si el navegador no soporta notificaciones', async () => {
-      await expect(requestNotificationPermission()).resolves.toBe(false);
+  describe('pedirPermiso', () => {
+    it('devuelve no-soportado si no hay API', async () => {
+      await expect(pedirPermiso()).resolves.toBe('no-soportado');
     });
 
-    it('devuelve true si ya está concedido, sin volver a preguntar', async () => {
+    it('no vuelve a preguntar si ya está concedido', async () => {
       instalarNotification('granted');
 
-      await expect(requestNotificationPermission()).resolves.toBe(true);
+      await expect(pedirPermiso()).resolves.toBe('granted');
       expect(window.Notification.requestPermission).not.toHaveBeenCalled();
     });
 
-    it('devuelve false si el usuario ya lo denegó, sin volver a preguntar', async () => {
+    /** Una vez en denied el diálogo no se abre más: sólo queda Ajustes. */
+    it('no vuelve a preguntar si ya está denegado', async () => {
       instalarNotification('denied');
 
-      await expect(requestNotificationPermission()).resolves.toBe(false);
+      await expect(pedirPermiso()).resolves.toBe('denied');
       expect(window.Notification.requestPermission).not.toHaveBeenCalled();
     });
 
-    it('pregunta si el permiso está en default y acepta', async () => {
+    it('pregunta cuando el estado es default', async () => {
       instalarNotification('default', 'granted');
 
-      await expect(requestNotificationPermission()).resolves.toBe(true);
+      await expect(pedirPermiso()).resolves.toBe('granted');
       expect(window.Notification.requestPermission).toHaveBeenCalledOnce();
-    });
-
-    it('pregunta si el permiso está en default y el usuario rechaza', async () => {
-      instalarNotification('default', 'denied');
-
-      await expect(requestNotificationPermission()).resolves.toBe(false);
     });
   });
 
-  // ---------------------------------------- subscribeToPushNotifications
+  // ========================================================= obtenerClaveVapid
 
-  describe('subscribeToPushNotifications', () => {
-    it('no hace nada si no hay permiso', async () => {
-      instalarNotification('denied');
-      global.fetch = vi.fn();
+  describe('obtenerClaveVapid', () => {
+    it('devuelve la clave pública', async () => {
+      global.fetch = fetchFeliz();
 
-      await expect(subscribeToPushNotifications('tok')).resolves.toBe(false);
-      expect(global.fetch).not.toHaveBeenCalled();
+      const datos = await obtenerClaveVapid(API);
+
+      expect(datos.public_key).toBe(CLAVE_VAPID);
+      expect(global.fetch).toHaveBeenCalledWith(`${API}/push/vapid.php`);
     });
 
-    it('no hace nada si el service worker no se registra', async () => {
-      instalarNotification('granted');
-      quitarServiceWorker();
-      global.fetch = vi.fn();
-
-      await expect(subscribeToPushNotifications('tok')).resolves.toBe(false);
-      expect(global.fetch).not.toHaveBeenCalled();
-    });
-
-    it('devuelve false si el servidor no da la clave VAPID', async () => {
-      instalarNotification('granted');
-      instalarServiceWorker();
-      global.fetch = vi.fn(() => Promise.resolve(respuesta(200, {})));
-
-      await expect(subscribeToPushNotifications('tok')).resolves.toBe(false);
-    });
-
-    it('se suscribe y envía la suscripción al servidor', async () => {
-      instalarNotification('granted');
-      const reg = instalarServiceWorker();
-      global.fetch = vi.fn((url, opts = {}) =>
-        Promise.resolve(
-          opts.method === 'POST'
-            ? respuesta(200, { success: true })
-            : respuesta(200, { public_key: 'BObs_base64url' })
-        )
+    it('falla con el mensaje del servidor si no está configurado', async () => {
+      global.fetch = vi.fn(() =>
+        Promise.resolve(respuesta(500, { error: 'Las notificaciones push no están configuradas' }))
       );
 
-      await expect(subscribeToPushNotifications('mi-token')).resolves.toBe(true);
+      await expect(obtenerClaveVapid(API)).rejects.toThrow('no están configuradas');
+    });
+  });
 
+  // ==================================================== activarNotificaciones
+
+  describe('activarNotificaciones', () => {
+    it('no suscribe si el usuario no concede el permiso', async () => {
+      instalarNotification('default', 'denied');
+      global.fetch = fetchFeliz();
+
+      const r = await activarNotificaciones(API, 'tok');
+
+      expect(r).toEqual({ ok: false, motivo: 'permiso', permiso: 'denied' });
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it('informa si el service worker no se puede registrar', async () => {
+      instalarNotification('granted');
+      quitarServiceWorker();
+      global.fetch = fetchFeliz();
+
+      const r = await activarNotificaciones(API, 'tok');
+
+      expect(r).toEqual({ ok: false, motivo: 'service-worker' });
+    });
+
+    it('suscribe y registra la suscripción en el servidor', async () => {
+      instalarNotification('granted');
+      const reg = instalarServiceWorker();
+      global.fetch = fetchFeliz();
+
+      const r = await activarNotificaciones(API, 'mi-token');
+
+      expect(r.ok).toBe(true);
       expect(reg.pushManager.subscribe).toHaveBeenCalledWith(
         expect.objectContaining({ userVisibleOnly: true })
       );
 
-      const post = global.fetch.mock.calls.find(([, o]) => o && o.method === 'POST');
-      expect(post[1].headers.Authorization).toBe('Bearer mi-token');
+      const registro = global.fetch.mock.calls.find(([u]) => String(u).includes('/push/subscribe.php'));
+      expect(registro[1].method).toBe('POST');
+      expect(registro[1].headers.Authorization).toBe('Bearer mi-token');
+      expect(JSON.parse(registro[1].body).suscripcion.endpoint).toBe('https://push.example/abc');
+    });
+
+    it('reutiliza la suscripción existente en vez de crear otra', async () => {
+      instalarNotification('granted');
+      const existente = suscripcion('https://push.example/ya-existe');
+      const reg = instalarServiceWorker({ suscripcionActual: existente });
+      global.fetch = fetchFeliz();
+
+      await activarNotificaciones(API, 'tok');
+
+      expect(reg.pushManager.subscribe).not.toHaveBeenCalled();
+      const registro = global.fetch.mock.calls.find(([u]) => String(u).includes('/push/subscribe.php'));
+      expect(JSON.parse(registro[1].body).suscripcion.endpoint).toBe('https://push.example/ya-existe');
+    });
+
+    it('informa al servidor si la app está instalada', async () => {
+      instalarNotification('granted');
+      instalarServiceWorker();
+      window.matchMedia = vi.fn(() => ({ matches: true }));
+      global.fetch = fetchFeliz();
+
+      await activarNotificaciones(API, 'tok');
+
+      const registro = global.fetch.mock.calls.find(([u]) => String(u).includes('/push/subscribe.php'));
+      expect(JSON.parse(registro[1].body).standalone).toBe(true);
     });
 
     it('convierte la clave VAPID a Uint8Array', async () => {
       instalarNotification('granted');
       const reg = instalarServiceWorker();
-      global.fetch = vi.fn((url, opts = {}) =>
-        Promise.resolve(
-          opts.method === 'POST'
-            ? respuesta(200, {})
-            : respuesta(200, { public_key: 'aGVsbG8' })
-        )
-      );
+      global.fetch = fetchFeliz();
 
-      await subscribeToPushNotifications('tok');
+      await activarNotificaciones(API, 'tok');
 
       const { applicationServerKey } = reg.pushManager.subscribe.mock.calls[0][0];
       expect(applicationServerKey).toBeInstanceOf(Uint8Array);
       expect(new TextDecoder().decode(applicationServerKey)).toBe('hello');
     });
 
-    it('devuelve false si el servidor rechaza la suscripción', async () => {
+    it('informa si falla la suscripción del navegador', async () => {
+      instalarNotification('granted');
+      instalarServiceWorker({
+        registro: {
+          pushManager: {
+            getSubscription: vi.fn(() => Promise.resolve(null)),
+            subscribe: vi.fn(() => Promise.reject(new Error('AbortError'))),
+          },
+        },
+      });
+      global.fetch = fetchFeliz();
+
+      const r = await activarNotificaciones(API, 'tok');
+
+      expect(r).toEqual({ ok: false, motivo: 'suscripcion' });
+    });
+
+    it('informa si el servidor rechaza el registro', async () => {
       instalarNotification('granted');
       instalarServiceWorker();
-      global.fetch = vi.fn((url, opts = {}) =>
+      global.fetch = vi.fn((url) =>
         Promise.resolve(
-          opts.method === 'POST'
-            ? respuesta(500, { error: 'x' })
-            : respuesta(200, { public_key: 'aGVsbG8' })
+          String(url).includes('/push/vapid.php')
+            ? respuesta(200, { public_key: CLAVE_VAPID })
+            : respuesta(500, { error: 'x' })
         )
       );
 
-      await expect(subscribeToPushNotifications('tok')).resolves.toBe(false);
-    });
+      const r = await activarNotificaciones(API, 'tok');
 
-    it('devuelve false ante cualquier excepción', async () => {
-      instalarNotification('granted');
-      instalarServiceWorker();
-      global.fetch = vi.fn(() => Promise.reject(new Error('sin red')));
-
-      await expect(subscribeToPushNotifications('tok')).resolves.toBe(false);
+      expect(r).toEqual({ ok: false, motivo: 'servidor' });
     });
   });
 
-  // ------------------------------------ unsubscribeFromPushNotifications
+  // ================================================== desactivarNotificaciones
 
-  describe('unsubscribeFromPushNotifications', () => {
-    it('devuelve true si no hay service worker registrado', async () => {
-      Object.defineProperty(navigator, 'serviceWorker', {
-        value: { getRegistration: vi.fn(() => Promise.resolve(null)) },
-        writable: true,
-        configurable: true,
-      });
-
-      await expect(unsubscribeFromPushNotifications('tok')).resolves.toBe(true);
-    });
-
-    it('devuelve true si no había suscripción', async () => {
-      instalarServiceWorker({ subscription: null });
+  describe('desactivarNotificaciones', () => {
+    it('devuelve true si no hay nada que desactivar', async () => {
+      instalarServiceWorker({ suscripcionActual: null });
       global.fetch = vi.fn();
 
-      await expect(unsubscribeFromPushNotifications('tok')).resolves.toBe(true);
+      await expect(desactivarNotificaciones(API, 'tok')).resolves.toBe(true);
       expect(global.fetch).not.toHaveBeenCalled();
     });
 
     it('desuscribe localmente y avisa al servidor', async () => {
-      const sub = suscripcion();
-      instalarServiceWorker({ subscription: sub });
-      global.fetch = vi.fn(() => Promise.resolve(respuesta(200, {})));
+      const sus = suscripcion();
+      instalarServiceWorker({ suscripcionActual: sus });
+      global.fetch = vi.fn(() => Promise.resolve(respuesta(200, { success: true })));
 
-      await expect(unsubscribeFromPushNotifications('mi-token')).resolves.toBe(true);
+      await expect(desactivarNotificaciones(API, 'mi-token')).resolves.toBe(true);
 
-      expect(sub.unsubscribe).toHaveBeenCalledOnce();
-
-      const [, opciones] = global.fetch.mock.calls[0];
+      expect(sus.unsubscribe).toHaveBeenCalledOnce();
+      const [url, opciones] = global.fetch.mock.calls[0];
+      expect(String(url)).toContain('/push/subscribe.php');
       expect(opciones.method).toBe('DELETE');
       expect(opciones.headers.Authorization).toBe('Bearer mi-token');
       expect(JSON.parse(opciones.body)).toEqual({ endpoint: 'https://push.example/abc' });
@@ -256,46 +298,36 @@ describe('pushNotifications', () => {
         configurable: true,
       });
 
-      await expect(unsubscribeFromPushNotifications('tok')).resolves.toBe(false);
+      await expect(desactivarNotificaciones(API, 'tok')).resolves.toBe(false);
     });
   });
 
-  // ------------------------------------------ isPushNotificationSubscribed
+  // ============================================================== estaSuscrito
 
-  describe('isPushNotificationSubscribed', () => {
-    it('es false si no hay soporte de service worker', async () => {
+  describe('estaSuscrito', () => {
+    it('es false sin soporte', async () => {
       quitarServiceWorker();
 
-      await expect(isPushNotificationSubscribed()).resolves.toBe(false);
+      await expect(estaSuscrito()).resolves.toBe(false);
     });
 
-    it('es false si no hay PushManager', async () => {
+    it('es false sin PushManager', async () => {
       instalarServiceWorker();
       delete window.PushManager;
 
-      await expect(isPushNotificationSubscribed()).resolves.toBe(false);
+      await expect(estaSuscrito()).resolves.toBe(false);
     });
 
-    it('es false si no hay registration', async () => {
-      Object.defineProperty(navigator, 'serviceWorker', {
-        value: { getRegistration: vi.fn(() => Promise.resolve(null)) },
-        writable: true,
-        configurable: true,
-      });
+    it('es false si no hay suscripción', async () => {
+      instalarServiceWorker({ suscripcionActual: null });
 
-      await expect(isPushNotificationSubscribed()).resolves.toBe(false);
-    });
-
-    it('es false si no hay suscripción activa', async () => {
-      instalarServiceWorker({ subscription: null });
-
-      await expect(isPushNotificationSubscribed()).resolves.toBe(false);
+      await expect(estaSuscrito()).resolves.toBe(false);
     });
 
     it('es true si hay suscripción activa', async () => {
-      instalarServiceWorker({ subscription: suscripcion() });
+      instalarServiceWorker({ suscripcionActual: suscripcion() });
 
-      await expect(isPushNotificationSubscribed()).resolves.toBe(true);
+      await expect(estaSuscrito()).resolves.toBe(true);
     });
   });
 });

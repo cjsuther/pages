@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import Navigation from '../components/Navigation';
 import PageSearch from '../components/PageSearch';
 import FollowingManager from '../components/FollowingManager';
+import ActivarNotificaciones from '../components/ActivarNotificaciones';
 
 function Pages() {
   const [activeTab, setActiveTab] = useState('search');
@@ -12,6 +13,13 @@ function Pages() {
 
       <div className="max-w-7xl mx-auto px-6 py-16">
         <h1 className="text-4xl font-bold mb-8">PÁGINAS</h1>
+
+        {/* Acá el usuario ya entiende para qué sirven las notificaciones:
+            está por seguir páginas. Pedir el permiso al cargar la aplicación
+            sería un "no" prematuro, y un "no" es permanente. */}
+        <div className="mb-8">
+          <ActivarNotificaciones />
+        </div>
 
         <div className="flex gap-4 mb-8">
           <button

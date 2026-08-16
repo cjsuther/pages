@@ -2,18 +2,43 @@
   RewriteEngine On
   RewriteBase /
 
-  # Redirect all requests to index.php except for existing files
+  # Todo lo que no sea un archivo real lo resuelve index.php, que además
+  # renderiza los meta tags Open Graph de cada página.
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
   RewriteRule . /index.php [L]
 
-  # Set index.php as the default directory index
   DirectoryIndex index.php index.html
 </IfModule>
 
-# Enable CORS for assets
 <IfModule mod_headers.c>
   <FilesMatch "\.(jpg|jpeg|png|gif|svg|webp|js|css|woff|woff2|ttf|eot)$">
     Header set Access-Control-Allow-Origin "*"
   </FilesMatch>
 </IfModule>
+
+# El service worker tiene que llegar con un tipo JavaScript o el navegador no
+# lo registra, y sin service worker no hay push (GUIA-PUSH-PWA.md §9).
+<IfModule mod_mime.c>
+  AddType application/javascript .js
+  AddType application/manifest+json .webmanifest
+</IfModule>
+
+# sw.js no se cachea: si el navegador conserva una versión vieja, el
+# dispositivo deja de recibir notificaciones sin que nadie se entere.
+<FilesMatch "sw\.js$">
+  <IfModule mod_headers.c>
+    # `always` para que se aplique también sobre lo que ya fijó el servidor:
+    # sin esto Hostinger deja el max-age de una semana que trae por defecto.
+    Header always unset Cache-Control
+    Header always set Cache-Control "no-cache, no-store, must-revalidate"
+    Header always set Service-Worker-Allowed "/"
+  </IfModule>
+</FilesMatch>
+
+# El manifiesto cambia poco pero debe poder actualizarse sin esperar un día.
+<FilesMatch "manifest\.json$">
+  <IfModule mod_headers.c>
+    Header set Cache-Control "public, max-age=3600"
+  </IfModule>
+</FilesMatch>

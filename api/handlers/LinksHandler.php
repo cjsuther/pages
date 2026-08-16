@@ -85,6 +85,18 @@ class LinksHandler
 
             $linkId = $db->lastInsertId();
 
+            // Si el grupo es de eventos, se avisa a los seguidores en el acto.
+            // Notificador es idempotente, así que el cron diario puede volver a
+            // pasar por el mismo evento sin duplicar nada.
+            if ($group && $group['type'] === 'eventos') {
+                try {
+                    Notificador::avisarEventoNuevo($db, $linkId);
+                } catch (Exception $e) {
+                    // Que falle el aviso no puede impedir que se cree el evento.
+                    error_log('No se pudo notificar el evento ' . $linkId . ': ' . $e->getMessage());
+                }
+            }
+
             $stmt = $db->prepare('SELECT * FROM links WHERE id = ?');
             $stmt->execute([$linkId]);
             $link = $stmt->fetch();
