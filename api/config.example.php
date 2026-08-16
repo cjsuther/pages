@@ -4,6 +4,10 @@ define('DB_HOST', 'localhost');
 define('DB_NAME', 'personal_pages');
 define('DB_USER', 'root');
 define('DB_PASS', '');
+// Este valor es público: está en el repositorio. Con él, cualquiera puede
+// firmar un token válido para cualquier usuario. `composer install` genera uno
+// aleatorio al crear config.php; si copiás este archivo a mano, reemplazalo:
+//     php -r "echo bin2hex(random_bytes(32));"
 define('JWT_SECRET', 'CAMBIA_ESTO_POR_UNA_CLAVE_SEGURA_ALEATORIA');
 define('JWT_EXPIRATION', 86400);
 

@@ -17,7 +17,7 @@
     },
     "scripts": {
         "post-install-cmd": [
-            "@php -r \"if (!file_exists('config.php')) { copy('config.example.php', 'config.php'); echo 'Archivo config.php creado. Por favor configúralo antes de usar la aplicación.\\n'; }\""
+            "@php bin/crear-config.php"
         ],
         "test": "phpunit",
         "test:coverage": "@php -d pcov.enabled=1 -d pcov.directory=. ./vendor/bin/phpunit --coverage-text",
