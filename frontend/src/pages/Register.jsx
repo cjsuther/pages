@@ -130,10 +130,11 @@ function Register() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="register-email" className="block text-sm font-medium text-gray-700 mb-2">
               Email
             </label>
             <input
+              id="register-email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -143,10 +144,11 @@ function Register() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="register-password" className="block text-sm font-medium text-gray-700 mb-2">
               Contraseña
             </label>
             <input
+              id="register-password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -156,10 +158,11 @@ function Register() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="register-password-confirm" className="block text-sm font-medium text-gray-700 mb-2">
               Confirmar Contraseña
             </label>
             <input
+              id="register-password-confirm"
               type="password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}

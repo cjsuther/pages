@@ -266,10 +266,11 @@ function MyPages() {
 
             <form onSubmit={createPage} className="space-y-6">
               <div>
-                <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">
+                <label htmlFor="nueva-pagina-titulo" className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">
                   TÍTULO
                 </label>
                 <input
+                  id="nueva-pagina-titulo"
                   type="text"
                   value={newPage.title}
                   onChange={(e) => setNewPage({ ...newPage, title: e.target.value })}
@@ -279,10 +280,11 @@ function MyPages() {
               </div>
 
               <div>
-                <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">
+                <label htmlFor="nueva-pagina-descripcion" className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">
                   DESCRIPCIÓN
                 </label>
                 <textarea
+                  id="nueva-pagina-descripcion"
                   value={newPage.description}
                   onChange={(e) => setNewPage({ ...newPage, description: e.target.value })}
                   className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
@@ -291,10 +293,11 @@ function MyPages() {
               </div>
 
               <div>
-                <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">
+                <label htmlFor="nueva-pagina-url" className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">
                   URL
                 </label>
                 <input
+                  id="nueva-pagina-url"
                   type="text"
                   value={newPage.url_slug}
                   onChange={(e) => setNewPage({ ...newPage, url_slug: e.target.value.toLowerCase() })}
