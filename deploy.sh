@@ -22,6 +22,9 @@ REMOTE_ROOT="/home/u414051709/domains/rezon.ar/public_html"
 REMOTE_BACKUPS="/home/u414051709/backups"
 SITE_URL="https://rezon.ar"
 
+# El `php` por defecto del servidor es 7.2, pero las dependencias piden >=8.1.
+REMOTE_PHP="/opt/alt/php83/usr/bin/php"
+
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 API_DIR="$PROJECT_DIR/api"
 FRONTEND_DIR="$PROJECT_DIR/frontend"
@@ -29,6 +32,8 @@ FRONTEND_DIR="$PROJECT_DIR/frontend"
 DRY_RUN=0
 SKIP_TESTS=0
 ONLY=""
+# Problemas detectados antes de la verificación final (p. ej. composer).
+FALLOS_PREVIOS=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -170,11 +175,28 @@ if hacer_api; then
       "$SSH_HOST:$REMOTE_ROOT/api/uploads/.htaccess" && ok "endurecido api/uploads/.htaccess"
   fi
 
-  # Dependencias de producción, sin las de desarrollo.
+  # Dependencias de producción. vendor/ no se sincroniza (vive sólo en el
+  # servidor), así que sólo hace falta tocarlo cuando cambió composer.lock.
+  #
+  # El php de la línea de comandos del servidor es 7.2 y los paquetes piden
+  # >=8.1: hay que invocar composer con un binario moderno o falla entero.
   if [ "$DRY_RUN" -eq 0 ]; then
-    ssh_remoto "cd $REMOTE_ROOT/api && composer install --no-dev --optimize-autoloader --no-interaction 2>&1 | tail -3" \
-      && ok "composer install --no-dev" \
-      || aviso "composer falló; revisá vendor/ en el servidor"
+    LOCK_LOCAL=$(md5 -q "$API_DIR/composer.lock" 2>/dev/null || md5sum "$API_DIR/composer.lock" | cut -d' ' -f1)
+    LOCK_REMOTO=$(ssh_remoto "md5sum $REMOTE_ROOT/api/composer.lock 2>/dev/null | cut -d' ' -f1")
+
+    if [ "$LOCK_LOCAL" = "$LOCK_REMOTO" ]; then
+      ok "dependencias sin cambios (composer.lock idéntico)"
+    else
+      COMPOSER_SALIDA=$(ssh_remoto "cd $REMOTE_ROOT/api && $REMOTE_PHP \$(command -v composer) install --no-dev --optimize-autoloader --no-interaction 2>&1")
+      # Sin el $? directo: una tubería devolvería el estado del último comando.
+      if [ $? -eq 0 ]; then
+        ok "composer install --no-dev"
+      else
+        aviso "composer falló; vendor/ quedó como estaba:"
+        echo "$COMPOSER_SALIDA" | tail -5 | sed 's/^/      /'
+        FALLOS_PREVIOS=1
+      fi
+    fi
   fi
 fi
 
@@ -213,7 +235,7 @@ fi
 
 titulo "Verificación post-deploy"
 
-FALLOS=0
+FALLOS=$FALLOS_PREVIOS
 comprobar() { # descripción, url, código esperado
   local codigo
   codigo=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "$2")
