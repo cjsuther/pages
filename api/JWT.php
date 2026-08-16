@@ -54,8 +54,24 @@ class JWT {
     }
 
     public static function getUserFromToken() {
-        $headers = getallheaders();
-        $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : null;
+        return self::getUserFromHeaders(getallheaders());
+    }
+
+    /**
+     * Igual que getUserFromToken() pero con las cabeceras inyectadas, para
+     * poder testearlo fuera de un contexto web (getallheaders() no existe en CLI).
+     */
+    public static function getUserFromHeaders($headers) {
+        $headers = is_array($headers) ? $headers : [];
+
+        // Apache normaliza distinto según la versión; aceptamos ambas grafías.
+        $authHeader = null;
+        foreach ($headers as $name => $value) {
+            if (strcasecmp($name, 'Authorization') === 0) {
+                $authHeader = $value;
+                break;
+            }
+        }
 
         if (!$authHeader || !preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
             return null;
