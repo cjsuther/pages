@@ -81,13 +81,52 @@ describe('PanelVentas', () => {
     });
 
     /** El dueño necesita poder contactar a quien compró. */
-    it('el email y el teléfono son clicables', async () => {
+    it('el email abre el cliente de correo', async () => {
       await montar({ ordenes: [VENTA] });
 
       expect(screen.getByRole('link', { name: 'ana@example.com' }))
         .toHaveAttribute('href', 'mailto:ana@example.com');
-      expect(screen.getByRole('link', { name: '1122334455' }))
-        .toHaveAttribute('href', 'tel:1122334455');
+    });
+
+    /**
+     * Es por donde se le escribe en la práctica: avisar de un cambio de horario
+     * se hace por WhatsApp, no llamando.
+     */
+    it('el teléfono abre WhatsApp, no el marcador', async () => {
+      await montar({ ordenes: [VENTA] });
+
+      const enlace = screen.getByRole('link', { name: /WhatsApp a Ana Gómez/ });
+
+      expect(enlace).toHaveAttribute('href', 'https://wa.me/5491122334455');
+      expect(enlace).toHaveAttribute('target', '_blank');
+    });
+
+    it('sigue mostrando el número tal como lo escribió el comprador', async () => {
+      await montar({ ordenes: [{ ...VENTA, telefono: '011 15 2233-4455' }] });
+
+      expect(screen.getByText('011 15 2233-4455')).toBeInTheDocument();
+    });
+
+    it('normaliza el 0 y el 15 para armar el link', async () => {
+      await montar({ ordenes: [{ ...VENTA, telefono: '011 15 2233-4455' }] });
+
+      expect(screen.getByRole('link', { name: /WhatsApp/ }))
+        .toHaveAttribute('href', 'https://wa.me/5491122334455');
+    });
+
+    it('respeta el país si el comprador lo puso', async () => {
+      await montar({ ordenes: [{ ...VENTA, telefono: '+34 612 345 678' }] });
+
+      expect(screen.getByRole('link', { name: /WhatsApp/ }))
+        .toHaveAttribute('href', 'https://wa.me/34612345678');
+    });
+
+    /** Mejor dejarlo como texto que mandar al dueño a un número equivocado. */
+    it('un número que no se puede interpretar queda como texto', async () => {
+      await montar({ ordenes: [{ ...VENTA, telefono: '1234' }] });
+
+      expect(screen.getByText('1234')).toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: /WhatsApp/ })).not.toBeInTheDocument();
     });
 
     it('muestra la cantidad y el total', async () => {
