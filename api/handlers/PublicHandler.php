@@ -47,8 +47,11 @@ class PublicHandler
                     $group['links'] = self::eventosVigentes($db, $group['id']);
                     $group['collaborated_events'] = self::eventosColaborados($db, $group['id']);
                 } else {
-                    $stmt = $db->prepare("SELECT *, (event_date IS NOT NULL AND event_date < CURDATE()) as event_due FROM links WHERE group_id = ? ORDER BY position, id");
-                    $stmt->execute([$group['id']]);
+                    $stmt = $db->prepare("
+                        SELECT *, (event_date IS NOT NULL AND event_date < ?) as event_due
+                        FROM links WHERE group_id = ? ORDER BY position, id
+                    ");
+                    $stmt->execute([Fechas::hoy(), $group['id']]);
                     $group['links'] = $stmt->fetchAll();
                 }
             }
@@ -72,8 +75,17 @@ class PublicHandler
     /** La página pública sólo muestra eventos futuros. */
     private static function eventosVigentes($db, $groupId)
     {
-        $stmt = $db->prepare("SELECT *, (event_date IS NOT NULL AND event_date < CURDATE()) as event_due FROM links WHERE group_id = ? AND event_date > CURDATE() ORDER BY event_date, id");
-        $stmt->execute([$groupId]);
+        // >= y no >: un evento de hoy a las 20:30 todavía no pasó. Con > la
+        // página se vaciaba el mismo día del show.
+        $hoy = Fechas::hoy();
+
+        $stmt = $db->prepare("
+            SELECT *, (event_date IS NOT NULL AND event_date < ?) as event_due
+            FROM links
+            WHERE group_id = ? AND event_date >= ?
+            ORDER BY event_date, id
+        ");
+        $stmt->execute([$hoy, $groupId, $hoy]);
         $links = $stmt->fetchAll();
 
         foreach ($links as &$link) {
@@ -93,15 +105,16 @@ class PublicHandler
             SELECT l.*, 1 as is_collaborated, ec.id as collaboration_id,
                 rp.id as source_page_id, rp.title as source_page_title,
                 rp.url_slug as source_page_slug, rp.profile_image as source_page_image,
-                (l.event_date IS NOT NULL AND l.event_date < CURDATE()) as event_due
+                (l.event_date IS NOT NULL AND l.event_date < ?) as event_due
             FROM event_collaborations ec
             JOIN links l ON ec.link_id = l.id
             JOIN pages rp ON ec.requester_page_id = rp.id
             WHERE ec.collaborator_group_id = ? AND ec.status = 'accepted'
-                AND (l.event_date IS NULL OR l.event_date >= CURDATE())
+                AND (l.event_date IS NULL OR l.event_date >= ?)
             ORDER BY l.event_date, l.id
         ");
-        $stmt->execute([$groupId]);
+        $hoy = Fechas::hoy();
+        $stmt->execute([$hoy, $groupId, $hoy]);
         $colaborados = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         foreach ($colaborados as &$evento) {
@@ -294,7 +307,7 @@ class PublicHandler
                 JOIN users u ON p.user_id = u.id
                 WHERE lg.type = 'eventos'
                   AND l.event_date IS NOT NULL
-                  AND l.event_date >= CURDATE()
+                  AND l.event_date >= '" . Fechas::hoy() . "'
                 ORDER BY l.event_date ASC, l.event_time ASC
                 LIMIT " . self::LIMITE_EVENTOS_RECIENTES . "
             ");
@@ -349,7 +362,7 @@ class PublicHandler
                 JOIN link_groups lg ON l.group_id = lg.id
                 JOIN pages p ON lg.page_id = p.id
                 WHERE lg.type = 'eventos'
-                  AND l.event_date >= CURDATE()
+                  AND l.event_date >= '" . Fechas::hoy() . "'
                   AND (l.text LIKE ? OR l.description LIKE ? OR l.event_address LIKE ?)
                 ORDER BY l.event_date ASC
                 LIMIT " . self::LIMITE_RESULTADOS_BUSQUEDA . "

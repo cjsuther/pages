@@ -2,6 +2,7 @@
 
 namespace Tests\Unit\Handlers;
 
+use Fechas;
 use PublicHandler;
 use Tests\Support\HandlerTestCase;
 
@@ -69,9 +70,29 @@ class PublicHandlerTest extends HandlerTestCase
 
         PublicHandler::page($this->db, $this->get(['slug' => 'mi-pagina']));
 
-        $sql = $this->db->callsFor('FROM links WHERE group_id = ? AND event_date')[0]['sql'];
+        $llamada = $this->db->callsFor('WHERE group_id = ? AND event_date')[0];
 
-        $this->assertStringContainsString('event_date > CURDATE()', $sql);
+        // >= y no >: un evento de hoy a las 20:30 todavía no pasó.
+        $this->assertStringContainsString('event_date >= ?', $llamada['sql']);
+        $this->assertContains(Fechas::hoy(), $llamada['params'], 'compara contra hoy en Argentina');
+    }
+
+    /**
+     * El corte se calcula en Argentina y no con CURDATE(): el servidor corre en
+     * UTC, tres horas adelante, así que a partir de las 21:00 la base creería
+     * que ya es el día siguiente y los eventos de esa misma noche desaparecerían
+     * de la página justo cuando la gente los está por ir a ver.
+     */
+    public function testElCorteDeFechaNoUsaLaHoraDelServidor()
+    {
+        $this->db->onSelect('FROM pages WHERE url_slug = ?', [['id' => 5]]);
+        $this->db->onSelect('FROM link_groups WHERE page_id = ?', [['id' => 10, 'type' => 'eventos']]);
+
+        PublicHandler::page($this->db, $this->get(['slug' => 'mi-pagina']));
+
+        foreach ($this->db->log() as $llamada) {
+            $this->assertStringNotContainsString('CURDATE()', $llamada['sql']);
+        }
     }
 
     public function testPageCargaColaboradoresDeCadaEvento()
@@ -282,7 +303,7 @@ class PublicHandlerTest extends HandlerTestCase
 
         $sql = $this->db->callsFor('FROM links l JOIN link_groups lg')[0]['sql'];
 
-        $this->assertStringContainsString('l.event_date >= CURDATE()', $sql);
+        $this->assertStringContainsString("l.event_date >= '" . Fechas::hoy() . "'", $sql);
         $this->assertStringContainsString("lg.type = 'eventos'", $sql);
         $this->assertStringContainsString('LIMIT 30', $sql);
     }
@@ -394,7 +415,7 @@ class PublicHandlerTest extends HandlerTestCase
 
         $sql = $this->db->callsFor('FROM links l JOIN link_groups lg')[0]['sql'];
 
-        $this->assertStringContainsString('l.event_date >= CURDATE()', $sql);
+        $this->assertStringContainsString("l.event_date >= '" . Fechas::hoy() . "'", $sql);
     }
 
     public function testSearchLimitaCadaTipoADiezResultados()
