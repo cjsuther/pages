@@ -251,6 +251,131 @@ describe('ComprarEntradas', () => {
     });
   });
 
+  describe('validación del email', () => {
+    /**
+     * El type="email" del navegador acepta asd@asd, así que sin esto el único
+     * aviso llegaba después de ir y volver del servidor.
+     */
+    it('avisa al salir del campo si el email está mal', () => {
+      montar();
+
+      const campo = screen.getByLabelText('EMAIL');
+      fireEvent.change(campo, { target: { value: 'asd@asd' } });
+      fireEvent.blur(campo);
+
+      expect(screen.getByRole('alert')).toHaveTextContent(/Revisá el email/);
+    });
+
+    it('no molesta mientras se está escribiendo', () => {
+      montar();
+
+      fireEvent.change(screen.getByLabelText('EMAIL'), { target: { value: 'ana@' } });
+
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
+
+    it('no avisa nada si el campo quedó vacío', () => {
+      montar();
+
+      const campo = screen.getByLabelText('EMAIL');
+      fireEvent.change(campo, { target: { value: '' } });
+      fireEvent.blur(campo);
+
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
+
+    it('el aviso desaparece al corregirlo', () => {
+      montar();
+
+      const campo = screen.getByLabelText('EMAIL');
+      fireEvent.change(campo, { target: { value: 'asd@asd' } });
+      fireEvent.blur(campo);
+      fireEvent.change(campo, { target: { value: 'ana@example.com' } });
+
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
+
+    it('marca el campo como inválido para quien usa lector de pantalla', () => {
+      montar();
+
+      const campo = screen.getByLabelText('EMAIL');
+      fireEvent.change(campo, { target: { value: 'asd@asd' } });
+      fireEvent.blur(campo);
+
+      expect(campo).toHaveAttribute('aria-invalid', 'true');
+    });
+
+    /** La confirmación va por mail: no puede salir con el email mal escrito. */
+    it('no manda la compra si el email es inválido', () => {
+      montar();
+
+      fireEvent.change(screen.getByLabelText('NOMBRE Y APELLIDO'), { target: { value: 'Ana' } });
+      fireEvent.change(screen.getByLabelText('EMAIL'), { target: { value: 'asd@asd' } });
+      fireEvent.change(screen.getByLabelText('TELÉFONO'), { target: { value: '1122334455' } });
+
+      fireEvent.click(screen.getByRole('button', { name: 'IR A PAGAR' }));
+
+      expect(global.fetch).not.toHaveBeenCalled();
+      expect(screen.getByRole('alert')).toBeInTheDocument();
+    });
+
+    it('con el email bien sí sale', async () => {
+      global.fetch.mockReturnValue(respuesta({ codigo: 'ABC', url: 'https://mp.test/x' }));
+      montar();
+      completarFormulario();
+
+      fireEvent.click(screen.getByRole('button', { name: 'IR A PAGAR' }));
+
+      await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+    });
+  });
+
+  describe('dominio sospechoso', () => {
+    /** gmail.co pasa cualquier validación de formato y no llega nunca. */
+    it('pregunta si quiso decir gmail.com', () => {
+      montar();
+
+      const campo = screen.getByLabelText('EMAIL');
+      fireEvent.change(campo, { target: { value: 'ana@gmail.co' } });
+      fireEvent.blur(campo);
+
+      expect(screen.getByText(/¿Quisiste decir/)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'ana@gmail.com' })).toBeInTheDocument();
+    });
+
+    it('al aceptarla se corrige el campo', () => {
+      montar();
+
+      const campo = screen.getByLabelText('EMAIL');
+      fireEvent.change(campo, { target: { value: 'ana@gmail.co' } });
+      fireEvent.blur(campo);
+      fireEvent.click(screen.getByRole('button', { name: 'ana@gmail.com' }));
+
+      expect(screen.getByLabelText('EMAIL')).toHaveValue('ana@gmail.com');
+    });
+
+    /** .co es un dominio real: se pregunta, no se corrige solo. */
+    it('no cambia el email por su cuenta', () => {
+      montar();
+
+      const campo = screen.getByLabelText('EMAIL');
+      fireEvent.change(campo, { target: { value: 'ana@gmail.co' } });
+      fireEvent.blur(campo);
+
+      expect(screen.getByLabelText('EMAIL')).toHaveValue('ana@gmail.co');
+    });
+
+    it('un dominio normal no dispara ninguna sugerencia', () => {
+      montar();
+
+      const campo = screen.getByLabelText('EMAIL');
+      fireEvent.change(campo, { target: { value: 'ana@mi-empresa.com.ar' } });
+      fireEvent.blur(campo);
+
+      expect(screen.queryByText(/¿Quisiste decir/)).not.toBeInTheDocument();
+    });
+  });
+
   describe('cerrar', () => {
     it('se puede cerrar con la cruz', () => {
       const { props } = montar();

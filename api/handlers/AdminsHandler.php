@@ -84,6 +84,13 @@ class AdminsHandler
             return Response::error(400, 'page_id y email son requeridos');
         }
 
+        // Sin esto, un email mal escrito caía en "no hay ningún usuario
+        // registrado con ese email", que hace buscar al invitado en vez de
+        // mirar el error de tipeo que uno tiene delante.
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return Response::error(400, 'El email no tiene un formato válido');
+        }
+
         // Sólo el dueño: un admin no puede sumar más admins.
         if (!PageAccess::isOwner($db, $pageId, $req->userId())) {
             return Response::error(403, 'Solo el dueño de la página puede invitar administradores');

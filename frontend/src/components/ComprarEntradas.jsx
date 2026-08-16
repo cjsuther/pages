@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Loader2, Check } from 'lucide-react';
 import { formatearPrecio, opcionesDeCantidad } from '../utils/entradas';
+import { esEmailValido, sugerenciaDeEmail } from '../utils/email';
 
 /**
  * Formulario de compra o reserva de entradas de un evento.
@@ -13,6 +14,10 @@ function ComprarEntradas({ evento, entradas, apiUrl, color = '#3B82F6', onCerrar
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState(null);
   const [reservado, setReservado] = useState(null);
+  // Se avisa recién al salir del campo: marcar en rojo mientras se escribe
+  // es molesto, porque todo email está incompleto hasta que se termina.
+  const [avisoEmail, setAvisoEmail] = useState(null);
+  const [sugerencia, setSugerencia] = useState(null);
 
   const cantidades = opcionesDeCantidad(entradas);
   const total = (Number(entradas.precio) || 0) * Number(datos.cantidad);
@@ -20,10 +25,39 @@ function ComprarEntradas({ evento, entradas, apiUrl, color = '#3B82F6', onCerrar
   const cambiar = (campo, valor) => {
     setDatos((previos) => ({ ...previos, [campo]: valor }));
     setError(null);
+
+    if (campo === 'email') {
+      setAvisoEmail(null);
+      setSugerencia(null);
+    }
+  };
+
+  const revisarEmail = () => {
+    const email = datos.email.trim();
+
+    if (email === '') {
+      return;
+    }
+
+    if (!esEmailValido(email)) {
+      setAvisoEmail('Revisá el email: parece que le falta algo.');
+      return;
+    }
+
+    setAvisoEmail(null);
+    setSugerencia(sugerenciaDeEmail(email));
   };
 
   const enviar = async (e) => {
     e.preventDefault();
+
+    // La confirmación va por mail: mandar una compra con el email mal escrito
+    // deja a la persona sin entrada y sin forma de reclamarla.
+    if (!esEmailValido(datos.email)) {
+      setAvisoEmail('Revisá el email: parece que le falta algo.');
+      return;
+    }
+
     setEnviando(true);
     setError(null);
 
@@ -104,16 +138,46 @@ function ComprarEntradas({ evento, entradas, apiUrl, color = '#3B82F6', onCerrar
           required
         />
 
-        <Campo
-          id="entrada-email"
-          etiqueta="EMAIL"
-          type="email"
-          value={datos.email}
-          onChange={(v) => cambiar('email', v)}
-          autoComplete="email"
-          ayuda="Te mandamos ahí la confirmación"
-          required
-        />
+        <div>
+          <Campo
+            id="entrada-email"
+            etiqueta="EMAIL"
+            type="email"
+            value={datos.email}
+            onChange={(v) => cambiar('email', v)}
+            onBlur={revisarEmail}
+            autoComplete="email"
+            ayuda={avisoEmail ? null : 'Te mandamos ahí la confirmación'}
+            aria-invalid={avisoEmail ? 'true' : undefined}
+            aria-describedby={avisoEmail ? 'entrada-email-aviso' : undefined}
+            required
+          />
+
+          {avisoEmail && (
+            <p id="entrada-email-aviso" role="alert" className="text-xs text-red-400 mt-1">
+              {avisoEmail}
+            </p>
+          )}
+
+          {/* Un dominio mal tipeado pasa cualquier validación y no llega nunca.
+              Se pregunta en vez de corregir solo: .co es un dominio real. */}
+          {sugerencia && !avisoEmail && (
+            <p className="text-xs text-amber-400 mt-1">
+              ¿Quisiste decir{' '}
+              <button
+                type="button"
+                onClick={() => {
+                  cambiar('email', sugerencia);
+                  setSugerencia(null);
+                }}
+                className="underline font-bold"
+              >
+                {sugerencia}
+              </button>
+              ?
+            </p>
+          )}
+        </div>
 
         <Campo
           id="entrada-telefono"
@@ -212,6 +276,7 @@ function Marco({ children, onCerrar }) {
 }
 
 function Campo({ id, etiqueta, ayuda, value, onChange, type = 'text', ...resto }) {
+  const conProblema = resto['aria-invalid'] === 'true';
   return (
     <div>
       <label htmlFor={id} className="block text-sm font-bold text-gray-400 mb-2 tracking-wide">
@@ -222,7 +287,9 @@ function Campo({ id, etiqueta, ayuda, value, onChange, type = 'text', ...resto }
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+        className={`w-full px-4 py-3 bg-black border text-white focus:border-white transition ${
+          conProblema ? 'border-red-700' : 'border-gray-700'
+        }`}
         {...resto}
       />
       {ayuda && <p className="text-xs text-gray-600 mt-1">{ayuda}</p>}

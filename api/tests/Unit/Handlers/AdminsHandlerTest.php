@@ -457,4 +457,33 @@ class AdminsHandlerTest extends HandlerTestCase
             'name' => $nombre, 'email' => 'ana@b.com',
         ]]);
     }
+
+    /**
+     * Sin esto, un email mal escrito caía en "no hay ningún usuario registrado
+     * con ese email", que hace buscar al invitado en vez de mirar el error de
+     * tipeo que uno tiene delante.
+     */
+    public function testInvitarRechazaUnEmailMalEscrito()
+    {
+        $this->db->onSelect('FROM pages WHERE id = ?', [['id' => 5, 'user_id' => 7]]);
+
+        $r = AdminsHandler::index($this->db, new Request('POST', [
+            'page_id' => 5, 'email' => 'asd@asd',
+        ], [], ['user_id' => 7]));
+
+        $this->assertSame(400, $r->status);
+        $this->assertStringContainsString('formato', $r->body['error']);
+    }
+
+    public function testInvitarNoConsultaLaBasePorUnEmailInvalido()
+    {
+        $this->db->onSelect('FROM pages WHERE id = ?', [['id' => 5, 'user_id' => 7]]);
+
+        AdminsHandler::index($this->db, new Request('POST', [
+            'page_id' => 5, 'email' => 'no-es-un-email',
+        ], [], ['user_id' => 7]));
+
+        $this->assertSame(0, $this->db->countCalls('SELECT id, name, email FROM users WHERE email'));
+    }
+
 }
