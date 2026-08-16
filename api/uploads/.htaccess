@@ -1,0 +1,21 @@
+# Las subidas son datos, nunca código. Este archivo impide que Apache ejecute
+# nada de este directorio aunque llegue a guardarse un .php.
+php_flag engine off
+RemoveHandler .php .phtml .php3 .php4 .php5 .php7 .php8 .phar
+RemoveType .php .phtml .php3 .php4 .php5 .php7 .php8 .phar
+
+<IfModule mod_headers.c>
+  Header always set Access-Control-Allow-Origin "*"
+  Header always set Access-Control-Allow-Methods "GET, OPTIONS"
+  Header always set Access-Control-Allow-Headers "Content-Type, Authorization"
+  Header always set X-Content-Type-Options "nosniff"
+</IfModule>
+
+# Sólo se sirven imágenes.
+<FilesMatch "(?i)\.(jpg|jpeg|png|gif|webp)$">
+  Require all granted
+</FilesMatch>
+
+<FilesMatch "(?i)\.(php|phtml|php3|php4|php5|php7|php8|phar|cgi|pl|py|sh|htaccess)$">
+  Require all denied
+</FilesMatch>

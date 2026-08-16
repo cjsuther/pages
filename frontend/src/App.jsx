@@ -11,8 +11,10 @@ import PageEditor from './pages/PageEditor';
 import PublicPage from './pages/PublicPage';
 import EventDetail from './pages/EventDetail';
 
-const API_URL = 'http://localhost:8000/api';
-//const API_URL = 'https://rezon.ar/api';
+// La URL de la API sale de VITE_API_URL (ver .env.production). El valor por
+// defecto es el de desarrollo, así que `npm run dev` funciona sin configurar
+// nada y el build de producción no depende de editar este archivo a mano.
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
 export const AuthContext = React.createContext(null);
 

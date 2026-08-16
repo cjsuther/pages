@@ -1,0 +1,289 @@
+import React from 'react';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { screen, within } from '@testing-library/react';
+import MinimalTemplate from '../../../src/components/templates/MinimalTemplate';
+import ModernTemplate from '../../../src/components/templates/ModernTemplate';
+import CardsTemplate from '../../../src/components/templates/CardsTemplate';
+import CondensedTemplate from '../../../src/components/templates/CondensedTemplate';
+import { renderConProviders } from '../../helpers/render';
+
+/**
+ * Las cuatro plantillas son intercambiables: reciben la misma página y deben
+ * cumplir el mismo contrato. Lo que cambia es la estética, no los datos que
+ * muestran, así que estas comprobaciones corren contra todas.
+ */
+const PLANTILLAS = [
+  ['MinimalTemplate', MinimalTemplate],
+  ['ModernTemplate', ModernTemplate],
+  ['CardsTemplate', CardsTemplate],
+  ['CondensedTemplate', CondensedTemplate],
+];
+
+const pagina = (overrides = {}) => ({
+  id: 5,
+  title: 'Mi Página',
+  description: 'Una descripción',
+  url_slug: 'mi-pagina',
+  profile_image: null,
+  background_image: null,
+  background_color: '#ffffff',
+  text_color: '#000000',
+  primary_color: '#3b82f6',
+  follower_count: 7,
+  groups: [],
+  ...overrides,
+});
+
+const grupoDeLinks = (links) => ({
+  id: 10,
+  title: 'Mis Links',
+  type: 'links',
+  links,
+});
+
+const link = (overrides = {}) => ({
+  id: 100,
+  url: 'https://ejemplo.com',
+  text: 'Un link',
+  description: null,
+  image_url: null,
+  ...overrides,
+});
+
+/** Busca un enlace por su destino, sin depender de cómo se maquete el texto. */
+const porHref = (href) =>
+  screen.getAllByRole('link').find((a) => a.getAttribute('href') === href);
+
+const evento = (overrides = {}) => ({
+  id: 200,
+  text: 'Mi Evento',
+  url: 'https://entradas.com',
+  description: 'Descripción del evento',
+  image_url: null,
+  event_date: '2026-12-01',
+  event_time: '20:00:00',
+  event_address: 'Av. Corrientes 1234',
+  event_maps_url: 'https://maps.google.com/x',
+  collaborators: [],
+  ...overrides,
+});
+
+describe.each(PLANTILLAS)('%s', (nombre, Plantilla) => {
+  beforeEach(() => {
+    window.gtag = vi.fn();
+  });
+
+  describe('cabecera', () => {
+    it('muestra el título de la página', () => {
+      renderConProviders(<Plantilla page={pagina()} />);
+
+      expect(screen.getByText('Mi Página')).toBeInTheDocument();
+    });
+
+    it('muestra la descripción', () => {
+      renderConProviders(<Plantilla page={pagina()} />);
+
+      expect(screen.getByText('Una descripción')).toBeInTheDocument();
+    });
+
+    it('funciona sin descripción', () => {
+      expect(() =>
+        renderConProviders(<Plantilla page={pagina({ description: null })} />)
+      ).not.toThrow();
+    });
+
+    it('muestra la imagen de perfil si la hay', () => {
+      renderConProviders(
+        <Plantilla page={pagina({ profile_image: 'https://img/perfil.png' })} />
+      );
+
+      const imagenes = screen.getAllByRole('img');
+      expect(imagenes.some((i) => i.getAttribute('src') === 'https://img/perfil.png')).toBe(true);
+    });
+
+    it('muestra el contador de seguidores', () => {
+      renderConProviders(<Plantilla page={pagina({ follower_count: 7 })} />);
+
+      expect(screen.getByText(/7 seguidores/)).toBeInTheDocument();
+    });
+
+    it('muestra cero seguidores si no vienen', () => {
+      renderConProviders(<Plantilla page={pagina({ follower_count: undefined })} />);
+
+      expect(screen.getByText(/0 seguidores/)).toBeInTheDocument();
+    });
+  });
+
+  describe('sin contenido', () => {
+    it('no rompe con groups vacío', () => {
+      expect(() => renderConProviders(<Plantilla page={pagina({ groups: [] })} />)).not.toThrow();
+    });
+
+    it('no rompe si groups viene sin definir', () => {
+      expect(() => renderConProviders(<Plantilla page={pagina({ groups: undefined })} />)).not.toThrow();
+    });
+
+    it('no rompe con un grupo sin links', () => {
+      expect(() =>
+        renderConProviders(
+          <Plantilla page={pagina({ groups: [{ id: 1, title: 'Vacío', type: 'links' }] })} />
+        )
+      ).not.toThrow();
+    });
+  });
+
+  describe('grupos de links', () => {
+    it('muestra el título del grupo', () => {
+      renderConProviders(
+        <Plantilla page={pagina({ groups: [grupoDeLinks([link()])] })} />
+      );
+
+      expect(screen.getByText('Mis Links')).toBeInTheDocument();
+    });
+
+    it('muestra cada link con su texto y su URL', () => {
+      renderConProviders(
+        <Plantilla
+          page={pagina({
+            groups: [grupoDeLinks([
+              link({ id: 1, text: 'Instagram', url: 'https://instagram.com/yo' }),
+              link({ id: 2, text: 'Spotify', url: 'https://spotify.com/yo' }),
+            ])],
+          })}
+        />
+      );
+
+      // Cada plantilla maqueta el texto distinto (con flechas, iconos o spans
+      // anidados), así que se busca por destino y se comprueba el contenido.
+      expect(porHref('https://instagram.com/yo')).toHaveTextContent('Instagram');
+      expect(porHref('https://spotify.com/yo')).toHaveTextContent('Spotify');
+    });
+
+    it('los links salen en una pestaña nueva y sin filtrar el referrer', () => {
+      renderConProviders(
+        <Plantilla page={pagina({ groups: [grupoDeLinks([link({ url: 'https://instagram.com/yo' })])] })} />
+      );
+
+      const enlace = porHref('https://instagram.com/yo');
+      expect(enlace).toHaveAttribute('target', '_blank');
+      expect(enlace).toHaveAttribute('rel', expect.stringContaining('noopener'));
+    });
+  });
+
+  describe('grupos de eventos', () => {
+    const conEventos = (links, colaborados = []) =>
+      pagina({
+        groups: [{ id: 20, title: 'Agenda', type: 'eventos', links, collaborated_events: colaborados }],
+      });
+
+    it('muestra el nombre del evento', () => {
+      renderConProviders(<Plantilla page={conEventos([evento()])} />);
+
+      expect(screen.getByText('Mi Evento')).toBeInTheDocument();
+    });
+
+    it('muestra varios eventos', () => {
+      renderConProviders(
+        <Plantilla
+          page={conEventos([
+            evento({ id: 1, text: 'Primero', event_date: '2026-01-01' }),
+            evento({ id: 2, text: 'Segundo', event_date: '2026-02-01' }),
+          ])}
+        />
+      );
+
+      expect(screen.getByText('Primero')).toBeInTheDocument();
+      expect(screen.getByText('Segundo')).toBeInTheDocument();
+    });
+
+    it('incluye los eventos colaborados junto a los propios', () => {
+      renderConProviders(
+        <Plantilla
+          page={conEventos(
+            [evento({ id: 1, text: 'Propio' })],
+            [evento({ id: 2, text: 'Colaborado', is_collaborated: true, source_page_slug: 'otra', source_page_title: 'Otra' })]
+          )}
+        />
+      );
+
+      expect(screen.getByText('Propio')).toBeInTheDocument();
+      expect(screen.getByText('Colaborado')).toBeInTheDocument();
+    });
+
+    it('no rompe si no hay eventos colaborados', () => {
+      expect(() =>
+        renderConProviders(
+          <Plantilla page={pagina({ groups: [{ id: 20, title: 'Agenda', type: 'eventos', links: [evento()] }] })} />
+        )
+      ).not.toThrow();
+    });
+
+    it('ofrece el enlace directo al evento', () => {
+      renderConProviders(<Plantilla page={conEventos([evento({ id: 200 })])} />);
+
+      const directos = screen.getAllByRole('link').filter(
+        (a) => a.getAttribute('href') === '/evento/200'
+      );
+      expect(directos.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('grupos de galería', () => {
+    const conGaleria = (links) =>
+      pagina({ groups: [{ id: 30, title: 'Fotos', type: 'galeria', links }] });
+
+    it('muestra las imágenes', () => {
+      renderConProviders(
+        <Plantilla
+          page={conGaleria([
+            { id: 1, text: 'Foto uno', image_url: 'https://img/1.jpg' },
+            { id: 2, text: 'Foto dos', image_url: 'https://img/2.jpg' },
+          ])}
+        />
+      );
+
+      expect(screen.getByAltText('Foto uno')).toHaveAttribute('src', 'https://img/1.jpg');
+      expect(screen.getByAltText('Foto dos')).toHaveAttribute('src', 'https://img/2.jpg');
+    });
+
+    it('no rompe con una galería vacía', () => {
+      expect(() => renderConProviders(<Plantilla page={conGaleria([])} />)).not.toThrow();
+    });
+  });
+
+  describe('personalización', () => {
+    it('aplica los colores de la página', () => {
+      const { container } = renderConProviders(
+        <Plantilla page={pagina({ background_color: '#112233', text_color: '#ffeedd' })} />
+      );
+
+      const raiz = container.firstChild;
+      expect(raiz.getAttribute('style')).toContain('rgb(17, 34, 51)');
+    });
+
+    it('aplica la imagen de fondo si la hay', () => {
+      const { container } = renderConProviders(
+        <Plantilla page={pagina({ background_image: 'https://img/fondo.jpg' })} />
+      );
+
+      expect(container.firstChild.getAttribute('style')).toContain('https://img/fondo.jpg');
+    });
+
+    it('funciona sin colores definidos', () => {
+      expect(() =>
+        renderConProviders(
+          <Plantilla page={pagina({ background_color: null, text_color: null, primary_color: null })} />
+        )
+      ).not.toThrow();
+    });
+  });
+
+  describe('pie', () => {
+    it('lleva la marca Rezonar al inicio', () => {
+      renderConProviders(<Plantilla page={pagina()} />);
+
+      const alInicio = screen.getAllByRole('link').filter((a) => a.getAttribute('href') === '/');
+      expect(alInicio.length).toBeGreaterThan(0);
+    });
+  });
+});

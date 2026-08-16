@@ -116,13 +116,20 @@ function LocationSettings() {
     setMessage('');
 
     try {
+      // El endpoint acepta POST (no PUT) y espera el nombre en `address`.
+      // Antes se enviaba un PUT con `location_name`, que el backend ignoraba:
+      // guardar la ubicación desde el perfil nunca llegaba a persistir nada.
       const response = await fetch(`${apiUrl}/users/location.php`, {
-        method: 'PUT',
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(location)
+        body: JSON.stringify({
+          latitude: location.latitude,
+          longitude: location.longitude,
+          address: location.location_name
+        })
       });
 
       const data = await response.json();
