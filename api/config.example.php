@@ -35,12 +35,16 @@ define('VAPID_SUBJECT', 'mailto:tu-email@ejemplo.com');
 
 define('CRON_SECRET_KEY', 'CAMBIA_ESTO_POR_UNA_CLAVE_SEGURA_PARA_CRON');
 
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization');
-header('Content-Type: application/json');
+// En CLI (el cron) no hay request HTTP: ni las cabeceras ni el preflight
+// tienen sentido, y tocar REQUEST_METHOD ahí sólo genera warnings.
+if (php_sapi_name() !== 'cli') {
+    header('Access-Control-Allow-Origin: *');
+    header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization');
+    header('Content-Type: application/json');
 
-if (!$_SERVER && $_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(200);
-    exit();
+    if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+        http_response_code(200);
+        exit();
+    }
 }
