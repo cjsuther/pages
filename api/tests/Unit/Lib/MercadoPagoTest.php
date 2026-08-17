@@ -240,4 +240,61 @@ class MercadoPagoTest extends TestCase
 
         $this->assertFalse((new MercadoPago(self::TOKEN_PROD, $http))->consultarPago('99')['ok']);
     }
+
+    // ------------------------------------ cuánto entra y cuándo se acredita
+
+    /**
+     * El neto lo dice Mercado Pago y no se calcula: el costo depende del plazo
+     * de acreditación y de la provincia del vendedor, que acá no se conocen.
+     */
+    public function testConsultarPagoTraeElNetoYLaFechaDeAcreditacion()
+    {
+        $http = (new FakeHttpClient())->responde('/v1/payments/99', 200, [
+            'status' => 'approved',
+            'transaction_amount' => 3000.0,
+            'transaction_details' => ['net_received_amount' => 2400.5],
+            'money_release_date' => '2026-09-16T10:30:00.000-03:00',
+            'fee_details' => [
+                ['type' => 'mercadopago_fee', 'amount' => 500.5],
+                ['type' => 'application_fee', 'amount' => 99.0],
+            ],
+        ]);
+
+        $r = (new MercadoPago(self::TOKEN_PROD, $http))->consultarPago('99');
+
+        $this->assertSame(2400.5, $r['neto']);
+        $this->assertSame('2026-09-16T10:30:00.000-03:00', $r['acreditacion']);
+    }
+
+    /** Se suman todos los conceptos: la de Mercado Pago, la nuestra y las demás. */
+    public function testLasComisionesSeSumanSinSeguirleElNombreACadaConcepto()
+    {
+        $total = MercadoPago::comisiones(['fee_details' => [
+            ['type' => 'mercadopago_fee', 'amount' => 500.5],
+            ['type' => 'application_fee', 'amount' => 99.0],
+            ['type' => 'financing_fee', 'amount' => 0.5],
+        ]]);
+
+        $this->assertSame(600.0, $total);
+    }
+
+    public function testUnPagoSinDesgloseDeComisionesNoInventaUnCero()
+    {
+        $this->assertNull(MercadoPago::comisiones([]));
+    }
+
+    /** Un pago viejo puede no traer nada de esto y no puede romper el aviso. */
+    public function testUnPagoSinEsosDatosSeConsultaIgual()
+    {
+        $http = (new FakeHttpClient())->responde('/v1/payments/99', 200, [
+            'status' => 'approved',
+            'transaction_amount' => 3000.0,
+        ]);
+
+        $r = (new MercadoPago(self::TOKEN_PROD, $http))->consultarPago('99');
+
+        $this->assertTrue($r['ok']);
+        $this->assertNull($r['neto']);
+        $this->assertNull($r['acreditacion']);
+    }
 }

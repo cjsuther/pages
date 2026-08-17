@@ -188,7 +188,42 @@ class MercadoPago
             'estado'     => $datos['status'],
             'referencia' => isset($datos['external_reference']) ? $datos['external_reference'] : null,
             'monto'      => isset($datos['transaction_amount']) ? (float) $datos['transaction_amount'] : null,
+            // Lo que Mercado Pago dice que entra a la cuenta, ya descontadas
+            // su comisión y la nuestra. Es más confiable que calcularlo: el
+            // costo depende del plazo de acreditación y de la provincia, que
+            // son cosas de la cuenta del vendedor y acá no se conocen.
+            'neto'       => isset($datos['transaction_details']['net_received_amount'])
+                ? (float) $datos['transaction_details']['net_received_amount']
+                : null,
+            'comisiones' => self::comisiones($datos),
+            // Cuándo queda disponible la plata. Con tarjeta de crédito puede
+            // ser un mes después; con dinero en cuenta, el mismo día.
+            'acreditacion' => isset($datos['money_release_date']) ? $datos['money_release_date'] : null,
         ];
+    }
+
+    /**
+     * Todo lo que se descontó del total.
+     *
+     * Mercado Pago lo devuelve desglosado por tipo —la suya, la de la
+     * plataforma, la de financiación—; para mostrar alcanza con el total, y
+     * sumar evita tener que seguirle el nombre a cada concepto.
+     */
+    public static function comisiones(array $pago)
+    {
+        if (!isset($pago['fee_details']) || !is_array($pago['fee_details'])) {
+            return null;
+        }
+
+        $total = 0.0;
+
+        foreach ($pago['fee_details'] as $detalle) {
+            if (isset($detalle['amount']) && is_numeric($detalle['amount'])) {
+                $total += (float) $detalle['amount'];
+            }
+        }
+
+        return round($total, 2);
     }
 
     private function cabeceras()

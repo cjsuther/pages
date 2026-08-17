@@ -266,7 +266,7 @@ class Entradas
      *
      * @return array{acreditada: bool, motivo: string}
      */
-    public static function acreditarPago($db, $codigo, $pagoId, $estadoMp)
+    public static function acreditarPago($db, $codigo, $pagoId, $estadoMp, array $detalle = [])
     {
         $stmt = $db->prepare('SELECT * FROM ticket_orders WHERE codigo = ?');
         $stmt->execute([$codigo]);
@@ -284,12 +284,25 @@ class Entradas
             // Sólo pasa de reservada a pagada. Si venció mientras tanto, se
             // acredita igual: la persona pagó, y dejarla afuera por 30 segundos
             // de demora sería peor que exceder el cupo por una orden.
+            // El neto y la fecha de acreditación los dice Mercado Pago y se
+            // guardan tal cual. Si no vinieron —un aviso viejo, una respuesta
+            // incompleta— se dejan como estaban en vez de escribir un null que
+            // borraría lo que ya se sabía.
             $upd = $db->prepare("
                 UPDATE ticket_orders
-                SET estado = 'pagada', mp_payment_id = ?, pagada_en = NOW()
+                SET estado = 'pagada', mp_payment_id = ?, pagada_en = NOW(),
+                    mp_neto = COALESCE(?, mp_neto),
+                    mp_comisiones = COALESCE(?, mp_comisiones),
+                    acreditacion_en = COALESCE(?, acreditacion_en)
                 WHERE codigo = ? AND estado IN ('reservada', 'vencida')
             ");
-            $upd->execute([$pagoId, $codigo]);
+            $upd->execute([
+                $pagoId,
+                isset($detalle['neto']) ? $detalle['neto'] : null,
+                isset($detalle['comisiones']) ? $detalle['comisiones'] : null,
+                self::fechaDeAcreditacion($detalle),
+                $codigo,
+            ]);
 
             return $upd->rowCount() > 0
                 ? ['acreditada' => true, 'motivo' => 'pago acreditado']
@@ -309,6 +322,24 @@ class Entradas
 
         // in_process, pending: se deja la reserva viva y se espera otro aviso.
         return ['acreditada' => false, 'motivo' => 'pago todavía en curso'];
+    }
+
+    /**
+     * La fecha de acreditación, en el formato de la columna.
+     *
+     * Mercado Pago la manda como instante ISO con zona ("2026-09-16T10:00:00.000-04:00").
+     * Guardar eso tal cual en un TIMESTAMP deja una fecha corrida o directamente
+     * inválida, así que se convierte.
+     */
+    public static function fechaDeAcreditacion(array $detalle)
+    {
+        if (empty($detalle['acreditacion']) || !is_string($detalle['acreditacion'])) {
+            return null;
+        }
+
+        $momento = date_create($detalle['acreditacion']);
+
+        return $momento === false ? null : $momento->format('Y-m-d H:i:s');
     }
 
     /**
@@ -387,6 +418,7 @@ class Entradas
                    precio_unitario, total, comision, comision_porcentaje,
                    moneda, estado, reserva_vence_en,
                    mp_payment_id, pagada_en, created_at,
+                   mp_neto, mp_comisiones, acreditacion_en,
                    (estado = 'reservada' AND reserva_vence_en <= NOW()) AS vencida
             FROM ticket_orders
             WHERE link_id = ?
@@ -399,6 +431,11 @@ class Entradas
         $recaudado = 0.0;
         $comisiones = 0.0;
         $reservadas = 0;
+        $porAcreditar = 0.0;
+        $acreditado = 0.0;
+        $proxima = null;
+        $sinDato = 0;
+        $ahora = date('Y-m-d H:i:s');
 
         foreach ($ordenes as &$orden) {
             if ($orden['vencida']) {
@@ -410,6 +447,24 @@ class Entradas
                 $vendidas += (int) $orden['cantidad'];
                 $recaudado += (float) $orden['total'];
                 $comisiones += (float) $orden['comision'];
+
+                // Sin el dato de Mercado Pago no se suma nada: es preferible
+                // avisar que faltan ventas por contar a mostrar un total que
+                // parezca completo y no lo esté.
+                $neto = isset($orden['mp_neto']) ? $orden['mp_neto'] : null;
+                $cuando = isset($orden['acreditacion_en']) ? $orden['acreditacion_en'] : null;
+
+                if ($neto === null) {
+                    $sinDato++;
+                } elseif ($cuando !== null && $cuando > $ahora) {
+                    $porAcreditar += (float) $neto;
+
+                    if ($proxima === null || $cuando < $proxima) {
+                        $proxima = $cuando;
+                    }
+                } else {
+                    $acreditado += (float) $neto;
+                }
             } elseif ($orden['estado'] === 'reservada') {
                 $reservadas += (int) $orden['cantidad'];
             }
@@ -425,6 +480,12 @@ class Entradas
                 'comision'   => round($comisiones, 2),
                 // Lo que realmente le queda al dueño después del split.
                 'neto'       => round($recaudado - $comisiones, 2),
+                // Y lo que dice Mercado Pago, que además descuenta su propia
+                // comisión: es la plata que efectivamente entra a la cuenta.
+                'acreditado'    => round($acreditado, 2),
+                'por_acreditar' => round($porAcreditar, 2),
+                'proxima_acreditacion' => $proxima,
+                'ventas_sin_dato' => $sinDato,
             ],
         ];
     }

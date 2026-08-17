@@ -308,4 +308,60 @@ describe('PanelVentas', () => {
       expect(screen.getByText('¿Cancelar esta compra?')).toBeInTheDocument();
     });
   });
+
+  describe('cuándo y cuánto se acredita', () => {
+    const conAcreditacion = (resumen) => ({
+      ordenes: [VENTA],
+      resumen: { vendidas: 2, reservadas: 0, recaudado: 3000, ...resumen },
+    });
+
+    it('no muestra nada si Mercado Pago no dio ningún dato', async () => {
+      await montar({ ordenes: [VENTA] });
+
+      expect(screen.queryByText(/Por acreditarse/)).not.toBeInTheDocument();
+    });
+
+    it('separa lo disponible de lo que falta acreditarse', async () => {
+      await montar(conAcreditacion({ acreditado: 2400, por_acreditar: 1200 }));
+
+      expect(screen.getByText(/Ya disponible/)).toBeInTheDocument();
+      expect(screen.getByText(/Por acreditarse/)).toBeInTheDocument();
+    });
+
+    it('dice desde cuándo va a estar disponible', async () => {
+      await montar(conAcreditacion({
+        acreditado: 0, por_acreditar: 1200, proxima_acreditacion: '2026-09-16 10:30:00',
+      }));
+
+      expect(screen.getByText(/desde el 16\/09\/2026/)).toBeInTheDocument();
+    });
+
+    /** El plazo lo fija la cuenta de Mercado Pago, no Rezonar. */
+    it('aclara de dónde sale el número y dónde se cambia el plazo', async () => {
+      await montar(conAcreditacion({ acreditado: 2400, por_acreditar: 0 }));
+
+      expect(screen.getByText(/Costos y plazos/)).toBeInTheDocument();
+    });
+
+    /** Un total que parece completo sin estarlo engaña más que ayudar. */
+    it('avisa cuántas ventas no tienen el dato', async () => {
+      await montar(conAcreditacion({ acreditado: 2400, por_acreditar: 0, ventas_sin_dato: 3 }));
+
+      expect(screen.getByText(/3 ventas sin este dato/)).toBeInTheDocument();
+    });
+
+    it('muestra por venta cuánto queda y cuándo', async () => {
+      await montar({
+        ordenes: [{ ...VENTA, mp_neto: '2400.00', acreditacion_en: '2026-09-16 10:30:00' }],
+      });
+
+      expect(screen.getByText(/te quedan .* el 16\/09\/2026/)).toBeInTheDocument();
+    });
+
+    it('una venta sin el dato no muestra una línea vacía', async () => {
+      await montar({ ordenes: [{ ...VENTA, mp_neto: null, acreditacion_en: null }] });
+
+      expect(screen.queryByText(/te quedan/)).not.toBeInTheDocument();
+    });
+  });
 });

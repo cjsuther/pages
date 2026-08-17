@@ -169,7 +169,7 @@ class CheckoutHandler
             return Response::ok(['recibido' => true, 'motivo' => 'el monto no coincide con la orden']);
         }
 
-        $resultado = Entradas::acreditarPago($db, $codigo, $pagoId, $pago['estado']);
+        $resultado = Entradas::acreditarPago($db, $codigo, $pagoId, $pago['estado'], $pago);
 
         if ($resultado['acreditada']) {
             self::mandarEntrada($db, $codigo, $mailer);

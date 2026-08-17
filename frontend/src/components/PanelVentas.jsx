@@ -138,6 +138,8 @@ function PanelVentas({ linkId, apiUrl, token }) {
         />
       </div>
 
+      <Acreditacion resumen={resumen} />
+
       <div className="flex items-center gap-3">
         <button
           type="button"
@@ -191,6 +193,12 @@ function PanelVentas({ linkId, apiUrl, token }) {
                   <td className="px-3 py-2 text-white text-right">{o.cantidad}</td>
                   <td className="px-3 py-2 text-white text-right whitespace-nowrap">
                     {formatearPrecio(o.total, o.moneda)}
+                    {o.mp_neto !== null && o.mp_neto !== undefined && (
+                      <span className="block text-xs text-gray-600">
+                        te quedan {formatearPrecio(o.mp_neto, o.moneda)}
+                        {fechaCorta(o.acreditacion_en) && ` el ${fechaCorta(o.acreditacion_en)}`}
+                      </span>
+                    )}
                   </td>
                   <td className="px-3 py-2">
                     <span className={`text-xs px-2 py-0.5 rounded ${colorDeEstado(o.estado)}`}>
@@ -257,6 +265,59 @@ function PanelVentas({ linkId, apiUrl, token }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Fecha corta, o null si no hay dato. Mercado Pago la manda con hora. */
+export function fechaCorta(momento) {
+  if (!momento) return null;
+
+  const [anio, mes, dia] = String(momento).slice(0, 10).split('-');
+
+  return dia ? `${dia}/${mes}/${anio}` : null;
+}
+
+/**
+ * Cuándo y cuánto entra la plata, según Mercado Pago.
+ *
+ * "Te queda" es una cuenta nuestra: el total menos nuestra comisión. Esto es
+ * otra cosa —lo que Mercado Pago dice que va a depositar, ya descontada
+ * también la suya— y por eso puede no coincidir. El plazo lo fija cada
+ * vendedor en su cuenta de Mercado Pago, no Rezonar: con tarjeta de crédito
+ * puede ser un mes, con dinero en cuenta el mismo día.
+ */
+export function Acreditacion({ resumen }) {
+  const porAcreditar = resumen.por_acreditar || 0;
+  const acreditado = resumen.acreditado || 0;
+  const sinDato = resumen.ventas_sin_dato || 0;
+
+  if (porAcreditar === 0 && acreditado === 0 && sinDato === 0) {
+    return null;
+  }
+
+  const proxima = fechaCorta(resumen.proxima_acreditacion);
+
+  return (
+    <div className="border border-gray-800 bg-black p-4 text-sm">
+      <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
+        <span className="text-gray-500">
+          Ya disponible <strong className="text-white">{formatearPrecio(acreditado)}</strong>
+        </span>
+
+        {porAcreditar > 0 && (
+          <span className="text-gray-500">
+            Por acreditarse <strong className="text-white">{formatearPrecio(porAcreditar)}</strong>
+            {proxima && <span className="text-gray-600"> · desde el {proxima}</span>}
+          </span>
+        )}
+      </div>
+
+      <p className="text-xs text-gray-600 mt-2">
+        Según Mercado Pago, ya descontada su comisión. El plazo lo elegís en tu cuenta
+        de Mercado Pago, en Costos y plazos.
+        {sinDato > 0 && ` (${sinDato} ${sinDato === 1 ? 'venta' : 'ventas'} sin este dato: son anteriores a que lo empezáramos a guardar.)`}
+      </p>
     </div>
   );
 }

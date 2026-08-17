@@ -551,6 +551,7 @@ class EntradasTest extends HandlerTestCase
             'comision' => '300.00', 'comision_porcentaje' => '10.00',
             'moneda' => 'ARS', 'estado' => 'pagada', 'reserva_vence_en' => null,
             'mp_payment_id' => '99', 'pagada_en' => '2026-08-16 20:00:00',
+            'mp_neto' => null, 'mp_comisiones' => null, 'acreditacion_en' => null,
             'created_at' => '2026-08-16 19:58:00', 'vencida' => 0,
         ], $overrides);
     }
@@ -679,5 +680,124 @@ class EntradasTest extends HandlerTestCase
 
         $this->assertFalse($r['cancelada']);
         $this->assertStringContainsString('inexistente', $r['motivo']);
+    }
+
+    // ============================================ cuándo y cuánto se acredita
+
+    /**
+     * Lo que la plataforma calculaba ("te queda") sólo descuenta nuestra
+     * comisión. El neto de Mercado Pago descuenta además la suya, que cambia
+     * según el plazo de acreditación de cada cuenta: es la cifra de verdad.
+     */
+    public function testElResumenSeparaLoAcreditadoDeLoQueFalta()
+    {
+        $this->hayVentas([
+            $this->venta(['id' => 1, 'mp_neto' => '2400.00', 'acreditacion_en' => '2026-08-16 10:00:00']),
+            $this->venta(['id' => 2, 'mp_neto' => '1200.00', 'acreditacion_en' => '2099-01-01 10:00:00']),
+        ]);
+
+        $r = Entradas::ventasDelEvento($this->db, 100);
+
+        $this->assertSame(2400.0, $r['resumen']['acreditado']);
+        $this->assertSame(1200.0, $r['resumen']['por_acreditar']);
+    }
+
+    public function testElResumenDiceCuandoEsLaProximaAcreditacion()
+    {
+        $this->hayVentas([
+            $this->venta(['id' => 1, 'mp_neto' => '100.00', 'acreditacion_en' => '2099-03-01 10:00:00']),
+            $this->venta(['id' => 2, 'mp_neto' => '100.00', 'acreditacion_en' => '2099-01-15 10:00:00']),
+        ]);
+
+        $r = Entradas::ventasDelEvento($this->db, 100);
+
+        $this->assertSame('2099-01-15 10:00:00', $r['resumen']['proxima_acreditacion']);
+    }
+
+    /**
+     * Sumar sólo lo que se sabe y avisar cuántas faltan es mejor que mostrar
+     * un total que parezca completo sin estarlo.
+     */
+    public function testLasVentasSinDatoDeMercadoPagoSeCuentanAparte()
+    {
+        $this->hayVentas([
+            $this->venta(['id' => 1, 'mp_neto' => '2400.00', 'acreditacion_en' => '2026-08-16 10:00:00']),
+            $this->venta(['id' => 2, 'mp_neto' => null]),
+        ]);
+
+        $r = Entradas::ventasDelEvento($this->db, 100);
+
+        $this->assertSame(2400.0, $r['resumen']['acreditado']);
+        $this->assertSame(1, $r['resumen']['ventas_sin_dato']);
+    }
+
+    /** Una reserva sin pagar no tiene nada que acreditar. */
+    public function testLoNoPagadoNoEntraEnLaAcreditacion()
+    {
+        $this->hayVentas([$this->venta(['estado' => 'reservada', 'mp_neto' => '2400.00'])]);
+
+        $r = Entradas::ventasDelEvento($this->db, 100);
+
+        $this->assertSame(0.0, $r['resumen']['acreditado']);
+        $this->assertSame(0.0, $r['resumen']['por_acreditar']);
+    }
+
+    // ------------------------------------------- la fecha que manda MP
+
+    /**
+     * Mercado Pago la manda como instante ISO con zona. Guardarla tal cual en
+     * un TIMESTAMP deja una fecha corrida o inválida.
+     */
+    public function testLaFechaDeAcreditacionSeConvierteAlFormatoDeLaColumna()
+    {
+        $r = Entradas::fechaDeAcreditacion(['acreditacion' => '2026-09-16T10:30:00.000-03:00']);
+
+        $this->assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $r);
+    }
+
+    public function testSinFechaDeAcreditacionNoSeInventaNinguna()
+    {
+        $this->assertNull(Entradas::fechaDeAcreditacion([]));
+        $this->assertNull(Entradas::fechaDeAcreditacion(['acreditacion' => null]));
+        $this->assertNull(Entradas::fechaDeAcreditacion(['acreditacion' => 'cualquier cosa']));
+    }
+
+    // ----------------------------------------- se guardan al acreditar
+
+    private function hayOrdenReservada()
+    {
+        $this->db->onSelect('SELECT * FROM ticket_orders WHERE codigo', [[
+            'id' => 1, 'codigo' => 'ABC123', 'estado' => 'reservada', 'cantidad' => 2,
+        ]]);
+        $this->db->onWrite('UPDATE ticket_orders', 1);
+    }
+
+    public function testAlAcreditarSeGuardaElNetoYLaFecha()
+    {
+        $this->hayOrdenReservada();
+
+        Entradas::acreditarPago($this->db, 'ABC123', '99', 'approved', [
+            'neto' => 2400.0, 'comisiones' => 600.0, 'acreditacion' => '2026-09-16T10:30:00.000-03:00',
+        ]);
+
+        $guardados = $this->db->paramsFor('UPDATE ticket_orders');
+
+        $this->assertContains(2400.0, $guardados);
+        $this->assertContains(600.0, $guardados);
+    }
+
+    /**
+     * Un aviso sin esos datos no puede borrar lo que ya se sabía: por eso el
+     * UPDATE usa COALESCE y no pisa con null.
+     */
+    public function testUnAvisoSinDatosNoBorraLoQueYaSeSabia()
+    {
+        $this->hayOrdenReservada();
+
+        Entradas::acreditarPago($this->db, 'ABC123', '99', 'approved');
+
+        $sql = $this->db->callsFor('UPDATE ticket_orders')[0]['sql'];
+
+        $this->assertStringContainsString('COALESCE(?, mp_neto)', $sql);
     }
 }
