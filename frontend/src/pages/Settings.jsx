@@ -4,6 +4,7 @@ import { AuthContext } from '../App';
 import LocationSettings from '../components/LocationSettings';
 import FollowingManager from '../components/FollowingManager';
 import PageSearch from '../components/PageSearch';
+import ClavesApi from '../components/ClavesApi';
 
 function Settings() {
   const { token, user, logout } = useContext(AuthContext);
@@ -88,6 +89,17 @@ function Settings() {
                 >
                   PÁGINAS QUE SIGO
                 </button>
+
+                <button
+                  onClick={() => setActiveTab('claves')}
+                  className={`w-full text-left px-4 py-3 font-bold transition ${
+                    activeTab === 'claves'
+                      ? 'bg-white text-black'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  CLAVES DE API
+                </button>
               </nav>
             </div>
           </div>
@@ -96,6 +108,7 @@ function Settings() {
             {activeTab === 'location' && <LocationSettings />}
             {activeTab === 'search' && <PageSearch />}
             {activeTab === 'following' && <FollowingManager />}
+            {activeTab === 'claves' && <ClavesApi />}
           </div>
         </div>
       </div>
