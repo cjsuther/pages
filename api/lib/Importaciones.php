@@ -24,6 +24,9 @@ class Importaciones
             'boleteria' => function (array $parametros) use ($db) {
                 return (new Boleteria())->eventos($parametros, $db);
             },
+            'niceto' => function (array $parametros) use ($db) {
+                return (new Niceto())->eventos($parametros, $db);
+            },
         ];
     }
 
