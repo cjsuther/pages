@@ -1,0 +1,272 @@
+<?php
+
+namespace Tests\Unit\Lib;
+
+use HerramientasMcp;
+use InvalidArgumentException;
+use Tests\Support\HandlerTestCase;
+
+class HerramientasMcpTest extends HandlerTestCase
+{
+    private $usuario = ['user_id' => 7, 'email' => 'ana@example.com', 'name' => 'Ana', 'por_clave_api' => true];
+
+    private function correr($nombre, array $args = [])
+    {
+        return HerramientasMcp::ejecutar($this->db, $this->usuario, $nombre, $args);
+    }
+
+    /** La página existe y es de esta persona. */
+    private function laPaginaEsSuya($pageId = 5)
+    {
+        $this->db->onSelect('FROM pages WHERE url_slug', [[$pageId]]);
+        // PageAccess::canManage: una fila cualquiera significa "sí puede".
+        $this->db->onSelect('SELECT 1 FROM pages p', [[1]]);
+    }
+
+    private function geocodificacionQueAnda()
+    {
+        $this->db->onSelect('FROM geocode_cache WHERE huella', [[
+            'latitud' => '-34.60', 'longitud' => '-58.38', 'intentos' => 0,
+        ]]);
+    }
+
+    // -------------------------------------------------------------- catálogo
+
+    public function testUnaHerramientaQueNoExisteRompeFuerte()
+    {
+        $this->expectException(InvalidArgumentException::class);
+
+        $this->correr('volar');
+    }
+
+    /** El nombre del catálogo y el que se puede ejecutar tienen que coincidir. */
+    public function testTodasLasHerramientasDelCatalogoSePuedenEjecutar()
+    {
+        foreach (HerramientasMcp::catalogo() as $herramienta) {
+            try {
+                $this->correr($herramienta['name']);
+            } catch (InvalidArgumentException $e) {
+                $this->fail("'{$herramienta['name']}' está en el catálogo pero no se puede ejecutar");
+            } catch (\Throwable $e) {
+                // Falla por falta de argumentos: eso es esperable acá.
+            }
+        }
+
+        $this->addToAssertionCount(1);
+    }
+
+    // --------------------------------------------------------------- páginas
+
+    public function testListarPaginasDevuelveLasDeEsaPersona()
+    {
+        $this->db->onSelect('FROM pages WHERE user_id', [['id' => 5, 'pagina' => 'mi-pagina']]);
+
+        $r = $this->correr('listar_paginas');
+
+        $this->assertTrue($r['ok']);
+        $this->assertCount(1, $r['datos']['paginas']);
+        $this->assertContains(7, $this->db->paramsFor('FROM pages WHERE user_id'));
+    }
+
+    public function testListarEventosDeUnaPaginaQueNoExiste()
+    {
+        $this->db->onSelect('FROM pages WHERE url_slug', []);
+
+        $r = $this->correr('listar_eventos', ['pagina' => 'fantasma']);
+
+        $this->assertFalse($r['ok']);
+        $this->assertStringContainsString('fantasma', $r['datos']['error']);
+    }
+
+    /** La clave da acceso a las páginas de su dueño, no a las de cualquiera. */
+    public function testNoSePuedeTrabajarSobreLaPaginaDeOtro()
+    {
+        $this->db->onSelect('FROM pages WHERE url_slug', [[5]]);
+        $this->db->onSelect('SELECT 1 FROM pages p', []);
+
+        $r = $this->correr('listar_eventos', ['pagina' => 'ajena']);
+
+        $this->assertFalse($r['ok']);
+        $this->assertStringContainsString('No administrás', $r['datos']['error']);
+    }
+
+    // --------------------------------------------------------- crear evento
+
+    /**
+     * La API exige coordenadas y en el editor las pone el mapa. Un asistente
+     * tiene una dirección escrita, así que se geocodifica acá.
+     */
+    public function testCrearUnEventoGeocodificaLaDireccion()
+    {
+        $this->laPaginaEsSuya();
+        $this->db->onSelect('FROM link_groups WHERE page_id', [[20]]);
+        $this->geocodificacionQueAnda();
+        $this->db->onSelect('SELECT 1 FROM link_groups lg', [[1]]);
+        $this->db->onSelect('SELECT id, type FROM link_groups', [['id' => 20, 'type' => 'links']]);
+        $this->db->onWrite('INSERT INTO links', 1);
+        $this->db->onSelect('SELECT * FROM links WHERE id', [['id' => 300, 'text' => 'Mi show']]);
+
+        $r = $this->correr('crear_evento', [
+            'pagina' => 'mi-pagina', 'titulo' => 'Mi show',
+            'fecha' => '2026-12-01', 'hora' => '21:00', 'direccion' => 'Bolívar 624, CABA',
+        ]);
+
+        $this->assertTrue($r['ok']);
+
+        $guardados = $this->db->paramsFor('INSERT INTO links');
+        $this->assertContains('-34.60', $guardados);
+        $this->assertContains('-58.38', $guardados);
+    }
+
+    public function testLaHoraSeNormalizaAlFormatoDeLaColumna()
+    {
+        $this->laPaginaEsSuya();
+        $this->db->onSelect('FROM link_groups WHERE page_id', [[20]]);
+        $this->geocodificacionQueAnda();
+        $this->db->onSelect('SELECT 1 FROM link_groups lg', [[1]]);
+        $this->db->onSelect('SELECT id, type FROM link_groups', [['id' => 20, 'type' => 'links']]);
+        $this->db->onWrite('INSERT INTO links', 1);
+        $this->db->onSelect('SELECT * FROM links WHERE id', [['id' => 300]]);
+
+        $this->correr('crear_evento', [
+            'pagina' => 'mi-pagina', 'titulo' => 'Mi show',
+            'fecha' => '2026-12-01', 'hora' => '9:05', 'direccion' => 'Bolívar 624',
+        ]);
+
+        $this->assertContains('09:05:00', $this->db->paramsFor('INSERT INTO links'));
+    }
+
+    /** Sin dirección no hay punto en el mapa, y el evento no se puede publicar. */
+    public function testCrearUnEventoSinDireccionSeExplica()
+    {
+        $this->laPaginaEsSuya();
+
+        $r = $this->correr('crear_evento', [
+            'pagina' => 'mi-pagina', 'titulo' => 'Mi show', 'fecha' => '2026-12-01',
+        ]);
+
+        $this->assertFalse($r['ok']);
+        $this->assertStringContainsString('dirección', $r['datos']['error']);
+        $this->assertSame(0, $this->db->countCalls('INSERT INTO links'));
+    }
+
+    /** Una dirección que el mapa no encuentra se dice con qué probar. */
+    public function testUnaDireccionQueNoSeUbicaSeExplica()
+    {
+        $this->laPaginaEsSuya();
+        $this->db->onSelect('FROM geocode_cache WHERE huella', [[
+            'latitud' => null, 'longitud' => null, 'intentos' => 5,
+        ]]);
+
+        $r = $this->correr('crear_evento', [
+            'pagina' => 'mi-pagina', 'titulo' => 'Mi show',
+            'fecha' => '2026-12-01', 'direccion' => 'por ahí',
+        ]);
+
+        $this->assertFalse($r['ok']);
+        $this->assertStringContainsString('mapa', $r['datos']['error']);
+    }
+
+    // ---------------------------------------------------- actualizar evento
+
+    /** Sólo se tocan los campos que llegaron. */
+    public function testActualizarMandaSoloLoQueCambio()
+    {
+        $this->db->onSelect('SELECT 1 FROM links l', [[1]]);
+        $this->db->onSelect('SELECT event_latitude, event_longitude FROM links', [[
+            'event_latitude' => '-34.60', 'event_longitude' => '-58.38',
+        ]]);
+        $this->db->onWrite('UPDATE links', 1);
+        $this->db->onSelect('SELECT * FROM links WHERE id', [['id' => 300, 'text' => 'Nuevo título']]);
+
+        $r = $this->correr('actualizar_evento', ['evento_id' => 300, 'titulo' => 'Nuevo título']);
+
+        $this->assertTrue($r['ok']);
+
+        $sql = $this->db->callsFor('UPDATE links')[0]['sql'];
+        $this->assertStringContainsString('text', $sql);
+        $this->assertStringNotContainsString('event_date', $sql);
+    }
+
+    public function testActualizarSinNingunCampoNoHaceNada()
+    {
+        $r = $this->correr('actualizar_evento', ['evento_id' => 300]);
+
+        $this->assertFalse($r['ok']);
+        $this->assertSame(0, $this->db->countCalls('UPDATE links'));
+    }
+
+    /**
+     * Mover el evento de dirección sin mover el punto dejaría la ficha
+     * diciendo una cosa y el mapa otra.
+     */
+    public function testCambiarLaDireccionRecalculaLasCoordenadas()
+    {
+        $this->geocodificacionQueAnda();
+        $this->db->onSelect('SELECT 1 FROM links l', [[1]]);
+        $this->db->onSelect('SELECT event_latitude, event_longitude FROM links', [[
+            'event_latitude' => '-30', 'event_longitude' => '-50',
+        ]]);
+        $this->db->onWrite('UPDATE links', 1);
+        $this->db->onSelect('SELECT * FROM links WHERE id', [['id' => 300]]);
+
+        $this->correr('actualizar_evento', ['evento_id' => 300, 'direccion' => 'Bolívar 624']);
+
+        $this->assertContains('-34.60', $this->db->paramsFor('UPDATE links'));
+    }
+
+    // --------------------------------------------------------- entradas
+
+    public function testConfigurarEntradasExigeUnModoConocido()
+    {
+        $r = $this->correr('configurar_entradas', ['evento_id' => 300, 'modo' => 'regalar']);
+
+        $this->assertFalse($r['ok']);
+        $this->assertStringContainsString('gratis', $r['datos']['error']);
+    }
+
+    public function testElModoPagoExigePrecio()
+    {
+        $r = $this->correr('configurar_entradas', ['evento_id' => 300, 'modo' => 'pago']);
+
+        $this->assertFalse($r['ok']);
+        $this->assertStringContainsString('precio', $r['datos']['error']);
+    }
+
+    /** Una reserva sin costo no necesita Mercado Pago conectado. */
+    public function testElModoGratisNoPideMercadoPago()
+    {
+        $this->db->onSelect('SELECT 1 FROM links l', [[1]]);
+        $this->db->onSelect('lg.page_id', [[5]]);
+        $this->db->onSelect('FROM event_ticketing', [[]]);
+        $this->db->onWrite('INSERT INTO event_ticketing', 1);
+
+        $r = $this->correr('configurar_entradas', ['evento_id' => 300, 'modo' => 'gratis', 'capacidad' => 50]);
+
+        $this->assertTrue($r['ok'], json_encode($r['datos']));
+    }
+
+    // ----------------------------------------------------------- las ventas
+
+    /** Los permisos son los del editor: sobre un evento ajeno no se puede. */
+    public function testNoSePuedenVerLasVentasDeUnEventoAjeno()
+    {
+        $this->db->onSelect('SELECT 1 FROM links l', []);
+
+        $r = $this->correr('ver_ventas', ['evento_id' => 300]);
+
+        $this->assertFalse($r['ok']);
+    }
+
+    public function testCancelarUnaCompraDeUnEventoAjenoNoSePuede()
+    {
+        $this->db->onSelect('FROM ticket_orders o', [[
+            'id' => 1, 'codigo' => 'ABC123', 'link_id' => 300, 'estado' => 'pagada', 'cantidad' => 2,
+        ]]);
+        $this->db->onSelect('SELECT 1 FROM links l', []);
+
+        $r = $this->correr('cancelar_compra', ['codigo' => 'ABC123']);
+
+        $this->assertFalse($r['ok']);
+    }
+}
