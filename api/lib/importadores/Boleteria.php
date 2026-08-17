@@ -23,16 +23,27 @@ class Boleteria
     /**
      * Segundos entre pedidos.
      *
-     * Boletería responde 429 con ritmos más rápidos: con un pedido por segundo
-     * corta a la segunda ficha, con seis anda. La tarea corre de madrugada una
-     * vez por día, así que esperar no cuesta nada.
+     * Boletería está detrás de Cloudflare con un límite de ritmo que no avisa
+     * cuánto es: el 429 no trae Retry-After. Seis segundos parecían alcanzar y
+     * no alcanzaban —en producción cortaba en la primera ficha y la fuente
+     * terminaba sin traer nada—; medido contra el sitio, a quince segundos
+     * entran siete fichas seguidas sin un solo corte. La tarea corre de
+     * madrugada una vez por día, así que esperar no cuesta nada.
      */
-    const PAUSA = 6;
+    const PAUSA = 15;
+
+    /**
+     * Espera antes de reintentar una ficha que el sitio cortó.
+     *
+     * Bien por encima de la pausa habitual: si el ritmo normal no alcanzó,
+     * reintentar al mismo ritmo tampoco va a alcanzar.
+     */
+    const ESPERA_TRAS_CORTE = 60;
 
     /**
      * Tope de fichas por corrida.
      *
-     * Bajo a propósito: a seis segundos cada una, pedir más alargaría la
+     * Bajo a propósito: a quince segundos cada una, pedir más alargaría la
      * corrida sin necesidad. Los eventos se acumulan noche a noche.
      */
     const MAX_EVENTOS = 15;
@@ -46,6 +57,9 @@ class Boleteria
     /** @var int */
     private $pausa;
 
+    /** @var int Espera antes de reintentar una ficha cortada. */
+    private $espera;
+
     /** @var bool true si el sitio cortó los pedidos por ritmo. */
     private $limitado = false;
 
@@ -53,7 +67,11 @@ class Boleteria
     {
         $this->traer = $traer === null ? [$this, 'traerConCurl'] : $traer;
         $this->geo = $geo === null ? new Geocodificador() : $geo;
+
+        // Las esperas son cortesía con el sitio ajeno. Con un lector inyectado
+        // no hay sitio ajeno, y esperar sólo haría lenta la suite de tests.
         $this->pausa = $traer === null ? self::PAUSA : 0;
+        $this->espera = $traer === null ? self::ESPERA_TRAS_CORTE : 0;
     }
 
     /**
@@ -92,9 +110,14 @@ class Boleteria
 
             $ficha = call_user_func($this->traer, $candidato['url']);
 
-            if ($this->limitado) {
+            if ($ficha === false) {
+                $ficha = $this->reintentarTrasCorte($candidato['url']);
+            }
+
+            if ($ficha === false) {
                 // Seguir pidiendo con el sitio cortando es maltratarlo y no
                 // trae nada. Se corta y se aprovecha lo que ya vino.
+                $this->limitado = true;
                 break;
             }
 
@@ -130,6 +153,24 @@ class Boleteria
         }
 
         return array_values($encontrados);
+    }
+
+    /**
+     * Segunda oportunidad después de un corte.
+     *
+     * Un 429 aislado no puede terminar la corrida entera: si la fuente venía
+     * trayendo bien y el sitio corta una vez, abandonar deja la agenda a
+     * medias. Se espera un rato largo —más que la pausa habitual, porque
+     * evidentemente el ritmo normal no alcanzó— y se pide esa misma ficha una
+     * sola vez más.
+     */
+    private function reintentarTrasCorte($url)
+    {
+        if ($this->espera > 0) {
+            sleep($this->espera);
+        }
+
+        return call_user_func($this->traer, $url);
     }
 
     /**
@@ -322,10 +363,11 @@ class Boleteria
         $estado = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
+        // false y cadena vacía no son lo mismo: false es "el sitio me cortó
+        // por ritmo, esperá y volvé", y eso merece un reintento. La cadena
+        // vacía es cualquier otro problema, que no mejora esperando.
         if ($estado === 429) {
-            $this->limitado = true;
-
-            return '';
+            return false;
         }
 
         return $estado === 200 && is_string($cuerpo) ? $cuerpo : '';

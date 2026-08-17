@@ -213,4 +213,54 @@ class BoleteriaTest extends TestCase
     {
         $this->assertSame([], (new Boleteria(function () { return ''; }))->eventos());
     }
+
+    // --------------------------------------------------- cuando el sitio corta
+
+    /**
+     * Boletería está detrás de Cloudflare y corta con 429 sin decir por cuánto.
+     * El lector devuelve false para eso —distinto de la cadena vacía, que es
+     * cualquier otro problema— porque un corte se arregla esperando.
+     */
+    private function lectorQueCorta(array $cortes)
+    {
+        $ficha = file_get_contents(__DIR__ . '/../../Fixtures/boleteria-ficha.html');
+        $listado = file_get_contents(__DIR__ . '/../../Fixtures/boleteria-listado.html');
+        $pedidos = 0;
+
+        return function ($url) use ($ficha, $listado, $cortes, &$pedidos) {
+            if (strpos($url, '/evento/') === false) {
+                return $listado;
+            }
+
+            $pedidos++;
+
+            return in_array($pedidos, $cortes, true) ? false : $ficha;
+        };
+    }
+
+    /** Un corte aislado no puede terminar la corrida: se reintenta esa ficha. */
+    public function testUnCorteSeReintentaYLaFichaEntraIgual()
+    {
+        $eventos = (new Boleteria($this->lectorQueCorta([1])))->eventos(['max_eventos' => 1]);
+
+        $this->assertCount(1, $eventos);
+    }
+
+    /** Si el reintento también corta, el sitio está diciendo que basta. */
+    public function testSiElReintentoTambienCortaSeAbandona()
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches('/429/');
+
+        (new Boleteria($this->lectorQueCorta([1, 2])))->eventos(['max_eventos' => 3]);
+    }
+
+    /** Lo que ya vino no se tira porque el sitio corte más adelante. */
+    public function testSeConservaLoTraidoAntesDelCorte()
+    {
+        // La primera ficha entra; la segunda corta dos veces seguidas.
+        $eventos = (new Boleteria($this->lectorQueCorta([2, 3])))->eventos(['max_eventos' => 4]);
+
+        $this->assertCount(1, $eventos);
+    }
 }
