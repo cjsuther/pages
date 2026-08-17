@@ -49,7 +49,95 @@ class PagesHandlerTest extends HandlerTestCase
         $res = PagesHandler::index($this->db, $this->get([], $this->user()));
 
         $this->assertStatus(200, $res);
-        $this->assertSame(['pages' => []], $res->body);
+        $this->assertSame([], $res->body['pages']);
+    }
+
+    // ------------------------------------------------------ buscador y páginas
+
+    public function testListarInformaLaPaginacion()
+    {
+        $this->db->onSelect('SELECT COUNT(*) FROM pages', [[30]]);
+        $this->db->onSelect('AS is_owner', [['id' => 1]]);
+
+        $res = PagesHandler::index($this->db, $this->get([], $this->user()));
+
+        $this->assertSame(1, $res->body['paginacion']['pagina']);
+        $this->assertSame(30, $res->body['paginacion']['total']);
+        $this->assertSame(3, $res->body['paginacion']['paginas']);
+    }
+
+    public function testSePuedeBuscarPorTituloYPorSlug()
+    {
+        $this->db->onSelect('SELECT COUNT(*) FROM pages', [[2]]);
+        $this->db->onSelect('AS is_owner', [['id' => 1]]);
+
+        PagesHandler::index($this->db, $this->get(['q' => 'arena'], $this->user(9)));
+
+        $sql = $this->db->callsFor('AS is_owner')[0]['sql'];
+
+        $this->assertStringContainsString('p.title LIKE ?', $sql);
+        $this->assertStringContainsString('p.url_slug LIKE ?', $sql);
+        $this->assertContains('%arena%', $this->db->paramsFor('AS is_owner'));
+    }
+
+    public function testSinBusquedaNoSeFiltra()
+    {
+        $this->db->onSelect('SELECT COUNT(*) FROM pages', [[5]]);
+        $this->db->onSelect('AS is_owner', [['id' => 1]]);
+
+        PagesHandler::index($this->db, $this->get([], $this->user()));
+
+        $this->assertStringNotContainsString('LIKE', $this->db->callsFor('AS is_owner')[0]['sql']);
+    }
+
+    /** Sin tope, alguien podría pedir un millón de filas de una. */
+    public function testElTamanoDePaginaTieneUnTope()
+    {
+        $this->db->onSelect('SELECT COUNT(*) FROM pages', [[500]]);
+        $this->db->onSelect('AS is_owner', [['id' => 1]]);
+
+        $res = PagesHandler::index($this->db, $this->get(['por_pagina' => 9999], $this->user()));
+
+        $this->assertSame(PagesHandler::MAX_POR_PAGINA, $res->body['paginacion']['por_pagina']);
+    }
+
+    /**
+     * Pedir la página 9 de 3 devolvería vacío y parecería que no hay nada, en
+     * vez de mostrar la última con resultados.
+     */
+    public function testUnaPaginaMasAllaDelFinalSeAcotaALaUltima()
+    {
+        $this->db->onSelect('SELECT COUNT(*) FROM pages', [[30]]);
+        $this->db->onSelect('AS is_owner', [['id' => 1]]);
+
+        $res = PagesHandler::index($this->db, $this->get(['pagina' => 9], $this->user()));
+
+        $this->assertSame(3, $res->body['paginacion']['pagina']);
+    }
+
+    public function testUnaPaginaNegativaNoRompeElOffset()
+    {
+        $this->db->onSelect('SELECT COUNT(*) FROM pages', [[30]]);
+        $this->db->onSelect('AS is_owner', [['id' => 1]]);
+
+        $res = PagesHandler::index($this->db, $this->get(['pagina' => -5], $this->user()));
+
+        $this->assertSame(1, $res->body['paginacion']['pagina']);
+        $this->assertStringContainsString('OFFSET 0', $this->db->callsFor('AS is_owner')[0]['sql']);
+    }
+
+    /** El buscador no puede saltarse el control de acceso. */
+    public function testLaBusquedaSigueRespetandoQuienPuedeVerQue()
+    {
+        $this->db->onSelect('SELECT COUNT(*) FROM pages', [[1]]);
+        $this->db->onSelect('AS is_owner', [['id' => 1]]);
+
+        PagesHandler::index($this->db, $this->get(['q' => 'algo'], $this->user(9)));
+
+        $sql = $this->db->callsFor('AS is_owner')[0]['sql'];
+
+        $this->assertStringContainsString('p.user_id = ?', $sql);
+        $this->assertStringContainsString('page_admins', $sql);
     }
 
     public function testListarDevuelve500SiLaBaseFalla()

@@ -1565,6 +1565,24 @@ function PageEditor() {
                     </div>
                   </div>
                   <div>
+                    <label htmlFor="nuevo-precio-desde" className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">
+                      PRECIO DESDE (OPCIONAL)
+                    </label>
+                    <input
+                      id="nuevo-precio-desde"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={newLink.precio_desde ?? ''}
+                      onChange={(e) => setNewLink({ ...newLink, precio_desde: e.target.value })}
+                      placeholder="Vacío si no se sabe"
+                      className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+                    />
+                    <p className="text-xs text-gray-600 mt-1">
+                      En 0 el evento se anuncia como gratis; vacío no muestra nada.
+                    </p>
+                  </div>
+                  <div>
                     <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">
                       DIRECCIÓN <span className="text-red-500">*</span>
                     </label>
@@ -1800,6 +1818,24 @@ function PageEditor() {
                         className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
                       />
                     </div>
+                  </div>
+                  <div>
+                    <label htmlFor="editar-precio-desde" className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">
+                      PRECIO DESDE (OPCIONAL)
+                    </label>
+                    <input
+                      id="editar-precio-desde"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={editingLink.precio_desde ?? ''}
+                      onChange={(e) => setEditingLink({ ...editingLink, precio_desde: e.target.value })}
+                      placeholder="Vacío si no se sabe"
+                      className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+                    />
+                    <p className="text-xs text-gray-600 mt-1">
+                      En 0 el evento se anuncia como gratis; vacío no muestra nada.
+                    </p>
                   </div>
                   <div>
                     <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">

@@ -28,7 +28,24 @@ class LinksHandler
         'event_latitude' => ['nullable' => false],
         'event_longitude' => ['nullable' => false],
         'event_maps_url' => ['nullable' => false],
+        // nullable: vaciarlo es "no se sabe", que no es lo mismo que cero.
+        'precio_desde' => ['nullable' => true],
     ];
+
+    /**
+     * El precio de referencia distingue tres cosas: no saberlo, que sea cero
+     * —o sea, gratis— y tener un valor. Una cadena vacía es lo primero.
+     */
+    public static function precioONull($valor)
+    {
+        if ($valor === null || $valor === '' || !is_numeric($valor)) {
+            return null;
+        }
+
+        // El cast explícito importa: max(0, -500.0) devuelve el entero 0, y el
+        // tipo tiene que ser siempre el mismo para quien lo consuma.
+        return (float) max(0, round((float) $valor, 2));
+    }
 
     const ERROR_SIN_COORDENADAS = 'Los eventos deben tener coordenadas. Por favor selecciona una dirección de Google Maps.';
 
@@ -66,7 +83,7 @@ class LinksHandler
                 }
             }
 
-            $stmt = $db->prepare('INSERT INTO links (group_id, url, url_text, text, image_url, description, position, event_date, event_time, event_address, event_latitude, event_longitude, event_maps_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+            $stmt = $db->prepare('INSERT INTO links (group_id, url, url_text, text, image_url, description, position, event_date, event_time, event_address, event_latitude, event_longitude, event_maps_url, precio_desde) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
             $stmt->execute([
                 $req->input('group_id'),
                 $req->input('url'),
@@ -81,6 +98,7 @@ class LinksHandler
                 $req->input('event_latitude'),
                 $req->input('event_longitude'),
                 $req->input('event_maps_url'),
+                self::precioONull($req->input('precio_desde')),
             ]);
 
             $linkId = $db->lastInsertId();

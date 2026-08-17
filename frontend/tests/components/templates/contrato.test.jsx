@@ -251,6 +251,56 @@ describe.each(PLANTILLAS)('%s', (nombre, Plantilla) => {
     });
   });
 
+  describe('precio de referencia', () => {
+    const conPrecio = (precio, entradas = null) =>
+      pagina({
+        groups: [{
+          id: 20, title: 'Agenda', type: 'eventos', collaborated_events: [],
+          links: [evento({ precio_desde: precio, entradas })],
+        }],
+      });
+
+    const abrir = () => fireEvent.click(screen.getByText('Mi Evento'));
+
+    /** El cero es la afirmación de que el evento es gratis, no falta de dato. */
+    it('un evento en cero se anuncia como gratis', () => {
+      renderConProviders(<Plantilla page={conPrecio(0)} />);
+      abrir();
+
+      expect(screen.getByText('Gratis')).toBeInTheDocument();
+    });
+
+    it('con precio dice desde cuánto sale', () => {
+      renderConProviders(<Plantilla page={conPrecio(25000)} />);
+      abrir();
+
+      expect(screen.getByText(/Desde.*25\.000/)).toBeInTheDocument();
+    });
+
+    /** Inventar "Gratis" cuando no se sabe el precio sería mentir. */
+    it('sin dato no anuncia nada', () => {
+      renderConProviders(<Plantilla page={conPrecio(null)} />);
+      abrir();
+
+      expect(screen.queryByText('Gratis')).not.toBeInTheDocument();
+      expect(screen.queryByText(/Desde/)).not.toBeInTheDocument();
+    });
+
+    /** Dos precios que podrían no coincidir confunden más de lo que ayudan. */
+    it('no se muestra si el evento vende entradas por acá', () => {
+      const conVenta = {
+        activo: true, es_gratis: false, precio: 1500, moneda: 'ARS',
+        disponibles: 50, max_por_compra: 6, agotado: false,
+      };
+
+      renderConProviders(<Plantilla page={conPrecio(25000, conVenta)} />);
+      abrir();
+
+      expect(screen.queryByText(/Desde.*25\.000/)).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /COMPRAR ENTRADAS/ })).toBeInTheDocument();
+    });
+  });
+
   describe('venta de entradas', () => {
     const conVenta = {
       activo: true, es_gratis: false, precio: 1500, moneda: 'ARS',

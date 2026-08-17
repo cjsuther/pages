@@ -7,6 +7,7 @@ import {
   etiquetaDeEstado,
   colorDeEstado,
   minutosRestantes,
+  precioDeReferencia,
 } from '../../src/utils/entradas';
 
 describe('entradas', () => {
@@ -125,5 +126,33 @@ describe('entradas', () => {
     it('acepta el formato con espacio que devuelve MySQL', () => {
       expect(minutosRestantes('2026-08-16 20:10:00', ahora)).toBe(10);
     });
+  });
+});
+
+describe('precioDeReferencia', () => {
+  /** El cero no es "sin dato": es la afirmación de que el evento es gratis. */
+  it('el cero se anuncia como gratis', () => {
+    expect(precioDeReferencia(0)).toBe('Gratis');
+    expect(precioDeReferencia('0.00')).toBe('Gratis');
+  });
+
+  it('con precio dice desde cuánto', () => {
+    expect(precioDeReferencia(25000)).toContain('Desde');
+    expect(precioDeReferencia(25000)).toContain('25.000');
+  });
+
+  /** Sin dato no se muestra nada: inventar "Gratis" sería mentir. */
+  it('sin dato no dice nada', () => {
+    expect(precioDeReferencia(null)).toBeNull();
+    expect(precioDeReferencia(undefined)).toBeNull();
+    expect(precioDeReferencia('')).toBeNull();
+  });
+
+  it('un valor que no es número no rompe', () => {
+    expect(precioDeReferencia('a consultar')).toBeNull();
+  });
+
+  it('un negativo se trata como gratis y no como precio', () => {
+    expect(precioDeReferencia(-100)).toBe('Gratis');
   });
 });

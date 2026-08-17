@@ -4,6 +4,7 @@ import EventCollaborators from '../EventCollaborators';
 import FollowersPopup from '../FollowersPopup';
 import RedesSociales from '../RedesSociales';
 import BotonEntradas, { vendeEntradas } from '../BotonEntradas';
+import PrecioEvento from '../PrecioEvento';
 import RezonarBadge from '../RezonarBadge';
 import { ExternalLink } from 'lucide-react';
 
@@ -282,6 +283,8 @@ function ModernTemplate({ page }) {
                   </p>
                 </div>
               )}
+
+              <PrecioEvento evento={modalEvent} className="mt-4" />
 
               <BotonEntradas evento={modalEvent} color={primaryColor} />
 

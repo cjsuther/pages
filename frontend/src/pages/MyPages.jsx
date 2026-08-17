@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../App';
 import Navigation from '../components/Navigation';
 import PageQRDownload from '../components/PageQRDownload';
+import { Search, ChevronLeft, ChevronRight } from 'lucide-react';
 
 function MyPages() {
   const { token, apiUrl } = useContext(AuthContext);
@@ -12,6 +13,9 @@ function MyPages() {
   const [newPage, setNewPage] = useState({ title: '', description: '', url_slug: '' });
   const [error, setError] = useState('');
   const [pendingCollabPageIds, setPendingCollabPageIds] = useState(new Set());
+  const [busqueda, setBusqueda] = useState('');
+  const [pagina, setPagina] = useState(1);
+  const [paginacion, setPaginacion] = useState({ total: 0, paginas: 0, pagina: 1 });
   const [adminInvites, setAdminInvites] = useState([]);
   const navigate = useNavigate();
 
@@ -20,6 +24,24 @@ function MyPages() {
     fetchPendingCollabs();
     fetchAdminInvites();
   }, []);
+
+  // Se espera a que la persona deje de tipear: una consulta por tecla es una
+  // consulta de más, y con muchas páginas se nota.
+  useEffect(() => {
+    const id = setTimeout(() => {
+      setPagina(1);
+      fetchPages(busqueda, 1);
+    }, 300);
+
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busqueda]);
+
+  const irAPagina = (nueva) => {
+    setPagina(nueva);
+    fetchPages(busqueda, nueva);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const fetchAdminInvites = async () => {
     try {
@@ -79,13 +101,26 @@ function MyPages() {
     }
   };
 
-  const fetchPages = async () => {
+  const fetchPages = async (termino = busqueda, nroPagina = pagina) => {
     try {
-      const response = await fetch(`${apiUrl}/pages/index.php`, {
+      const query = new URLSearchParams({ pagina: nroPagina });
+
+      if (termino.trim() !== '') {
+        query.set('q', termino.trim());
+      }
+
+      const response = await fetch(`${apiUrl}/pages/index.php?${query}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await response.json();
+
       setPages(data.pages || []);
+
+      if (data.paginacion) {
+        setPaginacion(data.paginacion);
+        // El servidor acota la página pedida a la última con resultados.
+        setPagina(data.paginacion.pagina);
+      }
     } catch (err) {
       console.error('Error fetching pages:', err);
     } finally {
@@ -186,16 +221,54 @@ function MyPages() {
           </div>
         )}
 
+        {/* El buscador se muestra siempre que haya algo que buscar, aunque la
+            búsqueda actual no traiga resultados: si no, quedaría atrapado sin
+            forma de borrar el término. */}
+        {(paginacion.total > 0 || busqueda !== '') && (
+          <div className="mb-8 flex items-center gap-4 flex-wrap">
+            <div className="relative flex-1 min-w-[240px]">
+              <Search className="w-4 h-4 text-gray-600 absolute left-4 top-1/2 -translate-y-1/2" />
+              <input
+                type="search"
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+                placeholder="Buscar por nombre o dirección"
+                aria-label="Buscar páginas"
+                className="w-full pl-11 pr-4 py-3 bg-gray-900 border border-gray-800 text-white focus:border-white transition"
+              />
+            </div>
+
+            <span className="text-sm text-gray-500">
+              {paginacion.total} {paginacion.total === 1 ? 'página' : 'páginas'}
+              {busqueda !== '' && ' encontradas'}
+            </span>
+          </div>
+        )}
+
         {loading ? (
           <div className="text-center py-24">
             <div className="text-gray-500 text-xl font-medium">Cargando...</div>
           </div>
         ) : pages.length === 0 ? (
+          busqueda !== '' ? (
+            <div className="text-center py-24 space-y-4">
+              <p className="text-gray-400 text-2xl font-light">
+                Ninguna página coincide con "{busqueda}"
+              </p>
+              <button
+                onClick={() => setBusqueda('')}
+                className="text-gray-500 hover:text-white underline"
+              >
+                Limpiar la búsqueda
+              </button>
+            </div>
+          ) : (
           <div className="text-center py-24 space-y-6">
             <div className="w-32 h-32 bg-gray-900 mx-auto"></div>
             <p className="text-gray-400 text-2xl font-light">No tienes páginas todavía</p>
             <p className="text-gray-600 text-lg">Crea tu primera página personal</p>
           </div>
+          )
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
             {pages.map((page) => (
@@ -250,6 +323,34 @@ function MyPages() {
               </div>
             ))}
           </div>
+        )}
+
+        {paginacion.paginas > 1 && (
+          <nav className="mt-12 flex items-center justify-center gap-2" aria-label="Paginación">
+            <button
+              type="button"
+              onClick={() => irAPagina(pagina - 1)}
+              disabled={pagina <= 1}
+              aria-label="Página anterior"
+              className="px-4 py-3 border border-gray-800 text-white hover:bg-gray-900 transition disabled:opacity-30 disabled:hover:bg-transparent"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+
+            <span className="px-4 text-gray-500 text-sm">
+              Página {pagina} de {paginacion.paginas}
+            </span>
+
+            <button
+              type="button"
+              onClick={() => irAPagina(pagina + 1)}
+              disabled={pagina >= paginacion.paginas}
+              aria-label="Página siguiente"
+              className="px-4 py-3 border border-gray-800 text-white hover:bg-gray-900 transition disabled:opacity-30 disabled:hover:bg-transparent"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </nav>
         )}
       </div>
 

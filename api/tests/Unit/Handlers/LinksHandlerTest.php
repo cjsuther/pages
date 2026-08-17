@@ -513,4 +513,41 @@ class LinksHandlerTest extends HandlerTestCase
     {
         $this->db->onSelect('FROM links l JOIN link_groups lg', [['1' => 1]]);
     }
+
+    // ------------------------------------------------------ precio de referencia
+
+    /**
+     * Son tres cosas distintas: no saber el precio, saber que es gratis, y
+     * tener un valor. Si el vacío se guardara como cero, todo evento sin dato
+     * aparecería anunciado como gratis.
+     */
+    public function testUnPrecioVacioEsSinDatoYNoCero()
+    {
+        $this->assertNull(LinksHandler::precioONull(''));
+        $this->assertNull(LinksHandler::precioONull(null));
+    }
+
+    public function testElCeroSeGuardaComoCeroYNoComoSinDato()
+    {
+        $this->assertSame(0.0, LinksHandler::precioONull(0));
+        $this->assertSame(0.0, LinksHandler::precioONull('0'));
+    }
+
+    public function testUnPrecioSeGuardaConDosDecimales()
+    {
+        $this->assertSame(25000.0, LinksHandler::precioONull('25000'));
+        $this->assertSame(1500.55, LinksHandler::precioONull('1500.554'));
+    }
+
+    public function testUnTextoNoNumericoNoSeGuarda()
+    {
+        $this->assertNull(LinksHandler::precioONull('a consultar'));
+    }
+
+    /** Un precio negativo no existe; se trata como gratis. */
+    public function testUnNegativoNoSeGuardaComoNegativo()
+    {
+        $this->assertSame(0.0, LinksHandler::precioONull(-500));
+    }
+
 }

@@ -55,6 +55,10 @@ class PagesHandler
     }
 
     /** Páginas propias más aquellas donde el usuario es administrador aceptado. */
+    /** Páginas por tanda. Con muchas importadas, traerlas todas no escala. */
+    const POR_PAGINA = 12;
+    const MAX_POR_PAGINA = 50;
+
     private static function listar($db, Request $req)
     {
         if (!$req->user) {
@@ -62,23 +66,72 @@ class PagesHandler
         }
 
         try {
-            $stmt = $db->prepare('
+            $usuario = $req->userId();
+            $busqueda = trim((string) $req->param('q', ''));
+            $porPagina = self::acotar((int) $req->param('por_pagina', self::POR_PAGINA), 1, self::MAX_POR_PAGINA);
+            $pagina = max(1, (int) $req->param('pagina', 1));
+
+            // Quién ve qué: el dueño y los administradores aceptados.
+            $acceso = 'p.user_id = ?
+                       OR EXISTS (
+                           SELECT 1 FROM page_admins pa
+                           WHERE pa.page_id = p.id AND pa.user_id = ? AND pa.status = "accepted"
+                       )';
+            $params = [$usuario, $usuario];
+
+            $filtro = '';
+
+            if ($busqueda !== '') {
+                // Por título y por slug: uno busca por lo que ve o por la URL
+                // que recuerda.
+                $filtro = ' AND (p.title LIKE ? OR p.url_slug LIKE ?)';
+                $comodin = '%' . $busqueda . '%';
+                $params[] = $comodin;
+                $params[] = $comodin;
+            }
+
+            $conteo = $db->prepare("SELECT COUNT(*) FROM pages p WHERE ($acceso)$filtro");
+            $conteo->execute($params);
+            $total = (int) $conteo->fetchColumn();
+
+            $paginas = (int) ceil($total / $porPagina);
+
+            // Pedir la página 9 de 3 devolvería vacío y parecería que no hay
+            // nada; se acota a la última con resultados.
+            if ($paginas > 0 && $pagina > $paginas) {
+                $pagina = $paginas;
+            }
+
+            $offset = ($pagina - 1) * $porPagina;
+
+            $stmt = $db->prepare("
                 SELECT p.*, (p.user_id = ?) AS is_owner
                 FROM pages p
-                WHERE p.user_id = ?
-                   OR EXISTS (
-                       SELECT 1 FROM page_admins pa
-                       WHERE pa.page_id = p.id AND pa.user_id = ? AND pa.status = "accepted"
-                   )
+                WHERE ($acceso)$filtro
                 ORDER BY p.created_at DESC
-            ');
-            $stmt->execute([$req->userId(), $req->userId(), $req->userId()]);
+                LIMIT $porPagina OFFSET $offset
+            ");
+            $stmt->execute(array_merge([$usuario], $params));
 
-            return Response::ok(['pages' => $stmt->fetchAll()]);
+            return Response::ok([
+                'pages' => $stmt->fetchAll(),
+                'paginacion' => [
+                    'pagina'      => $pagina,
+                    'por_pagina'  => $porPagina,
+                    'total'       => $total,
+                    'paginas'     => $paginas,
+                    'busqueda'    => $busqueda,
+                ],
+            ]);
 
         } catch (Exception $e) {
             return Response::serverError($e->getMessage());
         }
+    }
+
+    private static function acotar($valor, $minimo, $maximo)
+    {
+        return max($minimo, min($maximo, $valor));
     }
 
     private static function crear($db, Request $req)

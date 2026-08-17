@@ -84,3 +84,28 @@ export function minutosRestantes(vencimiento, ahora = Date.now()) {
 
   return restante <= 0 ? 0 : Math.ceil(restante / 60000);
 }
+
+/**
+ * Cómo se anuncia el precio de un evento en la tarjeta y en el detalle.
+ *
+ * Es el precio de referencia, distinto del de la venta interna: aplica a los
+ * eventos que se cobran en otro lado o que llegan importados desde la
+ * cartelera del lugar, donde lo único que se sabe es desde cuánto sale.
+ *
+ * @returns {string|null} null cuando no hay dato y no corresponde mostrar nada
+ */
+export function precioDeReferencia(precio) {
+  if (precio === null || precio === undefined || precio === '') {
+    return null;
+  }
+
+  const numero = Number(precio);
+
+  if (Number.isNaN(numero)) {
+    return null;
+  }
+
+  // El cero no es "sin dato": es la afirmación de que el evento es gratis, y
+  // eso el público lo quiere ver.
+  return numero <= 0 ? 'Gratis' : `Desde ${formatearPrecio(numero)}`;
+}
