@@ -126,12 +126,24 @@ describe('EstadoOrden', () => {
     it('deja de reintentar en algún momento', async () => {
       await montar({ ...ORDEN, estado: 'reservada' });
 
-      await vi.advanceTimersByTimeAsync(3000 * 15);
-      const despuesDeMucho = global.fetch.mock.calls.length;
+      // La cadena de reintentos no avanza sola con el reloj: cada consulta
+      // programa la siguiente recién cuando la anterior respondió. Saltar un
+      // bloque grande de tiempo de una vez no garantiza haber llegado al
+      // final, y esperar a que se quede quieta tampoco, porque puede pausarse
+      // un intervalo y seguir. Se avanza hasta el tope esperado —si el
+      // componente no frenara lo pasaría de largo, y la comprobación fallaría
+      // igual— y recién ahí se verifica que ya no consulta más.
+      const TOPE = 11; // la consulta inicial más los 10 reintentos
+
+      for (let vuelta = 0; vuelta < 60 && global.fetch.mock.calls.length < TOPE; vuelta++) {
+        await vi.advanceTimersByTimeAsync(3000);
+      }
+
+      expect(global.fetch.mock.calls.length).toBe(TOPE);
 
       await vi.advanceTimersByTimeAsync(3000 * 10);
 
-      expect(global.fetch.mock.calls.length).toBe(despuesDeMucho);
+      expect(global.fetch.mock.calls.length).toBe(TOPE);
     });
 
     it('una orden ya confirmada no reintenta', async () => {
