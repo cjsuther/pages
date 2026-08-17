@@ -3,6 +3,31 @@ import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { AuthContext } from '../App';
 import { trackEvent } from '../utils/analytics';
 
+/** Dónde se anota a dónde volver cuando hay que entrar primero. */
+export const DESTINO = 'rezonar:despues-de-entrar';
+
+/**
+ * A dónde ir después de entrar.
+ *
+ * Se anota en sessionStorage y no en la URL porque entrar con Google se va del
+ * sitio y vuelve: un parámetro no sobrevive ese rodeo.
+ *
+ * Sólo rutas de este sitio: un destino externo convertiría el login en un
+ * trampolín para mandar gente a cualquier lado con la confianza que da haber
+ * salido de acá.
+ */
+export function destinoSeguro(destino) {
+  return typeof destino === 'string' && /^\/[^/\\]/.test(destino) ? destino : '/';
+}
+
+/** Lee el destino anotado y lo borra: sirve una sola vez. */
+export function destinoPendiente() {
+  const anotado = sessionStorage.getItem(DESTINO);
+  sessionStorage.removeItem(DESTINO);
+
+  return destinoSeguro(anotado);
+}
+
 function Login() {
   const { login, apiUrl } = useContext(AuthContext);
   const navigate = useNavigate();
@@ -19,7 +44,7 @@ function Login() {
         const user = JSON.parse(decodeURIComponent(userParam));
         login(token, user);
         trackEvent.userLogin('oauth');
-        navigate('/');
+        navigate(destinoPendiente());
       } catch (err) {
         setError('Error al procesar el inicio de sesión');
       }

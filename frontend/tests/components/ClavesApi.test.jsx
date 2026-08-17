@@ -130,6 +130,6 @@ describe('ClavesApi', () => {
   it('muestra la dirección para conectar el server', async () => {
     await montar();
 
-    expect(screen.getByText('https://rezon.ar/api/mcp/index.php')).toBeInTheDocument();
+    expect(screen.getByText('https://rezon.ar/mcp')).toBeInTheDocument();
   });
 });

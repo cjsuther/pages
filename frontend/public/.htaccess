@@ -2,6 +2,22 @@
   RewriteEngine On
   RewriteBase /
 
+  # --------------------------------------------------------------- MCP
+  #
+  # El server MCP y su autorización tienen que vivir en direcciones que el
+  # protocolo fija: la metadata se busca en /.well-known/ del dominio, no
+  # adentro de /api/. Se reescriben acá para no mover los archivos de lugar.
+  RewriteRule ^mcp/?$ /api/mcp/index.php [L]
+
+  RewriteRule ^\.well-known/oauth-authorization-server/?$ /api/oauth/metadata-servidor.php [L]
+  RewriteRule ^\.well-known/oauth-protected-resource(/mcp)?/?$ /api/oauth/metadata-recurso.php [L]
+
+  RewriteRule ^oauth/registrar/?$ /api/oauth/registrar.php [L]
+  RewriteRule ^oauth/token/?$ /api/oauth/token.php [L]
+
+  # /oauth/authorize no se reescribe: es la pantalla donde la persona autoriza,
+  # y la resuelve la aplicación como cualquier otra ruta.
+
   # Todo lo que no sea un archivo real lo resuelve index.php, que además
   # renderiza los meta tags Open Graph de cada página.
   RewriteCond %{REQUEST_FILENAME} !-f

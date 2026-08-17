@@ -4,7 +4,7 @@ import { AuthContext } from '../App';
 import LocationSettings from '../components/LocationSettings';
 import FollowingManager from '../components/FollowingManager';
 import PageSearch from '../components/PageSearch';
-import ClavesApi from '../components/ClavesApi';
+import ClavesApi, { Conexiones } from '../components/ClavesApi';
 
 function Settings() {
   const { token, user, logout } = useContext(AuthContext);
@@ -108,7 +108,12 @@ function Settings() {
             {activeTab === 'location' && <LocationSettings />}
             {activeTab === 'search' && <PageSearch />}
             {activeTab === 'following' && <FollowingManager />}
-            {activeTab === 'claves' && <ClavesApi />}
+            {activeTab === 'claves' && (
+              <>
+                <ClavesApi />
+                <Conexiones />
+              </>
+            )}
           </div>
         </div>
       </div>

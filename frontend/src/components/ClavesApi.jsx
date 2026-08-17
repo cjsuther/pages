@@ -153,13 +153,89 @@ function ClavesApi() {
       <div className="mt-10 border-t border-gray-800 pt-6">
         <p className="text-sm font-bold text-gray-400 mb-2">CÓMO CONECTARLO</p>
         <p className="text-xs text-gray-600 mb-3">
-          En tu cliente de MCP, agregá un servidor remoto con esta dirección y la clave
-          como credencial:
+          En tu cliente de MCP, agregá un servidor remoto con esta dirección. Si el
+          cliente sabe autorizarse solo no hace falta ninguna clave: te va a mandar a
+          Rezonar a dar el permiso.
         </p>
         <code className="block text-xs text-gray-300 bg-black px-3 py-2 overflow-x-auto whitespace-nowrap">
-          https://rezon.ar/api/mcp/index.php
+          https://rezon.ar/mcp
         </code>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Aplicaciones que la persona autorizó por OAuth.
+ *
+ * Va acá al lado de las claves porque son las dos formas de conectar algo, y
+ * quien viene a cortar un acceso no tiene por qué saber cuál de las dos usó.
+ */
+export function Conexiones() {
+  const { token, apiUrl } = useContext(AuthContext);
+  const [conexiones, setConexiones] = useState([]);
+  const [cargando, setCargando] = useState(true);
+
+  const cabeceras = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+
+  const cargar = async () => {
+    try {
+      const r = await fetch(`${apiUrl}/oauth/conexiones.php`, { headers: cabeceras });
+      const cuerpo = await r.json();
+
+      if (r.ok) setConexiones(cuerpo.conexiones || []);
+    } catch (e) {
+      // Sin conexiones que mostrar, la sección simplemente no aparece.
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  useEffect(() => {
+    cargar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const desconectar = async (clientId, nombre) => {
+    if (!window.confirm(`¿Desconectar ${nombre}? Va a perder el acceso a tus páginas.`)) return;
+
+    await fetch(`${apiUrl}/oauth/conexiones.php?client_id=${encodeURIComponent(clientId)}`, {
+      method: 'DELETE',
+      headers: cabeceras,
+    });
+    cargar();
+  };
+
+  if (cargando || conexiones.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="bg-gray-900 border border-gray-800 p-8 mt-8">
+      <h2 className="text-2xl font-black mb-2 tracking-tight">APLICACIONES CONECTADAS</h2>
+      <p className="text-sm text-gray-500 mb-8">
+        Programas a los que les diste permiso para administrar tus eventos.
+      </p>
+
+      <ul className="divide-y divide-gray-800 border-t border-gray-800">
+        {conexiones.map((c) => (
+          <li key={c.client_id} className="py-4 flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-white font-bold truncate">{c.nombre || 'Aplicación sin nombre'}</p>
+              <p className="text-xs text-gray-600">
+                {c.ultimo_uso_en ? `Última vez el ${c.ultimo_uso_en.slice(0, 10)}` : 'Sin usar todavía'}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => desconectar(c.client_id, c.nombre)}
+              className="shrink-0 text-sm text-gray-500 hover:text-red-400 transition"
+            >
+              Desconectar
+            </button>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

@@ -45,15 +45,21 @@ class McpHandler
             return Response::methodNotAllowed();
         }
 
-        $usuario = ClavesApi::usuario($db, $req->bearerToken());
+        $usuario = self::identificar($db, $req->bearerToken());
 
         if ($usuario === null) {
-            // El WWW-Authenticate es lo que le dice al cliente que el problema
-            // es la credencial y no el pedido.
+            // El WWW-Authenticate no sólo dice que el problema es la
+            // credencial: apunta a la metadata del recurso, que es lo que le
+            // permite a un cliente que nunca vio este server descubrir solo
+            // dónde autorizarse. Sin esta cabecera, el circuito de OAuth no
+            // arranca nunca.
             return Response::raw(
                 401,
-                json_encode(['error' => 'Clave de API inválida o revocada']),
-                ['WWW-Authenticate' => 'Bearer realm="rezonar"', 'Content-Type' => 'application/json']
+                json_encode(['error' => 'Hace falta autorizarse']),
+                [
+                    'WWW-Authenticate' => 'Bearer realm="rezonar", resource_metadata="' . self::urlDeLaMetadata() . '"',
+                    'Content-Type' => 'application/json',
+                ]
             );
         }
 
@@ -145,6 +151,39 @@ class McpHandler
             'content' => [['type' => 'text', 'text' => self::comoTexto($resultado['datos'])]],
             'isError' => !$resultado['ok'],
         ]);
+    }
+
+    /**
+     * Quién está del otro lado.
+     *
+     * Se aceptan dos credenciales. La clave de API sirve para conectar algo
+     * propio en un minuto; el token de OAuth es el circuito que le sirve a
+     * cualquier persona, porque no le pide copiar nada. Se distinguen por el
+     * prefijo, así que probar las dos no cuesta una consulta de más.
+     */
+    private static function identificar($db, $credencial)
+    {
+        $credencial = (string) $credencial;
+
+        if ($credencial === '') {
+            return null;
+        }
+
+        if (strpos($credencial, ClavesApi::PREFIJO) === 0) {
+            return ClavesApi::usuario($db, $credencial);
+        }
+
+        return OAuth::usuario($db, $credencial);
+    }
+
+    /** Dónde está publicado quién autoriza el acceso a este server. */
+    private static function urlDeLaMetadata()
+    {
+        $recurso = OAuthHandler::urlDelRecurso();
+        $partes = parse_url($recurso);
+        $camino = isset($partes['path']) ? $partes['path'] : '';
+
+        return $partes['scheme'] . '://' . $partes['host'] . '/.well-known/oauth-protected-resource' . $camino;
     }
 
     /** El id puede ser número o texto; ausente significa notificación. */
