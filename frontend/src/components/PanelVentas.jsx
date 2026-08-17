@@ -5,6 +5,16 @@ import { urlDeWhatsApp } from '../utils/telefono';
 import { IconoDeMarca } from './IconosRedes';
 
 /**
+ * Estados desde los que una compra se puede dar de baja.
+ *
+ * Una vencida ya no ocupa lugar y una rechazada nunca lo ocupó: cancelarlas no
+ * cambiaría nada y sólo agregaría un botón que no hace lo que promete.
+ */
+const CANCELABLES = ['pagada', 'reservada'];
+
+export const sePuedeCancelar = (estado) => CANCELABLES.includes(estado);
+
+/**
  * Listado de ventas de un evento, dentro del modal de edición.
  *
  * Muestra los datos de contacto de los compradores, así que el servidor sólo lo
@@ -14,6 +24,9 @@ function PanelVentas({ linkId, apiUrl, token }) {
   const [datos, setDatos] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
+  const [porCancelar, setPorCancelar] = useState(null);
+  const [cancelando, setCancelando] = useState(false);
+  const [errorCancelacion, setErrorCancelacion] = useState(null);
 
   const cargar = async () => {
     setCargando(true);
@@ -65,6 +78,39 @@ function PanelVentas({ linkId, apiUrl, token }) {
     enlace.click();
     document.body.removeChild(enlace);
     URL.revokeObjectURL(url);
+  };
+
+  /**
+   * Cancelar devuelve los lugares al cupo y no se deshace desde acá, así que
+   * se pregunta antes. El servidor contesta con las ventas ya actualizadas:
+   * volver a pedirlas mostraría un cupo viejo por un instante.
+   */
+  const confirmarCancelacion = async () => {
+    setCancelando(true);
+    // Aparte del error de carga: ése reemplaza el panel entero, y una
+    // cancelación fallida no puede llevarse puesto el listado de ventas.
+    setErrorCancelacion(null);
+
+    try {
+      const r = await fetch(`${apiUrl}/entradas/cancelar.php`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ codigo: porCancelar.codigo }),
+      });
+      const cuerpo = await r.json();
+
+      if (!r.ok) {
+        setErrorCancelacion(cuerpo.error || 'No pudimos cancelar la compra');
+        return;
+      }
+
+      setDatos(cuerpo.ventas);
+      setPorCancelar(null);
+    } catch (e) {
+      setErrorCancelacion('No pudimos conectarnos al servidor');
+    } finally {
+      setCancelando(false);
+    }
   };
 
   if (cargando) {
@@ -128,6 +174,7 @@ function PanelVentas({ linkId, apiUrl, token }) {
                 <th className="px-3 py-2 font-bold text-right">Cant.</th>
                 <th className="px-3 py-2 font-bold text-right">Total</th>
                 <th className="px-3 py-2 font-bold">Estado</th>
+                <th className="px-3 py-2"><span className="sr-only">Acciones</span></th>
               </tr>
             </thead>
             <tbody>
@@ -150,10 +197,64 @@ function PanelVentas({ linkId, apiUrl, token }) {
                       {etiquetaDeEstado(o.estado)}
                     </span>
                   </td>
+                  <td className="px-3 py-2 text-right">
+                    {sePuedeCancelar(o.estado) && (
+                      <button
+                        type="button"
+                        onClick={() => setPorCancelar(o)}
+                        className="text-xs text-gray-500 hover:text-red-400 transition"
+                      >
+                        Cancelar
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {porCancelar && (
+        <div className="fixed inset-0 bg-black bg-opacity-80 z-50 flex items-center justify-center p-4">
+          <div className="bg-gray-900 border border-gray-700 rounded-lg p-6 max-w-sm w-full">
+            <h4 className="text-white font-bold text-lg mb-2">¿Cancelar esta compra?</h4>
+            <p className="text-sm text-gray-400 mb-1">
+              {porCancelar.cantidad}{' '}
+              {porCancelar.cantidad === 1 ? 'entrada' : 'entradas'} de {porCancelar.nombre}.
+            </p>
+            <p className="text-sm text-gray-500 mb-6">
+              Los lugares vuelven a estar disponibles y la compra queda registrada como cancelada.
+            </p>
+
+            {errorCancelacion && (
+              <p role="alert" className="text-sm text-red-400 bg-red-950 border border-red-900 px-3 py-2 mb-4">
+                {errorCancelacion}
+              </p>
+            )}
+
+            <div className="flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setPorCancelar(null);
+                  setErrorCancelacion(null);
+                }}
+                disabled={cancelando}
+                className="px-4 py-2 text-sm text-gray-400 hover:text-white transition"
+              >
+                Volver
+              </button>
+              <button
+                type="button"
+                onClick={confirmarCancelacion}
+                disabled={cancelando}
+                className="px-4 py-2 text-sm font-bold bg-red-600 text-white rounded hover:bg-red-500 transition disabled:opacity-50"
+              >
+                {cancelando ? 'Cancelando...' : 'Cancelar la compra'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

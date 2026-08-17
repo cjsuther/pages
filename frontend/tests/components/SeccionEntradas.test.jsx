@@ -18,11 +18,24 @@ function respuestaDe(cuerpo, ok = true, status = 200) {
   return Promise.resolve({ ok, status, json: () => Promise.resolve(cuerpo) });
 }
 
-async function montar({ cobros = SIN_CONECTAR, comision = 10, disponible = true, ruta = '/page/5' } = {}) {
+async function montar({
+  cobros = SIN_CONECTAR,
+  comision = 10,
+  disponible = true,
+  ruta = '/page/5',
+  emailContacto = '',
+  onGuardarContacto = () => {},
+} = {}) {
   global.fetch.mockReturnValueOnce(respuestaDe({ cobros, comision, disponible }));
 
   const vista = renderConProviders(
-    <SeccionEntradas pageId={5} apiUrl="https://api.test/api" token="tok" />,
+    <SeccionEntradas
+      pageId={5}
+      apiUrl="https://api.test/api"
+      token="tok"
+      emailContacto={emailContacto}
+      onGuardarContacto={onGuardarContacto}
+    />,
     { route: ruta, path: '/page/:id' }
   );
 
@@ -256,6 +269,59 @@ describe('SeccionEntradas', () => {
 
       expect(await screen.findByText('Mercado Pago desconectado')).toBeInTheDocument();
       expect(window.confirm).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('email de contacto', () => {
+    const escribir = (valor) =>
+      fireEvent.change(screen.getByLabelText('EMAIL DE CONTACTO'), { target: { value: valor } });
+
+    it('muestra el contacto ya cargado', async () => {
+      await montar({ emailContacto: 'hola@lasala.com' });
+
+      expect(screen.getByLabelText('EMAIL DE CONTACTO')).toHaveValue('hola@lasala.com');
+    });
+
+    it('guarda al salir del campo', async () => {
+      const onGuardarContacto = vi.fn();
+      await montar({ onGuardarContacto });
+
+      escribir('hola@lasala.com');
+      fireEvent.blur(screen.getByLabelText('EMAIL DE CONTACTO'));
+
+      expect(onGuardarContacto).toHaveBeenCalledWith('hola@lasala.com');
+    });
+
+    /** Vaciarlo es la forma de dejar de publicar un contacto. */
+    it('se puede vaciar', async () => {
+      const onGuardarContacto = vi.fn();
+      await montar({ emailContacto: 'hola@lasala.com', onGuardarContacto });
+
+      escribir('');
+      fireEvent.blur(screen.getByLabelText('EMAIL DE CONTACTO'));
+
+      expect(onGuardarContacto).toHaveBeenCalledWith('');
+    });
+
+    it('no guarda una dirección que no es un email', async () => {
+      const onGuardarContacto = vi.fn();
+      await montar({ onGuardarContacto });
+
+      escribir('esto no es un mail');
+      fireEvent.blur(screen.getByLabelText('EMAIL DE CONTACTO'));
+
+      expect(onGuardarContacto).not.toHaveBeenCalled();
+      expect(screen.getByText(/no parece una dirección válida/)).toBeInTheDocument();
+    });
+
+    /** Guardar lo mismo que ya estaba es un PUT al pedo. */
+    it('no guarda si no cambió nada', async () => {
+      const onGuardarContacto = vi.fn();
+      await montar({ emailContacto: 'hola@lasala.com', onGuardarContacto });
+
+      fireEvent.blur(screen.getByLabelText('EMAIL DE CONTACTO'));
+
+      expect(onGuardarContacto).not.toHaveBeenCalled();
     });
   });
 });

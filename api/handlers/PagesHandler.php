@@ -37,6 +37,8 @@ class PagesHandler
         'profile_image' => ['nullable' => true],
         'background_image' => ['nullable' => true],
         'template' => ['nullable' => false],
+        // Nullable: vaciarlo es la forma de dejar de publicar un contacto.
+        'email_contacto' => ['nullable' => true],
     ];
 
     // ------------------------------------------------------------------ index

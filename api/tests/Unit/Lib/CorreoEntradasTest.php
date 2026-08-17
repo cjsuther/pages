@@ -288,4 +288,117 @@ class CorreoEntradasTest extends HandlerTestCase
         $this->assertSame(0, $resumen['enviados']);
         $this->assertSame([], $mailer->enviados);
     }
+
+    // ================================================== la imagen del evento
+
+    /** El afiche es lo que hace reconocer el mail de un vistazo entre veinte. */
+    public function testElMailLlevaLaImagenDelEvento()
+    {
+        $this->hayOrden(['evento_imagen' => 'https://rezon.ar/uploads/afiche.jpg']);
+        $mailer = new FakeMailer();
+
+        $this->enviar($mailer);
+
+        $this->assertStringContainsString('https://rezon.ar/uploads/afiche.jpg', $mailer->enviados[0]['html']);
+    }
+
+    public function testUnEventoSinImagenMandaElMailIgual()
+    {
+        $this->hayOrden(['evento_imagen' => null]);
+        $mailer = new FakeMailer();
+
+        $r = $this->enviar($mailer);
+
+        $this->assertTrue($r['enviado']);
+        $this->assertStringNotContainsString('<img src="http', $mailer->enviados[0]['html']);
+    }
+
+    /**
+     * Una ruta relativa resuelve en el navegador contra el sitio y en un
+     * cliente de correo contra nada: se vería el ícono de imagen rota arriba
+     * de la entrada.
+     */
+    public function testUnaImagenConRutaRelativaNoVaAlMail()
+    {
+        $this->assertFalse(CorreoEntradas::imagenValida(['evento_imagen' => '/uploads/afiche.jpg']));
+        $this->assertFalse(CorreoEntradas::imagenValida(['evento_imagen' => 'afiche.jpg']));
+        $this->assertTrue(CorreoEntradas::imagenValida(['evento_imagen' => 'https://x/afiche.jpg']));
+    }
+
+    /** El QR sigue yendo adjunto: tiene que verse aunque bloqueen imágenes. */
+    public function testLaImagenDelEventoNoDesplazaAlQrAdjunto()
+    {
+        $this->hayOrden(['evento_imagen' => 'https://rezon.ar/uploads/afiche.jpg']);
+        $mailer = new FakeMailer();
+
+        $this->enviar($mailer);
+
+        $cids = array_column($mailer->enviados[0]['imagenes'], 'cid');
+
+        $this->assertContains('qr', $cids);
+    }
+
+    // ============================================= el contacto del organizador
+
+    /**
+     * El mail sale de la casilla de la plataforma porque es la que el SPF del
+     * dominio autoriza; el Reply-To es lo que hace que "responder" llegue a
+     * quien organiza y no a nosotros.
+     */
+    public function testResponderLeLlegaAlOrganizador()
+    {
+        $this->hayOrden(['email_contacto' => 'hola@lasala.com']);
+        $mailer = new FakeMailer();
+
+        $this->enviar($mailer);
+
+        $this->assertSame('hola@lasala.com', $mailer->enviados[0]['responder']);
+    }
+
+    /** Un Reply-To a una casilla que nadie lee es peor que no ofrecer responder. */
+    public function testSinContactoCargadoNoSePoneReplyTo()
+    {
+        $this->hayOrden(['email_contacto' => null]);
+        $mailer = new FakeMailer();
+
+        $this->enviar($mailer);
+
+        $this->assertArrayNotHasKey('responder', $mailer->enviados[0]);
+    }
+
+    public function testSinContactoElMailNoInvitaAResponder()
+    {
+        $this->hayOrden(['email_contacto' => '']);
+        $mailer = new FakeMailer();
+
+        $this->enviar($mailer);
+
+        $this->assertStringNotContainsString('respondé este mail', $mailer->enviados[0]['html']);
+    }
+
+    public function testConContactoElMailInvitaAResponder()
+    {
+        $this->hayOrden(['email_contacto' => 'hola@lasala.com']);
+        $mailer = new FakeMailer();
+
+        $this->enviar($mailer);
+
+        $this->assertStringContainsString('respondé este mail', $mailer->enviados[0]['html']);
+    }
+
+    /**
+     * Una dirección rota en el Reply-To puede hacer que el servidor rechace el
+     * mensaje entero: perder la entrada por un contacto mal tipeado sería
+     * desproporcionado.
+     */
+    public function testUnContactoInvalidoSeIgnoraYLaEntradaSaleIgual()
+    {
+        $this->hayOrden(['email_contacto' => 'esto no es un mail']);
+        $mailer = new FakeMailer();
+
+        $r = $this->enviar($mailer);
+
+        $this->assertTrue($r['enviado']);
+        $this->assertArrayNotHasKey('responder', $mailer->enviados[0]);
+    }
 }

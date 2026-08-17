@@ -21,7 +21,7 @@ const ERRORES = {
   no_se_pudo_guardar: 'No pudimos guardar la conexión. Probá de nuevo.',
 };
 
-function SeccionEntradas({ pageId, apiUrl, token }) {
+function SeccionEntradas({ pageId, apiUrl, token, emailContacto = '', onGuardarContacto }) {
   const [datos, setDatos] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [conectando, setConectando] = useState(false);
@@ -151,6 +151,11 @@ function SeccionEntradas({ pageId, apiUrl, token }) {
         Conectá tu cuenta de Mercado Pago para cobrar entradas. El dinero va directo
         a tu cuenta. Para eventos con reserva sin costo no hace falta.
       </p>
+
+      <ContactoDeCompradores
+        valor={emailContacto}
+        onGuardar={onGuardarContacto}
+      />
 
       {cobros.configurado ? (
         <div className="border border-gray-800 bg-black p-6 mb-6">
@@ -283,6 +288,65 @@ function SeccionEntradas({ pageId, apiUrl, token }) {
           <ExternalLink className="w-3 h-3" />
         </a>
         .
+      </p>
+    </div>
+  );
+}
+
+/**
+ * Casilla a la que le llegan las respuestas de quienes compraron.
+ *
+ * La entrada sale de una casilla de la plataforma, porque es la que el SPF del
+ * dominio autoriza; sin este dato, "responder este mail" no llega a ninguna
+ * parte. Con el dato cargado, el mail lleva Reply-To y la respuesta va derecho
+ * a quien organiza.
+ *
+ * Se guarda al salir del campo y no con un botón aparte: es un dato suelto, y
+ * un formulario de un solo campo con su propio "Guardar" es más ceremonia que
+ * ayuda.
+ */
+function ContactoDeCompradores({ valor, onGuardar }) {
+  const [email, setEmail] = useState(valor);
+  const [invalido, setInvalido] = useState(false);
+
+  useEffect(() => {
+    setEmail(valor);
+  }, [valor]);
+
+  const guardar = () => {
+    const limpio = email.trim();
+
+    // Vaciarlo es válido: es la forma de dejar de publicar un contacto.
+    if (limpio !== '' && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(limpio)) {
+      setInvalido(true);
+      return;
+    }
+
+    setInvalido(false);
+
+    if (limpio !== (valor || '').trim() && onGuardar) {
+      onGuardar(limpio);
+    }
+  };
+
+  return (
+    <div className="border border-gray-800 bg-black p-6 mb-6">
+      <label htmlFor="email-contacto" className="block text-sm font-bold text-gray-400 mb-2 tracking-wide">
+        EMAIL DE CONTACTO
+      </label>
+      <input
+        id="email-contacto"
+        type="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        onBlur={guardar}
+        placeholder="hola@tulugar.com"
+        className="w-full bg-gray-900 border border-gray-700 px-4 py-3 text-white focus:border-white focus:outline-none"
+      />
+      <p className="text-xs text-gray-600 mt-2">
+        {invalido
+          ? 'Revisá el email: no parece una dirección válida.'
+          : 'Cuando alguien responda el mail de su entrada, le llega acá. Si lo dejás vacío, el mail no invita a responder.'}
       </p>
     </div>
   );

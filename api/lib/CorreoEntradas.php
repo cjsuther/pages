@@ -45,14 +45,27 @@ class CorreoEntradas
 
         $qr = CodigoQR::png(CodigoQR::urlDeLaOrden($orden['codigo']));
 
-        $resultado = $mailer->enviar([
+        $mensaje = [
             'para'       => $orden['email'],
             'paraNombre' => $orden['nombre'],
             'asunto'     => 'Tu entrada para ' . $orden['evento'],
             'html'       => self::html($orden, $qr !== null),
             'texto'      => self::texto($orden),
             'imagenes'   => $qr === null ? [] : [['cid' => 'qr', 'contenido' => $qr, 'tipo' => 'image/png']],
-        ]);
+        ];
+
+        // El mail sale de la casilla de la plataforma, porque es la que el SPF
+        // del dominio autoriza. El Reply-To es lo que hace que "responder"
+        // llegue a quien organiza y no a nosotros, que no sabemos nada del
+        // evento. Sin contacto cargado no se pone ninguno: un Reply-To a una
+        // casilla que nadie lee es peor que no ofrecer responder.
+        $contacto = self::contacto($orden);
+
+        if ($contacto !== null) {
+            $mensaje['responder'] = $contacto;
+        }
+
+        $resultado = $mailer->enviar($mensaje);
 
         self::anotar($db, $orden['id'], $resultado);
 
@@ -158,6 +171,23 @@ class CorreoEntradas
             ? ''
             : '<p style="margin:0 0 8px;color:#444444;font-size:15px">📍 ' . $e($orden['event_address']) . '</p>';
 
+        // Sólo se invita a responder cuando hay a quién: el mail sale de una
+        // casilla de la plataforma, así que sin Reply-To la respuesta no llega
+        // a quien organiza. Prometerlo igual sería dejar a alguien esperando
+        // una contestación que nadie va a leer.
+        $bloqueContacto = self::contacto($orden) === null
+            ? ''
+            : ' Si tenés alguna duda, respondé este mail y le llega a ' . $e($orden['pagina']) . '.';
+
+        // El afiche arriba de todo: es lo que hace reconocer el mail de un
+        // vistazo entre veinte. Va por URL y no adjunto —el QR sí va adjunto,
+        // porque tiene que verse aunque el cliente bloquee las imágenes— así
+        // que si no carga, la entrada sigue completa igual.
+        $bloqueImagen = self::imagenValida($orden)
+            ? '<img src="' . $e($orden['evento_imagen']) . '" alt=""
+                    width="480" style="display:block;width:100%;max-width:480px;height:auto;border:0">'
+            : '';
+
         // Estilos en línea y tabla de una columna: es lo único que renderiza
         // igual en Gmail, Outlook y el cliente de iOS.
         return '<!DOCTYPE html>
@@ -165,7 +195,10 @@ class CorreoEntradas
 <meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="margin:0;padding:24px 12px;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif">
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:480px;margin:0 auto">
-  <tr><td style="background:#000000;padding:24px;text-align:center;border-radius:8px 8px 0 0">
+  ' . ($bloqueImagen === '' ? '' : '<tr><td style="line-height:0;border-radius:8px 8px 0 0;overflow:hidden">'
+        . $bloqueImagen . '</td></tr>') . '
+
+  <tr><td style="background:#000000;padding:24px;text-align:center' . ($bloqueImagen === '' ? ';border-radius:8px 8px 0 0' : '') . '">
     <p style="margin:0;color:#ffffff;font-size:13px;letter-spacing:2px">TU ENTRADA</p>
     <h1 style="margin:8px 0 0;color:#ffffff;font-size:24px;font-weight:800">' . $e($orden['evento']) . '</h1>
   </td></tr>
@@ -189,12 +222,39 @@ class CorreoEntradas
 
   <tr><td style="background:#ffffff;padding:0 24px 24px;border-radius:0 0 8px 8px">
     <p style="margin:0;color:#999999;font-size:12px;line-height:1.6;border-top:1px solid #eeeeee;padding-top:16px">
-      Mostrá este código en la entrada. Si tenés alguna duda, respondé este mail
-      y le llega a ' . $e($orden['pagina']) . '.
+      Mostrá este código en la entrada.' . $bloqueContacto . '
     </p>
   </td></tr>
 </table>
 </body></html>';
+    }
+
+    /**
+     * Casilla del organizador, si cargó una válida.
+     *
+     * Se valida acá y no sólo al guardarla: una dirección rota en el Reply-To
+     * puede hacer que el servidor rechace el mensaje entero, y perder la
+     * entrada por un contacto mal tipeado sería desproporcionado.
+     */
+    public static function contacto(array $orden)
+    {
+        $email = isset($orden['email_contacto']) ? trim((string) $orden['email_contacto']) : '';
+
+        return filter_var($email, FILTER_VALIDATE_EMAIL) ? $email : null;
+    }
+
+    /**
+     * La imagen del evento sirve para el mail sólo si es una URL absoluta.
+     *
+     * Los eventos cargados a mano pueden tener una ruta relativa, que en el
+     * navegador resuelve contra el sitio y en un cliente de correo no resuelve
+     * contra nada: se vería el ícono de imagen rota arriba de la entrada.
+     */
+    public static function imagenValida(array $orden)
+    {
+        $url = isset($orden['evento_imagen']) ? trim((string) $orden['evento_imagen']) : '';
+
+        return $url !== '' && preg_match('#^https?://#i', $url) === 1;
     }
 
     private static function texto(array $orden)
@@ -222,6 +282,12 @@ class CorreoEntradas
         $lineas[] = 'Ver tu entrada: ' . CodigoQR::urlDeLaOrden($orden['codigo']);
         $lineas[] = '';
         $lineas[] = 'Mostrá este código en la entrada.';
+
+        $contacto = self::contacto($orden);
+
+        if ($contacto !== null) {
+            $lineas[] = 'Dudas: ' . $contacto;
+        }
 
         return implode("\n", $lineas);
     }

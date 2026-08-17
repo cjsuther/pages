@@ -29,7 +29,7 @@ function montar(overrides = {}) {
 function completarFormulario() {
   fireEvent.change(screen.getByLabelText('NOMBRE Y APELLIDO'), { target: { value: 'Ana Gómez' } });
   fireEvent.change(screen.getByLabelText('EMAIL'), { target: { value: 'ana@example.com' } });
-  fireEvent.change(screen.getByLabelText('TELÉFONO'), { target: { value: '1122334455' } });
+  fireEvent.change(screen.getByLabelText('TELÉFONO (OPCIONAL)'), { target: { value: '1122334455' } });
 }
 
 function respuesta(cuerpo, ok = true) {
@@ -55,23 +55,32 @@ describe('ComprarEntradas', () => {
 
       expect(screen.getByLabelText('NOMBRE Y APELLIDO')).toBeInTheDocument();
       expect(screen.getByLabelText('EMAIL')).toBeInTheDocument();
-      expect(screen.getByLabelText('TELÉFONO')).toBeInTheDocument();
+      expect(screen.getByLabelText('TELÉFONO (OPCIONAL)')).toBeInTheDocument();
       expect(screen.getByLabelText('CANTIDAD')).toBeInTheDocument();
     });
 
-    it('los cuatro campos son obligatorios', () => {
+    it('el nombre y el email son obligatorios', () => {
       montar();
 
       expect(screen.getByLabelText('NOMBRE Y APELLIDO')).toBeRequired();
       expect(screen.getByLabelText('EMAIL')).toBeRequired();
-      expect(screen.getByLabelText('TELÉFONO')).toBeRequired();
+    });
+
+    /**
+     * La entrada llega por mail y ahí termina el circuito: exigir el teléfono
+     * sólo espantaba compras. Queda como dato de contacto, no como requisito.
+     */
+    it('el teléfono es opcional', () => {
+      montar();
+
+      expect(screen.getByLabelText('TELÉFONO (OPCIONAL)')).not.toBeRequired();
     });
 
     it('el email usa el teclado de email en el teléfono', () => {
       montar();
 
       expect(screen.getByLabelText('EMAIL')).toHaveAttribute('type', 'email');
-      expect(screen.getByLabelText('TELÉFONO')).toHaveAttribute('type', 'tel');
+      expect(screen.getByLabelText('TELÉFONO (OPCIONAL)')).toHaveAttribute('type', 'tel');
     });
 
     it('muestra el nombre del evento', () => {
@@ -311,7 +320,7 @@ describe('ComprarEntradas', () => {
 
       fireEvent.change(screen.getByLabelText('NOMBRE Y APELLIDO'), { target: { value: 'Ana' } });
       fireEvent.change(screen.getByLabelText('EMAIL'), { target: { value: 'asd@asd' } });
-      fireEvent.change(screen.getByLabelText('TELÉFONO'), { target: { value: '1122334455' } });
+      fireEvent.change(screen.getByLabelText('TELÉFONO (OPCIONAL)'), { target: { value: '1122334455' } });
 
       fireEvent.click(screen.getByRole('button', { name: 'IR A PAGAR' }));
 

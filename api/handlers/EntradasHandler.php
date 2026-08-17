@@ -259,6 +259,55 @@ class EntradasHandler
         return Response::ok($ventas);
     }
 
+    // -------------------------------------------------------------- cancelar
+
+    /**
+     * Cancela una compra y le devuelve los lugares al evento.
+     *
+     * La cancela quien administra la página, no quien compró: es el que sabe
+     * si la persona avisó que no va o si el pago nunca entró. El comprador
+     * tiene el código de su orden, y con eso cualquiera que lo viera podría
+     * cancelar entradas ajenas.
+     */
+    public static function cancelar($db, Request $req)
+    {
+        if (!$req->user) {
+            return Response::unauthorized();
+        }
+
+        if ($req->method !== 'POST') {
+            return Response::methodNotAllowed();
+        }
+
+        $codigo = trim((string) $req->input('codigo'));
+
+        if ($codigo === '') {
+            return Response::error(400, 'codigo requerido');
+        }
+
+        $orden = Entradas::orden($db, $codigo);
+
+        if ($orden === null) {
+            return Response::error(404, 'No encontramos esa compra');
+        }
+
+        if (!PageAccess::canManageLink($db, (int) $orden['link_id'], $req->userId())) {
+            return Response::error(403, 'No podés cancelar compras de este evento');
+        }
+
+        $resultado = Entradas::cancelar($db, $codigo);
+
+        if (!$resultado['cancelada']) {
+            return Response::error(409, $resultado['motivo']);
+        }
+
+        return Response::ok([
+            'cancelada' => true,
+            'mensaje' => $resultado['motivo'],
+            'ventas' => Entradas::ventasDelEvento($db, (int) $orden['link_id']),
+        ]);
+    }
+
     // --------------------------------------------------------------- internos
 
     private static function csv(array $ordenes)

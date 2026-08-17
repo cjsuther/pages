@@ -153,12 +153,54 @@ class EntradasTest extends HandlerTestCase
         $this->assertStringContainsString('email', $r['error']);
     }
 
-    public function testNoSePuedeComprarSinTelefonoUtilizable()
+    /** Si lo dejan, tiene que servir para llamar. */
+    public function testUnTelefonoEscritoConLetrasNoSirve()
     {
         $r = Entradas::crearOrden($this->db, 100, $this->comprador(['telefono' => 'abc']));
 
         $this->assertFalse($r['ok']);
         $this->assertStringContainsString('teléfono', $r['error']);
+    }
+
+    /**
+     * El teléfono es opcional: la entrada llega por mail y ahí termina el
+     * circuito, así que exigirlo sólo espantaba compras.
+     *
+     * @dataProvider sinTelefono
+     */
+    public function testSePuedeComprarSinDejarTelefono($valor)
+    {
+        $this->hayEvento();
+        $this->hayOcupadas(0);
+        $this->db->onWrite('INSERT INTO ticket_orders', 1);
+
+        $r = Entradas::crearOrden($this->db, 100, $this->comprador(['telefono' => $valor]));
+
+        $this->assertTrue($r['ok']);
+    }
+
+    public function sinTelefono()
+    {
+        return [
+            'vacío'          => [''],
+            'sólo espacios'  => ['   '],
+        ];
+    }
+
+    /** La columna no acepta null: sin teléfono se guarda vacío, no revienta. */
+    public function testSinTelefonoSeGuardaVacio()
+    {
+        $this->hayEvento();
+        $this->hayOcupadas(0);
+        $this->db->onWrite('INSERT INTO ticket_orders', 1);
+
+        $comprador = $this->comprador();
+        unset($comprador['telefono']);
+
+        $r = Entradas::crearOrden($this->db, 100, $comprador);
+
+        $this->assertTrue($r['ok']);
+        $this->assertContains('', $this->db->paramsFor('INSERT INTO ticket_orders'));
     }
 
     /**
@@ -549,5 +591,93 @@ class EntradasTest extends HandlerTestCase
 
         $this->assertSame('vencida', $r['ordenes'][0]['estado']);
         $this->assertSame(0, $r['resumen']['reservadas'], 'no puede contar como cupo tomado');
+    }
+
+    // ================================================================ cancelar
+
+    private function hayOrdenConEstado($estado, $cantidad = 2)
+    {
+        $this->db->onSelect('SELECT estado, cantidad FROM ticket_orders', [[
+            'estado' => $estado, 'cantidad' => $cantidad,
+        ]]);
+    }
+
+    public function testCancelarUnaCompraPagada()
+    {
+        $this->hayOrdenConEstado('pagada');
+        $this->db->onWrite('UPDATE ticket_orders', 1);
+
+        $r = Entradas::cancelar($this->db, 'ABC123');
+
+        $this->assertTrue($r['cancelada']);
+    }
+
+    public function testCancelarUnaReserva()
+    {
+        $this->hayOrdenConEstado('reservada');
+        $this->db->onWrite('UPDATE ticket_orders', 1);
+
+        $this->assertTrue(Entradas::cancelar($this->db, 'ABC123')['cancelada']);
+    }
+
+    /**
+     * No hay contador que actualizar: `ocupadas()` sólo suma pagadas y
+     * reservas vigentes, así que pasar a 'cancelada' devuelve los lugares.
+     */
+    public function testLaCancelacionNoTocaNingunContador()
+    {
+        $this->hayOrdenConEstado('pagada');
+        $this->db->onWrite('UPDATE ticket_orders', 1);
+
+        Entradas::cancelar($this->db, 'ABC123');
+
+        $sql = $this->db->callsFor('UPDATE ticket_orders')[0]['sql'];
+
+        $this->assertStringContainsString("estado = 'cancelada'", $sql);
+        $this->assertStringNotContainsString('capacidad', $sql);
+    }
+
+    /** El registro tiene que quedar, con su estado nuevo. */
+    public function testLaOrdenCanceladaNoSeBorra()
+    {
+        $this->hayOrdenConEstado('pagada');
+        $this->db->onWrite('UPDATE ticket_orders', 1);
+
+        Entradas::cancelar($this->db, 'ABC123');
+
+        $this->assertSame([], $this->db->callsFor('DELETE FROM ticket_orders'));
+    }
+
+    /** Cancelar dos veces no puede liberar el doble de lugares. */
+    public function testUnaOrdenYaCanceladaNoSeVuelveACancelar()
+    {
+        $this->hayOrdenConEstado('cancelada');
+
+        $r = Entradas::cancelar($this->db, 'ABC123');
+
+        $this->assertFalse($r['cancelada']);
+        $this->assertSame([], $this->db->callsFor('UPDATE ticket_orders'));
+    }
+
+    /**
+     * Dos pedidos simultáneos leen lo mismo: la condición sobre el estado va
+     * también en el UPDATE, y el segundo no actualiza ninguna fila.
+     */
+    public function testSiOtroPedidoGanoLaCarreraNoSeCancelaDeNuevo()
+    {
+        $this->hayOrdenConEstado('pagada');
+        $this->db->onWrite('UPDATE ticket_orders', 0);
+
+        $this->assertFalse(Entradas::cancelar($this->db, 'ABC123')['cancelada']);
+    }
+
+    public function testCancelarUnaOrdenQueNoExiste()
+    {
+        $this->db->onSelect('SELECT estado, cantidad FROM ticket_orders', []);
+
+        $r = Entradas::cancelar($this->db, 'NO-EXISTE');
+
+        $this->assertFalse($r['cancelada']);
+        $this->assertStringContainsString('inexistente', $r['motivo']);
     }
 }

@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import PanelVentas from '../../src/components/PanelVentas';
 
 const VENTA = {
@@ -207,6 +207,105 @@ describe('PanelVentas', () => {
       await montar({ ordenes: [] });
 
       expect(global.fetch.mock.calls[0][1].headers.Authorization).toBe('Bearer tok');
+    });
+  });
+
+  describe('cancelar una compra', () => {
+    const abrirElCartel = async () => {
+      fireEvent.click(screen.getByText('Cancelar'));
+      await screen.findByText('¿Cancelar esta compra?');
+    };
+
+    it('ofrece cancelar las compras vigentes', async () => {
+      await montar({ ordenes: [VENTA] });
+
+      expect(screen.getByText('Cancelar')).toBeInTheDocument();
+    });
+
+    /**
+     * Una vencida ya no ocupa lugar y una rechazada nunca lo ocupó: cancelarlas
+     * no cambiaría nada y sólo agregaría un botón que no hace lo que promete.
+     */
+    it.each(['vencida', 'rechazada', 'cancelada'])('no ofrece cancelar una %s', async (estado) => {
+      await montar({ ordenes: [{ ...VENTA, estado }] });
+
+      expect(screen.queryByText('Cancelar')).not.toBeInTheDocument();
+    });
+
+    /** Devuelve lugares al cupo y no se deshace: se pregunta antes. */
+    it('pregunta antes de cancelar', async () => {
+      await montar({ ordenes: [VENTA] });
+
+      fireEvent.click(screen.getByText('Cancelar'));
+
+      expect(await screen.findByText('¿Cancelar esta compra?')).toBeInTheDocument();
+      expect(global.fetch).toHaveBeenCalledTimes(1, 'todavía no pidió nada al servidor');
+    });
+
+    it('volver atrás no cancela nada', async () => {
+      await montar({ ordenes: [VENTA] });
+      await abrirElCartel();
+
+      fireEvent.click(screen.getByText('Volver'));
+
+      await waitFor(() =>
+        expect(screen.queryByText('¿Cancelar esta compra?')).not.toBeInTheDocument()
+      );
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('confirmar manda el código de la compra', async () => {
+      await montar({ ordenes: [VENTA] });
+      await abrirElCartel();
+
+      global.fetch.mockReturnValueOnce(
+        respuestaDe({ cancelada: true, ventas: { ordenes: [], resumen: {}, capacidad: 100 } })
+      );
+      fireEvent.click(screen.getByText('Cancelar la compra'));
+
+      await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
+
+      const [url, opciones] = global.fetch.mock.calls[1];
+
+      expect(url).toContain('/entradas/cancelar.php');
+      expect(opciones.method).toBe('POST');
+      expect(JSON.parse(opciones.body)).toEqual({ codigo: 'ABC123DEF456' });
+    });
+
+    /** El servidor contesta con las ventas ya actualizadas: no se repide. */
+    it('el listado se actualiza sin volver a pedir las ventas', async () => {
+      await montar({ ordenes: [VENTA] });
+      await abrirElCartel();
+
+      global.fetch.mockReturnValueOnce(
+        respuestaDe({
+          cancelada: true,
+          ventas: {
+            ordenes: [{ ...VENTA, estado: 'cancelada' }],
+            resumen: { vendidas: 0, reservadas: 0, recaudado: 0 },
+            capacidad: 100,
+          },
+        })
+      );
+      fireEvent.click(screen.getByText('Cancelar la compra'));
+
+      await waitFor(() => expect(screen.queryByText('Cancelar')).not.toBeInTheDocument());
+      expect(global.fetch).toHaveBeenCalledTimes(2);
+    });
+
+    /** Una cancelación fallida no puede llevarse puesto el listado de ventas. */
+    it('un rechazo del servidor se explica sin tirar abajo el listado', async () => {
+      await montar({ ordenes: [VENTA] });
+      await abrirElCartel();
+
+      global.fetch.mockReturnValueOnce(
+        respuestaDe({ error: 'ya estaba cancelada' }, false)
+      );
+      fireEvent.click(screen.getByText('Cancelar la compra'));
+
+      expect(await screen.findByText('ya estaba cancelada')).toBeInTheDocument();
+      expect(screen.getByText('Ana Gómez')).toBeInTheDocument();
+      expect(screen.getByText('¿Cancelar esta compra?')).toBeInTheDocument();
     });
   });
 });

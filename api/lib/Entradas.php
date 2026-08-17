@@ -205,7 +205,8 @@ class Entradas
                 (int) $linkId,
                 trim($datos['nombre']),
                 trim($datos['email']),
-                trim($datos['telefono']),
+                // Opcional: la columna no acepta null, así que se guarda vacío.
+                isset($datos['telefono']) ? trim($datos['telefono']) : '',
                 $cantidad,
                 $precio,
                 round($precio * $cantidad, 2),
@@ -310,12 +311,56 @@ class Entradas
         return ['acreditada' => false, 'motivo' => 'pago todavía en curso'];
     }
 
+    /**
+     * Cancela una compra y devuelve los lugares al cupo.
+     *
+     * No hace falta tocar ningún contador: `ocupadas()` sólo suma las pagadas y
+     * las reservas vigentes, así que pasar a 'cancelada' libera los lugares
+     * sola. La orden queda en la base con su estado nuevo, que es lo que
+     * permite después explicar por qué el evento tiene lugar otra vez.
+     *
+     * Se cancela desde reservada o pagada. Una orden ya cancelada devuelve
+     * false sin tocar nada: cancelar dos veces no puede liberar el doble.
+     *
+     * @return array{cancelada: bool, motivo: string}
+     */
+    public static function cancelar($db, $codigo)
+    {
+        $stmt = $db->prepare('SELECT estado, cantidad FROM ticket_orders WHERE codigo = ?');
+        $stmt->execute([$codigo]);
+        $orden = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($orden === false) {
+            return ['cancelada' => false, 'motivo' => 'orden inexistente'];
+        }
+
+        if ($orden['estado'] === 'cancelada') {
+            return ['cancelada' => false, 'motivo' => 'ya estaba cancelada'];
+        }
+
+        // La condición sobre el estado va en el UPDATE y no sólo en el if: dos
+        // pedidos simultáneos leerían lo mismo, y el segundo no debe pisar.
+        $upd = $db->prepare("
+            UPDATE ticket_orders
+            SET estado = 'cancelada', cancelada_en = NOW()
+            WHERE codigo = ? AND estado IN ('reservada', 'pagada', 'vencida')
+        ");
+        $upd->execute([$codigo]);
+
+        if ($upd->rowCount() === 0) {
+            return ['cancelada' => false, 'motivo' => 'la orden no estaba en un estado cancelable'];
+        }
+
+        return ['cancelada' => true, 'motivo' => 'compra cancelada'];
+    }
+
     /** Una orden por su código público, con los datos del evento. */
     public static function orden($db, $codigo)
     {
         $stmt = $db->prepare('
             SELECT o.*, l.text AS evento, l.event_date, l.event_time, l.event_address,
-                   p.title AS pagina, p.url_slug
+                   l.image_url AS evento_imagen,
+                   p.title AS pagina, p.url_slug, p.email_contacto
             FROM ticket_orders o
             INNER JOIN links l ON l.id = o.link_id
             INNER JOIN link_groups lg ON lg.id = l.group_id
@@ -401,9 +446,12 @@ class Entradas
             return 'El email no es válido';
         }
 
-        // Sólo se exige que haya dígitos suficientes: los formatos de teléfono
-        // varían demasiado como para rechazar por forma.
-        if (strlen(preg_replace('/\D/', '', $telefono)) < 6) {
+        // El teléfono es opcional: la entrada llega por mail y ahí termina el
+        // circuito, así que exigirlo sólo espantaba compras. Pero si lo dejan,
+        // tiene que servir para llamar. Sólo se exige que haya dígitos
+        // suficientes: los formatos varían demasiado como para rechazar por
+        // forma.
+        if ($telefono !== '' && strlen(preg_replace('/\D/', '', $telefono)) < 6) {
             return 'El teléfono no es válido';
         }
 

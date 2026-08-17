@@ -936,7 +936,16 @@ function PageEditor() {
         )}
 
         {seccion === 'entradas' && (
-          <SeccionEntradas pageId={id} apiUrl={apiUrl} token={token} />
+          <SeccionEntradas
+            pageId={id}
+            apiUrl={apiUrl}
+            token={token}
+            emailContacto={page.email_contacto || ''}
+            onGuardarContacto={(email) => {
+              setPage({ ...page, email_contacto: email });
+              updatePage({ email_contacto: email });
+            }}
+          />
         )}
 
         {seccion === 'admins' && isOwner && (

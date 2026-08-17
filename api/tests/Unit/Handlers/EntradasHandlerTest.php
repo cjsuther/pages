@@ -413,4 +413,95 @@ class EntradasHandlerTest extends HandlerTestCase
         $this->assertSame('"\'=1+1"', EntradasHandler::campoCsv('=1+1'));
         $this->assertSame('"\'@SUM(A1)"', EntradasHandler::campoCsv('@SUM(A1)'));
     }
+
+    // -------------------------------------------------------------- cancelar
+
+    private function hayCompra($estado = 'pagada')
+    {
+        $this->db->onSelect('FROM ticket_orders o', [[
+            'id' => 1, 'codigo' => 'ABC123', 'link_id' => 100, 'estado' => $estado, 'cantidad' => 2,
+        ]]);
+        $this->db->onSelect('SELECT estado, cantidad FROM ticket_orders', [[
+            'estado' => $estado, 'cantidad' => 2,
+        ]]);
+    }
+
+    private function cancelar(array $body, $conSesion = true)
+    {
+        return EntradasHandler::cancelar(
+            $this->db,
+            new Request('POST', $body, [], $conSesion ? $this->sesion() : null)
+        );
+    }
+
+    public function testCancelarExigeSesion()
+    {
+        $this->assertSame(401, $this->cancelar(['codigo' => 'ABC123'], false)->status);
+    }
+
+    public function testCancelarExigePost()
+    {
+        $r = EntradasHandler::cancelar($this->db, new Request('GET', [], [], $this->sesion()));
+
+        $this->assertSame(405, $r->status);
+    }
+
+    public function testCancelarExigeElCodigo()
+    {
+        $this->assertSame(400, $this->cancelar([])->status);
+    }
+
+    public function testNoSePuedeCancelarUnaCompraQueNoExiste()
+    {
+        $this->db->onSelect('FROM ticket_orders o', []);
+
+        $this->assertSame(404, $this->cancelar(['codigo' => 'NO-EXISTE'])->status);
+    }
+
+    /**
+     * El comprador tiene el código de su orden. Si alcanzara para cancelar,
+     * cualquiera que lo viera podría dar de baja entradas ajenas.
+     */
+    public function testUnExtranoNoPuedeCancelarCompras()
+    {
+        $this->hayCompra();
+        $this->db->onSelect('FROM links l', []);
+
+        $this->assertSame(403, $this->cancelar(['codigo' => 'ABC123'])->status);
+    }
+
+    public function testElAdministradorCancelaLaCompra()
+    {
+        $this->hayCompra();
+        $this->puedeAdministrarElEvento();
+        $this->db->onWrite('UPDATE ticket_orders', 1);
+
+        $r = $this->cancelar(['codigo' => 'ABC123']);
+
+        $this->assertSame(200, $r->status);
+        $this->assertTrue($r->body['cancelada']);
+    }
+
+    /** Quien cancela quiere ver el cupo actualizado, no volver a pedirlo. */
+    public function testAlCancelarSeDevuelveElEstadoDeLasVentas()
+    {
+        $this->hayCompra();
+        $this->puedeAdministrarElEvento();
+        $this->db->onWrite('UPDATE ticket_orders', 1);
+
+        $r = $this->cancelar(['codigo' => 'ABC123']);
+
+        $this->assertArrayHasKey('ventas', $r->body);
+    }
+
+    public function testCancelarDosVecesNoLiberaElDoble()
+    {
+        $this->hayCompra('cancelada');
+        $this->puedeAdministrarElEvento();
+
+        $r = $this->cancelar(['codigo' => 'ABC123']);
+
+        $this->assertSame(409, $r->status);
+        $this->assertSame(0, $this->db->countCalls('UPDATE ticket_orders'));
+    }
 }

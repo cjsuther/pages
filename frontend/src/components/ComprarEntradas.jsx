@@ -181,13 +181,12 @@ function ComprarEntradas({ evento, entradas, apiUrl, color = '#3B82F6', onCerrar
 
         <Campo
           id="entrada-telefono"
-          etiqueta="TELÉFONO"
+          etiqueta="TELÉFONO (OPCIONAL)"
           type="tel"
           value={datos.telefono}
           onChange={(v) => cambiar('telefono', v)}
           autoComplete="tel"
           ayuda="Por si hay que avisarte de un cambio"
-          required
         />
 
         <div>

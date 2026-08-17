@@ -66,6 +66,13 @@ define('SMTP_USER', 'entradas@tu-dominio.com');
 define('SMTP_PASS', 'TU_CLAVE_DE_LA_CASILLA');
 define('MAIL_FROM_NAME', 'Rezonar');
 
+// -------------------------------------------------------------- Importador
+// Token privado de Eventbrite (Cuenta → Developer → API keys). Sirve para
+// consultar la ficha de un evento público por id; la búsqueda de eventos de
+// la API pública ya no existe, así que el listado se sigue leyendo del sitio.
+// Vacío desactiva la consulta a la API: el importador sigue funcionando.
+define('EVENTBRITE_TOKEN', '');
+
 // En CLI (el cron) no hay request HTTP: ni las cabeceras ni el preflight
 // tienen sentido, y tocar REQUEST_METHOD ahí sólo genera warnings.
 if (php_sapi_name() !== 'cli') {
