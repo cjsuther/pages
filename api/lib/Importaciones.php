@@ -8,12 +8,21 @@
  */
 class Importaciones
 {
-    /** Adaptador por nombre. La clave es lo que guarda import_sources. */
-    public static function adaptadores()
+    /**
+     * Adaptador por nombre. La clave es lo que guarda import_sources.
+     *
+     * Reciben la conexión porque algunos necesitan geocodificar, y el
+     * geocodificador cachea en la base para no volver a preguntar por la misma
+     * sala en cada corrida.
+     */
+    public static function adaptadores($db)
     {
         return [
             'eventbrite' => function (array $parametros) {
                 return (new Eventbrite())->eventos($parametros);
+            },
+            'boleteria' => function (array $parametros) use ($db) {
+                return (new Boleteria())->eventos($parametros, $db);
             },
         ];
     }
@@ -39,7 +48,7 @@ class Importaciones
      */
     public static function correr($db, array $adaptadores = null)
     {
-        $adaptadores = $adaptadores === null ? self::adaptadores() : $adaptadores;
+        $adaptadores = $adaptadores === null ? self::adaptadores($db) : $adaptadores;
         $resumen = ['fuentes' => 0, 'creados' => 0, 'actualizados' => 0, 'fallidas' => 0, 'detalle' => []];
 
         foreach (self::activas($db) as $fuente) {
