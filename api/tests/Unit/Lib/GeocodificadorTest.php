@@ -132,4 +132,65 @@ class GeocodificadorTest extends HandlerTestCase
         $this->assertNull($geo->coordenadas($this->db, '   '));
         $this->assertSame(0, $pedidos);
     }
+
+    // ------------------------------------------ el nombre del lugar adelante
+
+    /**
+     * Las carteleras escriben "Muddy's Club — Gobernador Mariano Acosta 168"
+     * porque así ubica mejor a quien lee, pero al mapa ese prefijo le impide
+     * encontrar la calle. Era la razón por la que Boletería no importaba nada.
+     */
+    public function testSeQuedaConLaCalleCuandoHayNombreDeLugarAdelante()
+    {
+        $this->assertSame(
+            'Gobernador Mariano Acosta 168, Ituzaingó',
+            Geocodificador::soloLaCalle("Muddy's Club — Gobernador Mariano Acosta 168, Ituzaingó")
+        );
+    }
+
+    /** Sin prefijo no hay nada que sacar: repreguntar lo mismo sería al pedo. */
+    public function testSinNombreDeLugarNoHayNadaQueSacar()
+    {
+        $this->assertNull(Geocodificador::soloLaCalle('Bolívar 624, San Telmo'));
+    }
+
+    /** Hay calles con guión en el nombre: sólo la raya larga separa. */
+    public function testElGuionComunNoSeparaElNombreDelLugar()
+    {
+        $this->assertNull(Geocodificador::soloLaCalle('Av. Julio A. Roca 1234'));
+    }
+
+    public function testReintentaConLaCalleCuandoLaDireccionCompletaFalla()
+    {
+        $this->db->onSelect('FROM geocode_cache WHERE huella', []);
+        $this->db->onWrite('INSERT INTO geocode_cache', 1);
+
+        $consultadas = [];
+        $geo = new Geocodificador(function ($url) use (&$consultadas) {
+            parse_str(parse_url($url, PHP_URL_QUERY), $q);
+            $consultadas[] = $q['q'];
+
+            // El servicio sólo encuentra la calle sola.
+            return strpos($q['q'], 'Muddy') === false ? self::RESPUESTA : '[]';
+        });
+
+        $c = $geo->coordenadas($this->db, "Muddy's Club — Gobernador Mariano Acosta 168");
+
+        $this->assertNotNull($c);
+        $this->assertCount(2, $consultadas);
+        $this->assertSame('Gobernador Mariano Acosta 168', $consultadas[1]);
+    }
+
+    /** Una dirección sin prefijo que falla no se pregunta dos veces. */
+    public function testNoRepreguntaSiNoHayPrefijoQueSacar()
+    {
+        $this->db->onSelect('FROM geocode_cache WHERE huella', []);
+        $this->db->onWrite('INSERT INTO geocode_cache', 1);
+
+        $pedidos = 0;
+        $geo = new Geocodificador(function () use (&$pedidos) { $pedidos++; return '[]'; });
+
+        $this->assertNull($geo->coordenadas($this->db, 'Una calle que no existe 999'));
+        $this->assertSame(1, $pedidos);
+    }
 }

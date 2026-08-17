@@ -68,6 +68,28 @@ class Geocodificador
     /** Le pregunta al servicio y guarda el resultado, sea bueno o malo. */
     private function resolver($db, $huella, $direccion)
     {
+        $coordenadas = $this->preguntar($direccion);
+
+        // Las carteleras escriben la dirección con el nombre del lugar
+        // adelante —"Muddy's Club — Gobernador Mariano Acosta 168"— porque así
+        // ubica mejor a quien lee. Al servicio de mapas, en cambio, ese
+        // prefijo le impide encontrar la calle. Si falla se reintenta con lo
+        // que viene después de la raya, que es la dirección de verdad.
+        if ($coordenadas === null) {
+            $calle = self::soloLaCalle($direccion);
+
+            if ($calle !== null) {
+                $coordenadas = $this->preguntar($calle);
+            }
+        }
+
+        self::guardar($db, $huella, $direccion, $coordenadas);
+
+        return $coordenadas;
+    }
+
+    private function preguntar($direccion)
+    {
         if ($this->pausa > 0) {
             sleep($this->pausa);
         }
@@ -80,12 +102,29 @@ class Geocodificador
             'countrycodes' => 'ar',
         ]);
 
-        $cuerpo = call_user_func($this->traer, $url);
-        $coordenadas = self::leerRespuesta($cuerpo);
+        return self::leerRespuesta(call_user_func($this->traer, $url));
+    }
 
-        self::guardar($db, $huella, $direccion, $coordenadas);
+    /**
+     * La parte de la dirección que un mapa puede encontrar.
+     *
+     * Devuelve null cuando no hay prefijo que sacar, para no volver a
+     * preguntar exactamente lo mismo.
+     */
+    public static function soloLaCalle($direccion)
+    {
+        // La raya larga es la que usan los adaptadores para separar el nombre
+        // del lugar de la calle. El guión común no sirve como separador: hay
+        // calles que lo llevan en el nombre.
+        $partes = explode('—', (string) $direccion);
 
-        return $coordenadas;
+        if (count($partes) < 2) {
+            return null;
+        }
+
+        $calle = self::normalizar(array_pop($partes));
+
+        return $calle === '' ? null : $calle;
     }
 
     /** @return array|null */
