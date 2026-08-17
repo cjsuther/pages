@@ -12,6 +12,8 @@ spl_autoload_register(function ($class) {
         __DIR__ . '/../handlers/' . $class . '.php',
         // AppleJWT vive junto a los endpoints de Apple desde antes del refactor.
         __DIR__ . '/../auth/' . $class . '.php',
+        // Un adaptador por sitio: sumar una fuente es agregar un archivo acá.
+        __DIR__ . '/importadores/' . $class . '.php',
     ];
 
     foreach ($candidates as $path) {

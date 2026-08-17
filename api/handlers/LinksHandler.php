@@ -36,6 +36,14 @@ class LinksHandler
      * El precio de referencia distingue tres cosas: no saberlo, que sea cero
      * —o sea, gratis— y tener un valor. Una cadena vacía es lo primero.
      */
+    /** "text = ?" -> "text", para saber qué campos se guardaron. */
+    private static function nombresDeCampos(array $asignaciones)
+    {
+        return array_map(function ($asignacion) {
+            return trim(explode('=', $asignacion)[0]);
+        }, $asignaciones);
+    }
+
     public static function precioONull($valor)
     {
         if ($valor === null || $valor === '' || !is_numeric($valor)) {
@@ -183,6 +191,12 @@ class LinksHandler
             $values[] = $linkId;
             $stmt = $db->prepare('UPDATE links SET ' . implode(', ', $fields) . ' WHERE id = ?');
             $stmt->execute($values);
+
+            // Lo que se toca a mano queda congelado: el importador diario
+            // actualiza el resto pero no vuelve a pisar esto. Sin la marca,
+            // corregir el título de un show importado duraría hasta la
+            // madrugada siguiente.
+            Importador::marcarEditados($db, $linkId, self::nombresDeCampos($fields));
 
             $stmt = $db->prepare('SELECT * FROM links WHERE id = ?');
             $stmt->execute([$linkId]);
