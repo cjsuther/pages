@@ -41,7 +41,23 @@ class FeedHandlerTest extends HandlerTestCase
 
         $this->assertStringContainsString('g.type = "eventos"', $sql);
         $this->assertStringContainsString('l.event_date IS NOT NULL', $sql);
-        $this->assertSame([9, 9], $this->db->paramsFor('FROM page_followers pf'));
+        $this->assertSame([9, 9, \Fechas::hoy()], $this->db->paramsFor('FROM page_followers pf'));
+    }
+
+    /**
+     * Un evento que ya pasó no es agenda: es historia. El resto de las vistas
+     * públicas ya cortaba por hoy y ésta no, así que el feed de quien seguía
+     * páginas se iba llenando de shows vencidos.
+     */
+    public function testNoTraeEventosQueYaPasaron()
+    {
+        FeedHandler::events($this->db, $this->get([], $this->user(9)));
+
+        $sql = $this->db->callsFor('FROM page_followers pf')[0]['sql'];
+        $params = $this->db->paramsFor('FROM page_followers pf');
+
+        $this->assertStringContainsString('l.event_date >= ?', $sql);
+        $this->assertSame(\Fechas::hoy(), end($params));
     }
 
     public function testDevuelveFeedVacio()

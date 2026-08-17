@@ -59,8 +59,12 @@ class FeedHandler
             WHERE pf.user_id = ?
             AND g.type = "eventos"
             AND l.event_date IS NOT NULL
+            AND l.event_date >= ?
         ');
-        $stmt->execute([$req->userId(), $req->userId()]);
+        // Un evento que ya pasó no es agenda: es historia. El resto de las
+        // vistas públicas ya cortaba por hoy y ésta no, así que el feed de
+        // quien seguía páginas se iba llenando de shows vencidos.
+        $stmt->execute([$req->userId(), $req->userId(), Fechas::hoy()]);
 
         $eventos = self::filtrar($stmt->fetchAll(PDO::FETCH_ASSOC));
         $eventos = self::ordenar($eventos, $sortBy, $sortOrder);
