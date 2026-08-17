@@ -27,6 +27,9 @@ class Importaciones
             'niceto' => function (array $parametros) use ($db) {
                 return (new Niceto())->eventos($parametros, $db);
             },
+            'colon' => function (array $parametros) use ($db) {
+                return (new Colon())->eventos($parametros, $db);
+            },
         ];
     }
 

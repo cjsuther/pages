@@ -64,6 +64,15 @@ class NicetoTest extends TestCase
         $this->assertSame([], Niceto::tarjetas('<html><body>nada</body></html>'));
     }
 
+    /** Una tarjeta que no cierra en </section> igual tiene que entrar. */
+    public function testEncuentraLaUltimaTarjetaAunqueLaGrillaNoCierre()
+    {
+        $suelta = '<div class="event-card" data-name="Show" data-lugar="Niceto Bar">'
+            . '<a href="https://venti.live/evento/x">COMPRAR</a>';
+
+        $this->assertCount(1, Niceto::tarjetas($suelta));
+    }
+
     // ------------------------------------------------------------ fecha y hora
 
     public function testLeeLaFechaYLaHoraDelBloqueDeNumeros()

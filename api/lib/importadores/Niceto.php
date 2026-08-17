@@ -131,7 +131,10 @@ class Niceto
     /** Corta el HTML en tarjetas de evento. */
     public static function tarjetas($html)
     {
-        if (!preg_match_all('/<div class="event-card".*?(?=<div class="event-card"|<\/section>)/s', $html, $m)) {
+        // El $ final cierra la última tarjeta. Sin él, una grilla que no
+        // termine en </section> devolvería un evento menos, y un evento
+        // faltante no se nota como se nota un error.
+        if (!preg_match_all('/<div class="event-card".*?(?=<div class="event-card"|<\/section>|$)/s', $html, $m)) {
             return [];
         }
 
