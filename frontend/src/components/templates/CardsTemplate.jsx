@@ -6,6 +6,7 @@ import RedesSociales from '../RedesSociales';
 import BotonEntradas, { vendeEntradas } from '../BotonEntradas';
 import PrecioEvento from '../PrecioEvento';
 import RezonarBadge from '../RezonarBadge';
+import { superficie, borde } from '../../utils/colores';
 import { ExternalLink } from 'lucide-react';
 
 function CardsTemplate({ page }) {
@@ -15,6 +16,18 @@ function CardsTemplate({ page }) {
   const textColor = page.text_color || '#111827';
   const primaryColor = page.primary_color || '#3b82f6';
   const backgroundImage = page.background_image;
+
+  // La tarjeta acompaña al fondo elegido en vez de imponer un blanco fijo, y
+  // el texto es siempre el color elegido: como la tarjeta ya no trae color
+  // propio, no hay forma de que la tipografía quede invisible encima.
+  const fondoTarjeta = superficie(backgroundColor, textColor);
+  const bordeTarjeta = borde(textColor);
+
+  const tarjetaStyle = {
+    color: textColor,
+    ...(fondoTarjeta && { backgroundColor: fondoTarjeta }),
+    ...(bordeTarjeta && { border: `1px solid ${bordeTarjeta}` }),
+  };
 
   const containerStyle = {
     backgroundColor,
@@ -61,8 +74,8 @@ function CardsTemplate({ page }) {
                     <div
                       key={link.id}
                       onClick={() => setModalImage(link)}
-                      className="bg-white rounded-lg overflow-hidden shadow-md hover:shadow-xl transition cursor-pointer"
-                      style={{ color: '#000' }}
+                      className="rounded-lg overflow-hidden shadow-md hover:shadow-xl transition cursor-pointer"
+                      style={tarjetaStyle}
                     >
                       <img
                         src={link.image_url}
@@ -87,8 +100,8 @@ function CardsTemplate({ page }) {
                     <div
                       key={(link.is_collaborated ? 'c-' : '') + link.id}
                       onClick={() => setModalEvent(link)}
-                      className="bg-white rounded-lg p-6 shadow-md hover:shadow-xl transition cursor-pointer relative"
-                      style={{ color: '#000' }}
+                      className="rounded-lg p-6 shadow-md hover:shadow-xl transition cursor-pointer relative"
+                      style={tarjetaStyle}
                     >
                       <a
                         href={`/evento/${link.id}`}
@@ -129,8 +142,8 @@ function CardsTemplate({ page }) {
                       href={link.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="bg-white rounded-lg p-6 shadow-md hover:shadow-xl transition flex items-center gap-4"
-                      style={{ color: '#000' }}
+                      className="rounded-lg p-6 shadow-md hover:shadow-xl transition flex items-center gap-4"
+                      style={tarjetaStyle}
                     >
                       {link.image_url && (
                         <img
