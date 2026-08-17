@@ -468,6 +468,52 @@ describe.each(PLANTILLAS)('%s', (nombre, Plantilla) => {
         )
       ).not.toThrow();
     });
+
+    /**
+     * Una tarjeta pintada de blanco no puede heredar el color de texto de la
+     * página: quien elige un fondo oscuro elige texto claro, y ahí adentro
+     * queda blanco sobre blanco. La superficie que se pinta fija su color.
+     *
+     * Tailwind no corre en los tests, así que el fondo se reconoce por la
+     * clase. Las traslúcidas (bg-opacity) quedan afuera porque dejan ver el
+     * fondo de la página y el texto heredado se lee bien.
+     */
+    it('las superficies blancas no heredan el color de texto de la página', () => {
+      const { container } = renderConProviders(
+        <Plantilla
+          page={pagina({
+            background_color: '#030c1c',
+            text_color: '#f7f7f7',
+            socials: [{ red: 'instagram', url: 'https://instagram.com/yo' }],
+            groups: [
+              grupoDeLinks([link({ id: 1, text: 'Instagram', url: 'https://instagram.com/yo' })]),
+              { id: 20, title: 'Agenda', type: 'eventos', links: [evento()], collaborated_events: [] },
+              { id: 30, title: 'Fotos', type: 'galeria', links: [{ id: 3, text: 'Foto', image_url: 'https://img/1.jpg' }] },
+            ],
+          })}
+        />
+      );
+
+      // El detalle del evento es una tarjeta blanca en las cuatro plantillas,
+      // así que abrirlo garantiza que la comprobación no quede vacía.
+      fireEvent.click(screen.getByText('Mi Evento'));
+
+      const blancas = [...container.querySelectorAll('[class*="bg-white"]')].filter((el) => {
+        const clases = el.getAttribute('class') || '';
+        return /(^|\s)bg-white(\s|$)/.test(clases) && !clases.includes('bg-opacity');
+      });
+
+      expect(blancas.length).toBeGreaterThan(0);
+
+      blancas.forEach((el) => {
+        const clases = el.getAttribute('class') || '';
+        const propio =
+          /(^|;)\s*color:/.test(el.getAttribute('style') || '') ||
+          /(^|\s)text-(black|gray-[6-9]00|slate-[6-9]00)/.test(clases);
+
+        expect(propio, `superficie blanca sin color propio: ${clases}`).toBe(true);
+      });
+    });
   });
 
   describe('pie', () => {

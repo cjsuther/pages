@@ -62,6 +62,7 @@ function CardsTemplate({ page }) {
                       key={link.id}
                       onClick={() => setModalImage(link)}
                       className="bg-white rounded-lg overflow-hidden shadow-md hover:shadow-xl transition cursor-pointer"
+                      style={{ color: '#000' }}
                     >
                       <img
                         src={link.image_url}
@@ -87,6 +88,7 @@ function CardsTemplate({ page }) {
                       key={(link.is_collaborated ? 'c-' : '') + link.id}
                       onClick={() => setModalEvent(link)}
                       className="bg-white rounded-lg p-6 shadow-md hover:shadow-xl transition cursor-pointer relative"
+                      style={{ color: '#000' }}
                     >
                       <a
                         href={`/evento/${link.id}`}
@@ -128,6 +130,7 @@ function CardsTemplate({ page }) {
                       target="_blank"
                       rel="noopener noreferrer"
                       className="bg-white rounded-lg p-6 shadow-md hover:shadow-xl transition flex items-center gap-4"
+                      style={{ color: '#000' }}
                     >
                       {link.image_url && (
                         <img
