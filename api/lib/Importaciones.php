@@ -30,6 +30,9 @@ class Importaciones
             'colon' => function (array $parametros) use ($db) {
                 return (new Colon())->eventos($parametros, $db);
             },
+            'artmedia' => function (array $parametros) use ($db) {
+                return (new ArtMedia())->eventos($parametros, $db);
+            },
         ];
     }
 
