@@ -173,6 +173,9 @@ class EntradasHandler
                 'entradas' => Entradas::configDelEvento($db, $linkId),
                 'ocupadas' => Entradas::ocupadas($db, $linkId),
                 'cobros'   => Cobros::estado($db, self::pageIdDelLink($db, $linkId)),
+                // El dueño define el precio acá: necesita ver qué se le
+                // descuenta en la misma pantalla, no en otra sección.
+                'comision' => Comision::porcentaje(),
             ]);
         }
 

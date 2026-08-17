@@ -154,10 +154,19 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio }) {
               {/* Lo que importa a la hora de poner el precio no es lo que paga
                   el comprador sino lo que termina entrando a la cuenta. */}
               {!esGratis(form.precio) && comision > 0 && cobros && cobros.admite_split && (
-                <p className="text-xs text-emerald-400 mt-1">
-                  Recibís {formatearPrecio(form.precio * (100 - comision) / 100)} por entrada
-                  <span className="text-gray-600"> (comisión {comision}%)</span>
-                </p>
+                <>
+                  <p className="text-xs text-emerald-400 mt-1">
+                    Menos la comisión de Rezonar ({comision}%):{' '}
+                    {formatearPrecio(form.precio * (100 - comision) / 100)} por entrada
+                  </p>
+                  {/* No se pone un número: la comisión de Mercado Pago varía
+                      según el plazo de acreditación y la cambian cada tanto.
+                      Dar una cifra desactualizada sería peor que no darla. */}
+                  <p className="text-xs text-gray-600 mt-1">
+                    A eso Mercado Pago le descuenta aparte su propia comisión, según
+                    el plazo de acreditación que tengas elegido.
+                  </p>
+                </>
               )}
             </div>
           </div>

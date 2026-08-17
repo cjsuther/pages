@@ -150,27 +150,51 @@ describe('SeccionEntradas', () => {
 
     /** Un porcentaje solo no se entiende; un ejemplo en pesos sí. */
     it('lo explica con un ejemplo concreto', async () => {
+      await montar({ comision: 3 });
+
+      expect(screen.getByText(/300 de comisión/)).toBeInTheDocument();
+    });
+
+    it('el ejemplo acompaña el porcentaje configurado', async () => {
       await montar({ comision: 10 });
 
-      expect(screen.getByText(/9\.000/)).toBeInTheDocument();
+      expect(screen.getByText(/1\.000 de comisión/)).toBeInTheDocument();
     });
 
     it('aclara que el comprador paga una sola vez', async () => {
       await montar({ comision: 10 });
 
-      expect(screen.getByText(/el comprador paga una\s+sola vez/)).toBeInTheDocument();
+      expect(screen.getByText(/el comprador paga una sola vez/)).toBeInTheDocument();
+    });
+
+    /**
+     * Sin esto el dueño hace la cuenta con el 3% y no le cierra con lo que ve
+     * en su cuenta: Mercado Pago descuenta lo suyo aparte.
+     */
+    it('avisa que Mercado Pago cobra su propia comisión', async () => {
+      await montar({ comision: 3 });
+
+      expect(screen.getByText(/Mercado Pago cobra su\s+propia comisión/)).toBeInTheDocument();
+    });
+
+    it('manda a los costos de Mercado Pago en vez de inventar un número', async () => {
+      await montar({ comision: 3 });
+
+      expect(screen.getByRole('link', { name: /Costos/ }))
+        .toHaveAttribute('href', expect.stringContaining('mercadopago'));
     });
 
     it('aclara que las reservas sin costo no pagan comisión', async () => {
       await montar({ comision: 10 });
 
-      expect(screen.getByText(/reservas sin costo no pagan comisión/)).toBeInTheDocument();
+      expect(screen.getByText(/reservas sin costo no pagan nada/)).toBeInTheDocument();
     });
 
     it('sin comisión configurada no se menciona nada', async () => {
       await montar({ comision: 0 });
 
       expect(screen.queryByText(/Comisión de Rezonar/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Mercado Pago cobra su/)).not.toBeInTheDocument();
     });
   });
 

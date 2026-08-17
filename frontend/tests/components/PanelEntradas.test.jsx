@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import PanelEntradas from '../../src/components/PanelEntradas';
 
-const CONECTADO = { configurado: true, modo: 'produccion', token_ultimos4: 'x123' };
+const CONECTADO = { configurado: true, modo: 'produccion', cuenta: '987654321', admite_split: true };
 const SIN_CONECTAR = { configurado: false };
 
 function respuestaDe(cuerpo, ok = true) {
@@ -11,8 +11,8 @@ function respuestaDe(cuerpo, ok = true) {
 }
 
 /** Estado inicial que devuelve el servidor al abrir el panel. */
-function alAbrir({ entradas = null, cobros = CONECTADO, ocupadas = 0 } = {}) {
-  global.fetch.mockReturnValueOnce(respuestaDe({ entradas, cobros, ocupadas }));
+function alAbrir({ entradas = null, cobros = CONECTADO, ocupadas = 0, comision = 3 } = {}) {
+  global.fetch.mockReturnValueOnce(respuestaDe({ entradas, cobros, ocupadas, comision }));
 }
 
 async function montar(estado) {
@@ -104,7 +104,7 @@ describe('PanelEntradas', () => {
 
   describe('credenciales de prueba', () => {
     it('avisa que los pagos no son reales', async () => {
-      await montar({ cobros: { configurado: true, modo: 'prueba', token_ultimos4: 'x123' } });
+      await montar({ cobros: { ...CONECTADO, modo: 'prueba' } });
       activar();
 
       fireEvent.change(screen.getByLabelText('PRECIO POR ENTRADA'), { target: { value: '1500' } });
@@ -196,4 +196,50 @@ describe('PanelEntradas', () => {
       await waitFor(() => expect(onCambio).toHaveBeenCalledWith({ activo: 1, capacidad: 50 }));
     });
   });
+
+  describe('lo que recibe el dueño', () => {
+    /** A la hora de poner precio importa lo que entra, no lo que paga el otro. */
+    it('muestra el neto de la comisión de Rezonar', async () => {
+      await montar({ comision: 3 });
+      activar();
+
+      fireEvent.change(screen.getByLabelText('PRECIO POR ENTRADA'), { target: { value: '10000' } });
+
+      expect(screen.getByText(/comisión de Rezonar \(3%\)/)).toBeInTheDocument();
+      expect(screen.getByText(/9\.700/)).toBeInTheDocument();
+    });
+
+    /**
+     * Sin esto el dueño hace la cuenta con el 3% y no le cierra con lo que ve
+     * en su cuenta de Mercado Pago.
+     */
+    it('avisa que Mercado Pago descuenta lo suyo aparte', async () => {
+      await montar({ comision: 3 });
+      activar();
+
+      fireEvent.change(screen.getByLabelText('PRECIO POR ENTRADA'), { target: { value: '10000' } });
+
+      expect(screen.getByText(/Mercado Pago le descuenta aparte/)).toBeInTheDocument();
+    });
+
+    it('una reserva sin costo no habla de comisiones', async () => {
+      await montar({ comision: 3 });
+      activar();
+
+      fireEvent.change(screen.getByLabelText('PRECIO POR ENTRADA'), { target: { value: '0' } });
+
+      expect(screen.queryByText(/comisión de Rezonar/)).not.toBeInTheDocument();
+    });
+
+    /** Sin split la comisión no se descuenta: mostrar un neto sería mentir. */
+    it('no muestra neto si la cuenta no permite el descuento', async () => {
+      await montar({ comision: 3, cobros: { ...CONECTADO, admite_split: false } });
+      activar();
+
+      fireEvent.change(screen.getByLabelText('PRECIO POR ENTRADA'), { target: { value: '10000' } });
+
+      expect(screen.queryByText(/comisión de Rezonar/)).not.toBeInTheDocument();
+    });
+  });
+
 });

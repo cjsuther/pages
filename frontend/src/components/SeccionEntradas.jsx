@@ -233,11 +233,30 @@ function SeccionEntradas({ pageId, apiUrl, token }) {
             <strong className="text-white">Comisión de Rezonar: {comision}%</strong> de cada
             entrada vendida.
           </p>
-          <p className="text-xs text-gray-600">
-            Mercado Pago la descuenta en el momento del cobro: el comprador paga una
-            sola vez y a tu cuenta entra el resto. En una entrada de $10.000 recibís
-            ${(10000 * (100 - comision) / 100).toLocaleString('es-AR')}.
-            Las reservas sin costo no pagan comisión.
+          <p className="text-xs text-gray-600 mb-3">
+            Se descuenta en el momento del cobro: el comprador paga una sola vez y a
+            tu cuenta entra el resto. En una entrada de $10.000 son{' '}
+            ${(10000 * comision / 100).toLocaleString('es-AR')} de comisión.
+            Las reservas sin costo no pagan nada.
+          </p>
+
+          {/* Sin esto el dueño hace la cuenta con el 3% y no le cierra con lo
+              que ve en su cuenta de Mercado Pago. No se pone un número porque
+              varía según el plazo de acreditación y lo cambian cada tanto. */}
+          <p className="text-xs text-gray-500 border-t border-gray-800 pt-3">
+            <strong className="text-gray-400">Aparte de esto, Mercado Pago cobra su
+            propia comisión</strong> por procesar el pago, que depende del plazo de
+            acreditación que tengas elegido. Podés verla en{' '}
+            <a
+              href="https://www.mercadopago.com.ar/costs-section/release-options"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-400 hover:text-white inline-flex items-center gap-1"
+            >
+              Mercado Pago → Costos
+              <ExternalLink className="w-3 h-3" />
+            </a>
+            .
           </p>
         </div>
       )}
