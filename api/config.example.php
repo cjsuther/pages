@@ -56,6 +56,16 @@ define('MP_APP_ID', 'TU_CLIENT_ID_DE_MERCADO_PAGO');
 define('MP_APP_SECRET', 'TU_CLIENT_SECRET_DE_MERCADO_PAGO');
 define('MP_OAUTH_REDIRECT_URI', 'https://tu-dominio.com/api/entradas/oauth-callback.php');
 
+// ---------------------------------------------------------------------- Mail
+// Casilla desde la que salen las entradas. El SPF del dominio autoriza a los
+// servidores de Hostinger, así que conviene que sea una casilla del dominio y
+// no una de Gmail: si el remitente no coincide, el mail termina en spam.
+define('SMTP_HOST', 'smtp.hostinger.com');
+define('SMTP_PORT', 465);
+define('SMTP_USER', 'entradas@tu-dominio.com');
+define('SMTP_PASS', 'TU_CLAVE_DE_LA_CASILLA');
+define('MAIL_FROM_NAME', 'Rezonar');
+
 // En CLI (el cron) no hay request HTTP: ni las cabeceras ni el preflight
 // tienen sentido, y tocar REQUEST_METHOD ahí sólo genera warnings.
 if (php_sapi_name() !== 'cli') {

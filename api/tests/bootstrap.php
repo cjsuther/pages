@@ -55,6 +55,12 @@ define('MP_APP_ID', '1234567890123456');
 define('MP_APP_SECRET', 'secreto-de-prueba-de-la-aplicacion');
 define('MP_OAUTH_REDIRECT_URI', 'https://api.test/api/entradas/oauth-callback.php');
 
+define('SMTP_HOST', 'smtp.test');
+define('SMTP_PORT', 465);
+define('SMTP_USER', 'entradas@test.local');
+define('SMTP_PASS', 'clave-de-prueba');
+define('MAIL_FROM_NAME', 'Rezonar');
+
 define('CRON_SECRET_KEY', 'test-cron-secret');
 
 // Clases del dominio y autoload de lib/ + handlers/.
@@ -69,4 +75,5 @@ require_once __DIR__ . '/Support/FakePdo.php';
 require_once __DIR__ . '/Support/FakeStatement.php';
 require_once __DIR__ . '/Support/FakeHttpClient.php';
 require_once __DIR__ . '/Support/FakePushSender.php';
+require_once __DIR__ . '/Support/FakeMailer.php';
 require_once __DIR__ . '/Support/HandlerTestCase.php';

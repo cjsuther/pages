@@ -15,7 +15,7 @@ class CheckoutHandler
      * El cupo se toma acá, antes de ir a Mercado Pago: si se tomara al volver,
      * el evento se sobrevendería con la gente ya pagada.
      */
-    public static function comprar($db, Request $req, $http = null)
+    public static function comprar($db, Request $req, $http = null, $mailer = null)
     {
         if ($req->method !== 'POST') {
             return Response::methodNotAllowed();
@@ -48,6 +48,8 @@ class CheckoutHandler
 
         // Reserva sin cobro: ya quedó confirmada, no hay nada que pagar.
         if ($orden['es_gratis']) {
+            self::mandarEntrada($db, $orden['codigo'], $mailer);
+
             return Response::created([
                 'success' => true,
                 'codigo'  => $orden['codigo'],
@@ -123,7 +125,7 @@ class CheckoutHandler
      * incluso cuando el aviso no aplica: un 500 haría que reintente para
      * siempre un aviso que nunca va a poder procesarse.
      */
-    public static function aviso($db, Request $req, $http = null)
+    public static function aviso($db, Request $req, $http = null, $mailer = null)
     {
         if ($req->method !== 'POST' && $req->method !== 'GET') {
             return Response::methodNotAllowed();
@@ -168,6 +170,10 @@ class CheckoutHandler
         }
 
         $resultado = Entradas::acreditarPago($db, $codigo, $pagoId, $pago['estado']);
+
+        if ($resultado['acreditada']) {
+            self::mandarEntrada($db, $codigo, $mailer);
+        }
 
         return Response::ok(['recibido' => true, 'motivo' => $resultado['motivo']]);
     }
@@ -216,6 +222,22 @@ class CheckoutHandler
     }
 
     // -------------------------------------------------------------- internos
+
+    /**
+     * Manda la entrada sin que un problema de correo tumbe la operación.
+     *
+     * Si esto tirara, una compra pagada terminaría en error para el comprador
+     * —o Mercado Pago reintentaría el aviso para siempre— por algo que se
+     * puede reintentar después. La orden ya está pagada: la entrada existe.
+     */
+    private static function mandarEntrada($db, $codigo, $mailer)
+    {
+        try {
+            CorreoEntradas::enviar($db, $codigo, $mailer);
+        } catch (Throwable $e) {
+            // Queda pendiente y el cron lo reintenta.
+        }
+    }
 
     /**
      * El id del pago llega en distintos lugares según el tipo de aviso: los

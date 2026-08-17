@@ -53,11 +53,27 @@ try {
     $error = $e->getMessage();
 }
 
+// Entradas que no salieron en el momento del pago: si el SMTP estaba caído, la
+// persona se quedaría sin su entrada para siempre.
+$correos = ['enviados' => 0, 'fallidos' => 0];
+
+try {
+    if (Mailer::disponible()) {
+        $correos = CorreoEntradas::enviarPendientes($db);
+    }
+} catch (Throwable $e) {
+    // No puede tumbar el procesamiento de las notificaciones push.
+    $correos['fallidos']++;
+}
+
+$resultado['entradas_enviadas'] = $correos['enviados'];
+
 if ($esCli) {
     echo "Encolados:  {$resultado['encolados']}\n";
     echo "Enviados:   {$resultado['enviados']}\n";
     echo "Fallidos:   {$resultado['fallidos']}\n";
     echo "Expiradas:  {$resultado['expiradas']}\n";
+    echo "Entradas:   {$correos['enviados']} enviadas, {$correos['fallidos']} fallidas\n";
     if ($error) {
         echo "ERROR: $error\n";
         exit(1);

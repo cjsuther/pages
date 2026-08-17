@@ -6,6 +6,7 @@ use CheckoutHandler;
 use Cripto;
 use Request;
 use Tests\Support\FakeHttpClient;
+use Tests\Support\FakeMailer;
 use Tests\Support\HandlerTestCase;
 
 class CheckoutHandlerTest extends HandlerTestCase
@@ -28,30 +29,28 @@ class CheckoutHandlerTest extends HandlerTestCase
         $this->db->onWrite('INSERT INTO ticket_orders', 1);
     }
 
-    private function hayCredencialesDeCobro($conectadoPor = 'oauth')
+    /**
+     * Cada lectura de credenciales resuelve primero la página del evento.
+     *
+     * El número de veces es explícito porque las reglas sobrantes no son
+     * inofensivas: la consulta de la página menciona lg.page_id igual que la
+     * de la orden, así que una regla de más se come la consulta siguiente.
+     */
+    private function hayCredencialesDeCobro($conectadoPor = 'oauth', $veces = 1)
     {
-        // Cobros resuelve la página del evento y después lee sus credenciales.
-        $this->db->onSelect('lg.page_id', [[5]]);
-        $this->db->onSelect('FROM page_payment_settings WHERE page_id', [[
-            'page_id' => 5,
-            'mp_user_id' => '987654321',
-            'access_token_cifrado' => Cripto::cifrar(self::TOKEN),
-            'refresh_token_cifrado' => null,
-            'modo' => 'produccion',
-            'conectado_por' => $conectadoPor,
-            'token_expira_en' => date('Y-m-d H:i:s', time() + 86400 * 180),
-            'verificado_en' => '2026-08-16 20:00:00',
-        ]]);
-
-        // eventoAdmiteSplit vuelve a resolver la página y la credencial.
-        $this->db->onSelect('lg.page_id', [[5]]);
-        $this->db->onSelect('FROM page_payment_settings WHERE page_id', [[
-            'page_id' => 5,
-            'conectado_por' => $conectadoPor,
-            'access_token_cifrado' => Cripto::cifrar(self::TOKEN),
-            'refresh_token_cifrado' => null,
-            'token_expira_en' => date('Y-m-d H:i:s', time() + 86400 * 180),
-        ]]);
+        for ($i = 0; $i < $veces; $i++) {
+            $this->db->onSelect('lg.page_id', [[5]]);
+            $this->db->onSelect('FROM page_payment_settings WHERE page_id', [[
+                'page_id' => 5,
+                'mp_user_id' => '987654321',
+                'access_token_cifrado' => Cripto::cifrar(self::TOKEN),
+                'refresh_token_cifrado' => null,
+                'modo' => 'produccion',
+                'conectado_por' => $conectadoPor,
+                'token_expira_en' => date('Y-m-d H:i:s', time() + 86400 * 180),
+                'verificado_en' => '2026-08-16 20:00:00',
+            ]]);
+        }
     }
 
     private function pedido(array $overrides = [])
@@ -78,7 +77,7 @@ class CheckoutHandlerTest extends HandlerTestCase
     public function testComprarDevuelveElLinkDePago()
     {
         $this->hayEventoQueVende();
-        $this->hayCredencialesDeCobro();
+        $this->hayCredencialesDeCobro('oauth', 2);
         $this->db->onWrite('UPDATE ticket_orders SET comision', 1);
 
         $r = CheckoutHandler::comprar($this->db, $this->pedido(), $this->httpQueCreaLaPreferencia());
@@ -129,7 +128,7 @@ class CheckoutHandlerTest extends HandlerTestCase
     public function testElCupoSeTomaAntesDeIrAMercadoPago()
     {
         $this->hayEventoQueVende();
-        $this->hayCredencialesDeCobro();
+        $this->hayCredencialesDeCobro('oauth', 2);
 
         CheckoutHandler::comprar($this->db, $this->pedido(), $this->httpQueCreaLaPreferencia());
 
@@ -143,7 +142,7 @@ class CheckoutHandlerTest extends HandlerTestCase
     public function testSiFallaLaPreferenciaSeLiberaLaReserva()
     {
         $this->hayEventoQueVende();
-        $this->hayCredencialesDeCobro();
+        $this->hayCredencialesDeCobro('oauth', 2);
         $http = (new FakeHttpClient())->responde('/checkout/preferences', 400, ['message' => 'error']);
 
         $r = CheckoutHandler::comprar($this->db, $this->pedido(), $http);
@@ -173,7 +172,7 @@ class CheckoutHandlerTest extends HandlerTestCase
     public function testLaPreferenciaLlevaLaComisionDeLaPlataforma()
     {
         $this->hayEventoQueVende(['precio' => '1500.00']);
-        $this->hayCredencialesDeCobro('oauth');
+        $this->hayCredencialesDeCobro('oauth', 2);
         $this->db->onWrite('UPDATE ticket_orders SET comision', 1);
         $http = $this->httpQueCreaLaPreferencia();
 
@@ -187,7 +186,7 @@ class CheckoutHandlerTest extends HandlerTestCase
     public function testElCompradorPagaElTotalSinRecargo()
     {
         $this->hayEventoQueVende(['precio' => '1500.00']);
-        $this->hayCredencialesDeCobro('oauth');
+        $this->hayCredencialesDeCobro('oauth', 2);
         $this->db->onWrite('UPDATE ticket_orders SET comision', 1);
         $http = $this->httpQueCreaLaPreferencia();
 
@@ -205,7 +204,7 @@ class CheckoutHandlerTest extends HandlerTestCase
     public function testSinOauthNoSeMandaComision()
     {
         $this->hayEventoQueVende(['precio' => '1500.00']);
-        $this->hayCredencialesDeCobro('manual');
+        $this->hayCredencialesDeCobro('manual', 2);
         $this->db->onWrite('UPDATE ticket_orders SET comision', 1);
         $http = $this->httpQueCreaLaPreferencia();
 
@@ -217,7 +216,7 @@ class CheckoutHandlerTest extends HandlerTestCase
     public function testLaComisionQuedaCongeladaEnLaOrden()
     {
         $this->hayEventoQueVende(['precio' => '1500.00']);
-        $this->hayCredencialesDeCobro('oauth');
+        $this->hayCredencialesDeCobro('oauth', 2);
         $this->db->onWrite('UPDATE ticket_orders SET comision', 1);
 
         CheckoutHandler::comprar($this->db, $this->pedido(['cantidad' => 2]), $this->httpQueCreaLaPreferencia());
@@ -230,7 +229,7 @@ class CheckoutHandlerTest extends HandlerTestCase
     public function testSinSplitSeGuardaComisionCero()
     {
         $this->hayEventoQueVende(['precio' => '1500.00']);
-        $this->hayCredencialesDeCobro('manual');
+        $this->hayCredencialesDeCobro('manual', 2);
         $this->db->onWrite('UPDATE ticket_orders SET comision', 1);
 
         CheckoutHandler::comprar($this->db, $this->pedido(), $this->httpQueCreaLaPreferencia());
@@ -378,6 +377,103 @@ class CheckoutHandlerTest extends HandlerTestCase
         $aviso = new Request('POST', [], ['orden' => self::CODIGO, 'topic' => 'payment', 'id' => '99']);
 
         $this->assertSame('pago acreditado', CheckoutHandler::aviso($this->db, $aviso, $this->httpConPago([]))->body['motivo']);
+    }
+
+
+    // -------------------------------------------------------- envío del mail
+
+    private function hayOrdenParaMandar(array $overrides = [])
+    {
+        $this->db->onSelect('FROM ticket_orders o', [array_merge([
+            'id' => 1, 'codigo' => self::CODIGO, 'link_id' => 100, 'cantidad' => 2,
+            'total' => '3000.00', 'estado' => 'pagada', 'reserva_vence_en' => null,
+            'nombre' => 'Ana Gómez', 'email' => 'ana@example.com', 'moneda' => 'ARS',
+            'mail_enviado_en' => null, 'mail_intentos' => 0,
+            'evento' => 'Fiesta', 'event_date' => '2026-12-01', 'event_time' => '21:00:00',
+            'event_address' => 'Corrientes 1234', 'pagina' => 'Mi Página', 'url_slug' => 'mi-pagina',
+        ], $overrides)]);
+    }
+
+    public function testAlAcreditarseElPagoSaleLaEntradaPorMail()
+    {
+        $this->hayOrdenPendiente();
+        $this->hayCredencialesDeCobro();
+        $this->db->onSelect('FROM ticket_orders WHERE codigo', [['codigo' => self::CODIGO, 'estado' => 'reservada']]);
+        $this->db->onWrite('UPDATE ticket_orders', 1);
+        $this->hayOrdenParaMandar();
+        $this->db->onWrite('UPDATE ticket_orders', 1);
+
+        $mailer = new FakeMailer();
+        CheckoutHandler::aviso($this->db, $this->avisoDe('99'), $this->httpConPago([]), $mailer);
+
+        $this->assertCount(1, $mailer->enviados);
+        $this->assertSame('ana@example.com', $mailer->enviados[0]['para']);
+    }
+
+    /** Si el pago no se acreditó, todavía no hay entrada que mandar. */
+    public function testUnPagoRechazadoNoMandaEntrada()
+    {
+        $this->hayOrdenPendiente();
+        $this->hayCredencialesDeCobro();
+        $this->db->onSelect('FROM ticket_orders WHERE codigo', [['codigo' => self::CODIGO, 'estado' => 'reservada']]);
+        $this->db->onWrite('UPDATE ticket_orders', 1);
+
+        $mailer = new FakeMailer();
+        CheckoutHandler::aviso($this->db, $this->avisoDe('99'),
+            $this->httpConPago(['status' => 'rejected']), $mailer);
+
+        $this->assertSame([], $mailer->enviados);
+    }
+
+    /** Una reserva sin costo queda pagada en el acto: la entrada sale ahí. */
+    public function testUnaReservaSinCostoMandaLaEntradaEnElActo()
+    {
+        $this->hayEventoQueVende(['precio' => '0.00']);
+        $this->hayOrdenParaMandar();
+        $this->db->onWrite('UPDATE ticket_orders', 1);
+
+        $mailer = new FakeMailer();
+        CheckoutHandler::comprar($this->db, $this->pedido(), new FakeHttpClient(), $mailer);
+
+        $this->assertCount(1, $mailer->enviados);
+    }
+
+    /**
+     * La orden ya está pagada: la entrada existe. Voltear la compra por un
+     * problema de SMTP dejaría a la persona sin entrada Y sin plata, cuando el
+     * envío se puede reintentar después.
+     */
+    public function testUnFalloDeCorreoNoVolteaLaCompra()
+    {
+        $this->hayEventoQueVende(['precio' => '0.00']);
+        $this->hayOrdenParaMandar();
+        $this->db->onWrite('UPDATE ticket_orders', 1);
+
+        $mailer = (new FakeMailer())->fallarCon('SMTP connect() failed');
+        $r = CheckoutHandler::comprar($this->db, $this->pedido(), new FakeHttpClient(), $mailer);
+
+        $this->assertSame(201, $r->status);
+        $this->assertSame('pagada', $r->body['estado']);
+    }
+
+    /**
+     * Mercado Pago reintenta hasta recibir un 2xx: si el correo tumbara el
+     * aviso, reintentaría para siempre por algo que no tiene que ver con el pago.
+     */
+    public function testUnFalloDeCorreoNoTumbaElAvisoDePago()
+    {
+        $this->hayOrdenPendiente();
+        $this->hayCredencialesDeCobro();
+        $this->db->onSelect('FROM ticket_orders WHERE codigo', [['codigo' => self::CODIGO, 'estado' => 'reservada']]);
+        $this->db->onWrite('UPDATE ticket_orders', 1);
+        $this->hayOrdenParaMandar();
+        $this->db->onWrite('UPDATE ticket_orders', 1);
+
+        $mailer = (new FakeMailer())->fallarCon('rechazado por el servidor');
+        $r = CheckoutHandler::aviso($this->db, $this->avisoDe('99'), $this->httpConPago([]), $mailer);
+
+        $this->assertSame(200, $r->status);
+        $this->assertSame('pago acreditado', $r->body['motivo']);
     }
 
     // ---------------------------------------------------------------- orden

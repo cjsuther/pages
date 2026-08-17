@@ -185,14 +185,21 @@ if hacer_api; then
   # >=8.1: hay que invocar composer con un binario moderno o falla entero.
   if [ "$DRY_RUN" -eq 0 ]; then
     LOCK_LOCAL=$(md5 -q "$API_DIR/composer.lock" 2>/dev/null || md5sum "$API_DIR/composer.lock" | cut -d' ' -f1)
-    LOCK_REMOTO=$(ssh_remoto "md5sum $REMOTE_ROOT/api/composer.lock 2>/dev/null | cut -d' ' -f1")
 
-    if [ "$LOCK_LOCAL" = "$LOCK_REMOTO" ]; then
+    # Contra una marca que se escribe recién cuando composer termina bien, y no
+    # contra el composer.lock del servidor: ese archivo lo acaba de pisar el
+    # rsync de arriba, así que comparado con el local siempre da idéntico y
+    # composer no se ejecutaba nunca. Además, si vendor/ desaparece, la marca
+    # se va con él y las dependencias se reinstalan solas.
+    LOCK_INSTALADO=$(ssh_remoto "cat $REMOTE_ROOT/api/vendor/.composer-lock-md5 2>/dev/null")
+
+    if [ "$LOCK_LOCAL" = "$LOCK_INSTALADO" ]; then
       ok "dependencias sin cambios (composer.lock idéntico)"
     else
       COMPOSER_SALIDA=$(ssh_remoto "cd $REMOTE_ROOT/api && $REMOTE_PHP \$(command -v composer) install --no-dev --optimize-autoloader --no-interaction 2>&1")
       # Sin el $? directo: una tubería devolvería el estado del último comando.
       if [ $? -eq 0 ]; then
+        ssh_remoto "echo '$LOCK_LOCAL' > $REMOTE_ROOT/api/vendor/.composer-lock-md5"
         ok "composer install --no-dev"
       else
         aviso "composer falló; vendor/ quedó como estaba:"
