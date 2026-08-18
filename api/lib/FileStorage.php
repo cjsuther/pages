@@ -49,10 +49,24 @@ class FileStorage
         return file_put_contents($ruta, $contenido) === false ? false : $ruta;
     }
 
-    /** @return bool */
+    /**
+     * Mueve el archivo y lo deja legible para el servidor web.
+     *
+     * El chmod no es adorno: tempnam() crea con permisos 0600 y rename() los
+     * conserva, así que sin esto la imagen queda guardada pero Apache no la
+     * puede leer y el evento se publica con un afiche que devuelve 403.
+     *
+     * @return bool
+     */
     public function mover($origen, $destino)
     {
-        return rename($origen, $destino);
+        if (!rename($origen, $destino)) {
+            return false;
+        }
+
+        @chmod($destino, 0644);
+
+        return true;
     }
 
     public function borrar($ruta)

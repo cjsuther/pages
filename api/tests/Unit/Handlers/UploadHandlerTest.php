@@ -293,6 +293,26 @@ class UploadHandlerTest extends HandlerTestCase
         $this->assertSame('hola', UploadHandler::decodificar(base64_encode('hola')));
     }
 
+    /**
+     * tempnam() crea con permisos 0600 y rename() los conserva: sin el chmod,
+     * la imagen queda guardada pero Apache no la puede leer y el evento se
+     * publica con un afiche que devuelve 403. Pasó en producción.
+     */
+    public function testLaImagenGuardadaQuedaLegibleParaElServidorWeb()
+    {
+        $almacen = new FileStorage();
+        $temporal = $almacen->guardarTemporal('unos bytes');
+        $destino = sys_get_temp_dir() . '/rezonar-prueba-' . uniqid() . '.png';
+
+        $this->assertSame(0600, fileperms($temporal) & 0777, 'el temporal nace privado');
+
+        $almacen->mover($temporal, $destino);
+
+        $this->assertSame(0644, fileperms($destino) & 0777);
+
+        unlink($destino);
+    }
+
     private function peticion($user, array $file)
     {
         return new Request('POST', [], [], $user, ['image' => $file]);
