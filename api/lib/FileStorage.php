@@ -69,6 +69,16 @@ class FileStorage
         return true;
     }
 
+    /**
+     * Contenido de un archivo, o false.
+     *
+     * @return string|false
+     */
+    public function leer($ruta)
+    {
+        return @file_get_contents($ruta);
+    }
+
     public function borrar($ruta)
     {
         if (is_file($ruta)) {

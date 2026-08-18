@@ -409,4 +409,53 @@ class HerramientasMcpTest extends HandlerTestCase
         $this->assertFalse($r['ok']);
         $this->assertSame(0, $this->db->countCalls('UPDATE links'));
     }
+
+    // ============================================== link para soltar el archivo
+
+    /**
+     * Existe porque un asistente no puede mandarnos un archivo: los
+     * argumentos son texto que el modelo escribe, y una imagen no entra ahí.
+     */
+    public function testPideUnLinkParaSoltarElArchivo()
+    {
+        $this->db->onSelect('SELECT 1 FROM links l', [[1]]);
+        $this->db->onWrite('INSERT INTO image_uploads', 1);
+
+        $r = $this->correr('subir_imagen', ['evento_id' => 300]);
+
+        $this->assertTrue($r['ok']);
+        $this->assertStringContainsString('/subir/', $r['datos']['link']);
+    }
+
+    public function testNoSeDaUnLinkParaUnEventoAjeno()
+    {
+        $this->db->onSelect('SELECT 1 FROM links l', []);
+
+        $r = $this->correr('subir_imagen', ['evento_id' => 300]);
+
+        $this->assertFalse($r['ok']);
+        $this->assertSame(0, $this->db->countCalls('INSERT INTO image_uploads'));
+    }
+
+    public function testElLinkAvisaQueVence()
+    {
+        $this->db->onSelect('SELECT 1 FROM links l', [[1]]);
+        $this->db->onWrite('INSERT INTO image_uploads', 1);
+
+        $r = $this->correr('subir_imagen', ['evento_id' => 300]);
+
+        $this->assertSame(\SubidasConToken::VIDA_MINUTOS, $r['datos']['vence_en_minutos']);
+    }
+
+    // ==================================== una imagen que ya está publicada
+
+    /** Lo que el modelo sí puede escribir es una dirección. */
+    public function testUnaDireccionSeReconoceComoUrlYNoComoBase64()
+    {
+        $this->assertTrue(HerramientasMcp::pareceUrl('https://x/afiche.jpg'));
+        $this->assertTrue(HerramientasMcp::pareceUrl('  http://x/afiche.jpg'));
+        $this->assertFalse(HerramientasMcp::pareceUrl(base64_encode('bytes')));
+        $this->assertFalse(HerramientasMcp::pareceUrl('/Users/cris/afiche.jpg'));
+        $this->assertFalse(HerramientasMcp::pareceUrl(null));
+    }
 }

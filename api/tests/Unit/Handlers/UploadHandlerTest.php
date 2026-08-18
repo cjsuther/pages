@@ -313,6 +313,91 @@ class UploadHandlerTest extends HandlerTestCase
         unlink($destino);
     }
 
+    // ================================== subida con link de un solo uso
+
+    private function permisoVigente(array $overrides = [])
+    {
+        $this->db->onSelect('FROM image_uploads WHERE token_hash', [array_merge([
+            'id' => 4, 'user_id' => 7, 'link_id' => 300,
+            'expira_en' => date('Y-m-d H:i:s', time() + 600), 'usado_en' => null,
+        ], $overrides)]);
+    }
+
+    private function subirConToken($storage = null)
+    {
+        return UploadHandler::conToken(
+            $this->db,
+            new Request('POST', [], ['token' => 'abc'], null, ['image' => ['tmp_name' => '/tmp/x']]),
+            $storage === null ? $this->storage() : $storage
+        );
+    }
+
+    /** El token es la credencial: no hace falta sesión. */
+    public function testConTokenNoPideSesion()
+    {
+        $this->permisoVigente();
+        $this->db->onSelect('SELECT 1 FROM links l', [[1]]);
+        $this->db->onWrite('UPDATE image_uploads', 1);
+        $this->db->onWrite('UPDATE links', 1);
+
+        $r = $this->subirConToken();
+
+        $this->assertSame(200, $r->status);
+        $this->assertStringContainsString('/uploads/', $r->body['url']);
+    }
+
+    public function testConTokenDejaLaImagenEnElEvento()
+    {
+        $this->permisoVigente();
+        $this->db->onSelect('SELECT 1 FROM links l', [[1]]);
+        $this->db->onWrite('UPDATE image_uploads', 1);
+        $this->db->onWrite('UPDATE links', 1);
+
+        $this->subirConToken();
+
+        $this->assertContains(300, $this->db->paramsFor('UPDATE links'));
+    }
+
+    public function testUnTokenVencidoNoDejaSubir()
+    {
+        $this->db->onSelect('FROM image_uploads WHERE token_hash', []);
+
+        $this->assertSame(404, $this->subirConToken()->status);
+    }
+
+    /**
+     * Entre que se pidió el link y llegó el archivo pueden pasar treinta
+     * minutos: el permiso se revalida, no se da por hecho.
+     */
+    public function testSiElQuePidioElLinkYaNoAdministraElEventoNoSeSube()
+    {
+        $this->permisoVigente();
+        $this->db->onSelect('SELECT 1 FROM links l', []);
+
+        $this->assertSame(403, $this->subirConToken()->status);
+    }
+
+    public function testConTokenRechazaAlgoQueNoEsImagen()
+    {
+        $this->permisoVigente();
+        $this->db->onSelect('SELECT 1 FROM links l', [[1]]);
+
+        $r = $this->subirConToken($this->storage(['info' => false]));
+
+        $this->assertSame(400, $r->status);
+    }
+
+    /** Si la imagen falló, el link tiene que seguir sirviendo. */
+    public function testUnaSubidaFallidaNoQuemaElLink()
+    {
+        $this->permisoVigente();
+        $this->db->onSelect('SELECT 1 FROM links l', [[1]]);
+
+        $this->subirConToken($this->storage(['info' => false]));
+
+        $this->assertSame(0, $this->db->countCalls('UPDATE image_uploads'));
+    }
+
     private function peticion($user, array $file)
     {
         return new Request('POST', [], [], $user, ['image' => $file]);
@@ -371,6 +456,11 @@ class FakeFileStorage extends FileStorage
 
     public $temporal = '/tmp/fake-temporal';
     public $borrados = [];
+
+    public function leer($ruta)
+    {
+        return 'unos bytes';
+    }
 
     public function guardarTemporal($contenido)
     {

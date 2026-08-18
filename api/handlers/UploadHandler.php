@@ -83,6 +83,59 @@ class UploadHandler
     }
 
     /**
+     * Recibe el archivo que alguien suelta en un link de un solo uso.
+     *
+     * No lleva sesión: el token es la credencial. Por eso se revalida todo
+     * acá —que esté vigente, que no se haya usado, y que quien lo pidió
+     * siga pudiendo administrar ese evento— en lugar de confiar en que el
+     * permiso se comprobó al emitirlo.
+     */
+    public static function conToken($db, Request $req, FileStorage $storage = null)
+    {
+        if ($req->method !== 'POST') {
+            return Response::methodNotAllowed();
+        }
+
+        $permiso = SubidasConToken::vigente($db, $req->param('token'));
+
+        if ($permiso === null) {
+            return Response::error(404, 'Este link ya se usó o venció. Pedí uno nuevo.');
+        }
+
+        if (!PageAccess::canManageLink($db, (int) $permiso['link_id'], (int) $permiso['user_id'])) {
+            return Response::error(403, 'Quien pidió este link ya no administra ese evento');
+        }
+
+        if (!isset($req->files['image']['tmp_name'])) {
+            return Response::error(400, 'No llegó ninguna imagen');
+        }
+
+        $storage = $storage === null ? new FileStorage() : $storage;
+        $bytes = $storage->leer($req->files['image']['tmp_name']);
+
+        if ($bytes === false) {
+            return Response::error(400, 'No pudimos leer el archivo');
+        }
+
+        $guardada = self::guardarBytes($bytes, $storage);
+
+        if (!$guardada['ok']) {
+            return Response::error(400, $guardada['error']);
+        }
+
+        // Recién acá se quema el token: si algo falló antes, la persona puede
+        // volver a intentar con el mismo link.
+        if (!SubidasConToken::marcarUsado($db, (int) $permiso['id'])) {
+            return Response::error(409, 'Este link ya se usó');
+        }
+
+        $stmt = $db->prepare('UPDATE links SET image_url = ? WHERE id = ?');
+        $stmt->execute([$guardada['url'], (int) $permiso['link_id']]);
+
+        return Response::ok(['url' => $guardada['url']]);
+    }
+
+    /**
      * Guarda una imagen que llegó como bytes en base64.
      *
      * Es el camino del server MCP: un asistente no puede mandar un formulario
@@ -105,6 +158,14 @@ class UploadHandler
         if ($bytes === null) {
             return ['ok' => false, 'error' => 'La imagen no está en base64 válido'];
         }
+
+        return self::guardarBytes($bytes, $storage);
+    }
+
+    /** Valida los bytes y los deja guardados. Único punto que escribe. */
+    private static function guardarBytes($bytes, FileStorage $storage = null)
+    {
+        $storage = $storage === null ? new FileStorage() : $storage;
 
         if (strlen($bytes) > self::MAX_BYTES) {
             return ['ok' => false, 'error' => 'La imagen pesa más de 5 MB'];
@@ -136,6 +197,68 @@ class UploadHandler
         }
 
         return ['ok' => true, 'url' => UPLOAD_URL . '/uploads/' . $nombre];
+    }
+
+    /**
+     * Guarda una imagen que está publicada en otra dirección.
+     *
+     * Rezonar se queda con una copia en lugar de enlazar al sitio ajeno: un
+     * enlace prestado deja el evento sin afiche el día que ese sitio cambia la
+     * URL o se cae.
+     *
+     * @return array{ok: bool, url?: string, error?: string}
+     */
+    public static function guardarDesdeUrl($url, FileStorage $storage = null, HttpClient $http = null)
+    {
+        if (!self::direccionSegura($url)) {
+            return ['ok' => false, 'error' => 'La dirección de la imagen no es una URL pública válida'];
+        }
+
+        $http = $http === null ? new HttpClient() : $http;
+        $r = $http->get(trim($url), ['Accept: image/*']);
+
+        if ($r['status'] !== 200 || $r['body'] === '') {
+            return ['ok' => false, 'error' => 'No pudimos descargar la imagen de esa dirección'];
+        }
+
+        // Se reutiliza el mismo camino que el resto: lo que decide si esto es
+        // una imagen son los bytes, no de dónde vinieron.
+        return self::guardarBytes($r['body'], $storage);
+    }
+
+    /**
+     * Una dirección a la que el servidor puede ir a buscar algo.
+     *
+     * Descargar lo que diga un tercero es pedirle al servidor que haga
+     * pedidos por cuenta ajena: sin este filtro, alguien podría hacerle leer
+     * la red interna del hosting o los metadatos de la nube apuntando a una
+     * IP privada. Sólo http y https, y nunca hacia adentro.
+     */
+    public static function direccionSegura($url)
+    {
+        $partes = parse_url(trim((string) $url));
+
+        if (!$partes || !isset($partes['scheme'], $partes['host'])) {
+            return false;
+        }
+
+        if (!in_array(strtolower($partes['scheme']), ['http', 'https'], true)) {
+            return false;
+        }
+
+        $ip = filter_var($partes['host'], FILTER_VALIDATE_IP) ? $partes['host'] : gethostbyname($partes['host']);
+
+        // Sin resolver no se arriesga: un nombre que hoy no resuelve puede
+        // resolver a algo interno en el próximo intento.
+        if (!filter_var($ip, FILTER_VALIDATE_IP)) {
+            return false;
+        }
+
+        return (bool) filter_var(
+            $ip,
+            FILTER_VALIDATE_IP,
+            FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE
+        );
     }
 
     /**

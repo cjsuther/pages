@@ -12,6 +12,7 @@ import PublicPage from './pages/PublicPage';
 import EventDetail from './pages/EventDetail';
 import EstadoOrden from './pages/EstadoOrden';
 import Autorizar from './pages/Autorizar';
+import SubirImagen from './pages/SubirImagen';
 
 // La URL de la API sale de VITE_API_URL (ver .env.production). El valor por
 // defecto es el de desarrollo, así que `npm run dev` funciona sin configurar
@@ -71,6 +72,7 @@ function App() {
             <Route path="/entrada/:codigo" element={<EstadoOrden apiUrl={API_URL} />} />
             {/* Antes de /:slug: es una ruta del sitio, no una página pública. */}
             <Route path="/oauth/authorize" element={<Autorizar />} />
+            <Route path="/subir/:token" element={<SubirImagen />} />
             <Route path="/:slug" element={<PublicPage />} />
           </Routes>
         </BrowserRouter>

@@ -89,6 +89,19 @@ class HerramientasMcp
                 ],
             ],
             [
+                'name' => 'subir_imagen',
+                'description' => 'Devuelve un link donde la persona puede soltar el archivo del afiche '
+                    . 'desde su computadora, y queda como imagen del evento. Usá esta herramienta cuando '
+                    . 'la imagen esté en la máquina de la persona: vos no podés mandarme el archivo, '
+                    . 'porque los argumentos son texto y una imagen no entra ahí. Pasale el link tal cual. '
+                    . 'Sirve una sola vez y vence en media hora.',
+                'inputSchema' => [
+                    'type' => 'object',
+                    'properties' => ['evento_id' => ['type' => 'integer']],
+                    'required' => ['evento_id'],
+                ],
+            ],
+            [
                 'name' => 'borrar_evento',
                 'description' => 'Borra un evento. No se puede deshacer, y si tenía entradas vendidas '
                     . 'las compras quedan sin evento: preguntá antes de usarla.',
@@ -152,6 +165,7 @@ class HerramientasMcp
             'crear_evento'        => 'crearEvento',
             'actualizar_evento'   => 'actualizarEvento',
             'borrar_evento'       => 'borrarEvento',
+            'subir_imagen'        => 'subirImagen',
             'configurar_entradas' => 'configurarEntradas',
             'ver_ventas'          => 'verVentas',
             'cancelar_compra'     => 'cancelarCompra',
@@ -304,6 +318,40 @@ class HerramientasMcp
         return self::desdeRespuesta($r, 'evento borrado');
     }
 
+    /**
+     * Un link para que la persona suelte el archivo.
+     *
+     * El permiso se comprueba acá, al emitirlo, y otra vez cuando el archivo
+     * llega: entre una cosa y la otra pueden pasar treinta minutos.
+     */
+    private static function subirImagen($db, array $usuario, array $args, $storage = null)
+    {
+        $eventoId = isset($args['evento_id']) ? (int) $args['evento_id'] : 0;
+
+        if (!$eventoId) {
+            return self::mal('Falta el evento_id');
+        }
+
+        if (!PageAccess::canManageLink($db, $eventoId, $usuario['user_id'])) {
+            return self::mal('No administrás ese evento');
+        }
+
+        $token = SubidasConToken::crear($db, $usuario['user_id'], $eventoId);
+
+        return self::bien([
+            'link' => self::sitio() . '/subir/' . $token,
+            'vence_en_minutos' => SubidasConToken::VIDA_MINUTOS,
+            'instrucciones' => 'Pasale este link a la persona para que suelte ahí el archivo del afiche. '
+                . 'Se usa una sola vez y la imagen queda en el evento apenas lo suba.',
+        ]);
+    }
+
+    /** La dirección pública del sitio. */
+    private static function sitio()
+    {
+        return defined('FRONTEND_URL') ? rtrim(FRONTEND_URL, '/') : 'https://rezon.ar';
+    }
+
     // ------------------------------------------------------------ entradas
 
     private static function configurarEntradas($db, array $usuario, array $args, $storage = null)
@@ -375,13 +423,26 @@ class HerramientasMcp
             return ['ok' => true, 'url' => isset($args['imagen_url']) ? $args['imagen_url'] : null, 'datos' => null];
         }
 
-        $guardada = UploadHandler::guardarBase64($args['imagen'], $storage);
+        // El asistente manda lo que tiene a mano. Si son los bytes, se
+        // guardan; si es una dirección, se descarga desde acá. En los dos
+        // casos la imagen termina alojada en Rezonar, que es lo que importa:
+        // un enlace prestado deja el evento sin afiche el día que ese sitio
+        // cambie la URL.
+        $guardada = self::pareceUrl($args['imagen'])
+            ? UploadHandler::guardarDesdeUrl($args['imagen'], $storage)
+            : UploadHandler::guardarBase64($args['imagen'], $storage);
 
         if (!$guardada['ok']) {
             return self::mal($guardada['error']);
         }
 
         return ['ok' => true, 'url' => $guardada['url'], 'datos' => null];
+    }
+
+    /** Una dirección web, en oposición a bytes en base64. */
+    public static function pareceUrl($valor)
+    {
+        return is_string($valor) && preg_match('#^\s*https?://#i', $valor) === 1;
     }
 
     /** Arma el pedido como si viniera del editor, con la sesión de la clave. */
