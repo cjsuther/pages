@@ -2,7 +2,7 @@ import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, fireEvent, waitFor } from '@testing-library/react';
 import { renderConProviders } from '../helpers/render';
-import ClavesApi from '../../src/components/ClavesApi';
+import ClavesApi, { Conexiones } from '../../src/components/ClavesApi';
 
 const CLAVE = {
   id: 3,
@@ -126,10 +126,75 @@ describe('ClavesApi', () => {
     expect(global.fetch.mock.calls[1][0]).toContain('id=3');
   });
 
-  /** Sin la dirección del server, la clave sola no sirve para nada. */
-  it('muestra la dirección para conectar el server', async () => {
+  /** Una clave es la excepción, no el camino normal: conviene decirlo. */
+  it('aclara que casi nunca hace falta una clave', async () => {
     await montar();
 
+    expect(screen.getByText(/CUÁNDO HACE FALTA UNA CLAVE/)).toBeInTheDocument();
+    expect(screen.getByText(/se autoriza solo/)).toBeInTheDocument();
+  });
+});
+
+describe('Conexiones', () => {
+  beforeEach(() => {
+    global.fetch = vi.fn();
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const montarConexiones = async (conexiones = []) => {
+    global.fetch.mockReturnValueOnce(respuestaDe({ conexiones }));
+    const vista = renderConProviders(<Conexiones />);
+    await screen.findByText('APLICACIONES CONECTADAS');
+
+    return vista;
+  };
+
+  /**
+   * No encontrar nada no es lo mismo que no encontrar la sección: si se
+   * escondiera cuando está vacía, quien viene a conectar algo no sabría
+   * dónde mirar.
+   */
+  it('la sección se ve aunque no haya nada conectado', async () => {
+    await montarConexiones([]);
+
+    expect(screen.getByText(/Todavía no conectaste ninguna/)).toBeInTheDocument();
+  });
+
+  it('vacía, explica que no hay nada que generar y da la dirección', async () => {
+    await montarConexiones([]);
+
+    expect(screen.getByText(/No hay nada que generar/)).toBeInTheDocument();
     expect(screen.getByText('https://rezon.ar/mcp')).toBeInTheDocument();
+  });
+
+  it('lista las aplicaciones conectadas', async () => {
+    await montarConexiones([{ client_id: 'abc', nombre: 'Claude Desktop', ultimo_uso_en: null }]);
+
+    expect(screen.getByText('Claude Desktop')).toBeInTheDocument();
+  });
+
+  it('desconectar pregunta antes', async () => {
+    window.confirm.mockReturnValue(false);
+    await montarConexiones([{ client_id: 'abc', nombre: 'Claude Desktop', ultimo_uso_en: null }]);
+
+    fireEvent.click(screen.getByText('Desconectar'));
+
+    expect(window.confirm).toHaveBeenCalled();
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('desconecta al confirmar', async () => {
+    await montarConexiones([{ client_id: 'abc', nombre: 'Claude Desktop', ultimo_uso_en: null }]);
+
+    global.fetch.mockReturnValueOnce(respuestaDe({ desconectada: true }));
+    global.fetch.mockReturnValueOnce(respuestaDe({ conexiones: [] }));
+    fireEvent.click(screen.getByText('Desconectar'));
+
+    await waitFor(() => expect(global.fetch.mock.calls[1][1].method).toBe('DELETE'));
+    expect(global.fetch.mock.calls[1][0]).toContain('client_id=abc');
   });
 });

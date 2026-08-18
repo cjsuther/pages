@@ -151,15 +151,14 @@ function ClavesApi() {
       )}
 
       <div className="mt-10 border-t border-gray-800 pt-6">
-        <p className="text-sm font-bold text-gray-400 mb-2">CÓMO CONECTARLO</p>
-        <p className="text-xs text-gray-600 mb-3">
-          En tu cliente de MCP, agregá un servidor remoto con esta dirección. Si el
-          cliente sabe autorizarse solo no hace falta ninguna clave: te va a mandar a
-          Rezonar a dar el permiso.
+        <p className="text-sm font-bold text-gray-400 mb-2">CUÁNDO HACE FALTA UNA CLAVE</p>
+        <p className="text-xs text-gray-600">
+          Casi nunca. La mayoría de los asistentes se autoriza solo: alcanza con
+          agregar <code className="text-gray-400">https://rezon.ar/mcp</code> como
+          servidor MCP y él te trae acá a dar el permiso. Una clave sirve para lo
+          otro: un script propio, o un cliente viejo que sólo sepa mandar una
+          credencial fija.
         </p>
-        <code className="block text-xs text-gray-300 bg-black px-3 py-2 overflow-x-auto whitespace-nowrap">
-          https://rezon.ar/mcp
-        </code>
       </div>
     </div>
   );
@@ -206,7 +205,7 @@ export function Conexiones() {
     cargar();
   };
 
-  if (cargando || conexiones.length === 0) {
+  if (cargando) {
     return null;
   }
 
@@ -216,6 +215,22 @@ export function Conexiones() {
       <p className="text-sm text-gray-500 mb-8">
         Programas a los que les diste permiso para administrar tus eventos.
       </p>
+
+      {/* La sección se muestra siempre, aunque esté vacía: es donde uno viene a
+          buscar si hay algo conectado, y no encontrar nada no es lo mismo que
+          no encontrar la sección. */}
+      {conexiones.length === 0 && (
+        <div className="border border-gray-800 bg-black p-6">
+          <p className="text-sm text-gray-400 mb-4">
+            Todavía no conectaste ninguna. No hay nada que generar acá: agregá esta
+            dirección como servidor MCP en tu asistente y él te va a traer a una
+            pantalla de Rezonar para que le des permiso.
+          </p>
+          <code className="block text-xs text-gray-300 bg-gray-900 px-3 py-2 overflow-x-auto whitespace-nowrap">
+            https://rezon.ar/mcp
+          </code>
+        </div>
+      )}
 
       <ul className="divide-y divide-gray-800 border-t border-gray-800">
         {conexiones.map((c) => (
