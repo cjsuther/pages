@@ -90,14 +90,23 @@ class HerramientasMcp
             ],
             [
                 'name' => 'subir_imagen',
-                'description' => 'Devuelve un link donde la persona puede soltar el archivo del afiche '
-                    . 'desde su computadora, y queda como imagen del evento. Usá esta herramienta cuando '
-                    . 'la imagen esté en la máquina de la persona: vos no podés mandarme el archivo, '
-                    . 'porque los argumentos son texto y una imagen no entra ahí. Pasale el link tal cual. '
-                    . 'Sirve una sola vez y vence en media hora.',
+                'description' => 'Da un destino para subir el archivo del afiche de un evento. '
+                    . 'Subilo vos: te devuelve una dirección a la que tenés que mandar el archivo con un '
+                    . 'POST multipart (campo "image"), y en la respuesta viene el comando exacto listo para '
+                    . 'ejecutar. No me mandes el archivo como argumento —los argumentos son texto y una '
+                    . 'imagen no entra ahí— ni me pases la ruta, porque el servidor no puede leer el disco '
+                    . 'de quien te habla. Si no podés ejecutar comandos ni hacer pedidos HTTP, la respuesta '
+                    . 'trae además un link para que lo suba la persona. Sirve una sola vez y vence en media hora.',
                 'inputSchema' => [
                     'type' => 'object',
-                    'properties' => ['evento_id' => ['type' => 'integer']],
+                    'properties' => [
+                        'evento_id' => ['type' => 'integer'],
+                        'ruta' => [
+                            'type' => 'string',
+                            'description' => 'La ruta del archivo en tu máquina, si la sabés. Sólo se usa para '
+                                . 'armarte el comando; el servidor no la lee.',
+                        ],
+                    ],
                     'required' => ['evento_id'],
                 ],
             ],
@@ -337,12 +346,23 @@ class HerramientasMcp
         }
 
         $token = SubidasConToken::crear($db, $usuario['user_id'], $eventoId);
+        $destino = self::sitio() . '/api/upload/con-token.php?token=' . $token;
+
+        // El archivo lo manda el asistente, no la persona: el token es la
+        // credencial, así que basta con un POST multipart contra este destino.
+        // La ruta se usa sólo para armar el comando; el servidor no la lee ni
+        // podría, porque vive en otra máquina.
+        $ruta = isset($args['ruta']) && trim($args['ruta']) !== '' ? trim($args['ruta']) : 'AFICHE.jpg';
 
         return self::bien([
-            'link' => self::sitio() . '/subir/' . $token,
+            'subir_a' => $destino,
+            'como' => 'POST multipart/form-data con el archivo en el campo "image"',
+            'comando' => 'curl -F "image=@' . $ruta . '" "' . $destino . '"',
             'vence_en_minutos' => SubidasConToken::VIDA_MINUTOS,
-            'instrucciones' => 'Pasale este link a la persona para que suelte ahí el archivo del afiche. '
-                . 'Se usa una sola vez y la imagen queda en el evento apenas lo suba.',
+            'instrucciones' => 'Subí el archivo vos mismo a "subir_a". Cuando la respuesta traiga una url, '
+                . 'la imagen ya quedó en el evento y no hace falta llamar a actualizar_evento. '
+                . 'Sólo si no podés hacer pedidos HTTP, pasale a la persona el link de "para_la_persona".',
+            'para_la_persona' => self::sitio() . '/subir/' . $token,
         ]);
     }
 

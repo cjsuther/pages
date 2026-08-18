@@ -413,10 +413,11 @@ class HerramientasMcpTest extends HandlerTestCase
     // ============================================== link para soltar el archivo
 
     /**
-     * Existe porque un asistente no puede mandarnos un archivo: los
-     * argumentos son texto que el modelo escribe, y una imagen no entra ahí.
+     * El asistente sube el archivo él mismo: no puede mandarlo como argumento
+     * —los argumentos son texto y una imagen no entra ahí— pero sí puede hacer
+     * un POST contra el destino que se le da.
      */
-    public function testPideUnLinkParaSoltarElArchivo()
+    public function testDevuelveUnDestinoAlQueElAsistentePuedeSubirElArchivo()
     {
         $this->db->onSelect('SELECT 1 FROM links l', [[1]]);
         $this->db->onWrite('INSERT INTO image_uploads', 1);
@@ -424,7 +425,40 @@ class HerramientasMcpTest extends HandlerTestCase
         $r = $this->correr('subir_imagen', ['evento_id' => 300]);
 
         $this->assertTrue($r['ok']);
-        $this->assertStringContainsString('/subir/', $r['datos']['link']);
+        $this->assertStringContainsString('/api/upload/con-token.php?token=', $r['datos']['subir_a']);
+    }
+
+    /** El comando listo evita que el modelo tenga que adivinar la forma. */
+    public function testTraeElComandoArmadoConLaRutaQueLePasaron()
+    {
+        $this->db->onSelect('SELECT 1 FROM links l', [[1]]);
+        $this->db->onWrite('INSERT INTO image_uploads', 1);
+
+        $r = $this->correr('subir_imagen', ['evento_id' => 300, 'ruta' => '/tmp/afiche.jpg']);
+
+        $this->assertStringContainsString('image=@/tmp/afiche.jpg', $r['datos']['comando']);
+    }
+
+    /** La ruta es sólo para armar el comando: el servidor no la lee. */
+    public function testSinRutaElComandoIgualSeArma()
+    {
+        $this->db->onSelect('SELECT 1 FROM links l', [[1]]);
+        $this->db->onWrite('INSERT INTO image_uploads', 1);
+
+        $r = $this->correr('subir_imagen', ['evento_id' => 300]);
+
+        $this->assertStringContainsString('curl -F', $r['datos']['comando']);
+    }
+
+    /** Queda el camino para la persona, por si el asistente no puede pedir. */
+    public function testTambienDaUnLinkParaLaPersona()
+    {
+        $this->db->onSelect('SELECT 1 FROM links l', [[1]]);
+        $this->db->onWrite('INSERT INTO image_uploads', 1);
+
+        $r = $this->correr('subir_imagen', ['evento_id' => 300]);
+
+        $this->assertStringContainsString('/subir/', $r['datos']['para_la_persona']);
     }
 
     public function testNoSeDaUnLinkParaUnEventoAjeno()
