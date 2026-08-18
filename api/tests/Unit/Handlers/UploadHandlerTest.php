@@ -198,6 +198,101 @@ class UploadHandlerTest extends HandlerTestCase
 
     // ------------------------------------------------------------- ayudantes
 
+    // ============================================ subida en base64 (server MCP)
+
+    /** Un asistente no manda un formulario: manda los bytes dentro del JSON. */
+    public function testGuardaUnaImagenQueLlegaEnBase64()
+    {
+        $storage = $this->storage();
+
+        $r = UploadHandler::guardarBase64(base64_encode('unos bytes'), $storage);
+
+        $this->assertTrue($r['ok']);
+        $this->assertStringStartsWith(UPLOAD_URL . '/uploads/', $r['url']);
+        $this->assertStringEndsWith('.jpg', $r['url']);
+    }
+
+    /** Las herramientas de imagen suelen tener a mano el data URI completo. */
+    public function testAceptaUnDataUriCompleto()
+    {
+        $r = UploadHandler::guardarBase64('data:image/png;base64,' . base64_encode('unos bytes'), $this->storage());
+
+        $this->assertTrue($r['ok']);
+    }
+
+    /**
+     * La comprobación que importa: la extensión sale del tipo que detecta el
+     * servidor, no de lo que declare quien sube. En api/uploads/ Apache
+     * ejecuta PHP, así que confiar en el cliente sería ejecución remota.
+     */
+    public function testLaExtensionSaleDelTipoDetectadoYNoDelDataUri()
+    {
+        $storage = $this->storage(['info' => [10, 10, IMAGETYPE_PNG]]);
+
+        $r = UploadHandler::guardarBase64('data:image/jpeg;base64,' . base64_encode('x'), $storage);
+
+        $this->assertStringEndsWith('.png', $r['url']);
+    }
+
+    public function testRechazaAlgoQueNoEsUnaImagen()
+    {
+        $storage = $this->storage(['info' => false]);
+
+        $r = UploadHandler::guardarBase64(base64_encode('<?php echo 1;'), $storage);
+
+        $this->assertFalse($r['ok']);
+        $this->assertStringContainsString('no es una imagen', $r['error']);
+    }
+
+    /** Lo que no se guardó no puede quedar ocupando disco. */
+    public function testBorraElTemporalSiElArchivoNoSirve()
+    {
+        $storage = $this->storage(['info' => false]);
+
+        UploadHandler::guardarBase64(base64_encode('x'), $storage);
+
+        $this->assertSame([$storage->temporal], $storage->borrados);
+    }
+
+    public function testRechazaUnaImagenDemasiadoGrande()
+    {
+        $r = UploadHandler::guardarBase64(base64_encode(str_repeat('a', UploadHandler::MAX_BYTES + 1)), $this->storage());
+
+        $this->assertFalse($r['ok']);
+        $this->assertStringContainsString('5 MB', $r['error']);
+    }
+
+    /** @dataProvider base64Invalido */
+    public function testRechazaUnBase64Ilegible($valor)
+    {
+        $r = UploadHandler::guardarBase64($valor, $this->storage());
+
+        $this->assertFalse($r['ok']);
+    }
+
+    public function base64Invalido()
+    {
+        return [
+            'vacío'        => [''],
+            'sólo espacios' => ['   '],
+            'no es base64' => ['%%% esto no %%%'],
+            'no es texto'  => [null],
+        ];
+    }
+
+    /** El base64 puede venir cortado en líneas. */
+    public function testUnBase64ConSaltosDeLineaSeEntiende()
+    {
+        $partido = chunk_split(base64_encode('unos bytes'), 8, "\n");
+
+        $this->assertTrue(UploadHandler::guardarBase64($partido, $this->storage())['ok']);
+    }
+
+    public function testDecodificarDevuelveLosBytesOriginales()
+    {
+        $this->assertSame('hola', UploadHandler::decodificar(base64_encode('hola')));
+    }
+
     private function peticion($user, array $file)
     {
         return new Request('POST', [], [], $user, ['image' => $file]);
@@ -252,5 +347,29 @@ class FakeFileStorage extends FileStorage
     {
         $this->destino = $destination;
         return $this->exito;
+    }
+
+    public $temporal = '/tmp/fake-temporal';
+    public $borrados = [];
+
+    public function guardarTemporal($contenido)
+    {
+        $this->bytes = $contenido;
+
+        return $this->temporal;
+    }
+
+    public $bytes;
+
+    public function mover($origen, $destino)
+    {
+        $this->destino = $destino;
+
+        return $this->exito;
+    }
+
+    public function borrar($ruta)
+    {
+        $this->borrados[] = $ruta;
     }
 }

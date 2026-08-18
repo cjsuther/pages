@@ -55,7 +55,12 @@ class HerramientasMcp
                         'hora'        => ['type' => 'string', 'description' => 'HH:MM, opcional'],
                         'direccion'   => ['type' => 'string', 'description' => 'Dirección completa; se geocodifica sola'],
                         'descripcion' => ['type' => 'string'],
-                        'imagen_url'  => ['type' => 'string', 'description' => 'URL absoluta del afiche'],
+                        'imagen'      => [
+                            'type' => 'string',
+                            'description' => 'El afiche en base64 (o data URI). Se sube a Rezonar y queda alojado acá. '
+                                . 'Usá esto para subir una imagen; imagen_url es sólo para una que ya esté publicada en otro lado.',
+                        ],
+                        'imagen_url'  => ['type' => 'string', 'description' => 'URL absoluta de un afiche ya publicado'],
                         'url'         => ['type' => 'string', 'description' => 'Enlace de entradas o más info'],
                         'precio_desde' => ['type' => 'number', 'description' => 'Precio de referencia, sólo informativo'],
                     ],
@@ -75,6 +80,7 @@ class HerramientasMcp
                         'hora'        => ['type' => 'string', 'description' => 'HH:MM'],
                         'direccion'   => ['type' => 'string'],
                         'descripcion' => ['type' => 'string'],
+                        'imagen'      => ['type' => 'string', 'description' => 'Afiche nuevo en base64 (o data URI); reemplaza al anterior'],
                         'imagen_url'  => ['type' => 'string'],
                         'url'         => ['type' => 'string'],
                         'precio_desde' => ['type' => 'number'],
@@ -138,7 +144,7 @@ class HerramientasMcp
      * @return array{ok: bool, datos: mixed}
      * @throws InvalidArgumentException si la herramienta no existe
      */
-    public static function ejecutar($db, array $usuario, $nombre, array $args)
+    public static function ejecutar($db, array $usuario, $nombre, array $args, FileStorage $storage = null)
     {
         $metodos = [
             'listar_paginas'      => 'listarPaginas',
@@ -155,12 +161,12 @@ class HerramientasMcp
             throw new InvalidArgumentException("No existe la herramienta '$nombre'");
         }
 
-        return call_user_func([self::class, $metodos[$nombre]], $db, $usuario, $args);
+        return call_user_func([self::class, $metodos[$nombre]], $db, $usuario, $args, $storage);
     }
 
     // ------------------------------------------------------------- páginas
 
-    private static function listarPaginas($db, array $usuario, array $args)
+    private static function listarPaginas($db, array $usuario, array $args, $storage = null)
     {
         $stmt = $db->prepare('
             SELECT id, title AS titulo, url_slug AS pagina, description AS descripcion
@@ -173,7 +179,7 @@ class HerramientasMcp
         return self::bien(['paginas' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
     }
 
-    private static function listarEventos($db, array $usuario, array $args)
+    private static function listarEventos($db, array $usuario, array $args, $storage = null)
     {
         $pagina = self::pagina($db, $usuario, isset($args['pagina']) ? $args['pagina'] : '');
 
@@ -198,7 +204,7 @@ class HerramientasMcp
 
     // ------------------------------------------------------------- eventos
 
-    private static function crearEvento($db, array $usuario, array $args)
+    private static function crearEvento($db, array $usuario, array $args, $storage = null)
     {
         $pagina = self::pagina($db, $usuario, isset($args['pagina']) ? $args['pagina'] : '');
 
@@ -212,6 +218,12 @@ class HerramientasMcp
             return $coordenadas;
         }
 
+        $imagen = self::imagen($args, $storage);
+
+        if (!$imagen['ok']) {
+            return $imagen;
+        }
+
         $cuerpo = [
             'group_id' => self::grupoDeEventos($db, $pagina['id']),
             // La API pide url y text siempre; un evento sin enlace es válido,
@@ -219,7 +231,7 @@ class HerramientasMcp
             'url'  => isset($args['url']) ? $args['url'] : '',
             'text' => isset($args['titulo']) ? $args['titulo'] : '',
             'description' => isset($args['descripcion']) ? $args['descripcion'] : null,
-            'image_url' => isset($args['imagen_url']) ? $args['imagen_url'] : null,
+            'image_url' => $imagen['url'],
             'event_date' => isset($args['fecha']) ? $args['fecha'] : null,
             'event_time' => self::hora(isset($args['hora']) ? $args['hora'] : null),
             'event_address' => isset($args['direccion']) ? $args['direccion'] : null,
@@ -233,7 +245,7 @@ class HerramientasMcp
         return self::desdeRespuesta($r, 'evento creado');
     }
 
-    private static function actualizarEvento($db, array $usuario, array $args)
+    private static function actualizarEvento($db, array $usuario, array $args, $storage = null)
     {
         $eventoId = isset($args['evento_id']) ? (int) $args['evento_id'] : 0;
 
@@ -249,6 +261,16 @@ class HerramientasMcp
 
         if (isset($args['hora'])) {
             $cuerpo['event_time'] = self::hora($args['hora']);
+        }
+
+        if (isset($args['imagen'])) {
+            $imagen = self::imagen($args, $storage);
+
+            if (!$imagen['ok']) {
+                return $imagen;
+            }
+
+            $cuerpo['image_url'] = $imagen['url'];
         }
 
         // Mover el evento de dirección sin mover el punto del mapa dejaría la
@@ -273,7 +295,7 @@ class HerramientasMcp
         return self::desdeRespuesta($r, 'evento actualizado');
     }
 
-    private static function borrarEvento($db, array $usuario, array $args)
+    private static function borrarEvento($db, array $usuario, array $args, $storage = null)
     {
         $eventoId = isset($args['evento_id']) ? (int) $args['evento_id'] : 0;
 
@@ -284,7 +306,7 @@ class HerramientasMcp
 
     // ------------------------------------------------------------ entradas
 
-    private static function configurarEntradas($db, array $usuario, array $args)
+    private static function configurarEntradas($db, array $usuario, array $args, $storage = null)
     {
         $eventoId = isset($args['evento_id']) ? (int) $args['evento_id'] : 0;
         $modo = isset($args['modo']) ? $args['modo'] : '';
@@ -313,7 +335,7 @@ class HerramientasMcp
         return self::desdeRespuesta($r, 'entradas configuradas');
     }
 
-    private static function verVentas($db, array $usuario, array $args)
+    private static function verVentas($db, array $usuario, array $args, $storage = null)
     {
         $eventoId = isset($args['evento_id']) ? (int) $args['evento_id'] : 0;
 
@@ -322,7 +344,7 @@ class HerramientasMcp
         return self::desdeRespuesta($r, 'ventas');
     }
 
-    private static function cancelarCompra($db, array $usuario, array $args)
+    private static function cancelarCompra($db, array $usuario, array $args, $storage = null)
     {
         $codigo = isset($args['codigo']) ? $args['codigo'] : '';
 
@@ -332,6 +354,35 @@ class HerramientasMcp
     }
 
     // ------------------------------------------------------------- internos
+
+    /**
+     * La imagen del evento, ya alojada en Rezonar.
+     *
+     * Un asistente no puede mandar un formulario con un archivo, así que manda
+     * los bytes en base64 y acá se guardan igual que una subida cualquiera:
+     * misma validación, mismo directorio, misma comprobación de que sea
+     * realmente una imagen.
+     *
+     * `imagen_url` sigue existiendo para un afiche que ya esté publicado en
+     * otro lado. Si vienen las dos, gana la que se sube: es la que la persona
+     * eligió mandar en este momento.
+     *
+     * @return array{ok: bool, url?: string|null, datos?: mixed}
+     */
+    private static function imagen(array $args, $storage = null)
+    {
+        if (empty($args['imagen'])) {
+            return ['ok' => true, 'url' => isset($args['imagen_url']) ? $args['imagen_url'] : null, 'datos' => null];
+        }
+
+        $guardada = UploadHandler::guardarBase64($args['imagen'], $storage);
+
+        if (!$guardada['ok']) {
+            return self::mal($guardada['error']);
+        }
+
+        return ['ok' => true, 'url' => $guardada['url'], 'datos' => null];
+    }
 
     /** Arma el pedido como si viniera del editor, con la sesión de la clave. */
     private static function pedido($metodo, array $cuerpo, array $query, array $usuario)

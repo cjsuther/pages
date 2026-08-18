@@ -10,9 +10,42 @@ class HerramientasMcpTest extends HandlerTestCase
 {
     private $usuario = ['user_id' => 7, 'email' => 'ana@example.com', 'name' => 'Ana', 'por_clave_api' => true];
 
-    private function correr($nombre, array $args = [])
+    private function correr($nombre, array $args = [], $storage = null)
     {
-        return HerramientasMcp::ejecutar($this->db, $this->usuario, $nombre, $args);
+        return HerramientasMcp::ejecutar($this->db, $this->usuario, $nombre, $args, $storage);
+    }
+
+    /** Almacenamiento que no toca el disco. */
+    private function discoFalso($info = [10, 10, IMAGETYPE_JPEG], $exito = true)
+    {
+        return new class($info, $exito) extends \FileStorage {
+            public $destino;
+            private $info;
+            private $exito;
+
+            public function __construct($info, $exito)
+            {
+                $this->info = $info;
+                $this->exito = $exito;
+            }
+
+            public function imageInfo($path) { return $this->info; }
+            public function ensureDir($dir) {}
+            public function guardarTemporal($contenido) { return '/tmp/falso'; }
+            public function mover($origen, $destino) { $this->destino = $destino; return $this->exito; }
+            public function borrar($ruta) {}
+        };
+    }
+
+    private function sePuedeCrearElEvento()
+    {
+        $this->laPaginaEsSuya();
+        $this->db->onSelect('FROM link_groups WHERE page_id', [[20]]);
+        $this->geocodificacionQueAnda();
+        $this->db->onSelect('SELECT 1 FROM link_groups lg', [[1]]);
+        $this->db->onSelect('SELECT id, type FROM link_groups', [['id' => 20, 'type' => 'links']]);
+        $this->db->onWrite('INSERT INTO links', 1);
+        $this->db->onSelect('SELECT * FROM links WHERE id', [['id' => 300]]);
     }
 
     /** La página existe y es de esta persona. */
@@ -268,5 +301,112 @@ class HerramientasMcpTest extends HandlerTestCase
         $r = $this->correr('cancelar_compra', ['codigo' => 'ABC123']);
 
         $this->assertFalse($r['ok']);
+    }
+
+    // ================================================== la imagen del evento
+
+    private function eventoConImagen(array $extra = [])
+    {
+        return array_merge([
+            'pagina' => 'mi-pagina', 'titulo' => 'Mi show',
+            'fecha' => '2026-12-01', 'direccion' => 'Bolívar 624',
+        ], $extra);
+    }
+
+    /**
+     * Un asistente no puede mandar un formulario con un archivo: manda los
+     * bytes, y el evento tiene que quedar apuntando a una imagen nuestra.
+     */
+    public function testCrearUnEventoConLaImagenSubidaEnBase64()
+    {
+        $this->sePuedeCrearElEvento();
+
+        $r = $this->correr(
+            'crear_evento',
+            $this->eventoConImagen(['imagen' => base64_encode('unos bytes')]),
+            $this->discoFalso()
+        );
+
+        $this->assertTrue($r['ok'], json_encode($r['datos']));
+
+        $guardados = $this->db->paramsFor('INSERT INTO links');
+        $urls = array_filter($guardados, function ($v) {
+            return is_string($v) && strpos($v, '/uploads/') !== false;
+        });
+
+        $this->assertNotEmpty($urls, 'el evento tiene que quedar con la imagen subida');
+    }
+
+    /** Sigue sirviendo apuntar a un afiche ya publicado en otro lado. */
+    public function testCrearUnEventoConLaUrlDeUnAficheYaPublicado()
+    {
+        $this->sePuedeCrearElEvento();
+
+        $r = $this->correr('crear_evento', $this->eventoConImagen(['imagen_url' => 'https://x/afiche.jpg']));
+
+        $this->assertTrue($r['ok']);
+        $this->assertContains('https://x/afiche.jpg', $this->db->paramsFor('INSERT INTO links'));
+    }
+
+    /** Si vienen las dos, gana la que se sube: es la de este momento. */
+    public function testLaImagenSubidaLeGanaALaUrl()
+    {
+        $this->sePuedeCrearElEvento();
+
+        $this->correr(
+            'crear_evento',
+            $this->eventoConImagen(['imagen' => base64_encode('x'), 'imagen_url' => 'https://x/vieja.jpg']),
+            $this->discoFalso()
+        );
+
+        $this->assertNotContains('https://x/vieja.jpg', $this->db->paramsFor('INSERT INTO links'));
+    }
+
+    /** Un archivo que no es una imagen no puede crear el evento a medias. */
+    public function testSiLaImagenNoSirveNoSeCreaElEvento()
+    {
+        $this->laPaginaEsSuya();
+        $this->db->onSelect('FROM link_groups WHERE page_id', [[20]]);
+
+        $r = $this->correr(
+            'crear_evento',
+            $this->eventoConImagen(['imagen' => base64_encode('<?php echo 1;')]),
+            $this->discoFalso(false)
+        );
+
+        $this->assertFalse($r['ok']);
+        $this->assertStringContainsString('imagen', $r['datos']['error']);
+        $this->assertSame(0, $this->db->countCalls('INSERT INTO links'));
+    }
+
+    public function testActualizarElAficheDeUnEvento()
+    {
+        $this->db->onSelect('SELECT 1 FROM links l', [[1]]);
+        $this->db->onSelect('SELECT event_latitude, event_longitude FROM links', [[
+            'event_latitude' => '-34.60', 'event_longitude' => '-58.38',
+        ]]);
+        $this->db->onWrite('UPDATE links', 1);
+        $this->db->onSelect('SELECT * FROM links WHERE id', [['id' => 300]]);
+
+        $r = $this->correr(
+            'actualizar_evento',
+            ['evento_id' => 300, 'imagen' => base64_encode('unos bytes')],
+            $this->discoFalso()
+        );
+
+        $this->assertTrue($r['ok'], json_encode($r['datos']));
+        $this->assertStringContainsString('image_url', $this->db->callsFor('UPDATE links')[0]['sql']);
+    }
+
+    public function testSiLaImagenNuevaNoSirveNoSeActualizaNada()
+    {
+        $r = $this->correr(
+            'actualizar_evento',
+            ['evento_id' => 300, 'imagen' => base64_encode('x')],
+            $this->discoFalso(false)
+        );
+
+        $this->assertFalse($r['ok']);
+        $this->assertSame(0, $this->db->countCalls('UPDATE links'));
     }
 }

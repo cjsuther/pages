@@ -29,4 +29,36 @@ class FileStorage
     {
         return move_uploaded_file($tmpPath, $destination);
     }
+
+    /**
+     * Escribe bytes en un archivo temporal y devuelve su ruta.
+     *
+     * Hace falta porque la comprobación de que algo es realmente una imagen se
+     * hace sobre un archivo, y lo que llega por MCP son bytes en memoria.
+     *
+     * @return string|false
+     */
+    public function guardarTemporal($contenido)
+    {
+        $ruta = tempnam(sys_get_temp_dir(), 'rezonar');
+
+        if ($ruta === false) {
+            return false;
+        }
+
+        return file_put_contents($ruta, $contenido) === false ? false : $ruta;
+    }
+
+    /** @return bool */
+    public function mover($origen, $destino)
+    {
+        return rename($origen, $destino);
+    }
+
+    public function borrar($ruta)
+    {
+        if (is_file($ruta)) {
+            unlink($ruta);
+        }
+    }
 }
