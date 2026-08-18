@@ -185,6 +185,20 @@ class UploadHandler
             return ['ok' => false, 'error' => 'El archivo no es una imagen JPG, PNG, GIF o WebP'];
         }
 
+        // Mirar el encabezado no alcanza. Una imagen cortada por la mitad
+        // conserva la firma y hasta el cierre del formato, así que
+        // getimagesize() la da por buena y devuelve sus dimensiones: el
+        // archivo se guardaba, el evento quedaba apuntando a él, y recién el
+        // navegador o el CDN descubrían que no se puede dibujar. Pasó con una
+        // imagen que llegó truncada por MCP. Decodificarla entera es la única
+        // comprobación que distingue una imagen de algo que empieza como una.
+        if (!self::seDecodificaEntera($bytes)) {
+            $storage->borrar($temporal);
+
+            return ['ok' => false, 'error' => 'La imagen llegó incompleta o dañada. Volvé a mandarla; '
+                . 'si la estás pasando en base64, usá subir_imagen y subí el archivo con un POST.'];
+        }
+
         $directorio = dirname(__DIR__) . '/uploads/';
         $storage->ensureDir($directorio);
 
@@ -197,6 +211,30 @@ class UploadHandler
         }
 
         return ['ok' => true, 'url' => UPLOAD_URL . '/uploads/' . $nombre];
+    }
+
+    /**
+     * Si los bytes son una imagen completa y no sólo el principio de una.
+     *
+     * Sin GD no se puede comprobar; en ese caso se deja pasar en lugar de
+     * rechazar todo, porque el encabezado ya se validó y bloquear cada subida
+     * sería peor que el problema que esto evita.
+     */
+    public static function seDecodificaEntera($bytes)
+    {
+        if (!function_exists('imagecreatefromstring')) {
+            return true;
+        }
+
+        $imagen = @imagecreatefromstring($bytes);
+
+        if ($imagen === false) {
+            return false;
+        }
+
+        imagedestroy($imagen);
+
+        return true;
     }
 
     /**

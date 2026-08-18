@@ -205,7 +205,7 @@ class UploadHandlerTest extends HandlerTestCase
     {
         $storage = $this->storage();
 
-        $r = UploadHandler::guardarBase64(base64_encode('unos bytes'), $storage);
+        $r = UploadHandler::guardarBase64(base64_encode($this->pngDeVerdad()), $storage);
 
         $this->assertTrue($r['ok']);
         $this->assertStringStartsWith(UPLOAD_URL . '/uploads/', $r['url']);
@@ -215,7 +215,7 @@ class UploadHandlerTest extends HandlerTestCase
     /** Las herramientas de imagen suelen tener a mano el data URI completo. */
     public function testAceptaUnDataUriCompleto()
     {
-        $r = UploadHandler::guardarBase64('data:image/png;base64,' . base64_encode('unos bytes'), $this->storage());
+        $r = UploadHandler::guardarBase64('data:image/png;base64,' . base64_encode($this->pngDeVerdad()), $this->storage());
 
         $this->assertTrue($r['ok']);
     }
@@ -229,7 +229,7 @@ class UploadHandlerTest extends HandlerTestCase
     {
         $storage = $this->storage(['info' => [10, 10, IMAGETYPE_PNG]]);
 
-        $r = UploadHandler::guardarBase64('data:image/jpeg;base64,' . base64_encode('x'), $storage);
+        $r = UploadHandler::guardarBase64('data:image/jpeg;base64,' . base64_encode($this->pngDeVerdad()), $storage);
 
         $this->assertStringEndsWith('.png', $r['url']);
     }
@@ -283,9 +283,67 @@ class UploadHandlerTest extends HandlerTestCase
     /** El base64 puede venir cortado en líneas. */
     public function testUnBase64ConSaltosDeLineaSeEntiende()
     {
-        $partido = chunk_split(base64_encode('unos bytes'), 8, "\n");
+        $partido = chunk_split(base64_encode($this->pngDeVerdad()), 8, "\n");
 
         $this->assertTrue(UploadHandler::guardarBase64($partido, $this->storage())['ok']);
+    }
+
+    // ==================================== una imagen cortada por la mitad
+
+    private function pngDeVerdad($lado = 40, $conRuido = false)
+    {
+        $im = imagecreatetruecolor($lado, $lado);
+
+        if ($conRuido) {
+            for ($x = 0; $x < $lado; $x++) {
+                for ($y = 0; $y < $lado; $y++) {
+                    imagesetpixel($im, $x, $y, imagecolorallocate($im, ($x * 7) % 256, ($y * 13) % 256, ($x * $y) % 256));
+                }
+            }
+        } else {
+            imagefilledrectangle($im, 0, 0, $lado - 1, $lado - 1, imagecolorallocate($im, 200, 30, 30));
+        }
+
+        ob_start();
+        imagepng($im);
+        imagedestroy($im);
+
+        return ob_get_clean();
+    }
+
+    /**
+     * Una imagen cortada conserva la firma y las dimensiones del encabezado,
+     * así que getimagesize() la da por buena: el archivo se guardaba y el
+     * evento quedaba apuntando a algo que no se puede dibujar.
+     */
+    public function testUnaImagenCortadaPorLaMitadNoSeGuarda()
+    {
+        $entera = $this->pngDeVerdad();
+        $cortada = substr($entera, 0, (int) (strlen($entera) * 0.4)) . 'IEND';
+
+        $this->assertNotFalse(@getimagesize('data://image/png;base64,' . base64_encode($cortada)), 'el encabezado sigue siendo legible');
+        $this->assertFalse(UploadHandler::seDecodificaEntera($cortada));
+    }
+
+    public function testUnaImagenEnteraPasaLaComprobacion()
+    {
+        $this->assertTrue(UploadHandler::seDecodificaEntera($this->pngDeVerdad()));
+    }
+
+    /** El caso que rompió en producción, extremo a extremo. */
+    public function testUnBase64TruncadoSeRechazaConUnMensajeUtil()
+    {
+        // Con ruido, para que comprima poco y truncar corte de verdad.
+        $entera = $this->pngDeVerdad(120, true);
+        $base64 = base64_encode($entera);
+        // Múltiplo de 4: así el base64 sigue siendo válido y lo que queda
+        // incompleta es la imagen, que es justo el caso que se escapaba.
+        $truncado = substr($base64, 0, ((int) (strlen($base64) * 0.4) >> 2) << 2);
+
+        $r = UploadHandler::guardarBase64($truncado, $this->storage(['info' => [120, 120, IMAGETYPE_PNG]]));
+
+        $this->assertFalse($r['ok']);
+        $this->assertStringContainsString('incompleta', $r['error']);
     }
 
     public function testDecodificarDevuelveLosBytesOriginales()
@@ -457,9 +515,15 @@ class FakeFileStorage extends FileStorage
     public $temporal = '/tmp/fake-temporal';
     public $borrados = [];
 
+    /** Bytes de una imagen de verdad: la validación los decodifica. */
     public function leer($ruta)
     {
-        return 'unos bytes';
+        $im = imagecreatetruecolor(8, 8);
+        ob_start();
+        imagepng($im);
+        imagedestroy($im);
+
+        return ob_get_clean();
     }
 
     public function guardarTemporal($contenido)

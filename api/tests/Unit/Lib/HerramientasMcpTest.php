@@ -15,6 +15,17 @@ class HerramientasMcpTest extends HandlerTestCase
         return HerramientasMcp::ejecutar($this->db, $this->usuario, $nombre, $args, $storage);
     }
 
+    /** Bytes de una imagen real: la validación la decodifica entera. */
+    private function pngDeVerdad()
+    {
+        $im = imagecreatetruecolor(12, 12);
+        ob_start();
+        imagepng($im);
+        imagedestroy($im);
+
+        return ob_get_clean();
+    }
+
     /** Almacenamiento que no toca el disco. */
     private function discoFalso($info = [10, 10, IMAGETYPE_JPEG], $exito = true)
     {
@@ -323,7 +334,7 @@ class HerramientasMcpTest extends HandlerTestCase
 
         $r = $this->correr(
             'crear_evento',
-            $this->eventoConImagen(['imagen' => base64_encode('unos bytes')]),
+            $this->eventoConImagen(['imagen' => base64_encode($this->pngDeVerdad())]),
             $this->discoFalso()
         );
 
@@ -355,7 +366,7 @@ class HerramientasMcpTest extends HandlerTestCase
 
         $this->correr(
             'crear_evento',
-            $this->eventoConImagen(['imagen' => base64_encode('x'), 'imagen_url' => 'https://x/vieja.jpg']),
+            $this->eventoConImagen(['imagen' => base64_encode($this->pngDeVerdad()), 'imagen_url' => 'https://x/vieja.jpg']),
             $this->discoFalso()
         );
 
@@ -370,7 +381,7 @@ class HerramientasMcpTest extends HandlerTestCase
 
         $r = $this->correr(
             'crear_evento',
-            $this->eventoConImagen(['imagen' => base64_encode('<?php echo 1;')]),
+            $this->eventoConImagen(['imagen' => base64_encode($this->pngDeVerdad())]),
             $this->discoFalso(false)
         );
 
@@ -390,7 +401,7 @@ class HerramientasMcpTest extends HandlerTestCase
 
         $r = $this->correr(
             'actualizar_evento',
-            ['evento_id' => 300, 'imagen' => base64_encode('unos bytes')],
+            ['evento_id' => 300, 'imagen' => base64_encode($this->pngDeVerdad())],
             $this->discoFalso()
         );
 
@@ -402,7 +413,7 @@ class HerramientasMcpTest extends HandlerTestCase
     {
         $r = $this->correr(
             'actualizar_evento',
-            ['evento_id' => 300, 'imagen' => base64_encode('x')],
+            ['evento_id' => 300, 'imagen' => base64_encode($this->pngDeVerdad())],
             $this->discoFalso(false)
         );
 
