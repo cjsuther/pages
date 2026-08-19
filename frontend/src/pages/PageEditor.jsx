@@ -7,7 +7,6 @@ import SeccionRedes from '../components/SeccionRedes';
 import SeccionEntradas from '../components/SeccionEntradas';
 import PanelEntradas from '../components/PanelEntradas';
 import PanelVentas from '../components/PanelVentas';
-import { MoreVertical } from 'lucide-react';
 
 /** Secciones del editor, en el orden en que se muestran. */
 const SECCIONES = [
@@ -50,10 +49,6 @@ function PageEditor() {
     event_maps_url: ''
   });
   const [uploadingLinkImage, setUploadingLinkImage] = useState(false);
-  const [openGroupMenu, setOpenGroupMenu] = useState(null);
-  const [openLinkMenu, setOpenLinkMenu] = useState(null);
-  const groupMenuRef = useRef(null);
-  const linkMenuRef = useRef(null);
 
   // Collaborations state
   const [pendingCollaborations, setPendingCollaborations] = useState([]);
@@ -140,20 +135,6 @@ function PageEditor() {
       console.error('Error removing admin:', err);
     }
   };
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (groupMenuRef.current && !groupMenuRef.current.contains(event.target)) {
-        setOpenGroupMenu(null);
-      }
-      if (linkMenuRef.current && !linkMenuRef.current.contains(event.target)) {
-        setOpenLinkMenu(null);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   const fetchPage = async () => {
     try {
@@ -1095,9 +1076,14 @@ function PageEditor() {
                 <div className="space-y-6">
                   {page.groups?.map((group, index) => (
                     <div key={group.id} className="bg-black rounded-lg shadow-md p-6">
-                      <div className="flex justify-between items-center mb-4">
-                        <div className="flex items-center gap-3">
-                          <h3 className="text-xl font-semibold">{group.title}</h3>
+                      {/* En mobile las acciones van debajo del título. Antes
+                          compartían fila: un título largo empujaba los botones
+                          fuera de la pantalla y no había forma de llegar a
+                          ellos. min-w-0 es lo que permite que el título se
+                          recorte en vez de estirar la fila. */}
+                      <div className="flex flex-col gap-3 md:flex-row md:justify-between md:items-center mb-4">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <h3 className="text-xl font-semibold truncate">{group.title}</h3>
                           <span className={`px-2 py-1 text-xs rounded-full ${group.type === 'galeria' ? 'bg-purple-100 text-purple-700' :
                               group.type === 'eventos' ? 'bg-orange-100 text-orange-700' :
                                   'bg-blue-100 text-blue-700'
@@ -1107,7 +1093,7 @@ function PageEditor() {
                                   'Links'}
                           </span>
                         </div>
-                        <div className="flex gap-2 items-center">
+                        <div className="flex flex-wrap gap-2 items-center shrink-0">
                           <button
                             onClick={() => moveGroup(group.id, 'up')}
                             disabled={index === 0}
@@ -1125,7 +1111,7 @@ function PageEditor() {
                             ↓
                           </button>
 
-                          <div className="hidden md:flex gap-2">
+                          <div className="flex flex-wrap gap-2">
                             <button
                               onClick={() => openEditGroupModal(group)}
                               className="text-blue-600 hover:bg-blue-50 px-3 py-1 rounded-lg transition text-sm"
@@ -1151,49 +1137,6 @@ function PageEditor() {
                             </button>
                           </div>
 
-                          <div className="relative md:hidden" ref={openGroupMenu === group.id ? groupMenuRef : null}>
-                            <button
-                              onClick={() => setOpenGroupMenu(openGroupMenu === group.id ? null : group.id)}
-                              className="p-2 hover:bg-gray-200 rounded-lg transition text-gray-900"
-                            >
-                              <MoreVertical className="w-5 h-5" />
-                            </button>
-
-                            {openGroupMenu === group.id && (
-                              <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 w-48">
-                                <button
-                                  onClick={() => {
-                                    openEditGroupModal(group);
-                                    setOpenGroupMenu(null);
-                                  }}
-                                  className="w-full text-left px-4 py-2 hover:bg-gray-100 text-sm text-blue-600"
-                                >
-                                  Editar Título
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    setSelectedGroup(group);
-                                    setShowLinkModal(true);
-                                    setOpenGroupMenu(null);
-                                  }}
-                                  className="w-full text-left px-4 py-2 hover:bg-gray-100 text-sm text-green-600"
-                                >
-                                  {group.type === 'galeria' ? '+ Imagen' :
-                                    group.type === 'eventos' ? '+ Evento' :
-                                      '+ Link'}
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    deleteGroup(group.id);
-                                    setOpenGroupMenu(null);
-                                  }}
-                                  className="w-full text-left px-4 py-2 hover:bg-gray-100 text-sm text-red-600"
-                                >
-                                  Eliminar
-                                </button>
-                              </div>
-                            )}
-                          </div>
                         </div>
                       </div>
 
@@ -1244,7 +1187,7 @@ function PageEditor() {
                             ) : (
                             <div
                               key={link.id}
-                              className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg hover:bg-gray-100"
+                              className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 p-3 bg-gray-50 rounded-lg hover:bg-gray-100"
                             >
                               {link.image_url && (
                                 <img
@@ -1293,7 +1236,10 @@ function PageEditor() {
                                   </div>
                                 )}
                               </div>
-                              <div className="flex gap-1 items-center">
+                              {/* Se envuelven y se apilan: con el título y la
+                                  imagen en la misma fila, en un teléfono los
+                                  botones quedaban fuera de la pantalla. */}
+                              <div className="flex flex-wrap gap-1 items-center shrink-0">
                                 {group.type !== 'eventos' && (
                                   <>
                                     <button
@@ -1315,7 +1261,7 @@ function PageEditor() {
                                   </>
                                 )}
 
-                                <div className="hidden md:flex gap-1">
+                                <div className="flex flex-wrap gap-1">
                                   <button
                                     onClick={() => openEditLinkModal(link, group)}
                                     className="text-blue-600 hover:bg-blue-50 px-3 py-1 rounded transition text-sm"
@@ -1330,37 +1276,6 @@ function PageEditor() {
                                   </button>
                                 </div>
 
-                                <div className="relative md:hidden" ref={openLinkMenu === link.id ? linkMenuRef : null}>
-                                  <button
-                                    onClick={() => setOpenLinkMenu(openLinkMenu === link.id ? null : link.id)}
-                                    className="p-2 hover:bg-gray-300 rounded transition text-gray-900"
-                                  >
-                                    <MoreVertical className="w-4 h-4" />
-                                  </button>
-
-                                  {openLinkMenu === link.id && (
-                                    <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 w-40">
-                                      <button
-                                        onClick={() => {
-                                          openEditLinkModal(link, group);
-                                          setOpenLinkMenu(null);
-                                        }}
-                                        className="w-full text-left px-4 py-2 hover:bg-gray-100 text-sm text-blue-600"
-                                      >
-                                        Editar
-                                      </button>
-                                      <button
-                                        onClick={() => {
-                                          deleteLink(link.id);
-                                          setOpenLinkMenu(null);
-                                        }}
-                                        className="w-full text-left px-4 py-2 hover:bg-gray-100 text-sm text-red-600"
-                                      >
-                                        Eliminar
-                                      </button>
-                                    </div>
-                                  )}
-                                </div>
                               </div>
                             </div>
                             )

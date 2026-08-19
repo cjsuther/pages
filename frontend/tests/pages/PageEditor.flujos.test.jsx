@@ -291,25 +291,33 @@ describe('PageEditor — flujos de edición', () => {
   // =============================================================== grupos
 
   describe('grupos', () => {
-    const unGrupo = () => pagina({ groups: [grupo({ id: 10, title: 'Mis Links' })] });
+    const unGrupo = (extra = {}) => pagina({ groups: [grupo({ id: 10, title: 'Mis Links', ...extra })] });
 
-    /**
-     * Cada acción de grupo existe dos veces: en la fila (escritorio) y dentro
-     * del menú contextual (móvil). Se usa la primera, que es la de la fila.
-     */
     const accionDeGrupo = (etiqueta) => screen.getAllByText(etiqueta)[0];
 
-    it('el menú contextual repite las acciones de la fila', async () => {
+    /**
+     * Antes las acciones vivían en un menú contextual en móvil, y un título
+     * largo empujaba el botón que lo abría fuera de la pantalla: no había
+     * forma de llegar a ellas. Ahora son los mismos botones siempre, que se
+     * apilan debajo del título cuando no entran.
+     */
+    it('las acciones del grupo existen una sola vez y siempre visibles', async () => {
       await render({ page: unGrupo() }, 'CONTENIDO');
 
-      const conIcono = screen.getAllByRole('button').filter((b) => b.querySelector('svg'));
-      fireEvent.click(conIcono[conIcono.length - 1]);
+      expect(screen.getAllByText('Editar Título')).toHaveLength(1);
+      expect(screen.getAllByText('Eliminar')).toHaveLength(1);
+    });
 
-      // Con el menú abierto cada acción aparece duplicada.
-      await waitFor(() => {
-        expect(screen.getAllByText('Editar Título')).toHaveLength(2);
-        expect(screen.getAllByText('Eliminar')).toHaveLength(2);
-      });
+    /** El título se recorta en vez de estirar la fila y empujar los botones. */
+    it('un título largo no desplaza las acciones', async () => {
+      await render({
+        page: unGrupo({ title: 'Un título larguísimo que en un teléfono no entra de ninguna manera' }),
+      }, 'CONTENIDO');
+
+      const titulo = screen.getByRole('heading', { level: 3 });
+
+      expect(titulo.className).toContain('truncate');
+      expect(screen.getByText('Eliminar')).toBeInTheDocument();
     });
 
     it('edita el título del grupo', async () => {
