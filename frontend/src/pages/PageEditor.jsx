@@ -1047,7 +1047,7 @@ function PageEditor() {
             )}
 
             <div className="bg-gray-900 border border-gray-800 p-8 mb-8">
-              <div className="flex justify-between items-center mb-8">
+              <div className="flex justify-between items-center mb-4">
                 <h2 className="text-2xl font-black tracking-tight">GRUPOS DE LINKS</h2>
                 <button
                   onClick={() => setShowGroupModal(true)}
@@ -1055,6 +1055,38 @@ function PageEditor() {
                 >
                   + NUEVO GRUPO
                 </button>
+              </div>
+
+              {/* El contenido de una página vive dentro de un grupo, y el tipo
+                  del grupo decide cómo se ve. Es lo primero que hay que
+                  entender para cargar algo, y no estaba dicho en ninguna
+                  parte: se creaba un grupo de links y después no se podía
+                  poner una fecha. */}
+              <div className="border border-gray-800 bg-black p-5 mb-8">
+                <p className="text-sm text-gray-400 mb-3">
+                  Todo lo que publicás va adentro de un grupo, y el tipo que elijas define
+                  cómo se muestra. Creá uno por cada clase de contenido:
+                </p>
+                <ul className="text-sm text-gray-500 space-y-1.5">
+                  <li>
+                    <strong className="text-gray-300">Links —</strong> una lista de enlaces
+                    con su descripción e imagen.
+                  </li>
+                  <li>
+                    <strong className="text-gray-300">Eventos —</strong> con fecha, hora y
+                    dirección. Es el único que aparece en la agenda, en el mapa y en el
+                    buscador, y el único que puede vender entradas.
+                  </li>
+                  <li>
+                    <strong className="text-gray-300">Galería —</strong> una cuadrícula de
+                    imágenes que se abren en grande.
+                  </li>
+                </ul>
+                <p className="text-xs text-gray-600 mt-3">
+                  El tipo se elige al crear el grupo y conviene acertarlo: un evento cargado
+                  como link no tiene dónde poner la fecha. Tus redes sociales no van acá,
+                  se cargan en la sección Redes Sociales.
+                </p>
               </div>
 
               {page.groups && page.groups.length === 0 ? (
@@ -1068,12 +1100,10 @@ function PageEditor() {
                           <h3 className="text-xl font-semibold">{group.title}</h3>
                           <span className={`px-2 py-1 text-xs rounded-full ${group.type === 'galeria' ? 'bg-purple-100 text-purple-700' :
                               group.type === 'eventos' ? 'bg-orange-100 text-orange-700' :
-                                group.type === 'redes' ? 'bg-pink-100 text-pink-700' :
                                   'bg-blue-100 text-blue-700'
                             }`}>
                             {group.type === 'galeria' ? 'Galería' :
                               group.type === 'eventos' ? 'Eventos' :
-                                group.type === 'redes' ? 'Redes Sociales' :
                                   'Links'}
                           </span>
                         </div>
@@ -1370,13 +1400,11 @@ function PageEditor() {
                   required
                 >
                   <option value="links">Links</option>
-                  <option value="redes">Redes Sociales</option>
                   <option value="galeria">Galería</option>
                   <option value="eventos">Eventos</option>
                 </select>
                 <p className="text-xs text-gray-600 mt-2">
                   {newGroup.type === 'links' && 'Lista de enlaces con descripción'}
-                  {newGroup.type === 'redes' && 'Se crea con Instagram, TikTok, YouTube, Facebook, WhatsApp y Cafecito (con su logo). Editá cada uno con tu enlace.'}
                   {newGroup.type === 'galeria' && 'Cuadrícula de imágenes'}
                   {newGroup.type === 'eventos' && 'Eventos con fecha, hora y ubicación'}
                 </p>

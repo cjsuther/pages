@@ -108,40 +108,40 @@ class GroupsHandlerTest extends HandlerTestCase
         $this->assertSame(0, $this->db->countCalls('INSERT INTO links'));
     }
 
-    public function testIndexPrecargaLasRedesSocialesEnGruposDeTipoRedes()
+    /**
+     * El tipo "redes" se sacó: las redes de una página se cargan en su propia
+     * sección. Un cliente viejo que todavía lo mande tiene que enterarse.
+     */
+    public function testUnTipoDeGrupoDesconocidoSeRechaza()
     {
         $this->autorizarPagina();
-        $this->db->onInsert('INSERT INTO link_groups', 20);
 
-        GroupsHandler::index($this->db, $this->post(
+        $res = GroupsHandler::index($this->db, $this->post(
             ['page_id' => 3, 'title' => 'Redes', 'type' => 'redes'],
             $this->user()
         ));
 
-        $esperadas = GroupsHandler::redesPorDefecto();
-        $llamadas = $this->db->callsFor('INSERT INTO links');
-
-        $this->assertCount(count($esperadas), $llamadas);
-
-        foreach ($esperadas as $i => $red) {
-            $this->assertSame(
-                // lastInsertId() devuelve string, igual que en PDO real.
-                ['20', $red[1], $red[0], $red[2], $i],
-                $llamadas[$i]['params'],
-                'La red en la posición ' . $i . ' no se precargó como corresponde'
-            );
-        }
+        $this->assertSame(400, $res->status);
+        $this->assertSame(0, $this->db->countCalls('INSERT INTO link_groups'));
     }
 
-    public function testLasRedesPrecargadasTienenLogoYUrl()
+    /** @dataProvider tiposValidos */
+    public function testLosTiposQueQuedanSeAceptan($tipo)
     {
-        foreach (GroupsHandler::redesPorDefecto() as $red) {
-            list($nombre, $url, $logo) = $red;
+        $this->autorizarPagina();
+        $this->db->onInsert('INSERT INTO link_groups', 20);
 
-            $this->assertNotEmpty($nombre);
-            $this->assertStringStartsWith('https://', $url);
-            $this->assertStringEndsWith('.svg', $logo);
-        }
+        $res = GroupsHandler::index($this->db, $this->post(
+            ['page_id' => 3, 'title' => 'Un grupo', 'type' => $tipo],
+            $this->user()
+        ));
+
+        $this->assertSame(201, $res->status);
+    }
+
+    public function tiposValidos()
+    {
+        return array_map(function ($t) { return [$t]; }, \GroupsHandler::$tiposValidos);
     }
 
     public function testIndexDevuelve500SiLaBaseFalla()

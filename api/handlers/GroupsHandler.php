@@ -8,15 +8,13 @@
  */
 class GroupsHandler
 {
-    /** Links precargados al crear un grupo de tipo "redes". */
-    private static $redesPorDefecto = [
-        ['Instagram', 'https://instagram.com/', '/social/instagram.svg'],
-        ['TikTok',    'https://tiktok.com/',    '/social/tiktok.svg'],
-        ['YouTube',   'https://youtube.com/',   '/social/youtube.svg'],
-        ['Facebook',  'https://facebook.com/',  '/social/facebook.svg'],
-        ['WhatsApp',  'https://wa.me/',         '/social/whatsapp.svg'],
-        ['Cafecito',  'https://cafecito.app/',  '/social/cafecito.svg'],
-    ];
+    /**
+     * Tipos de grupo que existen.
+     *
+     * Se valida acá y no sólo en la base: con el ENUM alcanza para que no
+     * entre basura, pero el error de MySQL no le dice nada a quien lo lee.
+     */
+    public static $tiposValidos = ['links', 'galeria', 'eventos'];
 
     private static $updatableFields = ['title', 'type', 'position'];
 
@@ -43,6 +41,10 @@ class GroupsHandler
 
             $tipo = $req->input('type', 'links');
 
+            if (!in_array($tipo, self::$tiposValidos, true)) {
+                return Response::error(400, 'Tipo de grupo desconocido: ' . $tipo);
+            }
+
             $stmt = $db->prepare('INSERT INTO link_groups (page_id, title, type, position) VALUES (?, ?, ?, ?)');
             $stmt->execute([
                 $req->input('page_id'),
@@ -52,10 +54,6 @@ class GroupsHandler
             ]);
 
             $groupId = $db->lastInsertId();
-
-            if ($tipo === 'redes') {
-                self::precargarRedes($db, $groupId);
-            }
 
             $stmt = $db->prepare('SELECT * FROM link_groups WHERE id = ?');
             $stmt->execute([$groupId]);
@@ -147,18 +145,4 @@ class GroupsHandler
         }
     }
 
-    private static function precargarRedes($db, $groupId)
-    {
-        $stmt = $db->prepare('INSERT INTO links (group_id, url, text, image_url, position) VALUES (?, ?, ?, ?, ?)');
-
-        foreach (self::$redesPorDefecto as $i => $red) {
-            $stmt->execute([$groupId, $red[1], $red[0], $red[2], $i]);
-        }
-    }
-
-    /** Expuesto para que los tests verifiquen el catálogo sin duplicarlo. */
-    public static function redesPorDefecto()
-    {
-        return self::$redesPorDefecto;
-    }
 }

@@ -182,7 +182,6 @@ describe('PageEditor', () => {
             grupo({ id: 1, title: 'Mis Links', type: 'links' }),
             grupo({ id: 2, title: 'Agenda', type: 'eventos' }),
             grupo({ id: 3, title: 'Fotos', type: 'galeria' }),
-            grupo({ id: 4, title: 'Redes', type: 'redes' }),
           ],
         }),
       }, 'CONTENIDO');
@@ -191,7 +190,57 @@ describe('PageEditor', () => {
       expect(screen.getByText('Links')).toBeInTheDocument();
       expect(screen.getByText('Eventos')).toBeInTheDocument();
       expect(screen.getByText('Galería')).toBeInTheDocument();
-      expect(screen.getByText('Redes Sociales')).toBeInTheDocument();
+    });
+
+    /**
+     * El tipo "redes" se sacó, pero puede quedar alguno viejo en una base sin
+     * migrar: se muestra como lo que las plantillas siempre dibujaron, links.
+     */
+    it('un grupo de un tipo que ya no existe se muestra como links', async () => {
+      await render({
+        page: pagina({ groups: [grupo({ id: 4, title: 'Redes', type: 'redes' })] }),
+      }, 'CONTENIDO');
+
+      expect(screen.getByText('Links')).toBeInTheDocument();
+      expect(screen.queryByText('Redes Sociales')).not.toBeInTheDocument();
+    });
+
+    /**
+     * El tipo del grupo decide cómo se ve el contenido, y es lo primero que
+     * hay que entender para cargar algo. Antes no estaba dicho en ninguna
+     * parte: se creaba un grupo de links y después no había dónde poner la
+     * fecha.
+     */
+    it('explica para qué sirve cada tipo de grupo', async () => {
+      await render({}, 'CONTENIDO');
+
+      expect(screen.getByText(/Todo lo que publicás va adentro de un grupo/)).toBeInTheDocument();
+      expect(screen.getByText('Links —')).toBeInTheDocument();
+      expect(screen.getByText('Eventos —')).toBeInTheDocument();
+      expect(screen.getByText('Galería —')).toBeInTheDocument();
+    });
+
+    /** Es el único tipo que llega a la agenda, al mapa y a las entradas. */
+    it('aclara qué gana un evento por serlo', async () => {
+      await render({}, 'CONTENIDO');
+
+      expect(screen.getByText(/aparece en la agenda, en el mapa y en el buscador/)).toBeInTheDocument();
+    });
+
+    /** Las redes son de la página, no un bloque de contenido. */
+    it('manda las redes sociales a su sección', async () => {
+      await render({}, 'CONTENIDO');
+
+      expect(screen.getByText(/se cargan en la sección Redes Sociales/)).toBeInTheDocument();
+    });
+
+    it('ya no ofrece crear un grupo de redes sociales', async () => {
+      await render({}, 'CONTENIDO');
+
+      fireEvent.click(screen.getByRole('button', { name: '+ NUEVO GRUPO' }));
+
+      expect(screen.getByRole('option', { name: 'Links' })).toBeInTheDocument();
+      expect(screen.queryByRole('option', { name: 'Redes Sociales' })).not.toBeInTheDocument();
     });
 
     it('abre el modal de nuevo grupo', async () => {
