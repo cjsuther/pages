@@ -68,6 +68,16 @@ class FakeStatement
     {
         $rows = $this->rows;
         $this->rows = [];
+
+        // FETCH_COLUMN devuelve escalares, no filas. Ignorar el modo dejaba
+        // que el código bajo prueba recibiera arrays donde en producción
+        // recibe strings, y el test pasaba por el motivo equivocado.
+        if ($mode === \PDO::FETCH_COLUMN) {
+            return array_map(function ($row) {
+                return is_array($row) ? reset($row) : $row;
+            }, $rows);
+        }
+
         return $rows;
     }
 
