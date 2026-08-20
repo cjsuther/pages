@@ -2,6 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { AuthContext } from '../App';
+import BotonNotificaciones from '../components/BotonNotificaciones';
 import { Search, MapPin, Calendar, FileSymlink, ExternalLink, Users, ArrowUpDown, Map, Grid } from 'lucide-react';
 import EventsMap from '../components/EventsMap';
 import FollowButton from '../components/FollowButton';
@@ -191,6 +192,14 @@ function Home() {
 
         <section className="py-20 border-b border-gray-800">
           <div className="max-w-7xl mx-auto px-6">
+            {/* Arriba de los eventos y no en un rincón: la home es donde se
+                entra a mirar qué hay, que es exactamente cuando tiene sentido
+                ofrecer enterarse sin entrar. Se esconde solo si ya están
+                activadas. */}
+            <div className="mb-8">
+              <BotonNotificaciones />
+            </div>
+
             <div className="mb-8">
               <h2 className="text-4xl font-black tracking-tight mb-4">{token ? 'EVENTOS' : 'EVENTOS CERCA'}</h2>
               <div className="flex flex-col sm:flex-row sm:items-center gap-3">
