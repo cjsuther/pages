@@ -6,6 +6,7 @@ import RedesSociales from '../RedesSociales';
 import BotonEntradas, { vendeEntradas } from '../BotonEntradas';
 import PrecioEvento from '../PrecioEvento';
 import RezonarBadge from '../RezonarBadge';
+import { superficie, borde } from '../../utils/colores';
 import { ExternalLink } from 'lucide-react';
 
 function ModernTemplate({ page }) {
@@ -15,6 +16,20 @@ function ModernTemplate({ page }) {
   const textColor = page.text_color || '#f1f5f9';
   const primaryColor = page.primary_color || '#06b6d4';
   const backgroundImage = page.background_image;
+
+  // El detalle del evento sale de la misma paleta que la página. Estaba fijo
+  // en blanco con texto negro: sobre una página oscura era un recuadro ajeno,
+  // y el botón de compra —que se pinta con un color de la paleta— podía
+  // quedar del mismo color que ese blanco y desaparecer.
+  const fondoModal = superficie(backgroundColor, textColor);
+  const bordeModal = borde(textColor);
+
+  const modalStyle = {
+    color: textColor,
+    backgroundColor: fondoModal || '#ffffff',
+    ...(fondoModal ? {} : { color: '#000' }),
+    ...(bordeModal && { border: `1px solid ${bordeModal}` }),
+  };
 
   const containerStyle = {
     backgroundColor,
@@ -221,7 +236,7 @@ function ModernTemplate({ page }) {
           onClick={() => setModalEvent(null)}
         >
           <div className="max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="bg-white rounded-lg p-8" style={{ color: '#000' }}>
+            <div className="rounded-lg p-8" style={modalStyle}>
               <button
                 onClick={() => setModalEvent(null)}
                 className="float-right text-gray-600 text-3xl font-bold hover:text-gray-900"

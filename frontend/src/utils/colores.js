@@ -68,6 +68,54 @@ export function superficie(fondo, texto) {
   return mezclar(fondo, texto, TONO_TARJETA);
 }
 
+/** Luminancia relativa de la WCAG: cuánta luz emite el color, de 0 a 1. */
+function luminancia([r, g, b]) {
+  const canal = (v) => {
+    const s = v / 255;
+    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+  };
+
+  return 0.2126 * canal(r) + 0.7152 * canal(g) + 0.0722 * canal(b);
+}
+
+/** Contraste entre dos colores, de 1 (idénticos) a 21 (negro contra blanco). */
+export function contraste(unColor, otroColor) {
+  const a = aRgb(unColor);
+  const b = aRgb(otroColor);
+
+  if (!a || !b) return null;
+
+  const la = luminancia(a);
+  const lb = luminancia(b);
+
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+
+/**
+ * Color para escribir sobre un fondo que elegimos nosotros.
+ *
+ * Se usa sólo donde el fondo no es el de la página sino uno propio del
+ * control —el botón de compra, que se pinta con el color de acento—. Ahí la
+ * tipografía no la eligió nadie: la elegimos nosotros, y tiene que leerse.
+ * Sobre las superficies que acompañan al fondo de la página no hace falta,
+ * porque ahí vale el color que eligió la persona.
+ */
+export function textoSobre(fondo, preferido = '#ffffff') {
+  // 3:1 y no 4.5:1 porque esto se aplica a etiquetas de botón, que son
+  // grandes y en negrita: es el umbral que la WCAG pide para ese tamaño.
+  // Con 4.5 el azul de acento por defecto daba vuelta la etiqueta a negro,
+  // que se lee bien pero no es lo que nadie eligió.
+  const suficiente = contraste(fondo, preferido);
+
+  if (suficiente !== null && suficiente >= 3) return preferido;
+
+  const contraNegro = contraste(fondo, '#000000');
+
+  if (contraNegro === null) return preferido;
+
+  return contraNegro >= contraste(fondo, '#ffffff') ? '#000000' : '#ffffff';
+}
+
 /** Borde tenue que delimita la tarjeta sin agregar un color a la paleta. */
 export function borde(texto) {
   return conAlfa(texto, ALFA_BORDE);

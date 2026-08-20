@@ -516,6 +516,67 @@ describe.each(PLANTILLAS)('%s', (nombre, Plantilla) => {
     });
   });
 
+  describe('el detalle del evento', () => {
+    const conEvento = () =>
+      pagina({
+        background_color: '#000000',
+        text_color: '#ffffff',
+        primary_color: '#3b82f6',
+        groups: [{ id: 20, title: 'Agenda', type: 'eventos', links: [evento()], collaborated_events: [] }],
+      });
+
+    const abrir = () => fireEvent.click(screen.getByText('Mi Evento'));
+
+    /**
+     * Estaba fijo en blanco con texto negro. Sobre una página oscura era un
+     * recuadro ajeno, y el botón de compra —que se pinta con un color de la
+     * paleta— podía quedar del mismo color que ese blanco y desaparecer.
+     */
+    it('sale de la paleta de la página y no de un blanco fijo', () => {
+      const { container } = renderConProviders(<Plantilla page={conEvento()} />);
+      abrir();
+
+      // El modal es la capa fija que se superpone; adentro, el primer
+      // elemento con estilo propio es el panel.
+      const panel = container.querySelector('.fixed [style]');
+
+      expect(panel.style.backgroundColor).not.toBe('rgb(255, 255, 255)');
+      expect(panel.style.color).toBe('rgb(255, 255, 255)');
+    });
+
+    /**
+     * El botón se pinta con el color de acento, no con el del texto: cuando
+     * una plantilla le pasaba el color del texto, en una página de tipografía
+     * blanca el botón quedaba blanco sobre blanco.
+     */
+    it('el botón de compra usa el color de acento', () => {
+      const conVenta = {
+        activo: true, es_gratis: false, precio: 1500, moneda: 'ARS',
+        disponibles: 50, max_por_compra: 6, agotado: false,
+      };
+
+      renderConProviders(
+        <Plantilla
+          page={pagina({
+            background_color: '#000000',
+            text_color: '#ffffff',
+            primary_color: '#3b82f6',
+            groups: [{
+              id: 20, title: 'Agenda', type: 'eventos', collaborated_events: [],
+              links: [evento({ entradas: conVenta })],
+            }],
+          })}
+        />
+      );
+      abrir();
+
+      const boton = screen.getByRole('button', { name: /COMPRAR ENTRADAS/ });
+
+      expect(boton.style.backgroundColor).toBe('rgb(59, 130, 246)');
+      expect(boton.style.color).not.toBe(boton.style.backgroundColor);
+    });
+  });
+
   describe('pie', () => {
     it('lleva la marca Rezonar al inicio', () => {
       renderConProviders(<Plantilla page={pagina()} />);

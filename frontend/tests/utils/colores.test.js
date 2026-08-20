@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { aRgb, borde, conAlfa, mezclar, superficie } from '../../src/utils/colores';
+import { aRgb, borde, conAlfa, contraste, mezclar, superficie, textoSobre } from '../../src/utils/colores';
 
 describe('aRgb', () => {
   it('entiende el formato largo', () => {
@@ -107,5 +107,40 @@ describe('borde', () => {
 
   it('es null si la tipografía no se entiende', () => {
     expect(borde(null)).toBeNull();
+  });
+});
+
+describe('textoSobre', () => {
+  /**
+   * Se usa sólo donde el fondo lo elegimos nosotros —el botón de compra, que
+   * se pinta con el color de acento—. Ahí la tipografía no la eligió nadie.
+   */
+  /** El azul de acento por defecto tiene que seguir con etiqueta blanca. */
+  it('deja el blanco sobre el acento por defecto', () => {
+    expect(textoSobre('#3B82F6')).toBe('#ffffff');
+  });
+
+  it('deja el blanco sobre un fondo bien oscuro', () => {
+    expect(textoSobre('#111827')).toBe('#ffffff');
+  });
+
+  /** El caso del bug: acento claro y etiqueta blanca fija. */
+  it('pasa a negro cuando el blanco no se leería', () => {
+    expect(textoSobre('#ffffff')).toBe('#000000');
+    expect(textoSobre('#ffe680')).toBe('#000000');
+  });
+
+  it('con un color que no se entiende devuelve el preferido', () => {
+    expect(textoSobre('no es un color')).toBe('#ffffff');
+  });
+});
+
+describe('contraste', () => {
+  it('el máximo es negro contra blanco', () => {
+    expect(contraste('#000000', '#ffffff')).toBeCloseTo(21, 1);
+  });
+
+  it('un color contra sí mismo no contrasta', () => {
+    expect(contraste('#f7f7f7', '#f7f7f7')).toBeCloseTo(1, 5);
   });
 });

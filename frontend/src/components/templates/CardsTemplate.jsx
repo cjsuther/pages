@@ -29,6 +29,20 @@ function CardsTemplate({ page }) {
     ...(bordeTarjeta && { border: `1px solid ${bordeTarjeta}` }),
   };
 
+  // El detalle del evento sale de la misma paleta que la página. Estaba fijo
+  // en blanco con texto negro: sobre una página oscura era un recuadro ajeno,
+  // y el botón de compra —que se pinta con un color de la paleta— podía
+  // quedar del mismo color que ese blanco y desaparecer.
+  const fondoModal = superficie(backgroundColor, textColor);
+  const bordeModal = borde(textColor);
+
+  const modalStyle = {
+    color: textColor,
+    backgroundColor: fondoModal || '#ffffff',
+    ...(fondoModal ? {} : { color: '#000' }),
+    ...(bordeModal && { border: `1px solid ${bordeModal}` }),
+  };
+
   const containerStyle = {
     backgroundColor,
     color: textColor,
@@ -224,7 +238,7 @@ function CardsTemplate({ page }) {
           onClick={() => setModalEvent(null)}
         >
           <div className="max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="bg-white rounded-lg p-8" style={{ color: '#000' }}>
+            <div className="rounded-lg p-8" style={modalStyle}>
               <button
                 onClick={() => setModalEvent(null)}
                 className="float-right text-gray-600 text-3xl font-bold hover:text-gray-900"

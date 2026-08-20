@@ -3,6 +3,7 @@ import { Ticket } from 'lucide-react';
 import { AuthContext } from '../App';
 import ComprarEntradas from './ComprarEntradas';
 import { textoDeAccion, formatearPrecio } from '../utils/entradas';
+import { textoSobre } from '../utils/colores';
 
 /**
  * Botón de compra o reserva en el detalle de un evento.
@@ -43,8 +44,11 @@ function BotonEntradas({ evento, color = '#3B82F6' }) {
           e.stopPropagation();
           setComprando(true);
         }}
-        className="inline-flex items-center gap-2 px-6 py-3 rounded-lg font-bold text-white hover:opacity-90 transition"
-        style={{ backgroundColor: color }}
+        className="inline-flex items-center gap-2 px-6 py-3 rounded-lg font-bold hover:opacity-90 transition"
+        /* El fondo lo elegimos nosotros —es el color de acento de la página—
+           así que el color de la etiqueta también nos toca elegirlo: fijarlo
+           en blanco lo hacía desaparecer sobre un acento claro. */
+        style={{ backgroundColor: color, color: textoSobre(color) }}
       >
         <Ticket className="w-4 h-4" />
         {texto}
