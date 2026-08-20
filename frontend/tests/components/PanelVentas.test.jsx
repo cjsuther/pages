@@ -364,4 +364,23 @@ describe('PanelVentas', () => {
       expect(screen.queryByText(/te quedan/)).not.toBeInTheDocument();
     });
   });
+
+  describe('orden de las columnas', () => {
+    /** Es lo primero que se mira: si la compra vale o no. */
+    it('el estado va primero', async () => {
+      await montar({ ordenes: [VENTA] });
+
+      const encabezados = screen.getAllByRole('columnheader').map((th) => th.textContent.trim());
+
+      expect(encabezados[0]).toBe('Estado');
+    });
+
+    it('cada fila arranca por el estado', async () => {
+      await montar({ ordenes: [VENTA] });
+
+      const celdas = screen.getAllByRole('cell');
+
+      expect(celdas[0]).toHaveTextContent('Pagada');
+    });
+  });
 });

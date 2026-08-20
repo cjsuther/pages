@@ -171,17 +171,22 @@ function PanelVentas({ linkId, apiUrl, token }) {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-black text-gray-500 text-left">
+                <th className="px-3 py-2 font-bold">Estado</th>
                 <th className="px-3 py-2 font-bold">Nombre</th>
                 <th className="px-3 py-2 font-bold">Contacto</th>
                 <th className="px-3 py-2 font-bold text-right">Cant.</th>
                 <th className="px-3 py-2 font-bold text-right">Total</th>
-                <th className="px-3 py-2 font-bold">Estado</th>
                 <th className="px-3 py-2"><span className="sr-only">Acciones</span></th>
               </tr>
             </thead>
             <tbody>
               {ordenes.map((o) => (
                 <tr key={o.id} className="border-t border-gray-800">
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    <span className={`text-xs px-2 py-0.5 rounded ${colorDeEstado(o.estado)}`}>
+                      {etiquetaDeEstado(o.estado)}
+                    </span>
+                  </td>
                   <td className="px-3 py-2 text-white">
                     {o.nombre}
                     <span className="block text-xs text-gray-600 font-mono">{o.codigo}</span>
@@ -199,11 +204,6 @@ function PanelVentas({ linkId, apiUrl, token }) {
                         {fechaCorta(o.acreditacion_en) && ` el ${fechaCorta(o.acreditacion_en)}`}
                       </span>
                     )}
-                  </td>
-                  <td className="px-3 py-2">
-                    <span className={`text-xs px-2 py-0.5 rounded ${colorDeEstado(o.estado)}`}>
-                      {etiquetaDeEstado(o.estado)}
-                    </span>
                   </td>
                   <td className="px-3 py-2 text-right">
                     {sePuedeCancelar(o.estado) && (
