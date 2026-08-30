@@ -78,10 +78,12 @@ function AfichesTemplate({ page }) {
             <img
               src={page.profile_image}
               alt={page.title}
-              className="w-40 h-40 rounded-full object-cover mx-auto mb-6 shadow-lg"
+              className="w-24 h-24 sm:w-40 sm:h-40 rounded-full object-cover mx-auto mb-4 sm:mb-6 shadow-lg"
             />
           )}
-          <h1 className="text-5xl font-bold mb-4" style={{ color: colores.titulo }}>{page.title}</h1>
+          {/* En un teléfono de 390px, el avatar de 160 y el título de 48 se
+              comían la pantalla entera antes de mostrar un solo evento. */}
+          <h1 className="text-3xl sm:text-5xl font-bold mb-3 sm:mb-4" style={{ color: colores.titulo }}>{page.title}</h1>
           {page.description && (
             <p className="text-xl opacity-70 max-w-2xl mx-auto">{page.description}</p>
           )}
