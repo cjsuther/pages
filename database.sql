@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS pages (
     title VARCHAR(255) NOT NULL,
     description TEXT,
     url_slug VARCHAR(100) UNIQUE NOT NULL,
+    dominio VARCHAR(255) DEFAULT NULL UNIQUE,
     primary_color VARCHAR(7) DEFAULT '#3B82F6',
     secondary_color VARCHAR(7) DEFAULT '#1E40AF',
     background_color VARCHAR(7) DEFAULT '#FFFFFF',

@@ -8,8 +8,11 @@ import CardsTemplate from '../components/templates/CardsTemplate';
 import ModernTemplate from '../components/templates/ModernTemplate';
 import CondensedTemplate from '../components/templates/CondensedTemplate';
 
-function PublicPage() {
-  const { slug } = useParams();
+function PublicPage({ slugForzado = null }) {
+  // En un dominio propio la dirección es la raíz y no trae slug: lo dice quien
+  // renderiza la ruta.
+  const { slug: slugDeLaRuta } = useParams();
+  const slug = slugForzado || slugDeLaRuta;
   const { apiUrl } = useContext(AuthContext);
   const [page, setPage] = useState(null);
   const [loading, setLoading] = useState(true);

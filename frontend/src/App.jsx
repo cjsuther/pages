@@ -14,6 +14,7 @@ import EventDetail from './pages/EventDetail';
 import EstadoOrden from './pages/EstadoOrden';
 import Autorizar from './pages/Autorizar';
 import SubirImagen from './pages/SubirImagen';
+import { paginaDelDominio } from './utils/dominio';
 
 // La URL de la API sale de VITE_API_URL (ver .env.production). El valor por
 // defecto es el de desarrollo, así que `npm run dev` funciona sin configurar
@@ -63,7 +64,15 @@ function App() {
         <BrowserRouter>
           <AppRoutes />
           <Routes>
-            <Route path="/" element={<Home />} />
+            {/* En un dominio propio la raíz es la página, no el home de
+                Rezonar. El resto de las rutas —/evento, /entrada— andan igual
+                en los dos dominios: es la misma aplicación. */}
+            <Route
+              path="/"
+              element={paginaDelDominio()
+                ? <PublicPage slugForzado={paginaDelDominio()} />
+                : <Home />}
+            />
             <Route path="/login" element={!token ? <Login /> : <Navigate to="/" />} />
             <Route path="/register" element={!token ? <Register /> : <Navigate to="/" />} />
             <Route path="/pages" element={token ? <Pages /> : <Navigate to="/login" />} />

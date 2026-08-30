@@ -160,6 +160,73 @@ describe('PageEditor — flujos de edición', () => {
       });
     });
 
+    // ------------------------------------------------------ dominio propio
+
+    /**
+     * Se muestra lo normalizado que devuelve el servidor: si quedara lo que se
+     * escribió —con https:// o con www— parecería guardado algo distinto de lo
+     * que se va a comparar contra cada visita.
+     */
+    it('guarda el dominio propio y muestra lo que quedó guardado', async () => {
+      const { llamadas } = await render({
+        page: pagina({ dominio: null }),
+      });
+
+      const campo = screen.getByLabelText('DOMINIO PROPIO (OPCIONAL)');
+      fireEvent.change(campo, { target: { value: 'https://www.maxipeque.com/' } });
+      fireEvent.blur(campo);
+
+      await waitFor(() => {
+        expect(cuerpoDe(put(llamadas, 'pages/detail.php')))
+          .toEqual({ dominio: 'https://www.maxipeque.com/' });
+      });
+    });
+
+    it('vaciarlo es la forma de dejar de usar un dominio propio', async () => {
+      const { llamadas } = await render({ page: pagina({ dominio: 'maxipeque.com' }) });
+
+      const campo = screen.getByLabelText('DOMINIO PROPIO (OPCIONAL)');
+      fireEvent.change(campo, { target: { value: '' } });
+      fireEvent.blur(campo);
+
+      await waitFor(() => {
+        expect(cuerpoDe(put(llamadas, 'pages/detail.php'))).toEqual({ dominio: '' });
+      });
+    });
+
+    /**
+     * updatePage descarta los errores en silencio. Si el dominio hiciera lo
+     * mismo, cargar uno ya tomado no diría nada y quedaría escrito en pantalla
+     * como si se hubiera guardado.
+     */
+    it('muestra por qué el servidor rechazó el dominio', async () => {
+      const { llamadas } = await render({ page: pagina({ dominio: null }) });
+
+      // El alta del dominio es un PUT a la misma dirección que la carga: se
+      // responde según el método, no según la URL.
+      const original = global.fetch;
+      global.fetch = vi.fn((url, opciones = {}) => {
+        llamadas.push({ url: String(url), options: opciones });
+
+        if (String(url).includes('pages/detail.php') && opciones.method === 'PUT') {
+          return Promise.resolve({
+            ok: false,
+            status: 400,
+            json: () => Promise.resolve({ error: 'Ese dominio ya está asignado a otra página' }),
+          });
+        }
+
+        return original(url, opciones);
+      });
+
+      const campo = screen.getByLabelText('DOMINIO PROPIO (OPCIONAL)');
+      fireEvent.change(campo, { target: { value: 'maxipeque.com' } });
+      fireEvent.blur(campo);
+
+      expect(await screen.findByText('Ese dominio ya está asignado a otra página'))
+        .toBeInTheDocument();
+    });
+
     it('cambia la plantilla', async () => {
       const { llamadas } = await render();
 

@@ -496,6 +496,94 @@ class PagesHandlerTest extends HandlerTestCase
         $this->assertSame(['cards', 5], $this->db->paramsFor('UPDATE pages SET'));
     }
 
+    // ------------------------------------------------------- dominio propio
+
+    /**
+     * Lo guardado se compara contra el Host de cada visita: si no queda en la
+     * misma forma, la página no aparece y en el administrador se ve escrita
+     * igual, así que no hay manera de darse cuenta mirando.
+     */
+    public function testUpdateGuardaElDominioNormalizado()
+    {
+        $this->autorizarPagina();
+        $this->db->onWrite('UPDATE pages SET', 1);
+        $this->db->onSelect('SELECT id FROM pages WHERE dominio = ?', []);
+        $this->db->onSelect('SELECT * FROM pages WHERE id = ?', [['id' => 5]]);
+
+        PagesHandler::detail($this->db, $this->put(
+            ['dominio' => 'https://WWW.MaxiPeque.com/eventos'],
+            $this->user(),
+            ['id' => '5']
+        ));
+
+        $llamada = $this->db->callsFor('UPDATE pages SET')[0];
+        $this->assertStringContainsString('dominio = ?', $llamada['sql']);
+        $this->assertSame('maxipeque.com', $this->db->paramsFor('UPDATE pages SET')[0]);
+    }
+
+    public function testUpdateRechazaUnDominioQueNoVaAResolver()
+    {
+        $this->autorizarPagina();
+
+        $res = PagesHandler::detail($this->db, $this->put(
+            ['dominio' => 'maxi peque'],
+            $this->user(),
+            ['id' => '5']
+        ));
+
+        $this->assertStatus(400, $res);
+        $this->assertNoWrites();
+    }
+
+    public function testUpdateNoDejaReclamarUnDominioDeRezonar()
+    {
+        $this->autorizarPagina();
+
+        $res = PagesHandler::detail($this->db, $this->put(
+            ['dominio' => 'rezon.ar'],
+            $this->user(),
+            ['id' => '5']
+        ));
+
+        $this->assertStatus(400, $res);
+        $this->assertNoWrites();
+    }
+
+    /** Dos páginas con el mismo dominio: cuál gana dependería del orden. */
+    public function testUpdateRechazaUnDominioDeOtraPagina()
+    {
+        $this->autorizarPagina();
+        $this->db->onSelect('SELECT id FROM pages WHERE dominio = ?', [['id' => 9]]);
+
+        $res = PagesHandler::detail($this->db, $this->put(
+            ['dominio' => 'maxipeque.com'],
+            $this->user(),
+            ['id' => '5']
+        ));
+
+        $this->assertStatus(400, $res);
+        $this->assertNoWrites();
+    }
+
+    public function testUpdatePermiteQuitarElDominio()
+    {
+        $this->autorizarPagina();
+        $this->db->onWrite('UPDATE pages SET', 1);
+        $this->db->onSelect('SELECT * FROM pages WHERE id = ?', [['id' => 5]]);
+
+        PagesHandler::detail($this->db, $this->put(
+            ['dominio' => ''],
+            $this->user(),
+            ['id' => '5']
+        ));
+
+        $this->assertStringContainsString(
+            'dominio = ?',
+            $this->db->callsFor('UPDATE pages SET')[0]['sql']
+        );
+        $this->assertNull($this->db->paramsFor('UPDATE pages SET')[0]);
+    }
+
     public function testUpdatePermiteQuitarLaImagenDePerfil()
     {
         $this->autorizarPagina();

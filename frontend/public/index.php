@@ -1,24 +1,30 @@
 <?php
 header('Content-Type: text/html; charset=UTF-8');
 
-$apiUrl = getenv('API_URL') ?: ($_SERVER['HTTP_HOST'] === 'localhost' ? 'http://localhost:8000' : 'https://' . $_SERVER['HTTP_HOST']);
+$host = isset($_SERVER['HTTP_HOST']) ? strtolower($_SERVER['HTTP_HOST']) : '';
+$apiUrl = getenv('API_URL') ?: ($host === 'localhost' ? 'http://localhost:8000' : 'https://' . $host);
 $slug = null;
 $pageData = null;
+
+// La página que este dominio propio muestra en su raíz. Se le pasa al SPA para
+// que no tenga que volver a preguntarlo.
+$slugDelDominio = null;
 
 $requestUri = $_SERVER['REQUEST_URI'];
 $path = parse_url($requestUri, PHP_URL_PATH);
 $pathSegments = array_filter(explode('/', $path));
 
-if (count($pathSegments) > 0) {
-    $potentialSlug = end($pathSegments);
-    if ($potentialSlug && !strpos($potentialSlug, '.') && $potentialSlug !== 'index.php') {
-        $slug = $potentialSlug;
-    }
-}
+// Un dominio propio —maxipeque.com— muestra en su raíz la página que lo tenga
+// asignado. Se resuelve sólo en la raíz: en el resto de las rutas la dirección
+// ya dice qué mostrar, y consultar de nuevo sería una demora al pedo.
+$hostPelado = preg_replace('/^www\./', '', explode(':', $host)[0]);
+$esDominioPropio = $hostPelado !== '' && $hostPelado !== 'localhost'
+    && $hostPelado !== 'rezon.ar' && substr($hostPelado, -strlen('.rezon.ar')) !== '.rezon.ar';
 
-if ($slug) {
+/** Trae una página de la API. $clave es 'slug' o 'dominio'. */
+function buscarPagina($apiUrl, $clave, $valor) {
     $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, $apiUrl . '/api/public/page.php?slug=' . urlencode($slug));
+    curl_setopt($ch, CURLOPT_URL, $apiUrl . '/api/public/page.php?' . $clave . '=' . urlencode($valor));
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_TIMEOUT, 5);
 
@@ -29,8 +35,29 @@ if ($slug) {
     if ($httpCode === 200 && $response) {
         $data = json_decode($response, true);
         if (isset($data['page'])) {
-            $pageData = $data['page'];
+            return $data['page'];
         }
+    }
+
+    return null;
+}
+
+if ($esDominioPropio && count($pathSegments) === 0) {
+    $pageData = buscarPagina($apiUrl, 'dominio', $hostPelado);
+
+    if ($pageData && isset($pageData['url_slug'])) {
+        $slugDelDominio = $pageData['url_slug'];
+    }
+} else {
+    if (count($pathSegments) > 0) {
+        $potentialSlug = end($pathSegments);
+        if ($potentialSlug && !strpos($potentialSlug, '.') && $potentialSlug !== 'index.php') {
+            $slug = $potentialSlug;
+        }
+    }
+
+    if ($slug) {
+        $pageData = buscarPagina($apiUrl, 'slug', $slug);
     }
 }
 
@@ -119,5 +146,10 @@ if (file_exists($manifestPath)) {
 </head>
 <body>
   <div id="root"></div>
+  <?php if ($slugDelDominio): ?>
+  <!-- Este dominio propio muestra esta página en su raíz. Va acá para que el
+       SPA no repita la consulta que index.php ya hizo. -->
+  <script>window.__PAGINA_DEL_DOMINIO__ = <?php echo json_encode($slugDelDominio); ?>;</script>
+  <?php endif; ?>
 </body>
 </html>

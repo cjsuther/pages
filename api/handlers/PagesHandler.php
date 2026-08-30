@@ -314,6 +314,17 @@ class PagesHandler
             $fields = [];
             $values = [];
 
+            // El dominio propio no entra en la lista genérica: se normaliza
+            // —lo que se guarda tiene que ser idéntico al Host de la visita— y
+            // no puede estar tomado por otra página.
+            if (array_key_exists('dominio', $req->body)) {
+                $error = self::asignarDominio($db, $req->body['dominio'], $pageId, $fields, $values);
+
+                if ($error !== null) {
+                    return $error;
+                }
+            }
+
             foreach (self::$updatableFields as $campo => $opciones) {
                 if ($opciones['nullable']) {
                     if (!array_key_exists($campo, $req->body)) {
@@ -389,6 +400,46 @@ class PagesHandler
     // ------------------------------------------------------------- utilidades
 
     /** Deja sólo minúsculas, dígitos y guiones. */
+    /**
+     * Valida el dominio propio y lo suma a la actualización.
+     *
+     * @return Response|null Un error para devolver, o null si está todo bien.
+     */
+    private static function asignarDominio($db, $valor, $pageId, array &$fields, array &$values)
+    {
+        // Vaciarlo es la forma de dejar de usar un dominio propio.
+        if ($valor === null || trim((string) $valor) === '') {
+            $fields[] = 'dominio = ?';
+            $values[] = null;
+
+            return null;
+        }
+
+        $dominio = Dominio::normalizar($valor);
+
+        if ($dominio === null) {
+            return Response::error(400, 'Ese dominio no se entiende. Escribilo como maxipeque.com');
+        }
+
+        if (Dominio::esPropio($dominio)) {
+            return Response::error(400, 'Ese dominio es de Rezonar y no se puede usar como dominio propio');
+        }
+
+        // El índice único de la base ya lo impediría, pero ahí el error sale
+        // como una falla de base de datos y no dice qué pasó.
+        $stmt = $db->prepare('SELECT id FROM pages WHERE dominio = ? AND id <> ?');
+        $stmt->execute([$dominio, $pageId]);
+
+        if ($stmt->fetch()) {
+            return Response::error(400, 'Ese dominio ya está asignado a otra página');
+        }
+
+        $fields[] = 'dominio = ?';
+        $values[] = $dominio;
+
+        return null;
+    }
+
     public static function normalizarSlug($slug)
     {
         return preg_replace('/[^a-z0-9-]/', '', strtolower((string) $slug));

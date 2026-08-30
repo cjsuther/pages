@@ -24,14 +24,22 @@ class PublicHandler
         }
 
         $slug = trim((string) $req->param('slug'));
+        // Una página se pide por su slug o por el dominio propio con el que la
+        // visitaron. Es la misma página: cambia por dónde entraron.
+        $dominio = Dominio::normalizar($req->param('dominio'));
 
-        if ($slug === '') {
+        if ($slug === '' && $dominio === null) {
             return Response::error(400, 'Slug is required');
         }
 
         try {
-            $stmt = $db->prepare('SELECT * FROM pages WHERE url_slug = ?');
-            $stmt->execute([$slug]);
+            if ($dominio !== null) {
+                $stmt = $db->prepare('SELECT * FROM pages WHERE dominio = ?');
+                $stmt->execute([$dominio]);
+            } else {
+                $stmt = $db->prepare('SELECT * FROM pages WHERE url_slug = ?');
+                $stmt->execute([$slug]);
+            }
             $page = $stmt->fetch();
 
             if (!$page) {

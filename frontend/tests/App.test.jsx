@@ -1,5 +1,5 @@
 import React from 'react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import App from '../src/App';
 import { mockFetch } from './helpers/api';
@@ -18,6 +18,38 @@ describe('App', () => {
       'users/location.php': { latitude: null, longitude: null },
       'pages/following.php': { following: [], total: 0 },
       'pages/index.php': { pages: [] },
+    });
+  });
+
+  describe('dominio propio', () => {
+    afterEach(() => {
+      delete window.__PAGINA_DEL_DOMINIO__;
+    });
+
+    /**
+     * En maxipeque.com la raíz es la página, no el home de Rezonar. Qué página
+     * lo resolvió index.php contra el Host.
+     */
+    it('la raíz muestra la página del dominio', async () => {
+      window.__PAGINA_DEL_DOMINIO__ = 'maxipeque';
+      mockFetch({
+        'public/page.php': { page: { id: 1, title: 'Maxi Peque', url_slug: 'maxipeque', groups: [], socials: [] } },
+        'notifications/index.php': { notifications: [], unread_count: 0 },
+        'users/location.php': { latitude: null, longitude: null },
+      });
+
+      render(<App />);
+
+      expect(await screen.findByText('Maxi Peque')).toBeInTheDocument();
+    });
+
+    it('en rezon.ar la raíz sigue siendo el home', async () => {
+      render(<App />);
+
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalled();
+      });
+      expect(screen.queryByText('Maxi Peque')).not.toBeInTheDocument();
     });
   });
 

@@ -76,6 +76,10 @@ function PageEditor() {
   const [adminMsg, setAdminMsg] = useState('');
   const [invitingAdmin, setInvitingAdmin] = useState(false);
 
+  // El dominio propio se guarda aparte: la API lo puede rechazar —mal escrito,
+  // o ya tomado por otra página— y updatePage descarta los errores en silencio.
+  const [dominioError, setDominioError] = useState('');
+
   // ¿El usuario actual es el dueño de la página? (gestionar admins es solo del dueño)
   const isOwner = page && user && Number(page.user_id) === Number(user.id);
 
@@ -181,6 +185,38 @@ function PageEditor() {
       }
     } catch (err) {
       console.error('Error updating page:', err);
+    } finally {
+      setGlobalLoading(false);
+    }
+  };
+
+  /**
+   * Guarda el dominio propio y muestra lo que conteste la API.
+   *
+   * Se guarda lo normalizado que devuelve el servidor: si el campo quedara con
+   * lo que se escribió —con https:// o con www— parecería que se guardó otra
+   * cosa de la que efectivamente se va a comparar contra cada visita.
+   */
+  const guardarDominio = async (valor) => {
+    setDominioError('');
+
+    try {
+      setGlobalLoading(true);
+      const response = await fetch(`${apiUrl}/pages/detail.php?id=${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ dominio: valor || '' })
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        setDominioError(data.error || 'No pudimos guardar el dominio');
+        return;
+      }
+
+      setPage((actual) => ({ ...actual, dominio: data.page ? data.page.dominio : null }));
+    } catch (err) {
+      setDominioError('No pudimos guardar el dominio');
     } finally {
       setGlobalLoading(false);
     }
@@ -655,6 +691,30 @@ function PageEditor() {
                   className="w-full px-4 py-3 bg-gray-800 border border-gray-700 text-gray-500"
                 />
               </div>
+            </div>
+
+            <div className="mb-6">
+              <label htmlFor="dominio-propio" className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">
+                DOMINIO PROPIO (OPCIONAL)
+              </label>
+              <input
+                id="dominio-propio"
+                type="text"
+                value={page.dominio || ''}
+                onChange={(e) => setPage({ ...page, dominio: e.target.value })}
+                onBlur={() => guardarDominio(page.dominio)}
+                placeholder="maxipeque.com"
+                className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+              />
+              {dominioError ? (
+                <p className="text-xs text-red-400 mt-2">{dominioError}</p>
+              ) : (
+                <p className="text-xs text-gray-600 mt-2">
+                  El dominio muestra esta página en su raíz, y sus eventos siguen
+                  andando en la misma dirección. Antes tiene que estar dado de alta en
+                  el hosting y apuntando acá: cargarlo sólo no alcanza.
+                </p>
+              )}
             </div>
 
             <div className="mb-6">
