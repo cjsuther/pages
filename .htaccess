@@ -1,9 +1,73 @@
+# Configuración de Apache de rezon.ar.
+#
+# OJO: este archivo NO se despliega. `deploy.sh` sincroniza `frontend/dist/` y
+# `api/`, y este vive en la raíz del servidor, fuera de los dos. Se copia a mano:
+#
+#   scp -P 65002 .htaccess u414051709@195.35.33.1:/home/u414051709/domains/rezon.ar/public_html/.htaccess
+#
+# Está versionado porque acá viven las rutas de MCP y de OAuth, que no están en
+# ningún otro lado: si el servidor se rehiciera, sin esto habría que
+# reconstruirlas de memoria.
+#
+# Lo que sigue es una copia exacta de lo que corre en producción.
+
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteBase /
 
+  # --------------------------------------------------------------- MCP
+  #
+  # El server MCP y su autorización tienen que vivir en direcciones que el
+  # protocolo fija: la metadata se busca en /.well-known/ del dominio, no
+  # adentro de /api/. Se reescriben acá para no mover los archivos de lugar.
+  RewriteRule ^mcp/?$ /api/mcp/index.php [L]
+
+  RewriteRule ^\.well-known/oauth-authorization-server/?$ /api/oauth/metadata-servidor.php [L]
+  RewriteRule ^\.well-known/oauth-protected-resource(/mcp)?/?$ /api/oauth/metadata-recurso.php [L]
+
+  RewriteRule ^oauth/registrar/?$ /api/oauth/registrar.php [L]
+  RewriteRule ^oauth/token/?$ /api/oauth/token.php [L]
+
+  # /oauth/authorize no se reescribe: es la pantalla donde la persona autoriza,
+  # y la resuelve la aplicación como cualquier otra ruta.
+
+  # Todo lo que no sea un archivo real lo resuelve index.php, que además
+  # renderiza los meta tags Open Graph de cada página.
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
-  RewriteCond %{REQUEST_URI} !^/api/
-  RewriteRule . /index.html [L]
+  RewriteRule . /index.php [L]
+
+  DirectoryIndex index.php index.html
 </IfModule>
+
+<IfModule mod_headers.c>
+  <FilesMatch "\.(jpg|jpeg|png|gif|svg|webp|js|css|woff|woff2|ttf|eot)$">
+    Header set Access-Control-Allow-Origin "*"
+  </FilesMatch>
+</IfModule>
+
+# El service worker tiene que llegar con un tipo JavaScript o el navegador no
+# lo registra, y sin service worker no hay push (GUIA-PUSH-PWA.md §9).
+<IfModule mod_mime.c>
+  AddType application/javascript .js
+  AddType application/manifest+json .webmanifest
+</IfModule>
+
+# sw.js no se cachea: si el navegador conserva una versión vieja, el
+# dispositivo deja de recibir notificaciones sin que nadie se entere.
+<FilesMatch "sw\.js$">
+  <IfModule mod_headers.c>
+    # `always` para que se aplique también sobre lo que ya fijó el servidor:
+    # sin esto Hostinger deja el max-age de una semana que trae por defecto.
+    Header always unset Cache-Control
+    Header always set Cache-Control "no-cache, no-store, must-revalidate"
+    Header always set Service-Worker-Allowed "/"
+  </IfModule>
+</FilesMatch>
+
+# El manifiesto cambia poco pero debe poder actualizarse sin esperar un día.
+<FilesMatch "manifest\.json$">
+  <IfModule mod_headers.c>
+    Header set Cache-Control "public, max-age=3600"
+  </IfModule>
+</FilesMatch>

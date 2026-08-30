@@ -8,7 +8,10 @@ import { borde } from '../utils/colores';
  * que además de la disposición se ve la paleta elegida, y no hay imágenes que
  * queden viejas cuando una plantilla cambia.
  *
- * Lo que distingue a las cuatro es dónde va cada cosa —una columna o dos, el
+ * Todas llevan la barra del acento bajo el encabezado, que es lo que las cinco
+ * plantillas dibujan desde que cada color tiene un rol.
+ *
+ * Lo que distingue a las cinco es dónde va cada cosa —una columna o dos, el
  * encabezado centrado o al costado, bloques anchos o filas apretadas—, y eso
  * es lo que reproduce cada miniatura.
  */
@@ -36,6 +39,7 @@ function Minimal({ fondo, texto, acento }) {
       <div className="rounded-full flex-shrink-0" style={{ width: 14, height: 14, backgroundColor: acento }} />
       <Linea ancho="55%" color={texto} />
       <Linea ancho="35%" color={texto} opacidad={0.4} />
+      <div className="h-[3px] w-6 rounded-full flex-shrink-0" style={{ backgroundColor: acento }} />
       {/* Bloques anchos, uno debajo del otro y con la imagen arriba de todo. */}
       <div className="w-full mt-1 space-y-1.5">
         <div className="w-full" style={{ border: `1px solid ${texto}`, opacity: 0.85 }}>
@@ -60,6 +64,7 @@ function Cards({ fondo, texto, acento }) {
       <div className="rounded-full flex-shrink-0" style={{ width: 18, height: 18, backgroundColor: acento }} />
       <Linea ancho="60%" alto={4} color={texto} />
       <Linea ancho="40%" color={texto} opacidad={0.4} />
+      <div className="h-[3px] w-6 rounded-full flex-shrink-0" style={{ backgroundColor: acento }} />
       {/* Tarjetas rellenas con sombra. Los links ocupan la fila entera; las
           fotos y los eventos van de a dos, que es lo que la distingue. */}
       <div className="w-full mt-1 space-y-1.5">
@@ -96,6 +101,7 @@ function Modern({ fondo, texto, acento }) {
       <div className="rounded-lg w-full flex-shrink-0" style={{ height: 26, backgroundColor: acento }} />
       <Linea ancho="70%" alto={5} color={texto} />
       <Linea ancho="90%" color={texto} opacidad={0.4} />
+      <div className="h-[3px] w-6 rounded-full flex-shrink-0 self-start" style={{ backgroundColor: acento }} />
       <div className="w-full mt-1 space-y-1.5">
         {[0, 1, 2, 3].map((i) => (
           <div
@@ -117,6 +123,7 @@ function Condensed({ fondo, texto, acento }) {
     <div className="w-full h-full flex flex-col items-center gap-1 p-2" style={{ backgroundColor: fondo }}>
       <div className="rounded-full flex-shrink-0" style={{ width: 12, height: 12, backgroundColor: acento }} />
       <Linea ancho="45%" color={texto} />
+      <div className="h-[3px] w-6 rounded-full flex-shrink-0" style={{ backgroundColor: acento }} />
       {/* Píldoras de ancho completo: miniatura redonda a la izquierda y el
           título centrado respecto de toda la píldora. */}
       <div className="w-full mt-1 space-y-1.5">

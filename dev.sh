@@ -35,6 +35,31 @@ if [ ! -f "api/config.php" ]; then
     exit 1
 fi
 
+# La base a la que apunta config.php. Trabajar contra producción sin darse
+# cuenta es la forma más fácil de romper datos reales: el script no lo impide,
+# pero no deja que pase en silencio.
+DB_HOST_CONFIG=$(grep -oE "define\('DB_HOST', *'[^']*'" api/config.php 2>/dev/null | sed "s/.*'\(.*\)'/\1/")
+
+case "$DB_HOST_CONFIG" in
+    localhost|127.0.0.1|"")
+        ;;
+    *)
+        echo ""
+        echo "  ⚠️  api/config.php apunta a una base REMOTA: $DB_HOST_CONFIG"
+        echo ""
+        echo "     Todo lo que hagas acá —crear páginas, borrar eventos, vender"
+        echo "     entradas— se escribe sobre datos reales."
+        echo ""
+        read -r -p "     Escribí 'produccion' para seguir igual: " CONFIRMACION
+        if [ "$CONFIRMACION" != "produccion" ]; then
+            echo ""
+            echo "  Cancelado. Para trabajar en local, poné una base propia en api/config.php."
+            exit 1
+        fi
+        echo ""
+        ;;
+esac
+
 # Verificar que node_modules existe
 if [ ! -d "frontend/node_modules" ]; then
     echo "⚠️  node_modules no encontrado. Instalando dependencias..."
