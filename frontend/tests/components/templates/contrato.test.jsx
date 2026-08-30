@@ -114,21 +114,15 @@ describe.each(PLANTILLAS)('%s', (nombre, Plantilla) => {
       text_color: '#ffffff',
     });
 
-    // Ojo con mirar el style entero: ahí también está el color de la
-    // tipografía, que legítimamente es blanco. Lo que no puede ser blanco es
-    // el velo que va sobre la imagen.
-    it('no lava el fondo con un color ajeno a la paleta', () => {
+    // La imagen va tal cual en las cuatro. Condensado le ponía encima un velo
+    // del 95%: clavado en blanco volvía ilegible cualquier página de
+    // tipografía clara, y atado a la paleta teñía la imagen del color de
+    // fondo. Un gradiente acá adentro es cualquiera de esos dos errores.
+    it('muestra la imagen de fondo sin velo encima', () => {
       const { container } = renderConProviders(<Plantilla page={oscura()} />);
 
       expect(container.firstElementChild.style.backgroundImage)
-        .not.toMatch(/255,\s*255,\s*255/);
-    });
-
-    it('la imagen se sigue viendo', () => {
-      const { container } = renderConProviders(<Plantilla page={oscura()} />);
-
-      expect(container.firstElementChild.style.backgroundImage)
-        .toContain('https://img/fondo.png');
+        .toBe('url("https://img/fondo.png")');
     });
 
     it('sin imagen de fondo queda el color de la página', () => {
