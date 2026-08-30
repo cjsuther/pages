@@ -1,4 +1,4 @@
-import { borde } from './colores';
+import { borde, alrededor } from './colores';
 
 /**
  * Ancho de la columna de una página pública.
@@ -63,7 +63,13 @@ export function estiloDeCaja({ backgroundColor, backgroundImage, textColor }) {
   };
 }
 
-/** Lo que queda alrededor del recuadro: el color de la página, liso. */
+/**
+ * Lo que queda alrededor del recuadro.
+ *
+ * Un tono distinto del fondo de la página, para que el recuadro se vea
+ * apoyado sobre algo. Sólo aparece cuando sobra ancho: en un teléfono el
+ * recuadro ocupa toda la pantalla y esto no se ve nunca.
+ */
 export function estiloDeAlrededor({ backgroundColor, textColor }) {
-  return { backgroundColor, color: textColor };
+  return { backgroundColor: alrededor(backgroundColor, textColor) || backgroundColor, color: textColor };
 }

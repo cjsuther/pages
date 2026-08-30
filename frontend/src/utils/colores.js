@@ -17,6 +17,15 @@ const TONO_TARJETA = 0.06;
 /** Opacidad del borde que la delimita. */
 const ALFA_BORDE = 0.14;
 
+/**
+ * Cuánto se corre lo que rodea al recuadro respecto del fondo de la página.
+ *
+ * Más que la tarjeta, para que el recuadro se despegue: en una pantalla grande
+ * se ve la página apoyada sobre otro tono, y no un borde solo en el aire. En un
+ * teléfono el recuadro ocupa todo y esto no se ve nunca.
+ */
+const TONO_ALREDEDOR = 0.14;
+
 /** Descompone #rgb o #rrggbb. Devuelve null si no se entiende el color. */
 export function aRgb(color) {
   const texto = typeof color === 'string' ? color.trim() : '';
@@ -67,6 +76,17 @@ export function conAlfa(color, alfa) {
  */
 export function superficie(fondo, texto) {
   return mezclar(fondo, texto, TONO_TARJETA);
+}
+
+/**
+ * Color de lo que rodea al recuadro de la página.
+ *
+ * Es el fondo elegido corrido hacia la tipografía, en la misma dirección que
+ * la tarjeta pero más: así el recuadro queda claramente apoyado sobre algo y
+ * no hace falta saber si la página es clara u oscura.
+ */
+export function alrededor(fondo, texto) {
+  return mezclar(fondo, texto, TONO_ALREDEDOR);
 }
 
 /** Luminancia relativa de la WCAG: cuánta luz emite el color, de 0 a 1. */
@@ -151,5 +171,7 @@ export function paleta(page) {
     tarjeta: (page && page.card_color) || superficie(fondo, texto),
     /** Borde tenue que delimita esa superficie. */
     bordeTarjeta: borde(texto),
+    /** Lo que rodea al recuadro. Sólo se ve cuando sobra ancho. */
+    alrededor: alrededor(fondo, texto) || fondo,
   };
 }

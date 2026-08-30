@@ -8,6 +8,7 @@ import CondensedTemplate from '../../../src/components/templates/CondensedTempla
 import AfichesTemplate from '../../../src/components/templates/AfichesTemplate';
 import { renderConProviders } from '../../helpers/render';
 import { ANCHO_COLUMNA } from '../../../src/utils/plantillas';
+import { alrededor } from '../../../src/utils/colores';
 
 /**
  * Las cuatro plantillas son intercambiables: reciben la misma página y deben
@@ -138,18 +139,32 @@ describe.each(PLANTILLAS)('%s', (nombre, Plantilla) => {
       expect(container.firstElementChild.style.backgroundImage).toBe('');
     });
 
-    it('alrededor del recuadro queda el color de la página', () => {
+    // El alrededor lleva otro tono del mismo fondo, para que el recuadro se
+    // vea apoyado sobre algo y no como un borde suelto en el aire. Sólo se ve
+    // cuando sobra ancho: en un teléfono el recuadro ocupa toda la pantalla.
+    it('alrededor del recuadro va otro tono del fondo', () => {
       const { container } = renderConProviders(<Plantilla page={oscura()} />);
 
-      expect(container.firstElementChild).toHaveStyle({ backgroundColor: '#070708' });
+      expect(container.firstElementChild)
+        .toHaveStyle({ backgroundColor: alrededor('#070708', '#ffffff') });
     });
 
-    it('sin imagen de fondo queda el color de la página', () => {
+    it('el fondo de la página se conserva dentro del recuadro', () => {
       const { container } = renderConProviders(
         <Plantilla page={pagina({ background_color: '#070708' })} />
       );
 
-      expect(container.firstElementChild).toHaveStyle({ backgroundColor: '#070708' });
+      expect(caja(container)).toHaveStyle({ backgroundColor: '#070708' });
+    });
+
+    it('el recuadro y lo que lo rodea no son el mismo color', () => {
+      const { container } = renderConProviders(
+        <Plantilla page={pagina({ background_color: '#070708', text_color: '#ffffff' })} />
+      );
+
+      const fueraCaja = container.firstElementChild.style.backgroundColor;
+      const dentroCaja = caja(container).style.backgroundColor;
+      expect(fueraCaja).not.toBe(dentroCaja);
     });
   });
 
@@ -172,6 +187,17 @@ describe.each(PLANTILLAS)('%s', (nombre, Plantilla) => {
       const { container } = renderConProviders(<Plantilla page={conGrupo()} />);
 
       expect(pintadoCon(container, 'rgb(255, 136, 0)').length).toBeGreaterThan(0);
+    });
+
+    // El color de tarjetas tiene que llegar a las cinco. En dos no llegaba:
+    // Minimal y Modern dibujaban sus bloques sin relleno, así que elegirlo no
+    // hacía nada ahí.
+    it('el color de tarjetas pinta las tarjetas', () => {
+      const { container } = renderConProviders(
+        <Plantilla page={conGrupo({ card_color: '#00ff00' })} />
+      );
+
+      expect(pintadoCon(container, 'rgb(0, 255, 0)').length).toBeGreaterThan(0);
     });
 
     it('los títulos usan el color de títulos cuando se eligió', () => {
@@ -681,8 +707,8 @@ describe.each(PLANTILLAS)('%s', (nombre, Plantilla) => {
         <Plantilla page={pagina({ background_color: '#112233', text_color: '#ffeedd' })} />
       );
 
-      const raiz = container.firstChild;
-      expect(raiz.getAttribute('style')).toContain('rgb(17, 34, 51)');
+      // El fondo elegido vive en el recuadro; alrededor va otro tono.
+      expect(caja(container).getAttribute('style')).toContain('rgb(17, 34, 51)');
     });
 
     it('aplica la imagen de fondo si la hay', () => {

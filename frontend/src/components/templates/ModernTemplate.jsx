@@ -110,8 +110,8 @@ function ModernTemplate({ page }) {
                       <div
                         key={(link.is_collaborated ? 'c-' : '') + link.id}
                         onClick={() => setModalEvent(link)}
-                        className="border-l-4 pl-6 py-4 cursor-pointer hover:bg-white hover:bg-opacity-5 transition-all rounded-r-lg relative"
-                        style={{ borderColor: primaryColor }}
+                        className="border-l-4 pl-6 py-4 cursor-pointer hover:opacity-90 transition-all rounded-r-lg relative"
+                        style={{ backgroundColor: colores.tarjeta, borderColor: colores.acento }}
                       >
                         <a
                           href={`/evento/${link.id}`}
@@ -152,7 +152,8 @@ function ModernTemplate({ page }) {
                         href={link.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="block border border-current px-8 py-6 rounded-lg hover:bg-white hover:bg-opacity-10 transition-all group"
+                        className="block border px-8 py-6 rounded-lg hover:opacity-90 transition-all group"
+                        style={{ backgroundColor: colores.tarjeta, borderColor: colores.bordeTarjeta }}
                       >
                         <div className="flex items-center gap-4">
                           {link.image_url && (

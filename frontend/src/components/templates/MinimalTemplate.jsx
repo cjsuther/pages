@@ -103,7 +103,7 @@ function MinimalTemplate({ page }) {
                       trackEvent.event('view_event_modal', { event_title: link.text });
                     }}
                     className="border pb-6 p-4 rounded cursor-pointer hover:shadow-lg transition relative"
-                    style={{ borderColor: textColor + '20' }}
+                    style={{ backgroundColor: colores.tarjeta, borderColor: textColor + '20' }}
                   >
                     <a
                       href={`/evento/${link.id}`}
@@ -146,7 +146,7 @@ function MinimalTemplate({ page }) {
                     rel="noopener noreferrer"
                     onClick={() => trackEvent.clickLink(link.url, link.text)}
                     className="block border hover:opacity-70 transition overflow-hidden"
-                    style={{ borderColor: textColor }}
+                    style={{ backgroundColor: colores.tarjeta, borderColor: textColor }}
                   >
                     {link.image_url && (
                       <img

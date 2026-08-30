@@ -60,7 +60,11 @@ function AfichesTemplate({ page }) {
   // El marco del afiche es el color de acento, y el título va encima: se elige
   // el que se lea sobre ese color en vez de asumir que la tipografía de la
   // página contrasta con él.
-  const estiloMarco = { backgroundColor: primaryColor, color: textoSobre(primaryColor, textColor) };
+  // Acá la tarjeta es el marco del afiche. Si se eligió un color de tarjetas
+  // manda ese; si no, el acento, que es lo que le da su carácter a esta
+  // plantilla. El título va con el que se lea encima, sea cual sea.
+  const marco = page.card_color || primaryColor;
+  const estiloMarco = { backgroundColor: marco, color: textoSobre(marco, textColor) };
 
   const estiloAlrededor = estiloDeAlrededor({ backgroundColor, textColor });
   const estiloCaja = estiloDeCaja({ backgroundColor, backgroundImage, textColor });
