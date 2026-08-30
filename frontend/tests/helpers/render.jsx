@@ -38,10 +38,17 @@ export function crearAuth({ token = null, user = null, ...overrides } = {}) {
  * @param options.auth       valor de AuthContext (usar crearAuth())
  * @param options.route      ruta inicial
  * @param options.path       patrón de ruta, si el componente lee useParams()
+ * @param options.rutasExtra  rutas adicionales [{ path, element }], para poder
+ *                            comprobar a dónde navega el componente
  */
-export function renderConProviders(ui, { auth = crearAuth(), route = '/', path = null, ...options } = {}) {
+export function renderConProviders(ui, { auth = crearAuth(), route = '/', path = null, rutasExtra = [], ...options } = {}) {
   const contenido = path
-    ? <Routes><Route path={path} element={ui} /></Routes>
+    ? (
+      <Routes>
+        <Route path={path} element={ui} />
+        {rutasExtra.map((r) => <Route key={r.path} path={r.path} element={r.element} />)}
+      </Routes>
+    )
     : ui;
 
   const resultado = render(

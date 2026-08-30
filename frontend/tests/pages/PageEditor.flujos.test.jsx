@@ -390,27 +390,20 @@ describe('PageEditor — flujos de edición', () => {
       });
     });
 
-    it('abre el modal de edición con los datos del link', async () => {
+    // La edición vive en su propia pantalla (ver ItemEditor.test.jsx): acá se
+    // comprueba que tanto el título como "Editar" llevan hasta ella.
+    it('el título del link lleva a su edición', async () => {
       await render({ page: conLink() }, 'CONTENIDO');
 
-      fireEvent.click(screen.getByRole('button', { name: 'Editar' }));
-
-      expect(await screen.findByDisplayValue('Instagram')).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Instagram' }))
+        .toHaveAttribute('href', '/page/5/item/100');
     });
 
-    it('guarda los cambios del link', async () => {
-      const { llamadas } = await render({ page: conLink() }, 'CONTENIDO');
+    it('el botón Editar lleva a la edición del link', async () => {
+      await render({ page: conLink() }, 'CONTENIDO');
 
-      fireEvent.click(screen.getByRole('button', { name: 'Editar' }));
-      const campo = await screen.findByDisplayValue('Instagram');
-      fireEvent.change(campo, { target: { value: 'Instagram editado' } });
-      fireEvent.click(screen.getByRole('button', { name: 'GUARDAR' }));
-
-      await waitFor(() => {
-        const editado = put(llamadas, 'links/detail.php');
-        expect(editado.url).toContain('id=100');
-        expect(cuerpoDe(editado)).toMatchObject({ text: 'Instagram editado' });
-      });
+      expect(screen.getByRole('link', { name: 'Editar' }))
+        .toHaveAttribute('href', '/page/5/item/100');
     });
 
     it('elimina el link tras confirmar', async () => {
@@ -532,20 +525,6 @@ describe('PageEditor — flujos de edición', () => {
       });
     });
 
-    it('busca páginas para invitar a colaborar', async () => {
-      const { llamadas } = await render({
-        page: conEvento(),
-        results: [{ id: 7, type: 'page', title: 'Otra Página', slug: 'otra' }],
-      }, 'CONTENIDO');
-
-      fireEvent.click(screen.getByRole('button', { name: 'Editar' }));
-      const buscador = await screen.findByPlaceholderText('Buscar página para invitar...');
-      fireEvent.change(buscador, { target: { value: 'otra' } });
-
-      await waitFor(() => {
-        expect(llamadaA(llamadas, 'public/search.php')).not.toBeNull();
-      });
-    });
   });
 
   describe('invitaciones a colaborar recibidas', () => {

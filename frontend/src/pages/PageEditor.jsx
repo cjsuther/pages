@@ -1,12 +1,10 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { AuthContext } from '../App';
 import LoadingSpinner from '../components/LoadingSpinner';
 import GooglePlacesAutocomplete from '../components/GooglePlacesAutocomplete';
 import SeccionRedes from '../components/SeccionRedes';
 import SeccionEntradas from '../components/SeccionEntradas';
-import PanelEntradas from '../components/PanelEntradas';
-import PanelVentas from '../components/PanelVentas';
 
 /** Secciones del editor, en el orden en que se muestran. */
 const SECCIONES = [
@@ -21,19 +19,21 @@ function PageEditor() {
   const { id } = useParams();
   const { token, apiUrl, user } = useContext(AuthContext);
   const navigate = useNavigate();
-  const [seccion, setSeccion] = useState('general');
+  // La solapa abierta va en la URL (?s=). Así, al volver de editar un item
+  // —con el botón del editor o con el "atrás" del navegador— se cae en la
+  // misma sección y no en CONFIGURACIÓN.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const seccionEnUrl = searchParams.get('s');
+  const seccion = SECCIONES.some(x => x.clave === seccionEnUrl) ? seccionEnUrl : 'general';
+  const setSeccion = (clave) => setSearchParams(clave === 'general' ? {} : { s: clave });
   const [page, setPage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [globalLoading, setGlobalLoading] = useState(false);
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [showEditGroupModal, setShowEditGroupModal] = useState(false);
   const [showLinkModal, setShowLinkModal] = useState(false);
-  const [showEditLinkModal, setShowEditLinkModal] = useState(false);
   const [selectedGroup, setSelectedGroup] = useState(null);
   const [editingGroup, setEditingGroup] = useState(null);
-  const [editingLink, setEditingLink] = useState(null);
-  // Tab activo del modal de evento: datos | entradas | ventas.
-  const [tabEvento, setTabEvento] = useState('datos');
   const [newGroup, setNewGroup] = useState({ title: '', type: 'links' });
   const [newLink, setNewLink] = useState({
     url: '',
@@ -55,9 +55,6 @@ function PageEditor() {
   const [showCollabAcceptModal, setShowCollabAcceptModal] = useState(false);
   const [acceptingCollab, setAcceptingCollab] = useState(null);
   const [collabAcceptGroupId, setCollabAcceptGroupId] = useState('');
-  const [pageSearchQuery, setPageSearchQuery] = useState('');
-  const [pageSearchResults, setPageSearchResults] = useState([]);
-  const [searchingPages, setSearchingPages] = useState(false);
 
   // Page admins state
   const [admins, setAdmins] = useState([]);
@@ -235,7 +232,7 @@ function PageEditor() {
     }
   };
 
-  const handleLinkImageUpload = async (e, isEditing = false) => {
+  const handleLinkImageUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
@@ -244,11 +241,7 @@ function PageEditor() {
     setUploadingLinkImage(false);
 
     if (url) {
-      if (isEditing && editingLink) {
-        setEditingLink({ ...editingLink, image_url: url });
-      } else {
-        setNewLink({ ...newLink, image_url: url });
-      }
+      setNewLink({ ...newLink, image_url: url });
     }
   };
 
@@ -361,38 +354,6 @@ function PageEditor() {
     }
   };
 
-  const updateLink = async (e) => {
-    e.preventDefault();
-
-    if (selectedGroup.type === 'eventos') {
-      if (!editingLink.event_latitude || !editingLink.event_longitude) {
-        alert('Debes seleccionar una dirección válida de Google Maps para el evento');
-        return;
-      }
-    }
-
-    try {
-      setGlobalLoading(true);
-      const response = await fetch(`${apiUrl}/links/detail.php?id=${editingLink.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(editingLink)
-      });
-      if (response.ok) {
-        setShowEditLinkModal(false);
-        setEditingLink(null);
-        fetchPage();
-      }
-    } catch (err) {
-      console.error('Error updating link:', err);
-    } finally {
-      setGlobalLoading(false);
-    }
-  };
-
   const deleteLink = async (linkId) => {
     if (!confirm('¿Eliminar este link?')) return;
     try {
@@ -479,13 +440,6 @@ function PageEditor() {
     setShowEditGroupModal(true);
   };
 
-  const openEditLinkModal = (link, group) => {
-    setEditingLink({ ...link });
-    setSelectedGroup(group);
-    setTabEvento('datos');
-    setShowEditLinkModal(true);
-  };
-
   const loadPendingCollaborations = async () => {
     try {
       const response = await fetch(`${apiUrl}/collaborations/index.php?type=pending`, {
@@ -497,53 +451,6 @@ function PageEditor() {
       }
     } catch (err) {
       console.error('Error loading collaborations:', err);
-    }
-  };
-
-  const searchPagesForCollaboration = async (query) => {
-    if (!query.trim()) { setPageSearchResults([]); return; }
-    setSearchingPages(true);
-    try {
-      const response = await fetch(`${apiUrl}/public/search.php?q=${encodeURIComponent(query)}`);
-      const data = await response.json();
-      setPageSearchResults((data.results || []).filter(r => r.type === 'page'));
-    } catch (err) {
-      console.error('Error searching pages:', err);
-    } finally {
-      setSearchingPages(false);
-    }
-  };
-
-  const addCollaborator = async (linkId, page) => {
-    try {
-      setGlobalLoading(true);
-      const response = await fetch(`${apiUrl}/collaborations/index.php`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ link_id: linkId, collaborator_page_id: page.id })
-      });
-      const data = await response.json();
-      if (response.ok) {
-        setPageSearchQuery('');
-        setPageSearchResults([]);
-        // Update editingLink immediately so the modal reflects the new collaborator
-        const newCollab = {
-          id: data.collaboration_id,
-          status: 'pending',
-          collaborator_page_id: page.id,
-          page_title: page.title,
-          page_slug: page.slug,
-          page_image: page.profile_image || null,
-        };
-        setEditingLink(prev => prev ? { ...prev, collaborations: [...(prev.collaborations || []), newCollab] } : prev);
-        fetchPage();
-      } else {
-        alert(data.error || 'Error al invitar colaborador');
-      }
-    } catch (err) {
-      console.error('Error adding collaborator:', err);
-    } finally {
-      setGlobalLoading(false);
     }
   };
 
@@ -615,24 +522,14 @@ function PageEditor() {
     }
   };
 
-  const handlePlaceSelect = (placeData, isEditing = false) => {
-    if (isEditing && editingLink) {
-      setEditingLink({
-        ...editingLink,
-        event_address: placeData.address,
-        event_latitude: placeData.latitude,
-        event_longitude: placeData.longitude,
-        event_maps_url: placeData.mapsUrl
-      });
-    } else {
-      setNewLink({
-        ...newLink,
-        event_address: placeData.address,
-        event_latitude: placeData.latitude,
-        event_longitude: placeData.longitude,
-        event_maps_url: placeData.mapsUrl
-      });
-    }
+  const handlePlaceSelect = (placeData) => {
+    setNewLink({
+      ...newLink,
+      event_address: placeData.address,
+      event_latitude: placeData.latitude,
+      event_longitude: placeData.longitude,
+      event_maps_url: placeData.mapsUrl
+    });
   };
 
   if (loading) {
@@ -1196,15 +1093,13 @@ function PageEditor() {
                                   className="w-12 h-12 object-cover rounded"
                                 />
                               )}
-                              <div className="flex-1">
-                                <a
-                                  href={link.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-blue-600 hover:underline font-medium"
+                              <div className="flex-1 min-w-0">
+                                <Link
+                                  to={`/page/${id}/item/${link.id}`}
+                                  className="text-blue-600 hover:underline font-medium text-left"
                                 >
-                                  {link.text}
-                                </a>
+                                  {link.text || (group.type === 'galeria' ? 'Sin título' : link.url)}
+                                </Link>
                                 {link.description && (
                                   <p className="text-sm text-gray-600">{link.description}</p>
                                 )}
@@ -1262,12 +1157,12 @@ function PageEditor() {
                                 )}
 
                                 <div className="flex flex-wrap gap-1">
-                                  <button
-                                    onClick={() => openEditLinkModal(link, group)}
+                                  <Link
+                                    to={`/page/${id}/item/${link.id}`}
                                     className="text-blue-600 hover:bg-blue-50 px-3 py-1 rounded transition text-sm"
                                   >
                                     Editar
-                                  </button>
+                                  </Link>
                                   <button
                                     onClick={() => deleteLink(link.id)}
                                     className="text-red-600 hover:bg-red-50 px-3 py-1 rounded transition text-sm"
@@ -1460,7 +1355,7 @@ function PageEditor() {
                   <input
                     type="file"
                     accept="image/*"
-                    onChange={(e) => handleLinkImageUpload(e, false)}
+                    onChange={(e) => handleLinkImageUpload(e)}
                     disabled={uploadingLinkImage}
                     className="text-sm text-gray-400"
                     required={selectedGroup.type === 'galeria' && !newLink.image_url}
@@ -1541,7 +1436,7 @@ function PageEditor() {
                     <GooglePlacesAutocomplete
                       value={newLink.event_address}
                       onChange={(e) => setNewLink({ ...newLink, event_address: e.target.value })}
-                      onPlaceSelect={(placeData) => handlePlaceSelect(placeData, false)}
+                      onPlaceSelect={handlePlaceSelect}
                       placeholder="Buscar dirección en Google Maps..."
                       required={true}
                     />
@@ -1605,344 +1500,6 @@ function PageEditor() {
         </div>
       )}
 
-      {showEditLinkModal && editingLink && selectedGroup && (
-        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-start justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-gray-900 border border-gray-800 max-w-lg w-full p-10 my-8">
-            <h2 className="text-3xl font-black mb-8 text-white">
-              EDITAR {selectedGroup.type === 'galeria' ? 'IMAGEN' : selectedGroup.type === 'eventos' ? 'EVENTO' : 'LINK'}
-            </h2>
-
-            {selectedGroup.type === 'eventos' && (
-              <nav className="flex gap-1 border-b border-gray-800 mb-8 -mt-4" aria-label="Secciones del evento">
-                {[
-                  { clave: 'datos', etiqueta: 'DATOS' },
-                  { clave: 'entradas', etiqueta: 'ENTRADAS' },
-                  { clave: 'ventas', etiqueta: 'VENTAS' },
-                ].map((t) => (
-                  <button
-                    key={t.clave}
-                    type="button"
-                    onClick={() => setTabEvento(t.clave)}
-                    className={`px-4 py-3 text-sm font-bold tracking-wide transition border-b-2 -mb-px ${
-                      tabEvento === t.clave
-                        ? 'border-white text-white'
-                        : 'border-transparent text-gray-500 hover:text-gray-300'
-                    }`}
-                  >
-                    {t.etiqueta}
-                  </button>
-                ))}
-              </nav>
-            )}
-
-            {tabEvento === 'entradas' && selectedGroup.type === 'eventos' && (
-              <PanelEntradas linkId={editingLink.id} apiUrl={apiUrl} token={token} />
-            )}
-
-            {tabEvento === 'ventas' && selectedGroup.type === 'eventos' && (
-              <PanelVentas linkId={editingLink.id} apiUrl={apiUrl} token={token} />
-            )}
-
-            {(tabEvento === 'datos' || selectedGroup.type !== 'eventos') && (
-            <form onSubmit={updateLink} className="space-y-6">
-              {selectedGroup.type !== 'galeria' && (
-                <>
-                  <div>
-                    <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">
-                      {selectedGroup.type === 'eventos' ? 'NOMBRE DEL EVENTO' : 'TEXTO'}
-                    </label>
-                    <input
-                      type="text"
-                      value={editingLink.text}
-                      onChange={(e) => setEditingLink({ ...editingLink, text: e.target.value })}
-                      className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
-                      required
-                    />
-                  </div>
-                  {selectedGroup.type === 'eventos' ? (
-                    <div className="grid grid-cols-2 gap-4 items-end">
-                      <div>
-                        <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">URL (OPCIONAL)</label>
-                        <input
-                          type="url"
-                          value={editingLink.url}
-                          onChange={(e) => setEditingLink({ ...editingLink, url: e.target.value })}
-                          className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">TEXTO DEL BOTÓN (OPCIONAL)</label>
-                        <input
-                          type="text"
-                          value={editingLink.url_text || ''}
-                          onChange={(e) => setEditingLink({ ...editingLink, url_text: e.target.value })}
-                          placeholder="Más información"
-                          className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
-                        />
-                      </div>
-                    </div>
-                  ) : (
-                    <div>
-                      <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">URL</label>
-                      <input
-                        type="url"
-                        value={editingLink.url}
-                        onChange={(e) => setEditingLink({ ...editingLink, url: e.target.value })}
-                        className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
-                        required
-                      />
-                    </div>
-                  )}
-                </>
-              )}
-
-              <div>
-                <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">
-                  IMAGEN {selectedGroup.type === 'galeria' ? '' : '(OPCIONAL)'}
-                </label>
-                <div className="flex items-center gap-4">
-                  {editingLink.image_url && (
-                    <div className="relative">
-                      <img src={editingLink.image_url} alt="Vista previa" className="w-16 h-16 object-cover rounded" />
-                      <button
-                        onClick={() => setEditingLink({ ...editingLink, image_url: null })}
-                        className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-700 text-lg font-bold"
-                        type="button"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  )}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => handleLinkImageUpload(e, true)}
-                    disabled={uploadingLinkImage}
-                    className="text-sm text-gray-400"
-                  />
-                  {uploadingLinkImage && <span className="text-sm text-gray-500">Subiendo...</span>}
-                </div>
-                <p className="text-xs text-gray-600 mt-1">Sube una nueva imagen para reemplazar (máx 5MB)</p>
-              </div>
-
-              {selectedGroup.type === 'galeria' && (
-                <>
-                  <div>
-                    <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">TÍTULO (OPCIONAL)</label>
-                    <input
-                      type="text"
-                      value={editingLink.text}
-                      onChange={(e) => setEditingLink({ ...editingLink, text: e.target.value })}
-                      className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">LINK (OPCIONAL)</label>
-                    <input
-                      type="url"
-                      value={editingLink.url}
-                      onChange={(e) => setEditingLink({ ...editingLink, url: e.target.value })}
-                      className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
-                    />
-                  </div>
-                </>
-              )}
-
-              {selectedGroup.type === 'eventos' && (
-                <>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">FECHA</label>
-                      <input
-                        type="date"
-                        value={editingLink.event_date}
-                        onChange={(e) => setEditingLink({ ...editingLink, event_date: e.target.value })}
-                        className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">HORA</label>
-                      <input
-                        type="time"
-                        value={editingLink.event_time || ''}
-                        onChange={(e) => setEditingLink({ ...editingLink, event_time: e.target.value })}
-                        className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label htmlFor="editar-precio-desde" className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">
-                      PRECIO DESDE (OPCIONAL)
-                    </label>
-                    <input
-                      id="editar-precio-desde"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={editingLink.precio_desde ?? ''}
-                      onChange={(e) => setEditingLink({ ...editingLink, precio_desde: e.target.value })}
-                      placeholder="Vacío si no se sabe"
-                      className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
-                    />
-                    <p className="text-xs text-gray-600 mt-1">
-                      En 0 el evento se anuncia como gratis; vacío no muestra nada.
-                    </p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">
-                      DIRECCIÓN <span className="text-red-500">*</span>
-                    </label>
-                    <GooglePlacesAutocomplete
-                      value={editingLink.event_address || ''}
-                      onChange={(e) => setEditingLink({ ...editingLink, event_address: e.target.value })}
-                      onPlaceSelect={(placeData) => handlePlaceSelect(placeData, true)}
-                      placeholder="Buscar dirección en Google Maps..."
-                      required={true}
-                    />
-                    <p className="text-xs text-gray-600 mt-1">
-                      Selecciona una dirección de las sugerencias para capturar las coordenadas
-                    </p>
-                    {editingLink.event_latitude && editingLink.event_longitude && (
-                      <p className="text-xs text-green-500 mt-1">
-                        ✓ Coordenadas capturadas correctamente
-                      </p>
-                    )}
-                  </div>
-                </>
-              )}
-
-              {selectedGroup.type !== 'galeria' && (
-                <div>
-                  <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">
-                    {selectedGroup.type === 'eventos' ? 'DESCRIPCIÓN DEL EVENTO' : 'DESCRIPCIÓN (OPCIONAL)'}
-                  </label>
-                  <textarea
-                    value={editingLink.description}
-                    onChange={(e) => setEditingLink({ ...editingLink, description: e.target.value })}
-                    className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
-                    rows="3"
-                  />
-                </div>
-              )}
-
-              {selectedGroup.type === 'eventos' && (
-                <div className="border-t border-gray-700 pt-6">
-                  <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">COLABORADORES</label>
-
-                  {editingLink.collaborations && editingLink.collaborations.length > 0 && (
-                    <div className="space-y-2 mb-4">
-                      {editingLink.collaborations.map(c => (
-                        <div key={c.id} className="flex items-center justify-between bg-black px-3 py-2 rounded">
-                          <div className="flex items-center gap-2">
-                            {c.page_image && <img src={c.page_image} alt="" className="w-6 h-6 rounded-full object-cover" />}
-                            <span className="text-sm text-white">{c.page_title}</span>
-                            <span className={`text-xs px-2 py-0.5 rounded ${
-                              c.status === 'accepted' ? 'bg-green-900 text-green-300' :
-                              c.status === 'rejected' ? 'bg-red-900 text-red-300' :
-                              'bg-yellow-900 text-yellow-300'
-                            }`}>
-                              {c.status === 'accepted' ? 'Aceptó' : c.status === 'rejected' ? 'Rechazó' : 'Pendiente'}
-                            </span>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              removeCollaboration(c.id);
-                              setEditingLink({ ...editingLink, collaborations: editingLink.collaborations.filter(x => x.id !== c.id) });
-                            }}
-                            className="text-red-400 hover:text-red-300 text-sm"
-                          >
-                            Quitar
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={pageSearchQuery}
-                      onChange={(e) => {
-                        setPageSearchQuery(e.target.value);
-                        searchPagesForCollaboration(e.target.value);
-                      }}
-                      placeholder="Buscar página para invitar..."
-                      className="flex-1 px-3 py-2 bg-black border border-gray-700 text-white text-sm focus:border-white transition"
-                    />
-                    {searchingPages && <span className="text-gray-500 text-sm self-center">...</span>}
-                  </div>
-
-                  {pageSearchResults.length > 0 && (
-                    <div className="mt-2 bg-black border border-gray-700 rounded max-h-40 overflow-y-auto">
-                      {pageSearchResults
-                        .filter(p => !editingLink.collaborations?.some(c => c.collaborator_page_id == p.id))
-                        .map(p => (
-                          <button
-                            key={p.id}
-                            type="button"
-                            onClick={() => {
-                              addCollaborator(editingLink.id, p);
-                              setPageSearchQuery('');
-                              setPageSearchResults([]);
-                            }}
-                            className="w-full text-left px-3 py-2 hover:bg-gray-800 text-sm text-white flex items-center gap-2"
-                          >
-                            <span className="font-medium">{p.title}</span>
-                            <span className="text-gray-500 text-xs">/{p.slug}</span>
-                          </button>
-                        ))}
-                    </div>
-                  )}
-                  <p className="text-xs text-gray-600 mt-2">
-                    Las páginas invitadas recibirán una notificación para aceptar o rechazar la colaboración
-                  </p>
-                </div>
-              )}
-
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowEditLinkModal(false);
-                    setEditingLink(null);
-                    setSelectedGroup(null);
-                    setPageSearchQuery('');
-                    setPageSearchResults([]);
-                  }}
-                  className="flex-1 px-4 py-3 border border-gray-700 text-white hover:bg-gray-800 transition font-bold"
-                >
-                  CANCELAR
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 bg-white text-black px-4 py-3 font-bold hover:bg-gray-200 transition"
-                >
-                  GUARDAR
-                </button>
-              </div>
-            </form>
-            )}
-
-            {tabEvento !== 'datos' && selectedGroup.type === 'eventos' && (
-              <div className="flex gap-3 pt-8">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowEditLinkModal(false);
-                    setEditingLink(null);
-                    setSelectedGroup(null);
-                  }}
-                  className="flex-1 px-4 py-3 border border-gray-700 text-white hover:bg-gray-800 transition font-bold"
-                >
-                  CERRAR
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
       {showCollabAcceptModal && acceptingCollab && (
         <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center p-4 z-50">
           <div className="bg-gray-900 border border-gray-800 max-w-lg w-full p-10">

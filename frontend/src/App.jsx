@@ -8,6 +8,7 @@ import Register from './pages/Register';
 import Pages from './pages/Pages';
 import MyPages from './pages/MyPages';
 import PageEditor from './pages/PageEditor';
+import ItemEditor from './pages/ItemEditor';
 import PublicPage from './pages/PublicPage';
 import EventDetail from './pages/EventDetail';
 import EstadoOrden from './pages/EstadoOrden';
@@ -68,6 +69,7 @@ function App() {
             <Route path="/pages" element={token ? <Pages /> : <Navigate to="/login" />} />
             <Route path="/my-pages" element={token ? <MyPages /> : <Navigate to="/login" />} />
             <Route path="/page/:id" element={token ? <PageEditor /> : <Navigate to="/login" />} />
+            <Route path="/page/:id/item/:linkId" element={token ? <ItemEditor /> : <Navigate to="/login" />} />
             <Route path="/evento/:id" element={<EventDetail />} />
             <Route path="/entrada/:codigo" element={<EstadoOrden apiUrl={API_URL} />} />
             {/* Antes de /:slug: es una ruta del sitio, no una página pública. */}
