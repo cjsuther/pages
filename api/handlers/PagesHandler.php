@@ -31,7 +31,12 @@ class PagesHandler
         'title' => ['nullable' => false],
         'description' => ['nullable' => false],
         'primary_color' => ['nullable' => false],
-        'secondary_color' => ['nullable' => false],
+        // Nullable los tres: vaciarlos es volver al valor derivado —botones con
+        // el acento, tarjeta calculada del fondo, títulos con el color del
+        // texto—, que es lo que hacían antes de ser configurables.
+        'secondary_color' => ['nullable' => true],
+        'card_color' => ['nullable' => true],
+        'title_color' => ['nullable' => true],
         'background_color' => ['nullable' => false],
         'text_color' => ['nullable' => false],
         'profile_image' => ['nullable' => true],

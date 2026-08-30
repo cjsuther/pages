@@ -153,6 +153,46 @@ describe.each(PLANTILLAS)('%s', (nombre, Plantilla) => {
     });
   });
 
+  // El mismo control tiene que pintar lo mismo en las cinco. Antes no: el
+  // acento era el marco de cada ficha en una plantilla y no se veía nunca en
+  // otra, así que cambiarlo daba resultados incomparables.
+  describe('colores por rol', () => {
+    const ACENTO = '#ff8800';
+    const conGrupo = (extra = {}) => pagina({
+      primary_color: ACENTO,
+      groups: [grupoDeLinks([link()])],
+      ...extra,
+    });
+
+    const pintadoCon = (container, rgb) =>
+      [...container.querySelectorAll('[style]')]
+        .filter((n) => (n.getAttribute('style') || '').includes(rgb));
+
+    it('el acento se ve en el cuerpo de la página', () => {
+      const { container } = renderConProviders(<Plantilla page={conGrupo()} />);
+
+      expect(pintadoCon(container, 'rgb(255, 136, 0)').length).toBeGreaterThan(0);
+    });
+
+    it('los títulos usan el color de títulos cuando se eligió', () => {
+      const { container } = renderConProviders(
+        <Plantilla page={conGrupo({ title_color: '#00ff00' })} />
+      );
+
+      expect(pintadoCon(container, 'rgb(0, 255, 0)').length).toBeGreaterThan(0);
+    });
+
+    // Vacío se comporta como antes de ser configurable: una página que nunca
+    // lo tocó no cambia de aspecto.
+    it('sin color de títulos elegido manda el color del texto', () => {
+      const { container } = renderConProviders(
+        <Plantilla page={conGrupo({ text_color: '#123456' })} />
+      );
+
+      expect(pintadoCon(container, 'rgb(18, 52, 86)').length).toBeGreaterThan(0);
+    });
+  });
+
   describe('cabecera', () => {
     it('muestra el título de la página', () => {
       renderConProviders(<Plantilla page={pagina()} />);

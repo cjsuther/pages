@@ -6,7 +6,25 @@ import GooglePlacesAutocomplete from '../components/GooglePlacesAutocomplete';
 import SeccionRedes from '../components/SeccionRedes';
 import SeccionEntradas from '../components/SeccionEntradas';
 import { analizarEmbed, portadaDe } from '../utils/embeds';
+import { paleta } from '../utils/colores';
 import MiniaturaPlantilla from '../components/MiniaturaPlantilla';
+
+/**
+ * Los colores que se manejan desde el administrador, y qué pinta cada uno.
+ *
+ * Los tres primeros siempre tienen valor. Los tres últimos son opcionales:
+ * vacíos se derivan de los anteriores, que es como se comportaba la página
+ * antes de que se pudieran elegir. `rol` es la clave con la que paleta() los
+ * resuelve, y sirve para mostrar en el selector el color que está rigiendo.
+ */
+const COLORES = [
+  { campo: 'text_color',       etiqueta: 'TEXTO',    ayuda: 'Toda la tipografía' },
+  { campo: 'background_color', etiqueta: 'FONDO',    ayuda: 'El fondo de la página' },
+  { campo: 'primary_color',    etiqueta: 'ACENTO',   ayuda: 'La barra debajo de cada grupo y los detalles' },
+  { campo: 'title_color',      etiqueta: 'TÍTULOS',  rol: 'titulo',  automatico: 'igual al texto' },
+  { campo: 'secondary_color',  etiqueta: 'BOTONES',  rol: 'boton',   automatico: 'igual al acento' },
+  { campo: 'card_color',       etiqueta: 'TARJETAS', rol: 'tarjeta', automatico: 'se calcula con el fondo' },
+];
 
 /** Plantillas disponibles, en el orden en que se ofrecen. */
 const PLANTILLAS = [
@@ -83,6 +101,10 @@ function PageEditor() {
 
   // ¿El usuario actual es el dueño de la página? (gestionar admins es solo del dueño)
   const isOwner = page && user && Number(page.user_id) === Number(user.id);
+
+  // Los colores ya resueltos, para poder mostrar en el selector el que rige
+  // cuando el campo está en automático.
+  const colores = paleta(page);
 
   // Se muestra en el submenú para que las colaboraciones pendientes no queden
   // escondidas dentro de una solapa que el usuario no abrió.
@@ -198,6 +220,12 @@ function PageEditor() {
    * lo que se escribió —con https:// o con www— parecería que se guardó otra
    * cosa de la que efectivamente se va a comparar contra cada visita.
    */
+  /** Guarda un color. null vuelve al valor derivado. */
+  const guardarColor = (campo, valor) => {
+    setPage({ ...page, [campo]: valor });
+    updatePage({ [campo]: valor });
+  };
+
   const guardarDominio = async (valor) => {
     setDominioError('');
 
@@ -785,46 +813,44 @@ function PageEditor() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-6">
-              <div>
-                <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">COLOR DE TEXTO</label>
-                <input
-                  type="color"
-                  value={page.text_color}
-                  onChange={(e) => {
-                    setPage({ ...page, text_color: e.target.value });
-                    updatePage({ text_color: e.target.value });
-                  }}
-                  className="w-full h-10 rounded-lg cursor-pointer"
-                />
-              </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-6 mb-6">
+              {COLORES.map((c) => {
+                const elegido = page[c.campo];
+                // El selector muestra el color que rige: si no se eligió, el
+                // derivado. Un selector en negro cuando la página se ve azul
+                // sería mentir sobre lo que está pasando.
+                const vigente = elegido || (c.rol ? colores[c.rol] : '#000000');
 
-              <div>
-                <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">COLOR DE FONDO</label>
-                <input
-                  type="color"
-                  value={page.background_color}
-                  onChange={(e) => {
-                    setPage({ ...page, background_color: e.target.value });
-                    updatePage({ background_color: e.target.value });
-                  }}
-                  className="w-full h-10 rounded-lg cursor-pointer"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">COLOR ELEMENTOS</label>
-                <input
-                  type="color"
-                  value={page.primary_color}
-                  onChange={(e) => {
-                    setPage({ ...page, primary_color: e.target.value });
-                    updatePage({ primary_color: e.target.value });
-                  }}
-                  className="w-full h-10 rounded-lg cursor-pointer"
-                />
-              </div>
-            
+                return (
+                  <div key={c.campo}>
+                    <label htmlFor={`color-${c.campo}`} className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">
+                      COLOR DE {c.etiqueta}
+                    </label>
+                    <input
+                      id={`color-${c.campo}`}
+                      type="color"
+                      value={vigente}
+                      onChange={(e) => guardarColor(c.campo, e.target.value)}
+                      className="w-full h-10 rounded-lg cursor-pointer"
+                    />
+                    {c.rol ? (
+                      elegido ? (
+                        <button
+                          type="button"
+                          onClick={() => guardarColor(c.campo, null)}
+                          className="text-xs text-gray-500 hover:text-white transition mt-2"
+                        >
+                          Volver al automático
+                        </button>
+                      ) : (
+                        <p className="text-xs text-gray-600 mt-2">Automático: {c.automatico}</p>
+                      )
+                    ) : (
+                      <p className="text-xs text-gray-600 mt-2">{c.ayuda}</p>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
             <div className="mt-8 pt-8 border-t border-gray-800">

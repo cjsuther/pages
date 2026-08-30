@@ -7,7 +7,7 @@ import BotonEntradas, { vendeEntradas } from '../BotonEntradas';
 import PrecioEvento from '../PrecioEvento';
 import RezonarBadge from '../RezonarBadge';
 import { MiniaturaGaleria, VisorGaleria } from '../MediaGaleria';
-import { superficie, borde } from '../../utils/colores';
+import { paleta } from '../../utils/colores';
 import { CLASES_ALREDEDOR, CLASES_CAJA, estiloDeAlrededor, estiloDeCaja } from '../../utils/plantillas';
 import { ExternalLink } from 'lucide-react';
 
@@ -19,11 +19,15 @@ function CardsTemplate({ page }) {
   const primaryColor = page.primary_color || '#3b82f6';
   const backgroundImage = page.background_image;
 
+  // Los colores por rol. Las cinco plantillas leen de acá para que el mismo
+  // control pinte lo mismo en todas.
+  const colores = paleta(page);
+
   // La tarjeta acompaña al fondo elegido en vez de imponer un blanco fijo, y
   // el texto es siempre el color elegido: como la tarjeta ya no trae color
   // propio, no hay forma de que la tipografía quede invisible encima.
-  const fondoTarjeta = superficie(backgroundColor, textColor);
-  const bordeTarjeta = borde(textColor);
+  const fondoTarjeta = colores.tarjeta;
+  const bordeTarjeta = colores.bordeTarjeta;
 
   const tarjetaStyle = {
     color: textColor,
@@ -35,8 +39,8 @@ function CardsTemplate({ page }) {
   // en blanco con texto negro: sobre una página oscura era un recuadro ajeno,
   // y el botón de compra —que se pinta con un color de la paleta— podía
   // quedar del mismo color que ese blanco y desaparecer.
-  const fondoModal = superficie(backgroundColor, textColor);
-  const bordeModal = borde(textColor);
+  const fondoModal = colores.tarjeta;
+  const bordeModal = colores.bordeTarjeta;
 
   const modalStyle = {
     color: textColor,
@@ -60,7 +64,7 @@ function CardsTemplate({ page }) {
               className="w-40 h-40 rounded-full object-cover mx-auto mb-6 shadow-lg"
             />
           )}
-          <h1 className="text-5xl font-bold mb-4">{page.title}</h1>
+          <h1 className="text-5xl font-bold mb-4" style={{ color: colores.titulo }}>{page.title}</h1>
           {page.description && (
             <p className="text-xl opacity-70 max-w-2xl mx-auto">{page.description}</p>
           )}
@@ -74,7 +78,10 @@ function CardsTemplate({ page }) {
         <div className="space-y-12">
           {page.groups?.map((group) => (
             <div key={group.id}>
-              <h2 className="text-3xl font-bold mb-8 text-center">{group.title}</h2>
+              <div className="mb-8">
+                <h2 className="text-3xl font-bold text-center" style={{ color: colores.titulo }}>{group.title}</h2>
+                <span className="block h-1 w-12 mt-3 mx-auto rounded-full" style={{ backgroundColor: colores.acento }} />
+              </div>
 
               {group.type === 'galeria' ? (
                 <div className="grid grid-cols-2 gap-6">
@@ -179,7 +186,7 @@ function CardsTemplate({ page }) {
         </div>
       </div>
 
-      <footer className="mt-24 pt-12 border-t border-gray-300 text-center">
+      <footer className="mt-24 pt-12 border-t text-center" style={{ borderColor: colores.bordeTarjeta }}>
         <div className="space-y-4">
           <a href="/" className="inline-block opacity-50 hover:opacity-100 transition">
             <img src="/logo.png" alt="Rezonar" className="h-8 mx-auto" />
@@ -235,7 +242,7 @@ function CardsTemplate({ page }) {
             <div className="rounded-lg p-8" style={modalStyle}>
               <button
                 onClick={() => setModalEvent(null)}
-                className="float-right text-gray-600 text-3xl font-bold hover:text-gray-900"
+                className="float-right text-3xl font-bold opacity-60 hover:opacity-100"
               >
                 ×
               </button>
@@ -297,7 +304,7 @@ function CardsTemplate({ page }) {
 
               <PrecioEvento evento={modalEvent} className="mt-4" />
 
-              <BotonEntradas evento={modalEvent} color={primaryColor} />
+              <BotonEntradas evento={modalEvent} color={colores.boton} />
 
               {modalEvent.url && !vendeEntradas(modalEvent) && (
                 <a

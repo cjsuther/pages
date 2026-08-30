@@ -24,7 +24,10 @@ CREATE TABLE IF NOT EXISTS pages (
     url_slug VARCHAR(100) UNIQUE NOT NULL,
     dominio VARCHAR(255) DEFAULT NULL UNIQUE,
     primary_color VARCHAR(7) DEFAULT '#3B82F6',
-    secondary_color VARCHAR(7) DEFAULT '#1E40AF',
+    -- Opcionales: vacíos se derivan del acento, del fondo y del texto.
+    secondary_color VARCHAR(7) DEFAULT NULL,
+    card_color VARCHAR(7) DEFAULT NULL,
+    title_color VARCHAR(7) DEFAULT NULL,
     background_color VARCHAR(7) DEFAULT '#FFFFFF',
     text_color VARCHAR(7) DEFAULT '#000000',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

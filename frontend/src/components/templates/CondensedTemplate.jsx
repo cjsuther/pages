@@ -7,7 +7,7 @@ import BotonEntradas, { vendeEntradas } from '../BotonEntradas';
 import PrecioEvento from '../PrecioEvento';
 import RezonarBadge from '../RezonarBadge';
 import { MiniaturaGaleria, VisorGaleria } from '../MediaGaleria';
-import { superficie, borde } from '../../utils/colores';
+import { paleta } from '../../utils/colores';
 import { CLASES_ALREDEDOR, CLASES_CAJA, estiloDeAlrededor, estiloDeCaja } from '../../utils/plantillas';
 import { ExternalLink } from 'lucide-react';
 
@@ -19,6 +19,10 @@ function CondensedTemplate({ page }) {
   const primaryColor = page.primary_color || '#3b82f6';
   const backgroundImage = page.background_image;
 
+  // Los colores por rol. Las cinco plantillas leen de acá para que el mismo
+  // control pinte lo mismo en todas.
+  const colores = paleta(page);
+
   // La imagen se muestra tal cual, igual que en las otras tres. Acá iba detrás
   // de un velo del 95% que la tapaba: clavado en blanco volvía ilegible
   // cualquier página de tipografía clara, y atado a la paleta la teñía del
@@ -29,8 +33,8 @@ function CondensedTemplate({ page }) {
   // no en un flex: si empujara al título, cada fila quedaría centrada en un
   // lugar distinto según tenga imagen o no.
   const estiloPildora = {
-    backgroundColor: superficie(backgroundColor, textColor) || 'transparent',
-    ...(borde(textColor) && { border: `1px solid ${borde(textColor)}` }),
+    backgroundColor: colores.tarjeta || 'transparent',
+    ...(colores.bordeTarjeta && { border: `1px solid ${colores.bordeTarjeta}` }),
   };
 
   const CLASES_PILDORA =
@@ -43,8 +47,8 @@ function CondensedTemplate({ page }) {
   // en blanco con texto negro: sobre una página oscura era un recuadro ajeno,
   // y el botón de compra —que se pinta con un color de la paleta— podía
   // quedar del mismo color que ese blanco y desaparecer.
-  const fondoModal = superficie(backgroundColor, textColor);
-  const bordeModal = borde(textColor);
+  const fondoModal = colores.tarjeta;
+  const bordeModal = colores.bordeTarjeta;
 
   const modalStyle = {
     color: textColor,
@@ -66,7 +70,7 @@ function CondensedTemplate({ page }) {
               style={{ borderColor: primaryColor }}
             />
           )}
-          <h1 className="text-3xl md:text-4xl font-bold mb-3 md:mb-4">{page.title}</h1>
+          <h1 className="text-3xl md:text-4xl font-bold mb-3 md:mb-4" style={{ color: colores.titulo }}>{page.title}</h1>
           {page.description && (
             <p className="text-sm md:text-base opacity-70 max-w-xl mx-auto px-4">{page.description}</p>
           )}
@@ -81,9 +85,12 @@ function CondensedTemplate({ page }) {
           {page.groups?.map((group) => (
             <section key={group.id}>
               {group.title && (
-                <h2 className="text-sm md:text-base font-black uppercase tracking-widest mb-3 md:mb-4 text-center opacity-80">
-                  {group.title}
-                </h2>
+                <div className="mb-3 md:mb-4">
+                  <h2 className="text-sm md:text-base font-black uppercase tracking-widest text-center" style={{ color: colores.titulo }}>
+                    {group.title}
+                  </h2>
+                  <span className="block h-1 w-12 mt-3 mx-auto rounded-full" style={{ backgroundColor: colores.acento }} />
+                </div>
               )}
 
               {group.type === 'galeria' ? (
@@ -243,7 +250,7 @@ function CondensedTemplate({ page }) {
             <div className="rounded-lg p-6 md:p-8" style={modalStyle}>
               <button
                 onClick={() => setModalEvent(null)}
-                className="float-right text-gray-600 text-3xl font-bold hover:text-gray-900 -mt-2 -mr-2"
+                className="float-right text-3xl font-bold opacity-60 hover:opacity-100 -mt-2 -mr-2"
               >
                 ×
               </button>
@@ -305,7 +312,7 @@ function CondensedTemplate({ page }) {
 
               <PrecioEvento evento={modalEvent} className="mt-4" />
 
-              <BotonEntradas evento={modalEvent} color={primaryColor} />
+              <BotonEntradas evento={modalEvent} color={colores.boton} />
 
               {modalEvent.url && !vendeEntradas(modalEvent) && (
                 <a

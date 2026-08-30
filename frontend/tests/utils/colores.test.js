@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { aRgb, borde, conAlfa, contraste, mezclar, superficie, textoSobre } from '../../src/utils/colores';
+import { aRgb, borde, conAlfa, contraste, mezclar, superficie, textoSobre, paleta } from '../../src/utils/colores';
 
 describe('aRgb', () => {
   it('entiende el formato largo', () => {
@@ -142,5 +142,64 @@ describe('contraste', () => {
 
   it('un color contra sí mismo no contrasta', () => {
     expect(contraste('#f7f7f7', '#f7f7f7')).toBeCloseTo(1, 5);
+  });
+});
+
+describe('paleta', () => {
+  const page = {
+    background_color: '#111827',
+    text_color: '#f9fafb',
+    primary_color: '#f59e0b',
+  };
+
+  it('toma los tres colores que la página siempre tuvo', () => {
+    const p = paleta(page);
+
+    expect(p.fondo).toBe('#111827');
+    expect(p.texto).toBe('#f9fafb');
+    expect(p.acento).toBe('#f59e0b');
+  });
+
+  // Vacíos se derivan como se venían comportando: una página que nunca los
+  // tocó tiene que verse igual que antes.
+  describe('los opcionales, sin elegir', () => {
+    it('los títulos usan el color del texto', () => {
+      expect(paleta(page).titulo).toBe('#f9fafb');
+    });
+
+    it('los botones usan el acento', () => {
+      expect(paleta(page).boton).toBe('#f59e0b');
+    });
+
+    it('la tarjeta se calcula a partir del fondo', () => {
+      expect(paleta(page).tarjeta).toBe(superficie('#111827', '#f9fafb'));
+    });
+  });
+
+  describe('los opcionales, elegidos', () => {
+    it('mandan sobre el valor derivado', () => {
+      const p = paleta({
+        ...page,
+        title_color: '#ff0000',
+        secondary_color: '#00ff00',
+        card_color: '#0000ff',
+      });
+
+      expect(p.titulo).toBe('#ff0000');
+      expect(p.boton).toBe('#00ff00');
+      expect(p.tarjeta).toBe('#0000ff');
+    });
+  });
+
+  it('una página sin ningún color no rompe', () => {
+    const p = paleta({});
+
+    expect(p.fondo).toBe('#ffffff');
+    expect(p.texto).toBe('#000000');
+    expect(p.boton).toBe('#3b82f6');
+  });
+
+  it('no rompe sin página', () => {
+    expect(() => paleta(undefined)).not.toThrow();
   });
 });

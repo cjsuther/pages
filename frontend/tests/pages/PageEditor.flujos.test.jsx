@@ -160,6 +160,52 @@ describe('PageEditor — flujos de edición', () => {
       });
     });
 
+    // ------------------------------------------------------------- colores
+
+    it('ofrece los seis colores', async () => {
+      await render();
+
+      ['TEXTO', 'FONDO', 'ACENTO', 'TÍTULOS', 'BOTONES', 'TARJETAS'].forEach((etiqueta) => {
+        expect(screen.getByLabelText(`COLOR DE ${etiqueta}`)).toBeInTheDocument();
+      });
+    });
+
+    it('guarda un color opcional cuando se elige', async () => {
+      const { llamadas } = await render();
+
+      fireEvent.change(screen.getByLabelText('COLOR DE BOTONES'), { target: { value: '#00ff00' } });
+
+      await waitFor(() => {
+        expect(cuerpoDe(put(llamadas, 'pages/detail.php'))).toEqual({ secondary_color: '#00ff00' });
+      });
+    });
+
+    /** Vaciarlo es como se vuelve al valor derivado. */
+    it('permite volver al automático', async () => {
+      const { llamadas } = await render({ page: pagina({ secondary_color: '#00ff00' }) });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Volver al automático' }));
+
+      await waitFor(() => {
+        expect(cuerpoDe(put(llamadas, 'pages/detail.php'))).toEqual({ secondary_color: null });
+      });
+    });
+
+    // Un selector en negro mientras la página se ve azul mentiría sobre lo que
+    // está pasando.
+    it('en automático el selector muestra el color que rige', async () => {
+      await render({ page: pagina({ primary_color: '#abcdef', secondary_color: null }) });
+
+      expect(screen.getByLabelText('COLOR DE BOTONES')).toHaveValue('#abcdef');
+    });
+
+    it('elegido, muestra el elegido y ofrece volver atrás', async () => {
+      await render({ page: pagina({ primary_color: '#abcdef', secondary_color: '#00ff00' }) });
+
+      expect(screen.getByLabelText('COLOR DE BOTONES')).toHaveValue('#00ff00');
+      expect(screen.getByRole('button', { name: 'Volver al automático' })).toBeInTheDocument();
+    });
+
     // ------------------------------------------------------ dominio propio
 
     /**

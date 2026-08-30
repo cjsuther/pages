@@ -6,8 +6,9 @@
  * código es un bloque ajeno sobre la página, y si además hereda el texto,
  * ilegible: es lo que pasaba con las tarjetas blancas y la tipografía clara.
  *
- * La tarjeta no se configura aparte. Acompaña al fondo elegido y se delimita
- * con una diferencia mínima de tono y un borde tenue, no cambiando de color.
+ * La tarjeta acompaña al fondo elegido y se delimita con una diferencia mínima
+ * de tono y un borde tenue. Se puede elegir aparte, pero mientras no se elija
+ * sale de ahí: ver paleta(), al final del archivo, que resuelve cada rol.
  */
 
 /** Cuánto se corre la tarjeta del fondo de la página. Lo justo para verla. */
@@ -119,4 +120,36 @@ export function textoSobre(fondo, preferido = '#ffffff') {
 /** Borde tenue que delimita la tarjeta sin agregar un color a la paleta. */
 export function borde(texto) {
   return conAlfa(texto, ALFA_BORDE);
+}
+
+/**
+ * Los colores de una página, ya resueltos por rol.
+ *
+ * Es la única fuente: las plantillas leen de acá y no de `page` directamente.
+ * Antes cada una elegía qué pintar con el "color de elementos" y terminaban
+ * haciendo cosas distintas —en una era el marco de cada ficha y en otra no se
+ * veía nunca—, así que el mismo control daba resultados incomparables.
+ *
+ * Los tres opcionales se derivan cuando están vacíos, que es como se venían
+ * comportando: así una página que nunca los tocó se ve igual que antes.
+ */
+export function paleta(page) {
+  const fondo = (page && page.background_color) || '#ffffff';
+  const texto = (page && page.text_color) || '#000000';
+  const acento = (page && page.primary_color) || '#3b82f6';
+
+  return {
+    fondo,
+    texto,
+    /** Detalles estructurales: subrayado de los grupos, marcos, aros. */
+    acento,
+    /** Títulos. Vacío: el color del texto. */
+    titulo: (page && page.title_color) || texto,
+    /** Botones de acción —entradas, seguir—. Vacío: el acento. */
+    boton: (page && page.secondary_color) || acento,
+    /** Superficie de tarjetas y píldoras. Vacío: el fondo corrido hacia el texto. */
+    tarjeta: (page && page.card_color) || superficie(fondo, texto),
+    /** Borde tenue que delimita esa superficie. */
+    bordeTarjeta: borde(texto),
+  };
 }

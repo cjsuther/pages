@@ -8,7 +8,7 @@ import BotonEntradas, { vendeEntradas } from '../BotonEntradas';
 import PrecioEvento from '../PrecioEvento';
 import RezonarBadge from '../RezonarBadge';
 import { MiniaturaGaleria, VisorGaleria } from '../MediaGaleria';
-import { superficie, borde } from '../../utils/colores';
+import { paleta } from '../../utils/colores';
 import { CLASES_ALREDEDOR, CLASES_CAJA, estiloDeAlrededor, estiloDeCaja } from '../../utils/plantillas';
 import { ExternalLink } from 'lucide-react';
 
@@ -20,12 +20,16 @@ function MinimalTemplate({ page }) {
   const primaryColor = page.primary_color || '#3b82f6';
   const backgroundImage = page.background_image;
 
+  // Los colores por rol. Las cinco plantillas leen de acá para que el mismo
+  // control pinte lo mismo en todas.
+  const colores = paleta(page);
+
   // El detalle del evento sale de la misma paleta que la página. Estaba fijo
   // en blanco con texto negro: sobre una página oscura era un recuadro ajeno,
   // y el botón de compra —que se pinta con un color de la paleta— podía
   // quedar del mismo color que ese blanco y desaparecer.
-  const fondoModal = superficie(backgroundColor, textColor);
-  const bordeModal = borde(textColor);
+  const fondoModal = colores.tarjeta;
+  const bordeModal = colores.bordeTarjeta;
 
   const modalStyle = {
     color: textColor,
@@ -52,7 +56,7 @@ function MinimalTemplate({ page }) {
         )}
 
         <div className="text-center space-y-4">
-          <h1 className="text-4xl font-bold">{page.title}</h1>
+          <h1 className="text-4xl font-bold" style={{ color: colores.titulo }}>{page.title}</h1>
           {page.description && (
             <p className="text-lg opacity-70">{page.description}</p>
           )}
@@ -65,7 +69,10 @@ function MinimalTemplate({ page }) {
 
         {page.groups?.map((group) => (
           <div key={group.id} className="space-y-6">
-            <h2 className="text-2xl font-bold">{group.title}</h2>
+            <div>
+              <h2 className="text-2xl font-bold" style={{ color: colores.titulo }}>{group.title}</h2>
+              <span className="block h-1 w-12 mt-3 rounded-full" style={{ backgroundColor: colores.acento }} />
+            </div>
 
             {group.type === 'galeria' ? (
               <div className="grid grid-cols-2 gap-4">
@@ -217,7 +224,7 @@ function MinimalTemplate({ page }) {
             <div className="rounded-lg p-8" style={modalStyle}>
               <button
                 onClick={() => setModalEvent(null)}
-                className="float-right text-gray-600 text-3xl font-bold hover:text-gray-900"
+                className="float-right text-3xl font-bold opacity-60 hover:opacity-100"
               >
                 ×
               </button>
@@ -264,7 +271,8 @@ function MinimalTemplate({ page }) {
                         href={modalEvent.event_maps_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="hover:underline text-blue-600"
+                        className="hover:underline"
+                        style={{ color: colores.acento }}
                         onClick={(e) => e.stopPropagation()}
                       >
                         {modalEvent.event_address}
@@ -276,18 +284,19 @@ function MinimalTemplate({ page }) {
                 </div>
               )}
 
-              <EventCollaborators event={modalEvent} currentPageId={page.id} color="#000000" />
+              <EventCollaborators event={modalEvent} currentPageId={page.id} color={colores.acento} />
 
               <PrecioEvento evento={modalEvent} className="mt-4" />
 
-              <BotonEntradas evento={modalEvent} color={primaryColor} />
+              <BotonEntradas evento={modalEvent} color={colores.boton} />
 
               {modalEvent.url && !vendeEntradas(modalEvent) && (
                 <a
                   href={modalEvent.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-block mt-4 px-6 py-3 border-2 border-black font-bold hover:bg-black hover:text-white transition"
+                  className="inline-block mt-4 px-6 py-3 border-2 font-bold transition hover:opacity-80"
+                  style={{ borderColor: colores.boton, color: colores.boton }}
                   onClick={(e) => e.stopPropagation()}
                 >
                   {modalEvent.url_text || 'Más información →'}
