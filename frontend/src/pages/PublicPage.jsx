@@ -7,6 +7,7 @@ import MinimalTemplate from '../components/templates/MinimalTemplate';
 import CardsTemplate from '../components/templates/CardsTemplate';
 import ModernTemplate from '../components/templates/ModernTemplate';
 import CondensedTemplate from '../components/templates/CondensedTemplate';
+import AfichesTemplate from '../components/templates/AfichesTemplate';
 
 function PublicPage({ slugForzado = null }) {
   // En un dominio propio la dirección es la raíz y no trae slug: lo dice quien
@@ -85,8 +86,9 @@ function PublicPage({ slugForzado = null }) {
       {template === 'cards' && <CardsTemplate page={page} />}
       {template === 'modern' && <ModernTemplate page={page} />}
       {template === 'condensed' && <CondensedTemplate page={page} />}
+      {template === 'afiches' && <AfichesTemplate page={page} />}
       {template === 'minimal' && <MinimalTemplate page={page} />}
-      {!['cards', 'modern', 'condensed', 'minimal'].includes(template) && <MinimalTemplate page={page} />}
+      {!['cards', 'modern', 'condensed', 'minimal', 'afiches'].includes(template) && <MinimalTemplate page={page} />}
     </>
   );
 }

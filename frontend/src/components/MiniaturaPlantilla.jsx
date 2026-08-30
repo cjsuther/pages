@@ -115,16 +115,46 @@ function Modern({ fondo, texto, acento }) {
 function Condensed({ fondo, texto, acento }) {
   return (
     <div className="w-full h-full flex flex-col items-center gap-1 p-2" style={{ backgroundColor: fondo }}>
-      <div className="rounded-full flex-shrink-0" style={{ width: 10, height: 10, backgroundColor: acento }} />
+      <div className="rounded-full flex-shrink-0" style={{ width: 12, height: 12, backgroundColor: acento }} />
       <Linea ancho="45%" color={texto} />
-      {/* Filas apretadas, con la miniatura al lado de dos líneas de texto. */}
-      <div className="w-full mt-1 space-y-1">
-        {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
-          <div key={i} className="flex items-center gap-1">
-            <div className="rounded flex-shrink-0" style={{ width: 9, height: 9, backgroundColor: acento, opacity: 0.7 }} />
-            <div className="flex-1">
-              <Linea ancho="80%" alto={2} color={texto} />
-              <Linea ancho="55%" alto={2} color={texto} opacidad={0.4} margen={2} />
+      {/* Píldoras de ancho completo: miniatura redonda a la izquierda y el
+          título centrado respecto de toda la píldora. */}
+      <div className="w-full mt-1 space-y-1.5">
+        {[0, 1, 2, 3, 4].map((i) => (
+          <div
+            key={i}
+            className="relative flex items-center justify-center rounded-full"
+            style={{ height: 16, backgroundColor: texto, opacity: 0.12 }}
+          >
+            <div
+              className="absolute left-[3px] rounded-full"
+              style={{ width: 10, height: 10, backgroundColor: fondo }}
+            />
+            <Linea ancho={i % 2 ? '40%' : '55%'} alto={3} color={fondo} opacidad={1} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Afiches({ fondo, texto, acento }) {
+  return (
+    <div className="w-full h-full flex flex-col items-center gap-1.5 p-2" style={{ backgroundColor: fondo }}>
+      <div className="rounded-full flex-shrink-0" style={{ width: 14, height: 14, backgroundColor: acento }} />
+      <Linea ancho="60%" alto={4} color={texto} />
+      {/* La imagen es la ficha: marco de color, el afiche adentro y el título
+          abajo. El relleno del afiche va con el color de la tipografía y no
+          con el del fondo: con el del fondo se leía como un hueco. */}
+      <div className="w-full mt-1 space-y-1.5">
+        {[0, 1].map((i) => (
+          <div key={i} className="rounded p-[3px] flex-shrink-0" style={{ backgroundColor: acento }}>
+            <div
+              className="w-full rounded-sm"
+              style={{ aspectRatio: '4 / 5', backgroundColor: texto, opacity: 0.35 }}
+            />
+            <div className="flex justify-center pt-[3px] pb-[1px]">
+              <Linea ancho="60%" alto={3} color={fondo} opacidad={1} />
             </div>
           </div>
         ))}
@@ -138,6 +168,7 @@ const DIBUJOS = {
   cards: Cards,
   modern: Modern,
   condensed: Condensed,
+  afiches: Afiches,
 };
 
 function MiniaturaPlantilla({ plantilla, page }) {

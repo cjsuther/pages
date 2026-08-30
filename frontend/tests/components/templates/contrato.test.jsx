@@ -5,6 +5,7 @@ import MinimalTemplate from '../../../src/components/templates/MinimalTemplate';
 import ModernTemplate from '../../../src/components/templates/ModernTemplate';
 import CardsTemplate from '../../../src/components/templates/CardsTemplate';
 import CondensedTemplate from '../../../src/components/templates/CondensedTemplate';
+import AfichesTemplate from '../../../src/components/templates/AfichesTemplate';
 import { renderConProviders } from '../../helpers/render';
 import { ANCHO_COLUMNA } from '../../../src/utils/plantillas';
 
@@ -18,6 +19,7 @@ const PLANTILLAS = [
   ['ModernTemplate', ModernTemplate],
   ['CardsTemplate', CardsTemplate],
   ['CondensedTemplate', CondensedTemplate],
+  ['AfichesTemplate', AfichesTemplate],
 ];
 
 const pagina = (overrides = {}) => ({

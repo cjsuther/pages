@@ -242,6 +242,7 @@ describe('PageEditor — flujos de edición', () => {
       ['Cards', 'cards'],
       ['Modern', 'modern'],
       ['Condensado', 'condensed'],
+      ['Afiches', 'afiches'],
     ])('la plantilla %s envía "%s"', async (etiqueta, valor) => {
       const { llamadas } = await render();
 
@@ -257,7 +258,7 @@ describe('PageEditor — flujos de edición', () => {
     it('cada plantilla se ofrece con una vista previa', async () => {
       const { container } = await render();
 
-      ['minimal', 'cards', 'modern', 'condensed'].forEach((clave) => {
+      ['minimal', 'cards', 'modern', 'condensed', 'afiches'].forEach((clave) => {
         expect(container.querySelector(`[data-plantilla="${clave}"]`)).not.toBeNull();
       });
     });

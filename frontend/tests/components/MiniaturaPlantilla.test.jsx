@@ -8,7 +8,7 @@ import MiniaturaPlantilla from '../../src/components/MiniaturaPlantilla';
  * que hay que sostener es que cada plantilla se vea distinta de las otras y
  * que la paleta sea la que el usuario eligió.
  */
-const PLANTILLAS = ['minimal', 'cards', 'modern', 'condensed'];
+const PLANTILLAS = ['minimal', 'cards', 'modern', 'condensed', 'afiches'];
 
 const pagina = (overrides = {}) => ({
   background_color: '#102030',

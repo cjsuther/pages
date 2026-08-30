@@ -14,6 +14,7 @@ const PLANTILLAS = [
   { clave: 'cards',     nombre: 'Cards',      descripcion: 'Tarjetas con sombra y miniatura' },
   { clave: 'modern',    nombre: 'Modern',     descripcion: 'Portada ancha arriba, texto a la izquierda' },
   { clave: 'condensed', nombre: 'Condensado', descripcion: 'Lista compacta de 2 líneas' },
+  { clave: 'afiches',   nombre: 'Afiches',    descripcion: 'La imagen es la ficha, con marco de color' },
 ];
 
 /** Secciones del editor, en el orden en que se muestran. */

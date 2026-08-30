@@ -115,7 +115,10 @@ export function MiniaturaGaleria({ link, className = '', style }) {
   const etiqueta = embed.tipo === 'youtube' ? 'Video de YouTube' : 'Contenido de Instagram';
 
   return (
-    <div className={`relative ${className}`} style={style}>
+    // overflow-hidden: el contenido va recortado a la forma que le dé quien la
+    // use. Sin esto, en un contenedor redondo el embed seguía siendo un
+    // rectángulo y la miniatura se veía cuadrada dentro del círculo.
+    <div className={`relative overflow-hidden ${className}`} style={style}>
       {portada ? (
         <img src={portada} alt={link.text} className="w-full h-full object-cover" />
       ) : (
