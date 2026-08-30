@@ -5,6 +5,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import GooglePlacesAutocomplete from '../components/GooglePlacesAutocomplete';
 import PanelEntradas from '../components/PanelEntradas';
 import PanelVentas from '../components/PanelVentas';
+import { analizarEmbed, EJEMPLOS_EMBED } from '../utils/embeds';
 
 /**
  * Edición de un item (link, imagen o evento) en pantalla completa.
@@ -28,6 +29,9 @@ function ItemEditor() {
   const [uploadingImage, setUploadingImage] = useState(false);
   // Tab activo cuando el item es un evento: datos | entradas | ventas.
   const [tab, setTab] = useState('datos');
+  // Qué es este item de galería: imagen, youtube o instagram. Se deduce de la
+  // URL guardada; el formulario lo usa para mostrar el campo que corresponde.
+  const [tipoMedia, setTipoMedia] = useState('imagen');
   const [pageSearchQuery, setPageSearchQuery] = useState('');
   const [pageSearchResults, setPageSearchResults] = useState([]);
   const [searchingPages, setSearchingPages] = useState(false);
@@ -53,8 +57,10 @@ function ItemEditor() {
           (g.links || []).some(l => String(l.id) === String(linkId))
         );
         if (grupo) {
+          const encontrado = grupo.links.find(l => String(l.id) === String(linkId));
           setGroup(grupo);
-          setItem({ ...grupo.links.find(l => String(l.id) === String(linkId)) });
+          setItem({ ...encontrado });
+          setTipoMedia(analizarEmbed(encontrado.embed_url)?.tipo || 'imagen');
         }
       }
     } catch (err) {
@@ -117,8 +123,23 @@ function ItemEditor() {
     });
   };
 
+  const cambiarTipoMedia = (tipo) => {
+    setTipoMedia(tipo);
+    if (tipo === 'imagen') setItem({ ...item, embed_url: '' });
+  };
+
   const guardar = async (e) => {
     e.preventDefault();
+
+    if (group.type === 'galeria' && tipoMedia !== 'imagen') {
+      const embed = analizarEmbed(item.embed_url);
+      if (!embed || embed.tipo !== tipoMedia) {
+        alert(tipoMedia === 'youtube'
+          ? 'Ese link no parece un video de YouTube'
+          : 'Ese link no parece un post, reel o carrusel de Instagram');
+        return;
+      }
+    }
 
     if (group.type === 'eventos') {
       if (!item.event_latitude || !item.event_longitude) {
@@ -345,9 +366,56 @@ function ItemEditor() {
             </>
           )}
 
+          {group.type === 'galeria' && (
+            <>
+              <div>
+                <label htmlFor="tipo-de-contenido" className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">
+                  TIPO DE CONTENIDO
+                </label>
+                <select
+                  id="tipo-de-contenido"
+                  value={tipoMedia}
+                  onChange={(e) => cambiarTipoMedia(e.target.value)}
+                  className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+                >
+                  <option value="imagen">Imagen</option>
+                  <option value="youtube">Video de YouTube</option>
+                  <option value="instagram">Instagram</option>
+                </select>
+              </div>
+
+              {tipoMedia !== 'imagen' && (
+                <div>
+                  <label htmlFor="url-del-contenido" className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">
+                    {tipoMedia === 'youtube' ? 'URL DEL VIDEO' : 'URL DEL CONTENIDO'}
+                  </label>
+                  <input
+                    id="url-del-contenido"
+                    type="url"
+                    value={item.embed_url || ''}
+                    onChange={(e) => setItem({ ...item, embed_url: e.target.value })}
+                    placeholder={tipoMedia === 'youtube'
+                      ? 'https://www.youtube.com/watch?v=...'
+                      : 'https://www.instagram.com/p/...'}
+                    className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+                    required
+                  />
+                  <p className="text-xs text-gray-600 mt-1">
+                    {tipoMedia === 'youtube'
+                      ? 'Sirve el link del video, el de compartir o el de un short'
+                      : 'De Instagram se muestra sólo la foto, el carrusel o el video. La cuenta tiene que ser pública.'}
+                  </p>
+                </div>
+              )}
+            </>
+          )}
+
           <div>
             <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">
-              IMAGEN {group.type === 'galeria' ? '' : '(OPCIONAL)'}
+              {group.type !== 'galeria' ? 'IMAGEN (OPCIONAL)'
+                : tipoMedia === 'imagen' ? 'IMAGEN'
+                : tipoMedia === 'instagram' ? 'PORTADA (RECOMENDADA)'
+                : 'PORTADA (OPCIONAL)'}
             </label>
             <div className="flex items-center gap-4">
               {item.image_url && (
@@ -371,7 +439,13 @@ function ItemEditor() {
               />
               {uploadingImage && <span className="text-sm text-gray-500">Subiendo...</span>}
             </div>
-            <p className="text-xs text-gray-600 mt-1">Sube una nueva imagen para reemplazar (máx 5MB)</p>
+            <p className="text-xs text-gray-600 mt-1">
+              {group.type === 'galeria' && tipoMedia === 'instagram'
+                ? 'Instagram no comparte miniaturas: sin portada, en la grilla se ve un recuadro con su logo (máx 5MB)'
+                : group.type === 'galeria' && tipoMedia === 'youtube'
+                ? 'Opcional: sin portada se usa la miniatura del video (máx 5MB)'
+                : 'Sube una nueva imagen para reemplazar (máx 5MB)'}
+            </p>
           </div>
 
           {group.type === 'galeria' && (

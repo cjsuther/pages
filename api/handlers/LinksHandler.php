@@ -18,6 +18,8 @@ class LinksHandler
     private static $updatableFields = [
         'url' => ['nullable' => false],
         'url_text' => ['nullable' => true],
+        // nullable: vaciarlo devuelve el item de galería a ser una imagen.
+        'embed_url' => ['nullable' => true],
         'text' => ['nullable' => false],
         'image_url' => ['nullable' => true],
         'description' => ['nullable' => false],
@@ -91,11 +93,12 @@ class LinksHandler
                 }
             }
 
-            $stmt = $db->prepare('INSERT INTO links (group_id, url, url_text, text, image_url, description, position, event_date, event_time, event_address, event_latitude, event_longitude, event_maps_url, precio_desde) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+            $stmt = $db->prepare('INSERT INTO links (group_id, url, url_text, embed_url, text, image_url, description, position, event_date, event_time, event_address, event_latitude, event_longitude, event_maps_url, precio_desde) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
             $stmt->execute([
                 $req->input('group_id'),
                 $req->input('url'),
                 self::valorONull($req->input('url_text')),
+                self::valorONull($req->input('embed_url')),
                 $req->input('text'),
                 $req->input('image_url'),
                 $req->input('description'),

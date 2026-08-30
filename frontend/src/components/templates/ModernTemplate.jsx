@@ -6,6 +6,7 @@ import RedesSociales from '../RedesSociales';
 import BotonEntradas, { vendeEntradas } from '../BotonEntradas';
 import PrecioEvento from '../PrecioEvento';
 import RezonarBadge from '../RezonarBadge';
+import { MiniaturaGaleria, VisorGaleria } from '../MediaGaleria';
 import { superficie, borde } from '../../utils/colores';
 import { ExternalLink } from 'lucide-react';
 
@@ -85,9 +86,8 @@ function ModernTemplate({ page }) {
                         onClick={() => setModalImage(link)}
                         className="group relative overflow-hidden rounded-xl cursor-pointer"
                       >
-                        <img
-                          src={link.image_url}
-                          alt={link.text}
+                        <MiniaturaGaleria
+                          link={link}
                           className="w-full h-64 object-cover group-hover:scale-110 transition-transform duration-300"
                         />
                         {link.text && (
@@ -201,11 +201,7 @@ function ModernTemplate({ page }) {
               >
                 ×
               </button>
-              <img
-                src={modalImage.image_url}
-                alt={modalImage.text}
-                className="w-full max-h-[80vh] object-contain rounded-lg"
-              />
+              <VisorGaleria link={modalImage} className="w-full max-h-[80vh] object-contain rounded-lg" />
               {(modalImage.text || modalImage.url) && (
                 <div className="mt-4 text-center space-y-3">
                   {modalImage.text && (

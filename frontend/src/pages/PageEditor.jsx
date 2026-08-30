@@ -5,6 +5,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import GooglePlacesAutocomplete from '../components/GooglePlacesAutocomplete';
 import SeccionRedes from '../components/SeccionRedes';
 import SeccionEntradas from '../components/SeccionEntradas';
+import { analizarEmbed, portadaDe } from '../utils/embeds';
 
 /** Secciones del editor, en el orden en que se muestran. */
 const SECCIONES = [
@@ -35,9 +36,12 @@ function PageEditor() {
   const [selectedGroup, setSelectedGroup] = useState(null);
   const [editingGroup, setEditingGroup] = useState(null);
   const [newGroup, setNewGroup] = useState({ title: '', type: 'links' });
+  // Qué se está cargando en un grupo de galería: imagen, youtube o instagram.
+  const [tipoMedia, setTipoMedia] = useState('imagen');
   const [newLink, setNewLink] = useState({
     url: '',
     url_text: '',
+    embed_url: '',
     text: '',
     image_url: '',
     description: '',
@@ -312,6 +316,16 @@ function PageEditor() {
   const createLink = async (e) => {
     e.preventDefault();
 
+    if (selectedGroup.type === 'galeria' && tipoMedia !== 'imagen') {
+      const embed = analizarEmbed(newLink.embed_url);
+      if (!embed || embed.tipo !== tipoMedia) {
+        alert(tipoMedia === 'youtube'
+          ? 'Ese link no parece un video de YouTube'
+          : 'Ese link no parece un post, reel o carrusel de Instagram');
+        return;
+      }
+    }
+
     if (selectedGroup.type === 'eventos') {
       if (!newLink.event_latitude || !newLink.event_longitude) {
         alert('Debes seleccionar una dirección válida de Google Maps para el evento');
@@ -334,6 +348,7 @@ function PageEditor() {
         setNewLink({
           url: '',
           url_text: '',
+          embed_url: '',
           text: '',
           image_url: '',
           description: '',
@@ -1018,6 +1033,7 @@ function PageEditor() {
                             <button
                               onClick={() => {
                                 setSelectedGroup(group);
+                                setTipoMedia('imagen');
                                 setShowLinkModal(true);
                               }}
                               className="bg-green-600 text-white px-3 py-1 rounded-lg hover:bg-green-700 transition text-sm"
@@ -1086,9 +1102,9 @@ function PageEditor() {
                               key={link.id}
                               className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 p-3 bg-gray-50 rounded-lg hover:bg-gray-100"
                             >
-                              {link.image_url && (
+                              {portadaDe(link) && (
                                 <img
-                                  src={link.image_url}
+                                  src={portadaDe(link)}
                                   alt={link.text}
                                   className="w-12 h-12 object-cover rounded"
                                 />
@@ -1100,6 +1116,11 @@ function PageEditor() {
                                 >
                                   {link.text || (group.type === 'galeria' ? 'Sin título' : link.url)}
                                 </Link>
+                                {analizarEmbed(link.embed_url) && (
+                                  <span className="ml-2 text-xs px-2 py-0.5 rounded bg-gray-200 text-gray-700">
+                                    {analizarEmbed(link.embed_url).tipo === 'youtube' ? 'YouTube' : 'Instagram'}
+                                  </span>
+                                )}
                                 {link.description && (
                                   <p className="text-sm text-gray-600">{link.description}</p>
                                 )}
@@ -1335,9 +1356,59 @@ function PageEditor() {
                 </>
               )}
 
+              {selectedGroup.type === 'galeria' && (
+                <>
+                  <div>
+                    <label htmlFor="nuevo-tipo-de-contenido" className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">
+                      TIPO DE CONTENIDO
+                    </label>
+                    <select
+                      id="nuevo-tipo-de-contenido"
+                      value={tipoMedia}
+                      onChange={(e) => {
+                        setTipoMedia(e.target.value);
+                        if (e.target.value === 'imagen') setNewLink({ ...newLink, embed_url: '' });
+                      }}
+                      className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+                    >
+                      <option value="imagen">Imagen</option>
+                      <option value="youtube">Video de YouTube</option>
+                      <option value="instagram">Instagram</option>
+                    </select>
+                  </div>
+
+                  {tipoMedia !== 'imagen' && (
+                    <div>
+                      <label htmlFor="nueva-url-del-contenido" className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">
+                        {tipoMedia === 'youtube' ? 'URL DEL VIDEO' : 'URL DEL CONTENIDO'}
+                      </label>
+                      <input
+                        id="nueva-url-del-contenido"
+                        type="url"
+                        value={newLink.embed_url}
+                        onChange={(e) => setNewLink({ ...newLink, embed_url: e.target.value })}
+                        placeholder={tipoMedia === 'youtube'
+                          ? 'https://www.youtube.com/watch?v=...'
+                          : 'https://www.instagram.com/p/...'}
+                        className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+                        required
+                      />
+                      <p className="text-xs text-gray-600 mt-1">
+                        {tipoMedia === 'youtube'
+                          ? 'Sirve el link del video, el de compartir o el de un short'
+                          : 'De Instagram se muestra sólo la foto, el carrusel o el video. La cuenta tiene que ser pública.'}
+                      </p>
+                    </div>
+                  )}
+                </>
+              )}
+
               <div>
                 <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">
-                  IMAGEN {selectedGroup.type === 'galeria' ? '' : '(OPCIONAL)'}
+                  {selectedGroup.type !== 'galeria' ? 'IMAGEN (OPCIONAL)'
+                    : tipoMedia === 'imagen' ? 'IMAGEN'
+                    : tipoMedia === 'instagram' ? 'PORTADA (RECOMENDADA)'
+                    : 'PORTADA (OPCIONAL)'}
                 </label>
                 <div className="flex items-center gap-4">
                   {newLink.image_url && (
@@ -1358,11 +1429,17 @@ function PageEditor() {
                     onChange={(e) => handleLinkImageUpload(e)}
                     disabled={uploadingLinkImage}
                     className="text-sm text-gray-400"
-                    required={selectedGroup.type === 'galeria' && !newLink.image_url}
+                    required={selectedGroup.type === 'galeria' && tipoMedia === 'imagen' && !newLink.image_url}
                   />
                   {uploadingLinkImage && <span className="text-sm text-gray-500">Subiendo...</span>}
                 </div>
-                <p className="text-xs text-gray-600 mt-1">Sube una imagen (máx 5MB)</p>
+                <p className="text-xs text-gray-600 mt-1">
+                  {selectedGroup.type === 'galeria' && tipoMedia === 'instagram'
+                    ? 'Instagram no comparte miniaturas: sin portada, en la grilla se ve un recuadro con su logo (máx 5MB)'
+                    : selectedGroup.type === 'galeria' && tipoMedia === 'youtube'
+                    ? 'Opcional: sin portada se usa la miniatura del video (máx 5MB)'
+                    : 'Sube una imagen (máx 5MB)'}
+                </p>
               </div>
 
               {selectedGroup.type === 'galeria' && (

@@ -6,6 +6,7 @@ import RedesSociales from '../RedesSociales';
 import BotonEntradas, { vendeEntradas } from '../BotonEntradas';
 import PrecioEvento from '../PrecioEvento';
 import RezonarBadge from '../RezonarBadge';
+import { MiniaturaGaleria, VisorGaleria } from '../MediaGaleria';
 import { superficie, borde } from '../../utils/colores';
 import { ExternalLink } from 'lucide-react';
 
@@ -81,13 +82,10 @@ function CondensedTemplate({ page }) {
                       onClick={() => setModalImage(link)}
                       className="flex items-center gap-3 p-3 rounded-lg hover:bg-black hover:bg-opacity-5 transition cursor-pointer"
                     >
-                      {link.image_url && (
-                        <img
-                          src={link.image_url}
-                          alt={link.text}
-                          className="w-16 h-16 object-cover rounded flex-shrink-0"
-                        />
-                      )}
+                      <MiniaturaGaleria
+                        link={link}
+                        className="w-16 h-16 object-cover rounded flex-shrink-0"
+                      />
                       <div className="flex-1 min-w-0">
                         <div className="font-semibold truncate">{link.text || 'Imagen'}</div>
                         {link.description && (
@@ -197,11 +195,7 @@ function CondensedTemplate({ page }) {
               >
                 ×
               </button>
-              <img
-                src={modalImage.image_url}
-                alt={modalImage.text}
-                className="w-full max-h-[70vh] md:max-h-[80vh] object-contain"
-              />
+              <VisorGaleria link={modalImage} className="w-full max-h-[70vh] md:max-h-[80vh] object-contain" />
               {(modalImage.text || modalImage.url) && (
                 <div className="mt-4 text-center space-y-3">
                   {modalImage.text && (

@@ -342,6 +342,100 @@ describe('ItemEditor', () => {
     });
   });
 
+  // ======================================================== galería
+
+  describe('galería: imagen, YouTube o Instagram', () => {
+    const VIDEO = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
+    const galeria = (overrides = {}) => conItem(overrides, 'galeria', 30);
+
+    it('una imagen de toda la vida se edita como antes', async () => {
+      await render({ page: galeria({ image_url: 'https://img/1.jpg' }) });
+
+      expect(screen.getByLabelText('TIPO DE CONTENIDO')).toHaveValue('imagen');
+      expect(screen.queryByLabelText('URL DEL VIDEO')).not.toBeInTheDocument();
+    });
+
+    // El tipo no se guarda: se deduce de la URL, así que al abrir el item el
+    // formulario tiene que reconocerlo solo.
+    it('un item con URL de YouTube se abre como video', async () => {
+      await render({ page: galeria({ embed_url: VIDEO }) });
+
+      expect(screen.getByLabelText('TIPO DE CONTENIDO')).toHaveValue('youtube');
+      expect(screen.getByLabelText('URL DEL VIDEO')).toHaveValue(VIDEO);
+    });
+
+    it('un item con URL de Instagram se abre como Instagram', async () => {
+      await render({ page: galeria({ embed_url: 'https://www.instagram.com/p/CxAbC123_-x/' }) });
+
+      expect(screen.getByLabelText('TIPO DE CONTENIDO')).toHaveValue('instagram');
+      expect(screen.getByLabelText('URL DEL CONTENIDO')).toBeInTheDocument();
+    });
+
+    it('convierte una imagen en un video', async () => {
+      const { llamadas } = await render({ page: galeria({ image_url: 'https://img/1.jpg' }) });
+
+      fireEvent.change(screen.getByLabelText('TIPO DE CONTENIDO'), { target: { value: 'youtube' } });
+      fireEvent.change(screen.getByLabelText('URL DEL VIDEO'), { target: { value: VIDEO } });
+      fireEvent.click(screen.getByRole('button', { name: 'GUARDAR' }));
+
+      await waitFor(() => {
+        expect(cuerpoDe(put(llamadas, 'links/detail.php'))).toMatchObject({ embed_url: VIDEO });
+      });
+    });
+
+    // Si al volver a "Imagen" quedara la URL, el item seguiría siendo un video
+    // aunque el formulario mostrara otra cosa.
+    it('volver a imagen borra la URL del video', async () => {
+      const { llamadas } = await render({ page: galeria({ embed_url: VIDEO }) });
+
+      fireEvent.change(screen.getByLabelText('TIPO DE CONTENIDO'), { target: { value: 'imagen' } });
+      fireEvent.click(screen.getByRole('button', { name: 'GUARDAR' }));
+
+      await waitFor(() => {
+        expect(cuerpoDe(put(llamadas, 'links/detail.php'))).toMatchObject({ embed_url: '' });
+      });
+    });
+
+    it('avisa si el link no es de YouTube', async () => {
+      const { llamadas } = await render({ page: galeria({ image_url: 'https://img/1.jpg' }) });
+
+      fireEvent.change(screen.getByLabelText('TIPO DE CONTENIDO'), { target: { value: 'youtube' } });
+      fireEvent.change(screen.getByLabelText('URL DEL VIDEO'), {
+        target: { value: 'https://vimeo.com/123456' },
+      });
+      fireEvent.submit(screen.getByRole('button', { name: 'GUARDAR' }).closest('form'));
+
+      await waitFor(() => {
+        expect(window.alert).toHaveBeenCalledWith('Ese link no parece un video de YouTube');
+      });
+      expect(put(llamadas, 'links/detail.php')).toBeUndefined();
+    });
+
+    // Pegar un post de Instagram habiendo elegido YouTube es el error fácil de
+    // cometer, y guardarlo dejaría el item mostrando lo que no es.
+    it('avisa si el link es del otro servicio', async () => {
+      const { llamadas } = await render({ page: galeria({ image_url: 'https://img/1.jpg' }) });
+
+      fireEvent.change(screen.getByLabelText('TIPO DE CONTENIDO'), { target: { value: 'instagram' } });
+      fireEvent.change(screen.getByLabelText('URL DEL CONTENIDO'), { target: { value: VIDEO } });
+      fireEvent.submit(screen.getByRole('button', { name: 'GUARDAR' }).closest('form'));
+
+      await waitFor(() => {
+        expect(window.alert).toHaveBeenCalledWith(
+          'Ese link no parece un post, reel o carrusel de Instagram'
+        );
+      });
+      expect(put(llamadas, 'links/detail.php')).toBeUndefined();
+    });
+
+    it('en Instagram la portada se pide, no se exige', async () => {
+      await render({ page: galeria({ embed_url: 'https://www.instagram.com/p/CxAbC123_-x/' }) });
+
+      expect(screen.getByText('PORTADA (RECOMENDADA)')).toBeInTheDocument();
+      expect(document.querySelector('input[type="file"]')).not.toBeRequired();
+    });
+  });
+
   // =========================================================== tabs
 
   describe('solapas del evento', () => {

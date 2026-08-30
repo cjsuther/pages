@@ -249,6 +249,81 @@ describe.each(PLANTILLAS)('%s', (nombre, Plantilla) => {
     it('no rompe con una galería vacía', () => {
       expect(() => renderConProviders(<Plantilla page={conGaleria([])} />)).not.toThrow();
     });
+
+    // Una galería también puede tener videos de YouTube y contenido de
+    // Instagram. En la grilla van como imagen quieta: doce reproductores
+    // cargando a la vez harían inusable la página.
+    describe('videos y contenido de Instagram', () => {
+      const VIDEO = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
+      const POST = 'https://www.instagram.com/p/CxAbC123_-x/';
+
+      it('un video usa su propia miniatura sin que haya que subirla', () => {
+        renderConProviders(
+          <Plantilla page={conGaleria([{ id: 1, text: 'Mi video', embed_url: VIDEO }])} />
+        );
+
+        expect(screen.getByAltText('Mi video'))
+          .toHaveAttribute('src', 'https://img.youtube.com/vi/dQw4w9WgXcQ/hqdefault.jpg');
+      });
+
+      it('la portada que subió el usuario le gana a la del servicio', () => {
+        renderConProviders(
+          <Plantilla
+            page={conGaleria([
+              { id: 1, text: 'Mi video', embed_url: VIDEO, image_url: 'https://img/propia.jpg' },
+            ])}
+          />
+        );
+
+        expect(screen.getByAltText('Mi video')).toHaveAttribute('src', 'https://img/propia.jpg');
+      });
+
+      it('la grilla no carga ningún reproductor', () => {
+        const { container } = renderConProviders(
+          <Plantilla page={conGaleria([{ id: 1, text: 'Mi video', embed_url: VIDEO }])} />
+        );
+
+        expect(container.querySelector('iframe')).toBeNull();
+      });
+
+      it('al abrir el video se reproduce ahí mismo', () => {
+        const { container } = renderConProviders(
+          <Plantilla page={conGaleria([{ id: 1, text: 'Mi video', embed_url: VIDEO }])} />
+        );
+
+        fireEvent.click(screen.getByAltText('Mi video'));
+
+        const marco = container.querySelector('iframe');
+        expect(marco).toHaveAttribute('src', expect.stringContaining('youtube-nocookie.com/embed/dQw4w9WgXcQ'));
+      });
+
+      it('al abrir un contenido de Instagram se ve el post', () => {
+        const { container } = renderConProviders(
+          <Plantilla
+            page={conGaleria([
+              { id: 1, text: 'Mi post', embed_url: POST, image_url: 'https://img/portada.jpg' },
+            ])}
+          />
+        );
+
+        fireEvent.click(screen.getByAltText('Mi post'));
+
+        expect(container.querySelector('iframe'))
+          .toHaveAttribute('src', 'https://www.instagram.com/p/CxAbC123_-x/embed');
+      });
+
+      // Instagram no publica miniaturas sin API: sin portada el item tiene que
+      // seguir siendo clickeable en vez de quedar un hueco en blanco.
+      it('un contenido de Instagram sin portada igual se puede abrir', () => {
+        const { container } = renderConProviders(
+          <Plantilla page={conGaleria([{ id: 1, text: 'Mi post', embed_url: POST }])} />
+        );
+
+        fireEvent.click(screen.getByText('Contenido de Instagram'));
+
+        expect(container.querySelector('iframe')).not.toBeNull();
+      });
+    });
   });
 
   describe('precio de referencia', () => {

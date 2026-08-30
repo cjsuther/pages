@@ -202,6 +202,67 @@ describe('PageEditor — modales de link', () => {
     });
   });
 
+  // ============================================ galería con videos
+
+  describe('alta de un video o un contenido de Instagram', () => {
+    const VIDEO = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
+
+    async function abrirAltaGaleria() {
+      const mock = await render({ page: pagina({ groups: [grupo({ id: 10, type: 'galeria' })] }) });
+      fireEvent.click(screen.getByRole('button', { name: '+ Imagen' }));
+      await screen.findByRole('button', { name: 'CREAR' });
+      return mock;
+    }
+
+    it('la galería arranca en imagen', async () => {
+      await abrirAltaGaleria();
+
+      expect(screen.getByLabelText('TIPO DE CONTENIDO')).toHaveValue('imagen');
+      expect(screen.queryByLabelText('URL DEL VIDEO')).not.toBeInTheDocument();
+    });
+
+    it('crea un video de YouTube', async () => {
+      const { llamadas } = await abrirAltaGaleria();
+
+      fireEvent.change(screen.getByLabelText('TIPO DE CONTENIDO'), { target: { value: 'youtube' } });
+      fireEvent.change(screen.getByLabelText('URL DEL VIDEO'), { target: { value: VIDEO } });
+      fireEvent.submit(screen.getByRole('button', { name: 'CREAR' }).closest('form'));
+
+      await waitFor(() => {
+        const post = llamadas.find(
+          (l) => l.url.includes('links/index.php') && l.options.method === 'POST'
+        );
+        expect(cuerpoDe(post)).toMatchObject({ embed_url: VIDEO, group_id: 10 });
+      });
+    });
+
+    // La imagen es obligatoria porque sin ella no hay nada que mostrar; con un
+    // video, la miniatura la pone YouTube.
+    it('con un video la portada deja de ser obligatoria', async () => {
+      await abrirAltaGaleria();
+      expect(inputDeArchivoDelModal()).toBeRequired();
+
+      fireEvent.change(screen.getByLabelText('TIPO DE CONTENIDO'), { target: { value: 'youtube' } });
+
+      expect(inputDeArchivoDelModal()).not.toBeRequired();
+    });
+
+    it('no crea nada si el link no es del servicio elegido', async () => {
+      const { llamadas } = await abrirAltaGaleria();
+
+      fireEvent.change(screen.getByLabelText('TIPO DE CONTENIDO'), { target: { value: 'youtube' } });
+      fireEvent.change(screen.getByLabelText('URL DEL VIDEO'), {
+        target: { value: 'https://www.instagram.com/p/CxAbC123_-x/' },
+      });
+      fireEvent.submit(screen.getByRole('button', { name: 'CREAR' }).closest('form'));
+
+      await waitFor(() => {
+        expect(window.alert).toHaveBeenCalledWith('Ese link no parece un video de YouTube');
+      });
+      expect(llamadaA(llamadas, 'links/index.php')).toBeNull();
+    });
+  });
+
   // ================================================= alta: evento con mapa
 
   describe('dirección del evento al crear', () => {

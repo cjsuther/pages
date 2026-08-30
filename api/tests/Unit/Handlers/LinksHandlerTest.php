@@ -93,10 +93,11 @@ class LinksHandlerTest extends HandlerTestCase
         $this->assertSame(7, $params[0], 'group_id');
         $this->assertSame('https://ejemplo.com', $params[1], 'url');
         $this->assertNull($params[2], 'url_text ausente se guarda como NULL');
-        $this->assertSame('Mi link', $params[3], 'text');
-        $this->assertNull($params[4], 'image_url');
-        $this->assertNull($params[5], 'description');
-        $this->assertSame(0, $params[6], 'position por defecto');
+        $this->assertNull($params[3], 'embed_url ausente se guarda como NULL');
+        $this->assertSame('Mi link', $params[4], 'text');
+        $this->assertNull($params[5], 'image_url');
+        $this->assertNull($params[6], 'description');
+        $this->assertSame(0, $params[7], 'position por defecto');
     }
 
     public function testIndexGuardaUrlTextVacioComoNull()
@@ -127,6 +128,39 @@ class LinksHandlerTest extends HandlerTestCase
         ], $this->user()));
 
         $this->assertSame('Comprar entradas', $this->db->paramsFor('INSERT INTO links')[2]);
+    }
+
+    public function testIndexGuardaEmbedUrlVacioComoNull()
+    {
+        $this->autorizarGrupo();
+        $this->db->onSelect('SELECT id, type FROM link_groups', [['id' => 7, 'type' => 'galeria']]);
+
+        LinksHandler::index($this->db, $this->post([
+            'group_id' => 7,
+            'url' => 'u',
+            'text' => 't',
+            'embed_url' => '',
+        ], $this->user()));
+
+        $this->assertNull($this->db->paramsFor('INSERT INTO links')[3]);
+    }
+
+    public function testIndexGuardaElVideoDeUnItemDeGaleria()
+    {
+        $this->autorizarGrupo();
+        $this->db->onSelect('SELECT id, type FROM link_groups', [['id' => 7, 'type' => 'galeria']]);
+
+        LinksHandler::index($this->db, $this->post([
+            'group_id' => 7,
+            'url' => '',
+            'text' => 'Mi video',
+            'embed_url' => 'https://youtu.be/dQw4w9WgXcQ',
+        ], $this->user()));
+
+        $this->assertSame(
+            'https://youtu.be/dQw4w9WgXcQ',
+            $this->db->paramsFor('INSERT INTO links')[3]
+        );
     }
 
     public function testIndexExigeCoordenadasEnGruposDeEventos()
@@ -192,9 +226,9 @@ class LinksHandlerTest extends HandlerTestCase
         $this->assertStatus(201, $res);
 
         $params = $this->db->paramsFor('INSERT INTO links');
-        $this->assertSame('2026-12-01', $params[7], 'event_date');
-        $this->assertSame('-34.6037', $params[10], 'event_latitude');
-        $this->assertSame('-58.3816', $params[11], 'event_longitude');
+        $this->assertSame('2026-12-01', $params[8], 'event_date');
+        $this->assertSame('-34.6037', $params[11], 'event_latitude');
+        $this->assertSame('-58.3816', $params[12], 'event_longitude');
     }
 
     // ------------------------------------------- aviso a los seguidores
@@ -367,6 +401,22 @@ class LinksHandlerTest extends HandlerTestCase
         ));
 
         $this->assertStringContainsString('url_text = ?', $this->db->callsFor('UPDATE links SET')[0]['sql']);
+        $this->assertSame([null, 5], $this->db->paramsFor('UPDATE links SET'));
+    }
+
+    public function testUpdatePermiteVaciarEmbedUrl()
+    {
+        $this->autorizarLink();
+        $this->db->onSelect('SELECT l.id, lg.type', [['id' => 5, 'type' => 'galeria']]);
+        $this->db->onWrite('UPDATE links SET', 1);
+
+        LinksHandler::detail($this->db, $this->put(
+            ['embed_url' => ''],
+            $this->user(),
+            ['id' => '5']
+        ));
+
+        $this->assertStringContainsString('embed_url = ?', $this->db->callsFor('UPDATE links SET')[0]['sql']);
         $this->assertSame([null, 5], $this->db->paramsFor('UPDATE links SET'));
     }
 

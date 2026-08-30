@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS links (
     id INT AUTO_INCREMENT PRIMARY KEY,
     group_id INT NOT NULL,
     url VARCHAR(500) NOT NULL,
+    embed_url VARCHAR(500) DEFAULT NULL,
     text VARCHAR(255) NOT NULL,
     image_url VARCHAR(500),
     description TEXT,

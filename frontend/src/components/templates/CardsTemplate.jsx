@@ -6,6 +6,7 @@ import RedesSociales from '../RedesSociales';
 import BotonEntradas, { vendeEntradas } from '../BotonEntradas';
 import PrecioEvento from '../PrecioEvento';
 import RezonarBadge from '../RezonarBadge';
+import { MiniaturaGaleria, VisorGaleria } from '../MediaGaleria';
 import { superficie, borde } from '../../utils/colores';
 import { ExternalLink } from 'lucide-react';
 
@@ -91,9 +92,8 @@ function CardsTemplate({ page }) {
                       className="rounded-lg overflow-hidden shadow-md hover:shadow-xl transition cursor-pointer"
                       style={tarjetaStyle}
                     >
-                      <img
-                        src={link.image_url}
-                        alt={link.text}
+                      <MiniaturaGaleria
+                        link={link}
                         className="w-full aspect-[1080/1350] object-cover"
                       />
                       {link.text && (
@@ -203,11 +203,7 @@ function CardsTemplate({ page }) {
               >
                 ×
               </button>
-              <img
-                src={modalImage.image_url}
-                alt={modalImage.text}
-                className="w-full max-h-[80vh] object-contain rounded-lg"
-              />
+              <VisorGaleria link={modalImage} className="w-full max-h-[80vh] object-contain rounded-lg" />
               {(modalImage.text || modalImage.url) && (
                 <div className="mt-4 text-center space-y-3">
                   {modalImage.text && (
