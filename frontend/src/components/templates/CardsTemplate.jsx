@@ -98,7 +98,9 @@ function CardsTemplate({ page }) {
                   ))}
                 </div>
               ) : group.type === 'eventos' ? (
-                <div className="grid grid-cols-1 gap-6">
+                // Dos columnas, como la galería: son tarjetas con foto vertical
+                // y se leen igual de a pares.
+                <div className="grid grid-cols-2 gap-6">
                   {[...(group.links || []), ...(group.collaborated_events || [])].sort((a, b) => {
                     const dateA = new Date(a.event_date + ' ' + (a.event_time || '00:00'));
                     const dateB = new Date(b.event_date + ' ' + (b.event_time || '00:00'));
