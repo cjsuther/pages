@@ -139,26 +139,38 @@ function Condensed({ fondo, texto, acento }) {
 }
 
 function Afiches({ fondo, texto, acento }) {
+  /** Manchas dentro del afiche: sin esto el marco se lee como un bloque liso. */
+  const mancha = (estilo) => (
+    <div className="absolute" style={{ backgroundColor: texto, ...estilo }} />
+  );
+
   return (
-    <div className="w-full h-full flex flex-col items-center gap-1.5 p-2" style={{ backgroundColor: fondo }}>
-      <div className="rounded-full flex-shrink-0" style={{ width: 14, height: 14, backgroundColor: acento }} />
-      <Linea ancho="60%" alto={4} color={texto} />
-      {/* La imagen es la ficha: marco de color, el afiche adentro y el título
-          abajo. El relleno del afiche va con el color de la tipografía y no
-          con el del fondo: con el del fondo se leía como un hueco. */}
-      <div className="w-full mt-1 space-y-1.5">
-        {[0, 1].map((i) => (
-          <div key={i} className="rounded p-[3px] flex-shrink-0" style={{ backgroundColor: acento }}>
-            <div
-              className="w-full rounded-sm"
-              style={{ aspectRatio: '4 / 5', backgroundColor: texto, opacity: 0.35 }}
-            />
-            <div className="flex justify-center pt-[3px] pb-[1px]">
-              <Linea ancho="60%" alto={3} color={fondo} opacidad={1} />
-            </div>
-          </div>
-        ))}
+    <div className="w-full h-full flex flex-col items-center gap-1 p-2" style={{ backgroundColor: fondo }}>
+      <div className="rounded-full flex-shrink-0" style={{ width: 12, height: 12, backgroundColor: acento }} />
+      <Linea ancho="55%" alto={3} color={texto} />
+      <div className="h-[3px] w-6 rounded-full flex-shrink-0" style={{ backgroundColor: acento }} />
+
+      {/* Una sola ficha, grande: el afiche ocupa la tarjeta entera, enmarcado,
+          con el título abajo sobre el marco. De a dos se leería como la
+          plantilla de tarjetas, que es justo de la que hay que distinguirla. */}
+      <div className="w-full mt-1 rounded p-[3px] flex-shrink-0" style={{ backgroundColor: acento }}>
+        <div
+          className="relative w-full rounded-sm overflow-hidden"
+          style={{ aspectRatio: '1080 / 1350', backgroundColor: fondo }}
+        >
+          {mancha({ left: 0, right: 0, bottom: 0, height: '38%', opacity: 0.35 })}
+          {mancha({ left: '12%', bottom: '30%', width: '30%', height: '42%', opacity: 0.55, borderRadius: 2 })}
+          {mancha({ right: '14%', bottom: '30%', width: '22%', height: '26%', opacity: 0.28, borderRadius: 2 })}
+          {mancha({ left: '18%', top: '12%', width: '46%', height: 3, opacity: 0.5 })}
+          {mancha({ left: '18%', top: '22%', width: '30%', height: 3, opacity: 0.35 })}
+        </div>
+        <div className="flex justify-center pt-[3px] pb-[1px]">
+          <Linea ancho="65%" alto={3} color={fondo} opacidad={1} />
+        </div>
       </div>
+
+      {/* Asoma la siguiente: son una debajo de la otra. */}
+      <div className="w-full rounded-t h-2 flex-shrink-0" style={{ backgroundColor: acento }} />
     </div>
   );
 }
