@@ -61,6 +61,9 @@ function EstadoOrden({ apiUrl }) {
     return (
       <Marco>
         <Loader2 className="w-8 h-8 animate-spin text-gray-600 mx-auto" />
+        {/* Un ícono girando no le dice nada a un lector de pantalla, que se
+            queda con una página en blanco sin saber que está esperando. */}
+        <span className="sr-only">Cargando…</span>
       </Marco>
     );
   }

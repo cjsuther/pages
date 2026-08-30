@@ -31,6 +31,11 @@ async function montar(orden = ORDEN, ok = true) {
     path: '/entrada/:codigo',
   });
 
+  // Esta espera fue durante mucho tiempo un engaño: la pantalla de carga no
+  // decía "Cargando" en ningún lado —era sólo un ícono girando—, así que se
+  // cumplía en el primer intento y montar() devolvía antes de que llegara la
+  // respuesta. Los tests pasaban porque el microtask normalmente alcanzaba a
+  // resolverse; bajo carga, no, y fallaba uno distinto cada vez.
   await waitFor(() => expect(screen.queryByText(/Cargando/)).not.toBeInTheDocument());
 
   return vista;
@@ -44,6 +49,21 @@ describe('EstadoOrden', () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
+  });
+
+  /**
+   * Si la pantalla de carga no se anuncia, montar() no tiene qué esperar y
+   * todos los tests de este archivo se vuelven una carrera contra el reloj.
+   */
+  it('la pantalla de carga se anuncia mientras espera', () => {
+    global.fetch.mockReturnValue(new Promise(() => {}));
+
+    renderConProviders(<EstadoOrden apiUrl="https://api.test/api" />, {
+      route: '/entrada/ABC123DEF456',
+      path: '/entrada/:codigo',
+    });
+
+    expect(screen.getByText(/Cargando/)).toBeInTheDocument();
   });
 
   describe('pagada', () => {
