@@ -972,7 +972,8 @@ function PageEditor() {
                   </li>
                   <li>
                     <strong className="text-gray-300">Galería —</strong> una cuadrícula de
-                    imágenes que se abren en grande.
+                    imágenes, videos de YouTube y contenido de Instagram, que se abren
+                    en grande.
                   </li>
                 </ul>
                 <p className="text-xs text-gray-600 mt-3">
@@ -1038,7 +1039,7 @@ function PageEditor() {
                               }}
                               className="bg-green-600 text-white px-3 py-1 rounded-lg hover:bg-green-700 transition text-sm"
                             >
-                              {group.type === 'galeria' ? '+ Imagen' :
+                              {group.type === 'galeria' ? '+ Contenido' :
                                 group.type === 'eventos' ? '+ Evento' :
                                   '+ Link'}
                             </button>
@@ -1302,7 +1303,7 @@ function PageEditor() {
         <div className="fixed inset-0 bg-black bg-opacity-90 flex items-start justify-center p-4 z-50 overflow-y-auto">
           <div className="bg-gray-900 border border-gray-800 max-w-lg w-full p-10 my-8">
             <h2 className="text-3xl font-black mb-8 text-white">
-              {selectedGroup.type === 'galeria' ? 'NUEVA IMAGEN' : selectedGroup.type === 'eventos' ? 'NUEVO EVENTO' : 'NUEVO LINK'}
+              {selectedGroup.type === 'galeria' ? 'NUEVO CONTENIDO' : selectedGroup.type === 'eventos' ? 'NUEVO EVENTO' : 'NUEVO LINK'}
             </h2>
             <form onSubmit={createLink} className="space-y-6">
               {selectedGroup.type !== 'galeria' && (
@@ -1407,7 +1408,6 @@ function PageEditor() {
                 <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">
                   {selectedGroup.type !== 'galeria' ? 'IMAGEN (OPCIONAL)'
                     : tipoMedia === 'imagen' ? 'IMAGEN'
-                    : tipoMedia === 'instagram' ? 'PORTADA (RECOMENDADA)'
                     : 'PORTADA (OPCIONAL)'}
                 </label>
                 <div className="flex items-center gap-4">
@@ -1435,7 +1435,7 @@ function PageEditor() {
                 </div>
                 <p className="text-xs text-gray-600 mt-1">
                   {selectedGroup.type === 'galeria' && tipoMedia === 'instagram'
-                    ? 'Instagram no comparte miniaturas: sin portada, en la grilla se ve un recuadro con su logo (máx 5MB)'
+                    ? 'Sin portada, en la grilla se muestra el contenido tal como lo publica Instagram (máx 5MB)'
                     : selectedGroup.type === 'galeria' && tipoMedia === 'youtube'
                     ? 'Opcional: sin portada se usa la miniatura del video (máx 5MB)'
                     : 'Sube una imagen (máx 5MB)'}

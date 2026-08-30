@@ -312,16 +312,53 @@ describe.each(PLANTILLAS)('%s', (nombre, Plantilla) => {
           .toHaveAttribute('src', 'https://www.instagram.com/p/CxAbC123_-x/embed');
       });
 
-      // Instagram no publica miniaturas sin API: sin portada el item tiene que
-      // seguir siendo clickeable en vez de quedar un hueco en blanco.
+      // Instagram no publica miniaturas sin API. En vez de dejar un recuadro
+      // con el logo, que no dice nada de lo que hay adentro, lo dibuja el
+      // propio Instagram.
+      it('un contenido de Instagram sin portada se muestra en la grilla', () => {
+        const { container } = renderConProviders(
+          <Plantilla page={conGaleria([{ id: 1, text: 'Mi post', embed_url: POST }])} />
+        );
+
+        expect(container.querySelector('iframe'))
+          .toHaveAttribute('src', 'https://www.instagram.com/p/CxAbC123_-x/embed');
+      });
+
+      // Doce celdas son doce iframes: sin esto, una galería larga cargaría
+      // todos de golpe al abrir la página.
+      it('el contenido de la grilla se carga recién cuando se va a ver', () => {
+        const { container } = renderConProviders(
+          <Plantilla page={conGaleria([{ id: 1, text: 'Mi post', embed_url: POST }])} />
+        );
+
+        expect(container.querySelector('iframe')).toHaveAttribute('loading', 'lazy');
+      });
+
+      // El iframe se come los clicks: si no se los dejara pasar, el item sería
+      // el único de la galería que no se puede abrir.
       it('un contenido de Instagram sin portada igual se puede abrir', () => {
         const { container } = renderConProviders(
           <Plantilla page={conGaleria([{ id: 1, text: 'Mi post', embed_url: POST }])} />
         );
 
+        expect(container.querySelector('iframe').style.pointerEvents).toBe('none');
+
         fireEvent.click(screen.getByText('Contenido de Instagram'));
 
-        expect(container.querySelector('iframe')).not.toBeNull();
+        // Abierto, el mismo contenido pero ya sin recortar por la celda.
+        expect(container.querySelectorAll('iframe').length).toBe(2);
+      });
+
+      it('con portada la grilla sigue sin cargar nada de Instagram', () => {
+        const { container } = renderConProviders(
+          <Plantilla
+            page={conGaleria([
+              { id: 1, text: 'Mi post', embed_url: POST, image_url: 'https://img/portada.jpg' },
+            ])}
+          />
+        );
+
+        expect(container.querySelector('iframe')).toBeNull();
       });
     });
   });

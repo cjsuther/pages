@@ -388,7 +388,7 @@ describe('PageEditor', () => {
 
       expect(screen.getByRole('button', { name: '+ Link' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: '+ Evento' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: '+ Imagen' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '+ Contenido' })).toBeInTheDocument();
     });
   });
 

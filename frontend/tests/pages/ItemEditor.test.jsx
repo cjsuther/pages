@@ -428,10 +428,12 @@ describe('ItemEditor', () => {
       expect(put(llamadas, 'links/detail.php')).toBeUndefined();
     });
 
-    it('en Instagram la portada se pide, no se exige', async () => {
+    // Sin portada la grilla muestra el propio contenido de Instagram, así que
+    // subirla es una preferencia, no un requisito.
+    it('en un embed la portada es opcional', async () => {
       await render({ page: galeria({ embed_url: 'https://www.instagram.com/p/CxAbC123_-x/' }) });
 
-      expect(screen.getByText('PORTADA (RECOMENDADA)')).toBeInTheDocument();
+      expect(screen.getByText('PORTADA (OPCIONAL)')).toBeInTheDocument();
       expect(document.querySelector('input[type="file"]')).not.toBeRequired();
     });
   });

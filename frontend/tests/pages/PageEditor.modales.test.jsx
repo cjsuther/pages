@@ -136,7 +136,7 @@ describe('PageEditor — modales de link', () => {
   describe('imagen al crear un link', () => {
     async function abrirAlta(tipo = 'links') {
       const mock = await render({ page: pagina({ groups: [grupo({ id: 10, type: tipo })] }) });
-      const etiqueta = tipo === 'galeria' ? '+ Imagen' : tipo === 'eventos' ? '+ Evento' : '+ Link';
+      const etiqueta = tipo === 'galeria' ? '+ Contenido' : tipo === 'eventos' ? '+ Evento' : '+ Link';
       fireEvent.click(screen.getByRole('button', { name: etiqueta }));
       await screen.findByRole('button', { name: 'CREAR' });
       return mock;
@@ -209,7 +209,7 @@ describe('PageEditor — modales de link', () => {
 
     async function abrirAltaGaleria() {
       const mock = await render({ page: pagina({ groups: [grupo({ id: 10, type: 'galeria' })] }) });
-      fireEvent.click(screen.getByRole('button', { name: '+ Imagen' }));
+      fireEvent.click(screen.getByRole('button', { name: '+ Contenido' }));
       await screen.findByRole('button', { name: 'CREAR' });
       return mock;
     }

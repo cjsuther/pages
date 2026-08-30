@@ -250,7 +250,7 @@ function ItemEditor() {
     );
   }
 
-  const queEs = group.type === 'galeria' ? 'IMAGEN' : group.type === 'eventos' ? 'EVENTO' : 'LINK';
+  const queEs = group.type === 'galeria' ? 'CONTENIDO' : group.type === 'eventos' ? 'EVENTO' : 'LINK';
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -414,7 +414,6 @@ function ItemEditor() {
             <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">
               {group.type !== 'galeria' ? 'IMAGEN (OPCIONAL)'
                 : tipoMedia === 'imagen' ? 'IMAGEN'
-                : tipoMedia === 'instagram' ? 'PORTADA (RECOMENDADA)'
                 : 'PORTADA (OPCIONAL)'}
             </label>
             <div className="flex items-center gap-4">
@@ -441,7 +440,7 @@ function ItemEditor() {
             </div>
             <p className="text-xs text-gray-600 mt-1">
               {group.type === 'galeria' && tipoMedia === 'instagram'
-                ? 'Instagram no comparte miniaturas: sin portada, en la grilla se ve un recuadro con su logo (máx 5MB)'
+                ? 'Sin portada, en la grilla se muestra el contenido tal como lo publica Instagram (máx 5MB)'
                 : group.type === 'galeria' && tipoMedia === 'youtube'
                 ? 'Opcional: sin portada se usa la miniatura del video (máx 5MB)'
                 : 'Sube una nueva imagen para reemplazar (máx 5MB)'}
