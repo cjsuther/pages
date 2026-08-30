@@ -710,9 +710,9 @@ function PageEditor() {
                 <p className="text-xs text-red-400 mt-2">{dominioError}</p>
               ) : (
                 <p className="text-xs text-gray-600 mt-2">
-                  El dominio muestra esta página en su raíz, y sus eventos siguen
-                  andando en la misma dirección. Antes tiene que estar dado de alta en
-                  el hosting y apuntando acá: cargarlo sólo no alcanza.
+                  Puedes cargar tu dominio aca si quieres que tu pagina de rezonar
+                  tenga tu dominio propio. Para esto te debes comunicar antes con
+                  cjsuther@gmail.com y contarle que lo quieres hacer
                 </p>
               )}
             </div>
