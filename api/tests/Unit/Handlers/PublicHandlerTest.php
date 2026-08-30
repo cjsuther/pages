@@ -39,6 +39,34 @@ class PublicHandlerTest extends HandlerTestCase
         $this->assertSame(['mi-pagina'], $this->db->paramsFor('FROM pages WHERE url_slug = ?'));
     }
 
+    /**
+     * Un evento compartido tiene que ofrecer el botón de reservar también en la
+     * página que colabora. Llegaba sin disponibilidad —eso se agrega después de
+     * la consulta, y sólo se hacía para los eventos propios—, así que el mismo
+     * evento mostraba el botón en la página de origen y no en la otra.
+     */
+    public function testLosEventosColaboradosTraenLaDisponibilidadDeEntradas()
+    {
+        $this->db->onSelect('FROM pages WHERE url_slug = ?', [['id' => 5, 'title' => 'Mi página']]);
+        $this->db->onSelect('FROM link_groups WHERE page_id = ?', [['id' => 20, 'type' => 'eventos']]);
+        $this->db->onSelect('WHERE group_id = ? AND event_date >= ?', []);
+        $this->db->onSelect('FROM event_collaborations ec', [[
+            'id' => 300, 'text' => 'Un show compartido', 'is_collaborated' => 1,
+        ]]);
+        $this->db->onSelect('FROM event_ticketing WHERE link_id = ?', [[
+            'activo' => 1, 'capacidad' => 50, 'precio' => 0, 'moneda' => 'ARS',
+            'max_por_compra' => 4,
+        ]]);
+        $this->db->onSelect('FROM ticket_orders', [['0']]);
+        $this->db->onSelect('COUNT(*) as count FROM page_followers', [['count' => '0']]);
+
+        $res = PublicHandler::page($this->db, $this->get(['slug' => 'mi-pagina']));
+
+        $colaborado = $res->body['page']['groups'][0]['collaborated_events'][0];
+        $this->assertArrayHasKey('entradas', $colaborado, 'sin esto no se dibuja el botón de reservar');
+        $this->assertTrue($colaborado['entradas']['activo']);
+    }
+
     public function testPageDevuelveLaPaginaConGruposYSeguidores()
     {
         $this->db->onSelect('FROM pages WHERE url_slug = ?', [['id' => 5, 'title' => 'Mi página']]);

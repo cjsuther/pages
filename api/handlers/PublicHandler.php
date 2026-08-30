@@ -127,6 +127,10 @@ class PublicHandler
 
         foreach ($colaborados as &$evento) {
             $evento['collaborators'] = self::colaboradoresDe($db, $evento['id']);
+            // Igual que los eventos propios: sin esto el evento llega sin
+            // disponibilidad y la página que colabora no muestra el botón de
+            // reservar, aunque el mismo evento sí lo muestre en la de origen.
+            $evento['entradas'] = Entradas::disponibilidad($db, $evento['id']);
         }
         unset($evento);
 
