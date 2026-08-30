@@ -125,6 +125,14 @@ if (file_exists($manifestPath)) {
   <meta name="author" content="Rezonar">
   <link rel="canonical" href="<?php echo htmlspecialchars($currentUrl); ?>">
 
+  <!-- Poppins. Los pesos son los que el sitio realmente usa: 300, 400, 500,
+       600, 700 y 900. El 800 no se usa en ningún lado y traerlo sería peso de
+       red al pedo. display=swap: el texto se ve con la del sistema mientras
+       la tipografía baja, en vez de dejar la página en blanco. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-3W7JFPFSBL"></script>
   <script>
