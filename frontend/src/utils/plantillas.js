@@ -1,3 +1,5 @@
+import { borde } from './colores';
+
 /**
  * Ancho de la columna de una página pública.
  *
@@ -12,3 +14,56 @@
  * sacarla a mano.
  */
 export const ANCHO_COLUMNA = 'max-w-[580px]';
+
+/**
+ * Clases de la caja donde vive el contenido.
+ *
+ * Hasta 640px la caja es la pantalla: ocupa todo el ancho, sin margen ni
+ * esquinas redondeadas, que es como se ve en un teléfono. De ahí para arriba
+ * sobra lugar a los costados, así que se despega y queda como un recuadro
+ * apoyado sobre el color de la página.
+ *
+ * El corte es `sm:` y no `md:` a propósito: 640 es el primer breakpoint por
+ * encima de los 580 de la caja, o sea el ancho a partir del cual realmente
+ * sobra espacio.
+ */
+export const CLASES_CAJA = `${ANCHO_COLUMNA} mx-auto overflow-hidden sm:rounded-3xl sm:border`;
+
+/**
+ * Clases de lo que rodea al recuadro.
+ *
+ * El aire de arriba y abajo va acá como padding, y no como margen de la caja:
+ * un margen vertical se escapa fuera del contenedor —colapso de márgenes— y
+ * termina empujando la página entera hacia abajo, dejando ver una franja del
+ * fondo del navegador arriba de todo.
+ */
+export const CLASES_ALREDEDOR = 'min-h-screen sm:py-8';
+
+/**
+ * El fondo —color e imagen— es de la caja, no de la pantalla.
+ *
+ * Antes se pintaba la pantalla entera: en una computadora la imagen de fondo
+ * se derramaba por todos lados y el contenido flotaba encima sin forma. Ahora
+ * queda contenido en el recuadro.
+ *
+ * La imagen sigue anclada a la ventana (`fixed`), así que la caja funciona
+ * como una ventana a la imagen: no se estira ni se deforma según cuánto
+ * contenido tenga la página.
+ */
+export function estiloDeCaja({ backgroundColor, backgroundImage, textColor }) {
+  return {
+    backgroundColor,
+    borderColor: borde(textColor) || 'transparent',
+    ...(backgroundImage && {
+      backgroundImage: `url(${backgroundImage})`,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundAttachment: 'fixed',
+    }),
+  };
+}
+
+/** Lo que queda alrededor del recuadro: el color de la página, liso. */
+export function estiloDeAlrededor({ backgroundColor, textColor }) {
+  return { backgroundColor, color: textColor };
+}

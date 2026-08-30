@@ -8,7 +8,7 @@ import PrecioEvento from '../PrecioEvento';
 import RezonarBadge from '../RezonarBadge';
 import { MiniaturaGaleria, VisorGaleria } from '../MediaGaleria';
 import { superficie, borde } from '../../utils/colores';
-import { ANCHO_COLUMNA } from '../../utils/plantillas';
+import { CLASES_ALREDEDOR, CLASES_CAJA, estiloDeAlrededor, estiloDeCaja } from '../../utils/plantillas';
 import { ExternalLink } from 'lucide-react';
 
 function CondensedTemplate({ page }) {
@@ -19,20 +19,12 @@ function CondensedTemplate({ page }) {
   const primaryColor = page.primary_color || '#3b82f6';
   const backgroundImage = page.background_image;
 
-  // La imagen de fondo se muestra tal cual, igual que en las otras tres
-  // plantillas. Acá iba detrás de un velo del 95%, que era lo único que la
-  // distinguía: clavado en blanco desteñía la imagen y volvía ilegible
+  // La imagen se muestra tal cual, igual que en las otras tres. Acá iba detrás
+  // de un velo del 95% que la tapaba: clavado en blanco volvía ilegible
   // cualquier página de tipografía clara, y atado a la paleta la teñía del
-  // color de fondo. En los dos casos tapaba la imagen que alguien eligió.
-  const backgroundStyle = {
-    backgroundColor,
-    ...(backgroundImage && {
-      backgroundImage: `url(${backgroundImage})`,
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
-      backgroundAttachment: 'fixed',
-    }),
-  };
+  // color de fondo.
+  const estiloAlrededor = estiloDeAlrededor({ backgroundColor, textColor });
+  const estiloCaja = estiloDeCaja({ backgroundColor, backgroundImage, textColor });
 
   // El detalle del evento sale de la misma paleta que la página. Estaba fijo
   // en blanco con texto negro: sobre una página oscura era un recuadro ajeno,
@@ -49,9 +41,9 @@ function CondensedTemplate({ page }) {
   };
 
   return (
-    <div className="min-h-screen" style={{ ...backgroundStyle, color: textColor }}>
+    <div className={CLASES_ALREDEDOR} style={estiloAlrededor}>
       <RezonarBadge />
-      <div className={`${ANCHO_COLUMNA} mx-auto px-4 py-8 md:py-12`}>
+      <div className={`${CLASES_CAJA} px-4 py-8 md:py-12`} style={estiloCaja}>
         <header className="text-center mb-8 md:mb-12">
           {page.profile_image && (
             <img

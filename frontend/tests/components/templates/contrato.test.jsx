@@ -51,6 +51,9 @@ const link = (overrides = {}) => ({
   ...overrides,
 });
 
+/** La caja donde vive el contenido: es la que lleva el fondo de la página. */
+const caja = (container) => container.querySelector(`[class*="${ANCHO_COLUMNA}"]`);
+
 /** Busca un enlace por su destino, sin depender de cómo se maquete el texto. */
 const porHref = (href) =>
   screen.getAllByRole('link').find((a) => a.getAttribute('href') === href);
@@ -121,8 +124,22 @@ describe.each(PLANTILLAS)('%s', (nombre, Plantilla) => {
     it('muestra la imagen de fondo sin velo encima', () => {
       const { container } = renderConProviders(<Plantilla page={oscura()} />);
 
-      expect(container.firstElementChild.style.backgroundImage)
-        .toBe('url("https://img/fondo.png")');
+      expect(caja(container).style.backgroundImage).toBe('url("https://img/fondo.png")');
+    });
+
+    // El fondo es de la caja, no de la pantalla: en una computadora, si no,
+    // la imagen se derrama por todo el ancho y el recuadro deja de leerse
+    // como tal.
+    it('no pinta la pantalla con la imagen, sólo la caja', () => {
+      const { container } = renderConProviders(<Plantilla page={oscura()} />);
+
+      expect(container.firstElementChild.style.backgroundImage).toBe('');
+    });
+
+    it('alrededor del recuadro queda el color de la página', () => {
+      const { container } = renderConProviders(<Plantilla page={oscura()} />);
+
+      expect(container.firstElementChild).toHaveStyle({ backgroundColor: '#070708' });
     });
 
     it('sin imagen de fondo queda el color de la página', () => {
@@ -631,7 +648,7 @@ describe.each(PLANTILLAS)('%s', (nombre, Plantilla) => {
         <Plantilla page={pagina({ background_image: 'https://img/fondo.jpg' })} />
       );
 
-      expect(container.firstChild.getAttribute('style')).toContain('https://img/fondo.jpg');
+      expect(caja(container).getAttribute('style')).toContain('https://img/fondo.jpg');
     });
 
     it('funciona sin colores definidos', () => {

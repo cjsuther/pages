@@ -9,7 +9,7 @@ import PrecioEvento from '../PrecioEvento';
 import RezonarBadge from '../RezonarBadge';
 import { MiniaturaGaleria, VisorGaleria } from '../MediaGaleria';
 import { superficie, borde } from '../../utils/colores';
-import { ANCHO_COLUMNA } from '../../utils/plantillas';
+import { CLASES_ALREDEDOR, CLASES_CAJA, estiloDeAlrededor, estiloDeCaja } from '../../utils/plantillas';
 import { ExternalLink } from 'lucide-react';
 
 function MinimalTemplate({ page }) {
@@ -34,21 +34,13 @@ function MinimalTemplate({ page }) {
     ...(bordeModal && { border: `1px solid ${bordeModal}` }),
   };
 
-  const containerStyle = {
-    backgroundColor,
-    color: textColor,
-    ...(backgroundImage && {
-      backgroundImage: `url(${backgroundImage})`,
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
-      backgroundAttachment: 'fixed'
-    })
-  };
+  const estiloAlrededor = estiloDeAlrededor({ backgroundColor, textColor });
+  const estiloCaja = estiloDeCaja({ backgroundColor, backgroundImage, textColor });
 
   return (
-    <div className="min-h-screen py-16 px-6" style={containerStyle}>
+    <div className={CLASES_ALREDEDOR} style={estiloAlrededor}>
       <RezonarBadge />
-      <div className={`${ANCHO_COLUMNA} mx-auto space-y-16`}>
+      <div className={`${CLASES_CAJA} px-6 py-16 space-y-16`} style={estiloCaja}>
         {page.profile_image && (
           <div className="flex justify-center">
             <img

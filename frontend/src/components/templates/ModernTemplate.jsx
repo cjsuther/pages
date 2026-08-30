@@ -8,7 +8,7 @@ import PrecioEvento from '../PrecioEvento';
 import RezonarBadge from '../RezonarBadge';
 import { MiniaturaGaleria, VisorGaleria } from '../MediaGaleria';
 import { superficie, borde } from '../../utils/colores';
-import { ANCHO_COLUMNA } from '../../utils/plantillas';
+import { CLASES_ALREDEDOR, CLASES_CAJA, estiloDeAlrededor, estiloDeCaja } from '../../utils/plantillas';
 import { ExternalLink } from 'lucide-react';
 
 function ModernTemplate({ page }) {
@@ -33,21 +33,13 @@ function ModernTemplate({ page }) {
     ...(bordeModal && { border: `1px solid ${bordeModal}` }),
   };
 
-  const containerStyle = {
-    backgroundColor,
-    color: textColor,
-    ...(backgroundImage && {
-      backgroundImage: `url(${backgroundImage})`,
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
-      backgroundAttachment: 'fixed'
-    })
-  };
+  const estiloAlrededor = estiloDeAlrededor({ backgroundColor, textColor });
+  const estiloCaja = estiloDeCaja({ backgroundColor, backgroundImage, textColor });
 
   return (
-    <div className="min-h-screen" style={containerStyle}>
+    <div className={CLASES_ALREDEDOR} style={estiloAlrededor}>
       <RezonarBadge />
-      <div className={`${ANCHO_COLUMNA} mx-auto px-6 py-20`}>
+      <div className={`${CLASES_CAJA} px-6 py-20`} style={estiloCaja}>
         <div className="space-y-16">
           {/* Antes esto era una barra lateral de 4 columnas con el contenido
               al lado. En una columna angosta no hay costado: la portada pasa a
