@@ -6,6 +6,15 @@ import GooglePlacesAutocomplete from '../components/GooglePlacesAutocomplete';
 import SeccionRedes from '../components/SeccionRedes';
 import SeccionEntradas from '../components/SeccionEntradas';
 import { analizarEmbed, portadaDe } from '../utils/embeds';
+import MiniaturaPlantilla from '../components/MiniaturaPlantilla';
+
+/** Plantillas disponibles, en el orden en que se ofrecen. */
+const PLANTILLAS = [
+  { clave: 'minimal',   nombre: 'Minimal',    descripcion: 'Limpio y centrado, un bloque por link' },
+  { clave: 'cards',     nombre: 'Cards',      descripcion: 'Tarjetas con sombra, de a dos' },
+  { clave: 'modern',    nombre: 'Modern',     descripcion: 'Encabezado en una columna al costado' },
+  { clave: 'condensed', nombre: 'Condensado', descripcion: 'Lista compacta de 2 líneas' },
+];
 
 /** Secciones del editor, en el orden en que se muestran. */
 const SECCIONES = [
@@ -760,61 +769,26 @@ function PageEditor() {
             <div className="mt-8 pt-8 border-t border-gray-800">
               <label className="block text-sm font-bold text-gray-400 mb-4 tracking-wide">TEMPLATE DE DISEÑO</label>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <button
-                  onClick={() => {
-                    setPage({ ...page, template: 'minimal' });
-                    updatePage({ template: 'minimal' });
-                  }}
-                  className={`p-4 border-2 transition ${(page.template || 'minimal') === 'minimal'
-                      ? 'border-white bg-gray-800'
-                      : 'border-gray-700 hover:border-gray-600'
-                    }`}
-                >
-                  <div className="font-bold mb-2 text-white">Minimal</div>
-                  <div className="text-xs text-gray-500">Diseño limpio y centrado</div>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setPage({ ...page, template: 'cards' });
-                    updatePage({ template: 'cards' });
-                  }}
-                  className={`p-4 border-2 transition ${page.template === 'cards'
-                      ? 'border-white bg-gray-800'
-                      : 'border-gray-700 hover:border-gray-600'
-                    }`}
-                >
-                  <div className="font-bold mb-2 text-white">Cards</div>
-                  <div className="text-xs text-gray-500">Tarjetas con sombras</div>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setPage({ ...page, template: 'modern' });
-                    updatePage({ template: 'modern' });
-                  }}
-                  className={`p-4 border-2 transition ${page.template === 'modern'
-                      ? 'border-white bg-gray-800'
-                      : 'border-gray-700 hover:border-gray-600'
-                    }`}
-                >
-                  <div className="font-bold mb-2 text-white">Modern</div>
-                  <div className="text-xs text-gray-500">Estilo audaz y oscuro</div>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setPage({ ...page, template: 'condensed' });
-                    updatePage({ template: 'condensed' });
-                  }}
-                  className={`p-4 border-2 transition ${page.template === 'condensed'
-                      ? 'border-white bg-gray-800'
-                      : 'border-gray-700 hover:border-gray-600'
-                    }`}
-                >
-                  <div className="font-bold mb-2 text-white">Condensado</div>
-                  <div className="text-xs text-gray-500">Lista compacta de 2 líneas</div>
-                </button>
+                {PLANTILLAS.map((p) => {
+                  const elegida = (page.template || 'minimal') === p.clave;
+                  return (
+                    <button
+                      key={p.clave}
+                      onClick={() => {
+                        setPage({ ...page, template: p.clave });
+                        updatePage({ template: p.clave });
+                      }}
+                      aria-pressed={elegida}
+                      className={`p-3 border-2 text-left transition ${
+                        elegida ? 'border-white bg-gray-800' : 'border-gray-700 hover:border-gray-600'
+                      }`}
+                    >
+                      <MiniaturaPlantilla plantilla={p.clave} page={page} />
+                      <div className="font-bold mt-3 text-white">{p.nombre}</div>
+                      <div className="text-xs text-gray-500">{p.descripcion}</div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </div>

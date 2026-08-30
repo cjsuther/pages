@@ -173,6 +173,7 @@ describe('PageEditor — flujos de edición', () => {
     it.each([
       ['Minimal', 'minimal'],
       ['Cards', 'cards'],
+      ['Modern', 'modern'],
       ['Condensado', 'condensed'],
     ])('la plantilla %s envía "%s"', async (etiqueta, valor) => {
       const { llamadas } = await render();
@@ -182,6 +183,32 @@ describe('PageEditor — flujos de edición', () => {
       await waitFor(() => {
         expect(cuerpoDe(put(llamadas, 'pages/detail.php'))).toEqual({ template: valor });
       });
+    });
+
+    // Elegir a ciegas entre cuatro nombres no dice nada: cada opción muestra
+    // cómo se ve.
+    it('cada plantilla se ofrece con una vista previa', async () => {
+      const { container } = await render();
+
+      ['minimal', 'cards', 'modern', 'condensed'].forEach((clave) => {
+        expect(container.querySelector(`[data-plantilla="${clave}"]`)).not.toBeNull();
+      });
+    });
+
+    it('la vista previa se pinta con los colores de la página', async () => {
+      const { container } = await render({
+        page: pagina({ background_color: '#102030' }),
+      });
+
+      expect(container.querySelector('[data-plantilla="minimal"] > div'))
+        .toHaveStyle({ backgroundColor: '#102030' });
+    });
+
+    it('la plantilla en uso se ve elegida', async () => {
+      await render({ page: pagina({ template: 'cards' }) });
+
+      expect(screen.getByText('Cards').closest('button')).toHaveAttribute('aria-pressed', 'true');
+      expect(screen.getByText('Minimal').closest('button')).toHaveAttribute('aria-pressed', 'false');
     });
   });
 
