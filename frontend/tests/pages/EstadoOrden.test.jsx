@@ -39,7 +39,6 @@ async function montar(orden = ORDEN, ok = true) {
 describe('EstadoOrden', () => {
   beforeEach(() => {
     global.fetch = vi.fn();
-    vi.useFakeTimers({ shouldAdvanceTime: true });
   });
 
   afterEach(() => {
@@ -100,6 +99,14 @@ describe('EstadoOrden', () => {
   });
 
   describe('todavía sin confirmar', () => {
+    // El reloj falso vive sólo acá, que es donde se prueban los reintentos.
+    // Estaba puesto para todo el archivo, y eso volvía intermitentes tests que
+    // no tienen nada que ver con el tiempo: waitFor, con temporizadores
+    // falsos, avanza el reloj por su cuenta.
+    beforeEach(() => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+    });
+
     /**
      * Volver de Mercado Pago no significa que el pago esté acreditado: eso lo
      * confirma el aviso al servidor, que puede llegar unos segundos después.
@@ -115,11 +122,16 @@ describe('EstadoOrden', () => {
 
       const consultasIniciales = global.fetch.mock.calls.length;
 
-      await vi.advanceTimersByTimeAsync(3500);
+      // El reintento se programa en un efecto, que corre después del render
+      // que apagó el "Cargando" —que es lo que espera montar()—. Adelantar el
+      // reloj una sola vez puede caer antes de que el temporizador exista, y
+      // entonces el salto no dispara nada: se avanza en vueltas hasta verla
+      // consultar, igual que en el test de acá abajo.
+      for (let vuelta = 0; vuelta < 20 && global.fetch.mock.calls.length <= consultasIniciales; vuelta++) {
+        await vi.advanceTimersByTimeAsync(3000);
+      }
 
-      await waitFor(() =>
-        expect(global.fetch.mock.calls.length).toBeGreaterThan(consultasIniciales)
-      );
+      expect(global.fetch.mock.calls.length).toBeGreaterThan(consultasIniciales);
     });
 
     /** Reintentar para siempre dejaría la pestaña consultando sin fin. */
