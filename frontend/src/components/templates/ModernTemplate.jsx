@@ -65,7 +65,7 @@ function ModernTemplate({ page }) {
               <div className="flex flex-col gap-3 mt-6">
                 <RedesSociales socials={page.socials} className="mb-1" />
                 <FollowersPopup pageId={page.id} followerCount={page.follower_count || 0} />
-                <FollowButton pageId={page.id} />
+                <FollowButton pageId={page.id} colores={colores} />
               </div>
             </div>
           </div>

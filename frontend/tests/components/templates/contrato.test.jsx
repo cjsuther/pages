@@ -728,15 +728,18 @@ describe.each(PLANTILLAS)('%s', (nombre, Plantilla) => {
     });
 
     /**
-     * Una tarjeta pintada de blanco no puede heredar el color de texto de la
-     * página: quien elige un fondo oscuro elige texto claro, y ahí adentro
-     * queda blanco sobre blanco. La superficie que se pinta fija su color.
+     * Ninguna superficie se pinta de blanco: todas salen de la paleta.
+     *
+     * Antes se exigía menos —que la superficie blanca fijara su propio color de
+     * texto— porque había varias clavadas y heredar el texto de una página
+     * oscura las dejaba blanco sobre blanco. Ya no queda ninguna, así que se
+     * puede pedir lo de fondo: que no aparezcan.
      *
      * Tailwind no corre en los tests, así que el fondo se reconoce por la
-     * clase. Las traslúcidas (bg-opacity) quedan afuera porque dejan ver el
-     * fondo de la página y el texto heredado se lee bien.
+     * clase. Las traslúcidas (bg-opacity) quedan afuera: son capas sobre toda
+     * la pantalla, no superficies de la página.
      */
-    it('las superficies blancas no heredan el color de texto de la página', () => {
+    it('ninguna superficie se pinta de blanco', () => {
       const { container } = renderConProviders(
         <Plantilla
           page={pagina({
@@ -761,16 +764,10 @@ describe.each(PLANTILLAS)('%s', (nombre, Plantilla) => {
         return /(^|\s)bg-white(\s|$)/.test(clases) && !clases.includes('bg-opacity');
       });
 
-      expect(blancas.length).toBeGreaterThan(0);
-
-      blancas.forEach((el) => {
-        const clases = el.getAttribute('class') || '';
-        const propio =
-          /(^|;)\s*color:/.test(el.getAttribute('style') || '') ||
-          /(^|\s)text-(black|gray-[6-9]00|slate-[6-9]00)/.test(clases);
-
-        expect(propio, `superficie blanca sin color propio: ${clases}`).toBe(true);
-      });
+      expect(
+        blancas.map((el) => el.getAttribute('class')),
+        'quedó una superficie blanca clavada'
+      ).toEqual([]);
     });
   });
 
