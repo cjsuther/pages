@@ -833,26 +833,24 @@ function PageEditor() {
                     <label htmlFor={`color-${c.campo}`} className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">
                       COLOR DE {c.etiqueta}
                     </label>
+                    {/* Nunca deshabilitado: un input de color deshabilitado no
+                        abre el selector del sistema, y el control queda muerto.
+                        Que esté en automático se dice con el borde punteado y
+                        el texto de abajo; elegir un color lo separa. */}
                     <input
                       id={`color-${c.campo}`}
                       type="color"
                       value={vigente}
-                      disabled={enAutomatico}
                       onChange={(e) => guardarColor(c.campo, e.target.value)}
-                      className={`w-full h-10 rounded-lg ${enAutomatico ? 'opacity-60' : 'cursor-pointer'}`}
+                      className={`w-full h-10 rounded-lg cursor-pointer ${
+                        enAutomatico ? 'ring-2 ring-gray-600' : ''
+                      }`}
                     />
                     {c.rol ? (
                       enAutomatico ? (
-                        <>
-                          <p className="text-xs text-gray-600 mt-2">Automático: {c.automatico}</p>
-                          <button
-                            type="button"
-                            onClick={() => guardarColor(c.campo, vigente)}
-                            className="text-xs text-gray-500 hover:text-white transition mt-1"
-                          >
-                            Elegir un color propio
-                          </button>
-                        </>
+                        <p className="text-xs text-gray-600 mt-2">
+                          Automático: {c.automatico}. Elegí uno para separarlo.
+                        </p>
                       ) : (
                         <button
                           type="button"

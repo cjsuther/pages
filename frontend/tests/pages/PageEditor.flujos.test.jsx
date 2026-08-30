@@ -171,28 +171,29 @@ describe('PageEditor — flujos de edición', () => {
     });
 
     /**
-     * En automático el selector está deshabilitado. Si se pudiera arrastrar,
-     * moverlo y mover el acento se verían igual —el automático espeja al
-     * acento— y no habría forma de saber si están atados.
+     * Un input de color deshabilitado no abre el selector del sistema: el
+     * control queda muerto y no hay forma de cambiar el color. Estuvo así y
+     * los tests no lo vieron, porque fireEvent.change funciona igual sobre un
+     * input deshabilitado.
      */
-    it('en automático el color no se puede arrastrar', async () => {
-      await render({ page: pagina({ secondary_color: null }) });
+    it.each(['TÍTULOS', 'BOTONES', 'TARJETAS'])(
+      'el selector de %s se puede abrir aunque esté en automático',
+      async (etiqueta) => {
+        await render({ page: pagina({ secondary_color: null, title_color: null, card_color: null }) });
 
-      expect(screen.getByLabelText('COLOR DE BOTONES')).toBeDisabled();
-    });
+        expect(screen.getByLabelText(`COLOR DE ${etiqueta}`)).not.toBeDisabled();
+      }
+    );
 
-    it('separarlo del automático lo deja elegible', async () => {
+    it('elegir un color en automático lo separa', async () => {
       const { llamadas } = await render({
         page: pagina({ primary_color: '#abcdef', secondary_color: null }),
       });
 
-      // Los tres opcionales ofrecen el mismo botón: hay que apuntar al de este.
-      const control = screen.getByLabelText('COLOR DE BOTONES').closest('div');
-      fireEvent.click(within(control).getByRole('button', { name: 'Elegir un color propio' }));
+      fireEvent.change(screen.getByLabelText('COLOR DE BOTONES'), { target: { value: '#00ff00' } });
 
-      // Arranca en el color que venía rigiendo, para no dar un salto de color.
       await waitFor(() => {
-        expect(cuerpoDe(put(llamadas, 'pages/detail.php'))).toEqual({ secondary_color: '#abcdef' });
+        expect(cuerpoDe(put(llamadas, 'pages/detail.php'))).toEqual({ secondary_color: '#00ff00' });
       });
     });
 
