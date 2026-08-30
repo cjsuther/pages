@@ -204,7 +204,10 @@ function PageEditor() {
       });
       const data = await response.json();
       if (response.ok) {
-        setPage({ ...page, ...data.page });
+        // Sobre el estado actual y no sobre la copia que cerró esta función:
+        // si no, dos guardados seguidos se pisan y el segundo revierte al
+        // primero. Se veía al cambiar un color: no se refrescaba.
+        setPage((actual) => ({ ...actual, ...data.page }));
       }
     } catch (err) {
       console.error('Error updating page:', err);
@@ -820,6 +823,10 @@ function PageEditor() {
                 // derivado. Un selector en negro cuando la página se ve azul
                 // sería mentir sobre lo que está pasando.
                 const vigente = elegido || (c.rol ? colores[c.rol] : '#000000');
+                // En automático el selector queda deshabilitado: si se pudiera
+                // arrastrar, moverlo y mover el acento se verían igual y no
+                // habría forma de saber si están atados.
+                const enAutomatico = Boolean(c.rol) && !elegido;
 
                 return (
                   <div key={c.campo}>
@@ -830,11 +837,23 @@ function PageEditor() {
                       id={`color-${c.campo}`}
                       type="color"
                       value={vigente}
+                      disabled={enAutomatico}
                       onChange={(e) => guardarColor(c.campo, e.target.value)}
-                      className="w-full h-10 rounded-lg cursor-pointer"
+                      className={`w-full h-10 rounded-lg ${enAutomatico ? 'opacity-60' : 'cursor-pointer'}`}
                     />
                     {c.rol ? (
-                      elegido ? (
+                      enAutomatico ? (
+                        <>
+                          <p className="text-xs text-gray-600 mt-2">Automático: {c.automatico}</p>
+                          <button
+                            type="button"
+                            onClick={() => guardarColor(c.campo, vigente)}
+                            className="text-xs text-gray-500 hover:text-white transition mt-1"
+                          >
+                            Elegir un color propio
+                          </button>
+                        </>
+                      ) : (
                         <button
                           type="button"
                           onClick={() => guardarColor(c.campo, null)}
@@ -842,8 +861,6 @@ function PageEditor() {
                         >
                           Volver al automático
                         </button>
-                      ) : (
-                        <p className="text-xs text-gray-600 mt-2">Automático: {c.automatico}</p>
                       )
                     ) : (
                       <p className="text-xs text-gray-600 mt-2">{c.ayuda}</p>

@@ -170,13 +170,52 @@ describe('PageEditor — flujos de edición', () => {
       });
     });
 
+    /**
+     * En automático el selector está deshabilitado. Si se pudiera arrastrar,
+     * moverlo y mover el acento se verían igual —el automático espeja al
+     * acento— y no habría forma de saber si están atados.
+     */
+    it('en automático el color no se puede arrastrar', async () => {
+      await render({ page: pagina({ secondary_color: null }) });
+
+      expect(screen.getByLabelText('COLOR DE BOTONES')).toBeDisabled();
+    });
+
+    it('separarlo del automático lo deja elegible', async () => {
+      const { llamadas } = await render({
+        page: pagina({ primary_color: '#abcdef', secondary_color: null }),
+      });
+
+      // Los tres opcionales ofrecen el mismo botón: hay que apuntar al de este.
+      const control = screen.getByLabelText('COLOR DE BOTONES').closest('div');
+      fireEvent.click(within(control).getByRole('button', { name: 'Elegir un color propio' }));
+
+      // Arranca en el color que venía rigiendo, para no dar un salto de color.
+      await waitFor(() => {
+        expect(cuerpoDe(put(llamadas, 'pages/detail.php'))).toEqual({ secondary_color: '#abcdef' });
+      });
+    });
+
     it('guarda un color opcional cuando se elige', async () => {
-      const { llamadas } = await render();
+      const { llamadas } = await render({ page: pagina({ secondary_color: '#123456' }) });
 
       fireEvent.change(screen.getByLabelText('COLOR DE BOTONES'), { target: { value: '#00ff00' } });
 
       await waitFor(() => {
         expect(cuerpoDe(put(llamadas, 'pages/detail.php'))).toEqual({ secondary_color: '#00ff00' });
+      });
+    });
+
+    /** El síntoma reportado: parecía que cambiar uno cambiaba los dos. */
+    it('cambiar el acento no toca el color de los botones', async () => {
+      const { llamadas } = await render({
+        page: pagina({ primary_color: '#111111', secondary_color: null }),
+      });
+
+      fireEvent.change(screen.getByLabelText('COLOR DE ACENTO'), { target: { value: '#222222' } });
+
+      await waitFor(() => {
+        expect(cuerpoDe(put(llamadas, 'pages/detail.php'))).toEqual({ primary_color: '#222222' });
       });
     });
 
