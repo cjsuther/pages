@@ -9,7 +9,13 @@ define('DB_PASS', '');
 // aleatorio al crear config.php; si copiás este archivo a mano, reemplazalo:
 //     php -r "echo bin2hex(random_bytes(32));"
 define('JWT_SECRET', 'CAMBIA_ESTO_POR_UNA_CLAVE_SEGURA_ALEATORIA');
-define('JWT_EXPIRATION', 86400);
+// Cuánto dura la sesión. Es el vencimiento por defecto: los tokens de un solo
+// uso —como el estado del OAuth de Mercado Pago— fijan el suyo y no lo usan.
+//
+// Un año. El token vive en el localStorage del navegador y no hay lista de
+// revocación: para invalidar uno filtrado hay que cambiar JWT_SECRET, y eso
+// cierra la sesión de todo el mundo. Por eso tiene un tope, aunque sea lejano.
+define('JWT_EXPIRATION', 31536000);
 
 define('FRONTEND_URL', 'http://localhost:5173');
 define('UPLOAD_URL', 'http://localhost:8000');
