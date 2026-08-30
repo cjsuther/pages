@@ -200,7 +200,7 @@ describe('PageEditor — flujos de edición', () => {
         page: pagina({ background_color: '#102030' }),
       });
 
-      expect(container.querySelector('[data-plantilla="minimal"] > div'))
+      expect(container.querySelector('[data-plantilla="minimal"]'))
         .toHaveStyle({ backgroundColor: '#102030' });
     });
 

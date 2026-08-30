@@ -27,7 +27,7 @@ describe('MiniaturaPlantilla', () => {
   it('usa el color de fondo de la página', () => {
     const { container } = render(<MiniaturaPlantilla plantilla="minimal" page={pagina()} />);
 
-    expect(container.querySelector('[data-plantilla] > div')).toHaveStyle({
+    expect(container.querySelector('[data-plantilla]')).toHaveStyle({
       backgroundColor: '#102030',
     });
   });
@@ -46,7 +46,7 @@ describe('MiniaturaPlantilla', () => {
     const { container } = render(<MiniaturaPlantilla plantilla="cards" page={{}} />);
 
     // Los mismos valores por defecto que usan las plantillas de verdad.
-    expect(container.querySelector('[data-plantilla] > div')).toHaveStyle({
+    expect(container.querySelector('[data-plantilla]')).toHaveStyle({
       backgroundColor: '#ffffff',
     });
   });

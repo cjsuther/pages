@@ -1,4 +1,5 @@
 import React from 'react';
+import { borde } from '../utils/colores';
 
 /**
  * Cómo se ve cada plantilla, en chiquito.
@@ -59,21 +60,29 @@ function Cards({ fondo, texto, acento }) {
       <div className="rounded-full flex-shrink-0" style={{ width: 18, height: 18, backgroundColor: acento }} />
       <Linea ancho="60%" alto={4} color={texto} />
       <Linea ancho="40%" color={texto} opacidad={0.4} />
-      {/* Tarjetas rellenas con sombra, una debajo de la otra. */}
+      {/* Tarjetas rellenas con sombra. Los links ocupan la fila entera; las
+          fotos y los eventos van de a dos, que es lo que la distingue. */}
       <div className="w-full mt-1 space-y-1.5">
-        {[0, 1, 2, 3].map((i) => (
-          <div
-            key={i}
-            className="rounded flex items-center gap-1.5 p-1"
-            style={{ backgroundColor: texto, opacity: 0.12, height: 18 }}
-          >
-            <div className="rounded flex-shrink-0" style={{ width: 12, height: 12, backgroundColor: fondo }} />
-            <div className="flex-1">
-              <Linea ancho="70%" alto={3} color={fondo} opacidad={1} />
-              <Linea ancho="45%" alto={2} color={fondo} opacidad={0.7} margen={2} />
-            </div>
+        <div
+          className="rounded flex items-center gap-1.5 p-1"
+          style={{ backgroundColor: texto, opacity: 0.12, height: 18 }}
+        >
+          <div className="rounded flex-shrink-0" style={{ width: 12, height: 12, backgroundColor: fondo }} />
+          <div className="flex-1">
+            <Linea ancho="70%" alto={3} color={fondo} opacidad={1} />
+            <Linea ancho="45%" alto={2} color={fondo} opacidad={0.7} margen={2} />
           </div>
-        ))}
+        </div>
+
+        <div className="grid grid-cols-2 gap-1.5">
+          {[0, 1].map((i) => (
+            <div key={i} className="rounded p-1" style={{ backgroundColor: texto, opacity: 0.12 }}>
+              {/* La foto es vertical, como en la plantilla de verdad. */}
+              <div className="w-full rounded" style={{ aspectRatio: '1080 / 1350', backgroundColor: fondo }} />
+              <Linea ancho="80%" alto={2} color={fondo} opacidad={1} margen={3} />
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -142,12 +151,19 @@ function MiniaturaPlantilla({ plantilla, page }) {
 
   return (
     <div
-      className="w-full overflow-hidden rounded border border-gray-700"
-      style={{ aspectRatio: '3 / 4' }}
+      className="w-full overflow-hidden rounded border border-gray-700 p-[3px]"
+      style={{ aspectRatio: '3 / 4', backgroundColor: fondo }}
       data-plantilla={plantilla}
       aria-hidden="true"
     >
-      <Dibujo fondo={fondo} texto={texto} acento={acento} />
+      {/* En una pantalla grande la página es un recuadro apoyado sobre su
+          propio color de fondo, no el ancho completo de la ventana. */}
+      <div
+        className="w-full h-full overflow-hidden rounded-[5px] border"
+        style={{ borderColor: borde(texto) || 'transparent' }}
+      >
+        <Dibujo fondo={fondo} texto={texto} acento={acento} />
+      </div>
     </div>
   );
 }
