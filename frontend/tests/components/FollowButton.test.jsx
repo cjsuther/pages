@@ -8,6 +8,54 @@ import { mockFetch, cuerpoDe, llamadaA, tokenDe } from '../helpers/api';
 const autenticado = () => crearAuth({ token: 'tok-123', user: usuarioDePrueba() });
 
 describe('FollowButton', () => {
+
+  /**
+   * El color de botones tiene que aplicarse en los dos estados. Siguiendo iba
+   * como una tarjeta y el color elegido no lo tocaba: se veía como si el
+   * control no funcionara.
+   */
+  describe('colores de la página', () => {
+    const paleta = {
+      fondo: '#111827', texto: '#e5e7eb', acento: '#f59e0b',
+      titulo: '#ffffff', boton: '#7c3aed',
+      tarjeta: '#1b2432', bordeTarjeta: 'rgba(229, 231, 235, 0.14)',
+    };
+
+    it('sin seguir, el botón va relleno con el color de botones', async () => {
+      mockFetch({ 'pages/follow.php': { is_following: false } });
+
+      renderConProviders(<FollowButton pageId={5} colores={paleta} />, {
+        auth: crearAuth({ token: 'tok', user: usuarioDePrueba() }),
+      });
+
+      const boton = await screen.findByRole('button', { name: 'SEGUIR' });
+      expect(boton).toHaveStyle({ backgroundColor: '#7c3aed' });
+    });
+
+    it('siguiendo, el botón usa el mismo color de contorno', async () => {
+      mockFetch({ 'pages/follow.php': { is_following: true } });
+
+      renderConProviders(<FollowButton pageId={5} colores={paleta} />, {
+        auth: crearAuth({ token: 'tok', user: usuarioDePrueba() }),
+      });
+
+      const boton = await screen.findByRole('button', { name: 'SIGUIENDO' });
+      expect(boton).toHaveStyle({ color: '#7c3aed' });
+      expect(boton.getAttribute('style')).toContain('124, 58, 237');
+    });
+
+    /** En el Home de Rezonar no llega paleta y conserva su estilo propio. */
+    it('sin paleta no inventa colores', async () => {
+      mockFetch({ 'pages/follow.php': { is_following: false } });
+
+      renderConProviders(<FollowButton pageId={5} />, {
+        auth: crearAuth({ token: 'tok', user: usuarioDePrueba() }),
+      });
+
+      const boton = await screen.findByRole('button', { name: 'SEGUIR' });
+      expect(boton.getAttribute('style')).toBeFalsy();
+    });
+  });
   beforeEach(() => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     window.confirm = vi.fn(() => true);

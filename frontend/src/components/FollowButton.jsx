@@ -117,11 +117,13 @@ function FollowButton({ pageId, colores = null }) {
               : 'bg-white text-black hover:bg-gray-200'
         }`}
         style={colores ? (
-          // Siguiendo es un estado, no una invitación: queda como una tarjeta
-          // en vez de repetir el color del botón.
+          // El color de botones se aplica en los dos estados: lo que cambia es
+          // cómo. Sin seguir es una invitación y va relleno; siguiendo ya está
+          // hecho y va de contorno, para que se distinga sin dejar de usar el
+          // color elegido.
           isFollowing
-            ? { backgroundColor: colores.tarjeta, color: colores.texto, border: `1px solid ${colores.bordeTarjeta}` }
-            : { backgroundColor: colores.boton, color: textoSobre(colores.boton, colores.texto) }
+            ? { backgroundColor: 'transparent', color: colores.boton, border: `2px solid ${colores.boton}` }
+            : { backgroundColor: colores.boton, color: textoSobre(colores.boton, colores.texto), border: '2px solid transparent' }
         ) : undefined}
       >
         {isFollowing ? 'SIGUIENDO' : 'SEGUIR'}
