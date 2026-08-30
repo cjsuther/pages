@@ -106,10 +106,13 @@ function CardsTemplate({ page }) {
                     const dateB = new Date(b.event_date + ' ' + (b.event_time || '00:00'));
                     return dateA - dateB;
                   }).map((link) => (
+                    // En un teléfono la tarjeta mide unos 156px: con el relleno
+                    // y el cuerpo de texto de siempre, el título se partía en
+                    // cuatro líneas.
                     <div
                       key={(link.is_collaborated ? 'c-' : '') + link.id}
                       onClick={() => setModalEvent(link)}
-                      className="rounded-lg p-6 shadow-md hover:shadow-xl transition cursor-pointer relative"
+                      className="rounded-lg p-4 sm:p-6 shadow-md hover:shadow-xl transition cursor-pointer relative"
                       style={tarjetaStyle}
                     >
                       <a
@@ -125,7 +128,7 @@ function CardsTemplate({ page }) {
                         alt={link.text}
                         className="w-full aspect-[1080/1350] object-cover rounded-lg mb-4"
                       />
-                      <h3 className="font-bold text-xl mb-2">{link.text}</h3>
+                      <h3 className="font-bold text-base sm:text-xl mb-2">{link.text}</h3>
                       {(link.event_date || link.event_time) && (
                         <p className="opacity-60">
                           🗓️ {link.event_date && new Date(link.event_date + ' ' + link.event_time).toLocaleDateString('es-AR', {
