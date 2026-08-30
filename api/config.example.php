@@ -54,7 +54,7 @@ define('PAYMENTS_ENCRYPTION_KEY', 'CAMBIA_ESTO_POR_UNA_CLAVE_LARGA_Y_ALEATORIA')
 // Sólo se aplica a las páginas que conectaron su cuenta por OAuth. Con un
 // access token pegado a mano la comisión se ignora, así que el alta manual
 // quedó deshabilitada.
-define('PLATFORM_FEE_PERCENT', 3);
+define('PLATFORM_FEE_PERCENT', 1.5);
 
 // Aplicación de marketplace, desde Mercado Pago -> Tus integraciones. Es la
 // cuenta a la que llega la comisión.

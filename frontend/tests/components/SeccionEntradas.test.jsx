@@ -181,16 +181,31 @@ describe('SeccionEntradas', () => {
     });
 
     /**
-     * Sin esto el dueño hace la cuenta con el 3% y no le cierra con lo que ve
-     * en su cuenta: Mercado Pago descuenta lo suyo aparte.
+     * Sin esto el dueño hace la cuenta sólo con nuestra comisión y no le cierra
+     * con lo que ve en su cuenta: Mercado Pago descuenta lo suyo aparte.
      */
-    it('avisa que Mercado Pago cobra su propia comisión', async () => {
-      await montar({ comision: 3 });
+    it('dice cuánto cobra Mercado Pago aparte', async () => {
+      await montar({ comision: 1.5 });
 
-      expect(screen.getByText(/Mercado Pago cobra su\s+propia comisión/)).toBeInTheDocument();
+      expect(screen.getByText(/Mercado Pago cobra\s+4,39%/)).toBeInTheDocument();
     });
 
-    it('manda a los costos de Mercado Pago en vez de inventar un número', async () => {
+    /** El porcentaje sin el plazo deja la mitad de la cuenta sin hacer. */
+    it('dice a los cuántos días se libera la plata', async () => {
+      await montar({ comision: 1.5 });
+
+      expect(screen.getByText(/libera\s+la plata a los 10 días de la compra/)).toBeInTheDocument();
+    });
+
+    // El porcentaje sale de la configuración del servidor y llega como número:
+    // sin formatear, un 1,5% se mostraba "1.5%".
+    it('escribe los decimales como se escriben acá', async () => {
+      await montar({ comision: 1.5 });
+
+      expect(screen.getByText(/Comisión de Rezonar: 1,5%/)).toBeInTheDocument();
+    });
+
+    it('manda a los costos de Mercado Pago para el detalle', async () => {
       await montar({ comision: 3 });
 
       expect(screen.getByRole('link', { name: /Costos/ }))
@@ -207,7 +222,7 @@ describe('SeccionEntradas', () => {
       await montar({ comision: 0 });
 
       expect(screen.queryByText(/Comisión de Rezonar/)).not.toBeInTheDocument();
-      expect(screen.queryByText(/Mercado Pago cobra su/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Mercado Pago cobra/)).not.toBeInTheDocument();
     });
   });
 

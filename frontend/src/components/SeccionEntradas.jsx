@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Check, AlertTriangle, Loader2, ExternalLink } from 'lucide-react';
+import { MP_PORCENTAJE, MP_DIAS_ACREDITACION, formatearPorcentaje } from '../utils/comisiones';
 
 /**
  * Sección del editor donde el dueño conecta su cuenta de Mercado Pago.
@@ -235,7 +236,7 @@ function SeccionEntradas({ pageId, apiUrl, token, emailContacto = '', onGuardarC
       {comision > 0 && (
         <div className="border border-gray-800 bg-black p-6 mb-6">
           <p className="text-sm text-gray-400 mb-2">
-            <strong className="text-white">Comisión de Rezonar: {comision}%</strong> de cada
+            <strong className="text-white">Comisión de Rezonar: {formatearPorcentaje(comision)}%</strong> de cada
             entrada vendida.
           </p>
           <p className="text-xs text-gray-600 mb-3">
@@ -245,13 +246,13 @@ function SeccionEntradas({ pageId, apiUrl, token, emailContacto = '', onGuardarC
             Las reservas sin costo no pagan nada.
           </p>
 
-          {/* Sin esto el dueño hace la cuenta con el 3% y no le cierra con lo
-              que ve en su cuenta de Mercado Pago. No se pone un número porque
-              varía según el plazo de acreditación y lo cambian cada tanto. */}
+          {/* Sin esto el dueño hace la cuenta sólo con nuestra comisión y no le
+              cierra con lo que ve en su cuenta. El porcentaje y el plazo van
+              juntos: en Mercado Pago uno depende del otro. */}
           <p className="text-xs text-gray-500 border-t border-gray-800 pt-3">
-            <strong className="text-gray-400">Aparte de esto, Mercado Pago cobra su
-            propia comisión</strong> por procesar el pago, que depende del plazo de
-            acreditación que tengas elegido. Podés verla en{' '}
+            <strong className="text-gray-400">Aparte de esto, Mercado Pago cobra{' '}
+            {formatearPorcentaje(MP_PORCENTAJE)}%</strong> por procesar el pago, y libera
+            la plata a los {MP_DIAS_ACREDITACION} días de la compra. Podés verlo en{' '}
             <a
               href="https://www.mercadopago.com.ar/costs-section/release-options"
               target="_blank"

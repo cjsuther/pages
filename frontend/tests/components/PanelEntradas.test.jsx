@@ -210,16 +210,36 @@ describe('PanelEntradas', () => {
     });
 
     /**
-     * Sin esto el dueño hace la cuenta con el 3% y no le cierra con lo que ve
-     * en su cuenta de Mercado Pago.
+     * Sin esto el dueño hace la cuenta sólo con nuestra comisión y no le cierra
+     * con lo que ve en su cuenta de Mercado Pago.
      */
-    it('avisa que Mercado Pago descuenta lo suyo aparte', async () => {
-      await montar({ comision: 3 });
+    it('dice cuánto descuenta Mercado Pago aparte', async () => {
+      await montar({ comision: 1.5 });
       activar();
 
       fireEvent.change(screen.getByLabelText('PRECIO POR ENTRADA'), { target: { value: '10000' } });
 
-      expect(screen.getByText(/Mercado Pago le descuenta aparte/)).toBeInTheDocument();
+      expect(screen.getByText(/descuenta aparte 4,39%/)).toBeInTheDocument();
+    });
+
+    /** Poner precio es decidir cuánto entra y cuándo: el plazo es parte. */
+    it('dice a los cuántos días se libera la plata', async () => {
+      await montar({ comision: 1.5 });
+      activar();
+
+      fireEvent.change(screen.getByLabelText('PRECIO POR ENTRADA'), { target: { value: '10000' } });
+
+      expect(screen.getByText(/a los 10 días\s+de la compra/)).toBeInTheDocument();
+    });
+
+    it('escribe los decimales de la comisión como se escriben acá', async () => {
+      await montar({ comision: 1.5 });
+      activar();
+
+      fireEvent.change(screen.getByLabelText('PRECIO POR ENTRADA'), { target: { value: '10000' } });
+
+      expect(screen.getByText(/comisión de Rezonar \(1,5%\)/)).toBeInTheDocument();
+      expect(screen.getByText(/9\.850/)).toBeInTheDocument();
     });
 
     it('una reserva sin costo no habla de comisiones', async () => {

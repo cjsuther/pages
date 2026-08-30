@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Loader2, AlertTriangle, Check } from 'lucide-react';
 import { formatearPrecio, esGratis } from '../utils/entradas';
+import { MP_PORCENTAJE, MP_DIAS_ACREDITACION, formatearPorcentaje } from '../utils/comisiones';
 
 /**
  * Configuración de venta de entradas de un evento, dentro del modal de edición.
@@ -156,15 +157,16 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio }) {
               {!esGratis(form.precio) && comision > 0 && cobros && cobros.admite_split && (
                 <>
                   <p className="text-xs text-emerald-400 mt-1">
-                    Menos la comisión de Rezonar ({comision}%):{' '}
+                    Menos la comisión de Rezonar ({formatearPorcentaje(comision)}%):{' '}
                     {formatearPrecio(form.precio * (100 - comision) / 100)} por entrada
                   </p>
-                  {/* No se pone un número: la comisión de Mercado Pago varía
-                      según el plazo de acreditación y la cambian cada tanto.
-                      Dar una cifra desactualizada sería peor que no darla. */}
+                  {/* El porcentaje y el plazo van juntos: en Mercado Pago uno
+                      depende del otro, y a la hora de poner un precio lo que
+                      importa es cuánto entra y cuándo. */}
                   <p className="text-xs text-gray-600 mt-1">
-                    A eso Mercado Pago le descuenta aparte su propia comisión, según
-                    el plazo de acreditación que tengas elegido.
+                    A eso Mercado Pago le descuenta aparte {formatearPorcentaje(MP_PORCENTAJE)}%
+                    por procesar el pago, y libera la plata a los {MP_DIAS_ACREDITACION} días
+                    de la compra.
                   </p>
                 </>
               )}
