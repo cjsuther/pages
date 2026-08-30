@@ -32,7 +32,8 @@ describe('FollowButton', () => {
       expect(boton).toHaveStyle({ backgroundColor: '#7c3aed' });
     });
 
-    it('siguiendo, el botón usa el mismo color de contorno', async () => {
+    /** Los dos estados se ven igual: los distingue la etiqueta, no la forma. */
+    it('siguiendo, el botón se ve igual que sin seguir', async () => {
       mockFetch({ 'pages/follow.php': { is_following: true } });
 
       renderConProviders(<FollowButton pageId={5} colores={paleta} />, {
@@ -40,8 +41,7 @@ describe('FollowButton', () => {
       });
 
       const boton = await screen.findByRole('button', { name: 'SIGUIENDO' });
-      expect(boton).toHaveStyle({ color: '#7c3aed' });
-      expect(boton.getAttribute('style')).toContain('124, 58, 237');
+      expect(boton).toHaveStyle({ backgroundColor: '#7c3aed' });
     });
 
     /** En el Home de Rezonar no llega paleta y conserva su estilo propio. */

@@ -116,15 +116,12 @@ function FollowButton({ pageId, colores = null }) {
               ? 'bg-gray-800 text-white hover:bg-gray-700'
               : 'bg-white text-black hover:bg-gray-200'
         }`}
-        style={colores ? (
-          // El color de botones se aplica en los dos estados: lo que cambia es
-          // cómo. Sin seguir es una invitación y va relleno; siguiendo ya está
-          // hecho y va de contorno, para que se distinga sin dejar de usar el
-          // color elegido.
-          isFollowing
-            ? { backgroundColor: 'transparent', color: colores.boton, border: `2px solid ${colores.boton}` }
-            : { backgroundColor: colores.boton, color: textoSobre(colores.boton, colores.texto), border: '2px solid transparent' }
-        ) : undefined}
+        style={colores ? {
+          // Los dos estados se ven igual: relleno con el color de botones. Lo
+          // que los distingue es la etiqueta —SEGUIR o SIGUIENDO—, no la forma.
+          backgroundColor: colores.boton,
+          color: textoSobre(colores.boton, colores.texto),
+        } : undefined}
       >
         {isFollowing ? 'SIGUIENDO' : 'SEGUIR'}
       </button>
