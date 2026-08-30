@@ -103,6 +103,43 @@ describe.each(PLANTILLAS)('%s', (nombre, Plantilla) => {
     });
   });
 
+  // El módulo de colores parte de que nada tiene color propio: todo sale del
+  // fondo y la tipografía que eligió la página. Un blanco clavado en el código
+  // dejó una página oscura ilegible —texto blanco sobre un velo blanco—, así
+  // que esto se comprueba en las cuatro.
+  describe('imagen de fondo', () => {
+    const oscura = () => pagina({
+      background_image: 'https://img/fondo.png',
+      background_color: '#070708',
+      text_color: '#ffffff',
+    });
+
+    // Ojo con mirar el style entero: ahí también está el color de la
+    // tipografía, que legítimamente es blanco. Lo que no puede ser blanco es
+    // el velo que va sobre la imagen.
+    it('no lava el fondo con un color ajeno a la paleta', () => {
+      const { container } = renderConProviders(<Plantilla page={oscura()} />);
+
+      expect(container.firstElementChild.style.backgroundImage)
+        .not.toMatch(/255,\s*255,\s*255/);
+    });
+
+    it('la imagen se sigue viendo', () => {
+      const { container } = renderConProviders(<Plantilla page={oscura()} />);
+
+      expect(container.firstElementChild.style.backgroundImage)
+        .toContain('https://img/fondo.png');
+    });
+
+    it('sin imagen de fondo queda el color de la página', () => {
+      const { container } = renderConProviders(
+        <Plantilla page={pagina({ background_color: '#070708' })} />
+      );
+
+      expect(container.firstElementChild).toHaveStyle({ backgroundColor: '#070708' });
+    });
+  });
+
   describe('cabecera', () => {
     it('muestra el título de la página', () => {
       renderConProviders(<Plantilla page={pagina()} />);

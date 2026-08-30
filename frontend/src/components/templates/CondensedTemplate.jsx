@@ -7,9 +7,12 @@ import BotonEntradas, { vendeEntradas } from '../BotonEntradas';
 import PrecioEvento from '../PrecioEvento';
 import RezonarBadge from '../RezonarBadge';
 import { MiniaturaGaleria, VisorGaleria } from '../MediaGaleria';
-import { superficie, borde } from '../../utils/colores';
+import { superficie, borde, conAlfa } from '../../utils/colores';
 import { ANCHO_COLUMNA } from '../../utils/plantillas';
 import { ExternalLink } from 'lucide-react';
+
+/** Cuánto tapa el velo a la imagen de fondo. Lo suficiente para leer encima. */
+const ALFA_VELO = 0.95;
 
 function CondensedTemplate({ page }) {
   const [modalImage, setModalImage] = useState(null);
@@ -19,9 +22,18 @@ function CondensedTemplate({ page }) {
   const primaryColor = page.primary_color || '#3b82f6';
   const backgroundImage = page.background_image;
 
+  // La imagen de fondo va detrás de un velo, si no la lista no se lee encima.
+  // El velo es el color de fondo de la página: estaba clavado en blanco, y en
+  // una página oscura —tipografía clara— dejaba texto blanco sobre casi blanco,
+  // con la página entera ilegible.
+  const velo = conAlfa(backgroundColor, ALFA_VELO);
+
   const backgroundStyle = backgroundImage
     ? {
-        backgroundImage: `linear-gradient(rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.95)), url(${backgroundImage})`,
+        backgroundColor,
+        backgroundImage: velo
+          ? `linear-gradient(${velo}, ${velo}), url(${backgroundImage})`
+          : `url(${backgroundImage})`,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
         backgroundAttachment: 'fixed',
