@@ -8,6 +8,7 @@ import PrecioEvento from '../PrecioEvento';
 import RezonarBadge from '../RezonarBadge';
 import { MiniaturaGaleria, VisorGaleria } from '../MediaGaleria';
 import { superficie, borde } from '../../utils/colores';
+import { ANCHO_COLUMNA } from '../../utils/plantillas';
 import { ExternalLink } from 'lucide-react';
 
 function ModernTemplate({ page }) {
@@ -46,32 +47,34 @@ function ModernTemplate({ page }) {
   return (
     <div className="min-h-screen" style={containerStyle}>
       <RezonarBadge />
-      <div className="max-w-7xl mx-auto px-6 py-20">
-        <div className="grid md:grid-cols-12 gap-12">
-          <div className="md:col-span-4">
-            <div className="md:sticky md:top-20 space-y-8">
-              {page.profile_image && (
-                <img
-                  src={page.profile_image}
-                  alt={page.title}
-                  className="w-full h-64 object-cover rounded-2xl"
-                />
+      <div className={`${ANCHO_COLUMNA} mx-auto px-6 py-20`}>
+        <div className="space-y-16">
+          {/* Antes esto era una barra lateral de 4 columnas con el contenido
+              al lado. En una columna angosta no hay costado: la portada pasa a
+              ser una banda ancha arriba de todo, que es lo que le da su
+              carácter a esta plantilla. */}
+          <div className="space-y-8">
+            {page.profile_image && (
+              <img
+                src={page.profile_image}
+                alt={page.title}
+                className="w-full h-64 object-cover rounded-2xl"
+              />
+            )}
+            <div>
+              <h1 className="text-4xl font-black tracking-tight mb-4">{page.title}</h1>
+              {page.description && (
+                <p className="text-lg opacity-70 leading-relaxed">{page.description}</p>
               )}
-              <div>
-                <h1 className="text-4xl font-black tracking-tight mb-4">{page.title}</h1>
-                {page.description && (
-                  <p className="text-lg opacity-70 leading-relaxed">{page.description}</p>
-                )}
-                <div className="flex flex-col gap-3 mt-6">
-                  <RedesSociales socials={page.socials} className="mb-1" />
-                  <FollowersPopup pageId={page.id} followerCount={page.follower_count || 0} />
-                  <FollowButton pageId={page.id} />
-                </div>
+              <div className="flex flex-col gap-3 mt-6">
+                <RedesSociales socials={page.socials} className="mb-1" />
+                <FollowersPopup pageId={page.id} followerCount={page.follower_count || 0} />
+                <FollowButton pageId={page.id} />
               </div>
             </div>
           </div>
 
-          <div className="md:col-span-8 space-y-16">
+          <div className="space-y-16">
             {page.groups?.map((group) => (
               <div key={group.id} className="space-y-8">
                 <h2 className="text-3xl font-black tracking-tight" style={{ color: primaryColor }}>
@@ -79,7 +82,7 @@ function ModernTemplate({ page }) {
                 </h2>
 
                 {group.type === 'galeria' ? (
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-2 gap-4">
                     {group.links?.map((link) => (
                       <div
                         key={link.id}
@@ -99,7 +102,7 @@ function ModernTemplate({ page }) {
                     ))}
                   </div>
                 ) : group.type === 'eventos' ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 gap-6">
                     {[...(group.links || []), ...(group.collaborated_events || [])].sort((a, b) => {
                       const dateA = new Date(a.event_date + ' ' + (a.event_time || '00:00'));
                       const dateB = new Date(b.event_date + ' ' + (b.event_time || '00:00'));

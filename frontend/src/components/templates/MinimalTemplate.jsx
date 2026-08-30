@@ -9,6 +9,7 @@ import PrecioEvento from '../PrecioEvento';
 import RezonarBadge from '../RezonarBadge';
 import { MiniaturaGaleria, VisorGaleria } from '../MediaGaleria';
 import { superficie, borde } from '../../utils/colores';
+import { ANCHO_COLUMNA } from '../../utils/plantillas';
 import { ExternalLink } from 'lucide-react';
 
 function MinimalTemplate({ page }) {
@@ -47,7 +48,7 @@ function MinimalTemplate({ page }) {
   return (
     <div className="min-h-screen py-16 px-6" style={containerStyle}>
       <RezonarBadge />
-      <div className="max-w-2xl mx-auto space-y-16">
+      <div className={`${ANCHO_COLUMNA} mx-auto space-y-16`}>
         {page.profile_image && (
           <div className="flex justify-center">
             <img
@@ -75,7 +76,7 @@ function MinimalTemplate({ page }) {
             <h2 className="text-2xl font-bold">{group.title}</h2>
 
             {group.type === 'galeria' ? (
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 {group.links?.map((link) => (
                   <div
                     key={link.id}
@@ -90,7 +91,7 @@ function MinimalTemplate({ page }) {
                 ))}
               </div>
             ) : group.type === 'eventos' ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 gap-6">
                 {[...(group.links || []), ...(group.collaborated_events || [])].sort((a, b) => {
                   const dateA = new Date(a.event_date + ' ' + (a.event_time || '00:00'));
                   const dateB = new Date(b.event_date + ' ' + (b.event_time || '00:00'));

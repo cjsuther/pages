@@ -59,17 +59,18 @@ function Cards({ fondo, texto, acento }) {
       <div className="rounded-full flex-shrink-0" style={{ width: 18, height: 18, backgroundColor: acento }} />
       <Linea ancho="60%" alto={4} color={texto} />
       <Linea ancho="40%" color={texto} opacidad={0.4} />
-      {/* Dos columnas de tarjetas con sombra. */}
-      <div className="w-full mt-1 grid grid-cols-2 gap-1.5">
-        {[0, 1, 2, 3, 4, 5].map((i) => (
+      {/* Tarjetas rellenas con sombra, una debajo de la otra. */}
+      <div className="w-full mt-1 space-y-1.5">
+        {[0, 1, 2, 3].map((i) => (
           <div
             key={i}
-            className="rounded flex items-center gap-1 p-1"
+            className="rounded flex items-center gap-1.5 p-1"
             style={{ backgroundColor: texto, opacity: 0.12, height: 18 }}
           >
-            <div className="rounded" style={{ width: 10, height: 10, backgroundColor: fondo }} />
+            <div className="rounded flex-shrink-0" style={{ width: 12, height: 12, backgroundColor: fondo }} />
             <div className="flex-1">
-              <Linea ancho="100%" alto={2} color={fondo} opacidad={1} />
+              <Linea ancho="70%" alto={3} color={fondo} opacidad={1} />
+              <Linea ancho="45%" alto={2} color={fondo} opacidad={0.7} margen={2} />
             </div>
           </div>
         ))}
@@ -80,24 +81,21 @@ function Cards({ fondo, texto, acento }) {
 
 function Modern({ fondo, texto, acento }) {
   return (
-    <div className="w-full h-full flex gap-1.5 p-2" style={{ backgroundColor: fondo }}>
-      {/* La única con el encabezado en una columna al costado. */}
-      <div className="flex flex-col gap-1" style={{ width: '34%' }}>
-        <div className="rounded-lg w-full flex-shrink-0" style={{ height: 22, backgroundColor: acento }} />
-        <Linea ancho="90%" alto={4} color={texto} />
-        <Linea ancho="70%" color={texto} opacidad={0.4} />
-        <Linea ancho="80%" color={texto} opacidad={0.4} />
-      </div>
-      <div className="flex-1 space-y-1.5">
-        <Linea ancho="50%" alto={4} color={texto} />
-        {[0, 1, 2, 3, 4].map((i) => (
+    <div className="w-full h-full flex flex-col gap-1.5 p-2" style={{ backgroundColor: fondo }}>
+      {/* La única que arranca con una portada ancha en vez de un avatar
+          redondo, y la única con el texto alineado a la izquierda. */}
+      <div className="rounded-lg w-full flex-shrink-0" style={{ height: 26, backgroundColor: acento }} />
+      <Linea ancho="70%" alto={5} color={texto} />
+      <Linea ancho="90%" color={texto} opacidad={0.4} />
+      <div className="w-full mt-1 space-y-1.5">
+        {[0, 1, 2, 3].map((i) => (
           <div
             key={i}
             className="rounded flex items-center gap-1 px-1"
-            style={{ border: `1px solid ${texto}`, opacity: 0.85, height: 14 }}
+            style={{ border: `1px solid ${texto}`, opacity: 0.85, height: 16 }}
           >
-            <div className="rounded" style={{ width: 8, height: 8, backgroundColor: acento }} />
-            <Linea ancho={i % 2 ? '45%' : '60%'} color={texto} />
+            <div className="rounded flex-shrink-0" style={{ width: 9, height: 9, backgroundColor: acento }} />
+            <Linea ancho={i % 2 ? '45%' : '65%'} alto={4} color={texto} />
           </div>
         ))}
       </div>

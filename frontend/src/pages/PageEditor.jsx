@@ -11,8 +11,8 @@ import MiniaturaPlantilla from '../components/MiniaturaPlantilla';
 /** Plantillas disponibles, en el orden en que se ofrecen. */
 const PLANTILLAS = [
   { clave: 'minimal',   nombre: 'Minimal',    descripcion: 'Limpio y centrado, un bloque por link' },
-  { clave: 'cards',     nombre: 'Cards',      descripcion: 'Tarjetas con sombra, de a dos' },
-  { clave: 'modern',    nombre: 'Modern',     descripcion: 'Encabezado en una columna al costado' },
+  { clave: 'cards',     nombre: 'Cards',      descripcion: 'Tarjetas con sombra y miniatura' },
+  { clave: 'modern',    nombre: 'Modern',     descripcion: 'Portada ancha arriba, texto a la izquierda' },
   { clave: 'condensed', nombre: 'Condensado', descripcion: 'Lista compacta de 2 líneas' },
 ];
 

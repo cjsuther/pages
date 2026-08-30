@@ -8,6 +8,7 @@ import PrecioEvento from '../PrecioEvento';
 import RezonarBadge from '../RezonarBadge';
 import { MiniaturaGaleria, VisorGaleria } from '../MediaGaleria';
 import { superficie, borde } from '../../utils/colores';
+import { ANCHO_COLUMNA } from '../../utils/plantillas';
 import { ExternalLink } from 'lucide-react';
 
 function CondensedTemplate({ page }) {
@@ -44,7 +45,7 @@ function CondensedTemplate({ page }) {
   return (
     <div className="min-h-screen" style={{ ...backgroundStyle, color: textColor }}>
       <RezonarBadge />
-      <div className="max-w-3xl mx-auto px-4 py-8 md:py-12">
+      <div className={`${ANCHO_COLUMNA} mx-auto px-4 py-8 md:py-12`}>
         <header className="text-center mb-8 md:mb-12">
           {page.profile_image && (
             <img

@@ -6,6 +6,7 @@ import ModernTemplate from '../../../src/components/templates/ModernTemplate';
 import CardsTemplate from '../../../src/components/templates/CardsTemplate';
 import CondensedTemplate from '../../../src/components/templates/CondensedTemplate';
 import { renderConProviders } from '../../helpers/render';
+import { ANCHO_COLUMNA } from '../../../src/utils/plantillas';
 
 /**
  * Las cuatro plantillas son intercambiables: reciben la misma página y deben
@@ -71,6 +72,35 @@ const evento = (overrides = {}) => ({
 describe.each(PLANTILLAS)('%s', (nombre, Plantilla) => {
   beforeEach(() => {
     window.gtag = vi.fn();
+  });
+
+  // Las páginas se ven siempre en formato mobile, también en una pantalla
+  // grande: por el teléfono entra casi todo el mundo, y así una página no se
+  // ve de dos maneras distintas.
+  describe('formato mobile', () => {
+    it('la columna no se ensancha en una pantalla grande', () => {
+      const { container } = renderConProviders(<Plantilla page={pagina()} />);
+
+      expect(container.querySelector(`[class*="${ANCHO_COLUMNA}"]`)).not.toBeNull();
+    });
+
+    // Los prefijos md: de Tailwind miran la ventana, no el contenedor: dentro
+    // de una columna angosta seguirían partiendo el contenido en dos.
+    it('no parte el contenido en columnas según el ancho de la ventana', () => {
+      const { container } = renderConProviders(
+        <Plantilla
+          page={pagina({
+            groups: [
+              grupoDeLinks([link(), link({ id: 101 })]),
+              { id: 30, title: 'Fotos', type: 'galeria', links: [{ id: 3, text: 'Foto', image_url: 'https://img/1.jpg' }] },
+            ],
+          })}
+        />
+      );
+
+      const conMd = [...container.querySelectorAll('[class*="md:grid-cols"], [class*="md:col-span"]')];
+      expect(conMd.map((n) => n.className)).toEqual([]);
+    });
   });
 
   describe('cabecera', () => {

@@ -8,6 +8,7 @@ import PrecioEvento from '../PrecioEvento';
 import RezonarBadge from '../RezonarBadge';
 import { MiniaturaGaleria, VisorGaleria } from '../MediaGaleria';
 import { superficie, borde } from '../../utils/colores';
+import { ANCHO_COLUMNA } from '../../utils/plantillas';
 import { ExternalLink } from 'lucide-react';
 
 function CardsTemplate({ page }) {
@@ -58,7 +59,7 @@ function CardsTemplate({ page }) {
   return (
     <div className="min-h-screen py-16 px-6" style={containerStyle}>
       <RezonarBadge />
-      <div className="max-w-5xl mx-auto">
+      <div className={`${ANCHO_COLUMNA} mx-auto`}>
         <div className="text-center mb-16">
           {page.profile_image && (
             <img
@@ -84,7 +85,7 @@ function CardsTemplate({ page }) {
               <h2 className="text-3xl font-bold mb-8 text-center">{group.title}</h2>
 
               {group.type === 'galeria' ? (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                <div className="grid grid-cols-2 gap-6">
                   {group.links?.map((link) => (
                     <div
                       key={link.id}
@@ -105,7 +106,7 @@ function CardsTemplate({ page }) {
                   ))}
                 </div>
               ) : group.type === 'eventos' ? (
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 gap-6">
                   {[...(group.links || []), ...(group.collaborated_events || [])].sort((a, b) => {
                     const dateA = new Date(a.event_date + ' ' + (a.event_time || '00:00'));
                     const dateB = new Date(b.event_date + ' ' + (b.event_time || '00:00'));
@@ -149,7 +150,7 @@ function CardsTemplate({ page }) {
                   ))}
                 </div>
               ) : (
-                <div className="grid md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 gap-6">
                   {group.links?.map((link) => (
                     <a
                       key={link.id}
