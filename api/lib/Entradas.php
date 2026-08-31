@@ -14,6 +14,14 @@
  */
 class Entradas
 {
+    /**
+     * Tope del listado de eventos con entradas.
+     *
+     * No es paginación: es una red. Una página con cientos de shows no puede
+     * mandarlos todos de una, y para llegar a uno viejo está el buscador.
+     */
+    const LIMITE_EVENTOS = 200;
+
     /** Minutos que se sostiene el cupo mientras la persona paga. */
     const MINUTOS_DE_RESERVA = 15;
 
@@ -488,6 +496,104 @@ class Entradas
                 'ventas_sin_dato' => $sinDato,
             ],
         ];
+    }
+
+    /**
+     * Eventos de una página que venden o vendieron entradas.
+     *
+     * Es el índice para llegar a las ventas sin pasar por el evento: quien
+     * administra la página muchas veces sabe el nombre del show o la fecha,
+     * pero no en qué grupo de contenido quedó cargado.
+     *
+     * Aparece un evento si tiene entradas configuradas o si alguna vez tuvo
+     * una compra. Lo segundo no es redundante: si el dueño apaga las entradas
+     * de un show que ya vendió, las ventas hechas tienen que seguir estando.
+     *
+     * Los totales son los mismos que muestra el panel de un evento —pagadas
+     * suman, reservadas vencidas no— para que el listado y el detalle no se
+     * contradigan.
+     *
+     * @param array $filtros texto (nombre del evento), desde y hasta (fechas ISO)
+     */
+    public static function eventosConEntradas($db, $pageId, array $filtros = [])
+    {
+        // Aparece si tiene entradas configuradas o si alguna vez tuvo una
+        // compra: apagar las entradas de un show vendido no puede esconder lo
+        // ya vendido.
+        $where = [
+            'lg.page_id = ?',
+            "lg.type = 'eventos'",
+            '(et.id IS NOT NULL OR v.link_id IS NOT NULL)',
+        ];
+        $params = [(int) $pageId];
+
+        $texto = isset($filtros['texto']) ? trim((string) $filtros['texto']) : '';
+
+        if ($texto !== '') {
+            $where[] = 'l.text LIKE ?';
+            // Escapamos los comodines: quien busca "100%" busca eso y no
+            // cualquier cosa que empiece con 100.
+            $params[] = '%' . addcslashes($texto, '%_\\') . '%';
+        }
+
+        foreach (['desde' => '>=', 'hasta' => '<='] as $clave => $comparador) {
+            $fecha = isset($filtros[$clave]) ? trim((string) $filtros[$clave]) : '';
+
+            if (self::esFechaIso($fecha)) {
+                $where[] = "l.event_date $comparador ?";
+                $params[] = $fecha;
+            }
+        }
+
+        // Las ventas se resumen aparte y se pegan por link_id. Agrupar en la
+        // consulta de afuera obligaría a listar cada columna del evento en el
+        // GROUP BY o a depender de que el servidor no tenga ONLY_FULL_GROUP_BY,
+        // que es una condición del entorno y no algo que podamos garantizar.
+        $stmt = $db->prepare('
+            SELECT l.id, l.text, l.event_date, l.event_time, l.event_address,
+                   et.activo, et.capacidad, et.precio, et.moneda,
+                   COALESCE(v.ordenes, 0)    AS ordenes,
+                   COALESCE(v.vendidas, 0)   AS vendidas,
+                   COALESCE(v.reservadas, 0) AS reservadas,
+                   COALESCE(v.recaudado, 0)  AS recaudado
+            FROM links l
+            JOIN link_groups lg ON l.group_id = lg.id
+            LEFT JOIN event_ticketing et ON et.link_id = l.id
+            LEFT JOIN (
+                SELECT link_id,
+                       COUNT(*) AS ordenes,
+                       SUM(CASE WHEN estado = \'pagada\' THEN cantidad END) AS vendidas,
+                       SUM(CASE WHEN estado = \'reservada\'
+                            AND (reserva_vence_en IS NULL OR reserva_vence_en > NOW())
+                            THEN cantidad END) AS reservadas,
+                       SUM(CASE WHEN estado = \'pagada\' THEN total END) AS recaudado
+                FROM ticket_orders
+                GROUP BY link_id
+            ) v ON v.link_id = l.id
+            WHERE ' . implode(' AND ', $where) . '
+            ORDER BY l.event_date DESC, l.id DESC
+            LIMIT ' . self::LIMITE_EVENTOS . '
+        ');
+        $stmt->execute($params);
+
+        $eventos = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        foreach ($eventos as $i => $evento) {
+            $eventos[$i]['activo'] = !empty($evento['activo']);
+            $eventos[$i]['capacidad'] = (int) $evento['capacidad'];
+            $eventos[$i]['ordenes'] = (int) $evento['ordenes'];
+            $eventos[$i]['vendidas'] = (int) $evento['vendidas'];
+            $eventos[$i]['reservadas'] = (int) $evento['reservadas'];
+            $eventos[$i]['recaudado'] = round((float) $evento['recaudado'], 2);
+        }
+
+        return $eventos;
+    }
+
+    /** Una fecha del filtro sirve sólo si es una fecha. */
+    private static function esFechaIso($fecha)
+    {
+        return (bool) preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $fecha);
     }
 
     // ------------------------------------------------------------ internos

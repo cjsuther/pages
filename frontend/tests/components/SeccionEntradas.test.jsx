@@ -356,4 +356,38 @@ describe('SeccionEntradas', () => {
       expect(onGuardarContacto).not.toHaveBeenCalled();
     });
   });
+
+  /**
+   * La configuración de cobros se toca una vez y las ventas se miran seguido.
+   * Apiladas, lo segundo quedaba debajo de todo lo primero.
+   */
+  describe('sub-solapas', () => {
+    it('abre en CONFIGURACIÓN', async () => {
+      await montar();
+
+      expect(screen.getByText(/Conectá tu cuenta de Mercado Pago/)).toBeInTheDocument();
+    });
+
+    it('desde VENTAS se llega al buscador de eventos', async () => {
+      await montar();
+
+      global.fetch.mockReturnValue(respuestaDe({ eventos: [] }));
+      fireEvent.click(screen.getByRole('button', { name: 'VENTAS' }));
+
+      expect(await screen.findByLabelText('Buscar por nombre del evento')).toBeInTheDocument();
+      expect(screen.queryByText(/Conectá tu cuenta de Mercado Pago/)).not.toBeInTheDocument();
+    });
+
+    /**
+     * Editar un evento desde las ventas y volver tiene que dejarte en VENTAS.
+     * Por eso la sub-solapa va en la URL, como la sección.
+     */
+    it('la sub-solapa abierta queda en la URL', async () => {
+      await montar({ ruta: '/page/5?s=entradas&e=ventas' });
+
+      global.fetch.mockReturnValue(respuestaDe({ eventos: [] }));
+
+      expect(await screen.findByLabelText('Buscar por nombre del evento')).toBeInTheDocument();
+    });
+  });
 });

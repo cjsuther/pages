@@ -264,6 +264,48 @@ class EntradasHandler
         return Response::ok($ventas);
     }
 
+    // --------------------------------------------------------------- eventos
+
+    /**
+     * Eventos de una página que venden o vendieron entradas.
+     *
+     * Es la puerta de entrada a las ventas desde la solapa Entradas: hasta
+     * ahora el único camino era abrir el evento en el editor de contenido, y
+     * para eso hay que acordarse en qué grupo quedó cargado. Acá se busca por
+     * nombre o por fecha.
+     *
+     * Devuelve totales, no compradores: los datos de contacto se piden después
+     * con ventas.php, evento por evento, como hasta ahora.
+     */
+    public static function eventos($db, Request $req)
+    {
+        if (!$req->user) {
+            return Response::unauthorized();
+        }
+
+        if ($req->method !== 'GET') {
+            return Response::methodNotAllowed();
+        }
+
+        $pageId = (int) $req->param('page_id');
+
+        if (!$pageId) {
+            return Response::error(400, 'page_id requerido');
+        }
+
+        if (!PageAccess::canManage($db, $pageId, $req->userId())) {
+            return Response::error(403, 'No podés ver las ventas de esta página');
+        }
+
+        return Response::ok([
+            'eventos' => Entradas::eventosConEntradas($db, $pageId, [
+                'texto' => $req->param('q', ''),
+                'desde' => $req->param('desde', ''),
+                'hasta' => $req->param('hasta', ''),
+            ]),
+        ]);
+    }
+
     // -------------------------------------------------------------- cancelar
 
     /**

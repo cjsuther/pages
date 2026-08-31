@@ -391,6 +391,124 @@ class EntradasHandlerTest extends HandlerTestCase
         $this->assertStringContainsString('Codigo,Nombre,Email', $r->raw, 'la primera fila son los encabezados');
     }
 
+    // --------------------------------------------------- eventos con ventas
+
+    private function hayEventosConEntradas()
+    {
+        $this->db->onSelect('FROM links l', [[
+            'id' => 100, 'text' => 'Corta la Semana', 'event_date' => '2026-09-02',
+            'event_time' => '21:00:00', 'event_address' => 'Humboldt 1574',
+            'activo' => 1, 'capacidad' => 80, 'precio' => '5000.00', 'moneda' => 'ARS',
+            'ordenes' => '4', 'vendidas' => '6', 'reservadas' => '2', 'recaudado' => '30000.00',
+        ]]);
+    }
+
+    public function testElListadoDeEventosExigeSesion()
+    {
+        $r = EntradasHandler::eventos($this->db, new Request('GET', [], ['page_id' => 5]));
+
+        $this->assertSame(401, $r->status);
+    }
+
+    public function testElListadoDeEventosExigePageId()
+    {
+        $r = EntradasHandler::eventos($this->db, new Request('GET', [], [], $this->sesion()));
+
+        $this->assertSame(400, $r->status);
+    }
+
+    /** El listado dice cuánto vendió cada show: no lo ve cualquiera. */
+    public function testUnExtranoNoPuedeVerLosEventosDeUnaPagina()
+    {
+        $this->db->onSelect('FROM pages', []);
+
+        $r = EntradasHandler::eventos($this->db, new Request('GET', [], ['page_id' => 5], $this->sesion()));
+
+        $this->assertSame(403, $r->status);
+    }
+
+    public function testElListadoTraeLosTotalesDeCadaEvento()
+    {
+        $this->puedeAdministrar();
+        $this->hayEventosConEntradas();
+
+        $r = EntradasHandler::eventos($this->db, new Request('GET', [], ['page_id' => 5], $this->sesion()));
+
+        $evento = $r->body['eventos'][0];
+        $this->assertSame('Corta la Semana', $evento['text']);
+        $this->assertSame(6, $evento['vendidas'], 'los totales llegan como número, no como texto');
+        $this->assertSame(2, $evento['reservadas']);
+        $this->assertSame(30000.0, $evento['recaudado']);
+        $this->assertTrue($evento['activo']);
+    }
+
+    public function testSePuedeBuscarPorNombre()
+    {
+        $this->puedeAdministrar();
+        $this->hayEventosConEntradas();
+
+        EntradasHandler::eventos($this->db,
+            new Request('GET', [], ['page_id' => 5, 'q' => 'Corta'], $this->sesion()));
+
+        $this->assertContains('%Corta%', $this->db->paramsFor('FROM links l'));
+    }
+
+    /**
+     * Quien busca "100%" busca eso. Sin escapar, el % del texto es el comodín
+     * de LIKE y la búsqueda trae cualquier cosa que empiece con 100.
+     */
+    public function testLosComodinesDelTextoNoSonComodines()
+    {
+        $this->puedeAdministrar();
+        $this->hayEventosConEntradas();
+
+        EntradasHandler::eventos($this->db,
+            new Request('GET', [], ['page_id' => 5, 'q' => '100%'], $this->sesion()));
+
+        $this->assertContains('%100\%%', $this->db->paramsFor('FROM links l'));
+    }
+
+    public function testSePuedeBuscarPorRangoDeFechas()
+    {
+        $this->puedeAdministrar();
+        $this->hayEventosConEntradas();
+
+        EntradasHandler::eventos($this->db, new Request('GET', [],
+            ['page_id' => 5, 'desde' => '2026-09-01', 'hasta' => '2026-09-30'], $this->sesion()));
+
+        $params = $this->db->paramsFor('FROM links l');
+        $this->assertContains('2026-09-01', $params);
+        $this->assertContains('2026-09-30', $params);
+    }
+
+    /** Una fecha que no es una fecha se ignora en vez de romper la consulta. */
+    public function testUnaFechaInvalidaNoLlegaALaConsulta()
+    {
+        $this->puedeAdministrar();
+        $this->hayEventosConEntradas();
+
+        EntradasHandler::eventos($this->db,
+            new Request('GET', [], ['page_id' => 5, 'desde' => 'ayer'], $this->sesion()));
+
+        $sql = $this->db->callsFor('FROM links l')[0]['sql'];
+        $this->assertStringNotContainsString('event_date >=', $sql);
+    }
+
+    /**
+     * Si el dueño apaga las entradas de un show que ya vendió, las ventas
+     * hechas tienen que seguir apareciendo.
+     */
+    public function testUnEventoSinEntradasPeroConVentasSigueApareciendo()
+    {
+        $this->puedeAdministrar();
+        $this->hayEventosConEntradas();
+
+        EntradasHandler::eventos($this->db, new Request('GET', [], ['page_id' => 5], $this->sesion()));
+
+        $sql = $this->db->callsFor('FROM links l')[0]['sql'];
+        $this->assertStringContainsString('et.id IS NOT NULL OR v.link_id IS NOT NULL', $sql);
+    }
+
     // ------------------------------------------------------------ csv seguro
 
     /** Un nombre con coma partiría la fila en dos columnas. */
