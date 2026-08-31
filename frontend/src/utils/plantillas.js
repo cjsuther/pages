@@ -15,6 +15,9 @@ import { borde, alrededor } from './colores';
  */
 export const ANCHO_COLUMNA = 'max-w-[580px]';
 
+/** Los mismos 580, en número, para lo que no se puede expresar con clases. */
+const ANCHO_CAJA_PX = 580;
+
 /**
  * Clases de la caja donde vive el contenido.
  *
@@ -46,12 +49,14 @@ export const CLASES_ALREDEDOR = 'min-h-screen sm:py-8';
  * se derramaba por todos lados y el contenido flotaba encima sin forma. Ahora
  * queda contenido en el recuadro.
  *
- * La imagen ocupa el ancho de la caja y se apoya arriba, conservando su
- * proporción. Así se ve entera y del mismo tamaño en cualquier página: antes se
- * estiraba para cubrir todo el alto, y cuanto más contenido tenía la página más
- * se agrandaba, hasta quedar irreconocible.
+ * La imagen ocupa el ancho de la caja, se apoya arriba y queda quieta mientras
+ * se scrollea, para que no se pierda de vista en una página larga.
  *
- * Debajo de donde termina la imagen sigue el color de fondo.
+ * Quedarse quieta es `fixed`, y ahí hay una trampa: con `fixed` el fondo se
+ * dimensiona contra la ventana, no contra la caja. Por eso el ancho va en
+ * píxeles y no en porcentaje —un 100% serían 1920 en una computadora y se
+ * vería apenas una franja central—, y el `min` con 100vw es para el teléfono,
+ * donde la caja es más angosta que 580.
  */
 export function estiloDeCaja({ backgroundColor, backgroundImage, textColor }) {
   return {
@@ -59,11 +64,10 @@ export function estiloDeCaja({ backgroundColor, backgroundImage, textColor }) {
     borderColor: borde(textColor) || 'transparent',
     ...(backgroundImage && {
       backgroundImage: `url(${backgroundImage})`,
-      // Ancho completo y alto proporcional: la imagen no se recorta ni se
-      // deforma, y se ve igual tenga la página dos links o veinte.
-      backgroundSize: '100% auto',
+      backgroundSize: `min(${ANCHO_CAJA_PX}px, 100vw) auto`,
       backgroundPosition: 'top center',
       backgroundRepeat: 'no-repeat',
+      backgroundAttachment: 'fixed',
     }),
   };
 }
