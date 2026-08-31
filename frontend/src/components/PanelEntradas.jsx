@@ -4,11 +4,18 @@ import { formatearPrecio, esGratis } from '../utils/entradas';
 import { formatearPorcentaje } from '../utils/comisiones';
 
 /**
- * Configuración de venta de entradas de un evento, dentro del modal de edición.
+ * Cómo se consiguen las entradas de un evento.
+ *
+ * Es una sola decisión con dos respuestas posibles, y por eso se pregunta así
+ * y no con una casilla: o las entradas se venden en otro lado y lo único que
+ * hace falta es el link, o las vende Rezonar y hay que decir cuántas hay, a
+ * cuánto y cuántas puede llevar cada uno. Antes el link vivía en DATOS y la
+ * venta interna acá, así que la decisión no estaba en ninguna pantalla: se
+ * deducía de qué campos habían quedado cargados.
  *
  * Un precio de 0 es una reserva sin cobro y no necesita Mercado Pago.
  */
-function PanelEntradas({ linkId, apiUrl, token, onCambio }) {
+function PanelEntradas({ linkId, apiUrl, token, onCambio, enlace = null, onGuardarEnlace = null }) {
   const [config, setConfig] = useState(null);
   const [cobros, setCobros] = useState(null);
   const [ocupadas, setOcupadas] = useState(0);
@@ -18,12 +25,23 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio }) {
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState(null);
   const [guardado, setGuardado] = useState(false);
-  const [form, setForm] = useState({ activo: false, capacidad: 100, precio: 0, max_por_compra: 10 });
+  const [modo, setModo] = useState('externo');
+  const [form, setForm] = useState({ capacidad: 100, precio: 0, max_por_compra: 10 });
+  const [link, setLink] = useState({ url: '', url_text: '' });
 
   const cabeceras = {
     'Content-Type': 'application/json',
     Authorization: `Bearer ${token}`,
   };
+
+  useEffect(() => {
+    if (enlace) {
+      setLink({ url: enlace.url || '', url_text: enlace.url_text || '' });
+    }
+    // Sólo para arrancar con lo que ya tenía el evento: mientras se edita, el
+    // campo manda. Sin esto, guardar el link lo pisaría con el valor viejo.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkId]);
 
   useEffect(() => {
     let vigente = true;
@@ -43,11 +61,16 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio }) {
 
         if (cuerpo.entradas) {
           setForm({
-            activo: !!Number(cuerpo.entradas.activo),
             capacidad: Number(cuerpo.entradas.capacidad),
             precio: Number(cuerpo.entradas.precio),
             max_por_compra: Number(cuerpo.entradas.max_por_compra),
           });
+
+          // La venta interna prendida es la que manda: es la que decide qué ve
+          // el público, que con ella activa ni mira el link.
+          if (Number(cuerpo.entradas.activo)) {
+            setModo('interno');
+          }
         }
       } catch (e) {
         if (vigente) setError('No pudimos cargar la configuración');
@@ -66,28 +89,59 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio }) {
     setError(null);
   };
 
+  const cambiarLink = (campo, valor) => {
+    setLink((previo) => ({ ...previo, [campo]: valor }));
+    setGuardado(false);
+    setError(null);
+  };
+
+  const elegirModo = (cual) => {
+    setModo(cual);
+    setGuardado(false);
+    setError(null);
+  };
+
+  /** Guarda la configuración de venta interna. `activo` sale del modo elegido. */
+  const guardarEntradas = async (activo) => {
+    const r = await fetch(`${apiUrl}/entradas/evento.php?link_id=${linkId}`, {
+      method: 'POST',
+      headers: cabeceras,
+      body: JSON.stringify({ ...form, activo }),
+    });
+    const cuerpo = await r.json();
+
+    if (!r.ok) {
+      throw new Error(cuerpo.error || 'No se pudo guardar');
+    }
+
+    setConfig(cuerpo.entradas);
+    if (onCambio) onCambio(cuerpo.entradas);
+  };
+
   const guardar = async () => {
     setGuardando(true);
     setError(null);
 
     try {
-      const r = await fetch(`${apiUrl}/entradas/evento.php?link_id=${linkId}`, {
-        method: 'POST',
-        headers: cabeceras,
-        body: JSON.stringify(form),
-      });
-      const cuerpo = await r.json();
+      if (modo === 'interno') {
+        await guardarEntradas(true);
+      } else {
+        if (onGuardarEnlace) {
+          await onGuardarEnlace(link);
+        }
 
-      if (!r.ok) {
-        setError(cuerpo.error || 'No se pudo guardar');
-        return;
+        // Apagar la venta interna es parte de elegir "en otro lado": si queda
+        // prendida, el detalle del evento sigue ofreciendo el botón de compra
+        // y el link no se ve nunca. Se apaga después de guardar el link, para
+        // no dejar al evento sin ninguna de las dos cosas si eso falla.
+        if (config && Number(config.activo)) {
+          await guardarEntradas(false);
+        }
       }
 
-      setConfig(cuerpo.entradas);
       setGuardado(true);
-      if (onCambio) onCambio(cuerpo.entradas);
     } catch (e) {
-      setError('No pudimos conectarnos al servidor');
+      setError(e.message || 'No pudimos conectarnos al servidor');
     } finally {
       setGuardando(false);
     }
@@ -103,22 +157,66 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio }) {
 
   return (
     <div className="space-y-6">
-      <label className="flex items-start gap-3 cursor-pointer">
-        <input
-          type="checkbox"
-          checked={form.activo}
-          onChange={(e) => cambiar('activo', e.target.checked)}
-          className="mt-1"
-        />
-        <span>
-          <span className="block text-white font-bold">Vender entradas para este evento</span>
-          <span className="block text-sm text-gray-500">
-            En el detalle del evento se muestra el botón de compra en lugar del link.
-          </span>
-        </span>
-      </label>
+      <fieldset>
+        <legend className="text-sm font-bold text-gray-400 mb-3 tracking-wide">
+          ¿DÓNDE SE CONSIGUEN LAS ENTRADAS?
+        </legend>
 
-      {form.activo && (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <OpcionDeModo
+            valor="externo"
+            elegido={modo}
+            onElegir={elegirModo}
+            titulo="En otro lado"
+            detalle="El evento muestra un link a donde se venden."
+          />
+          <OpcionDeModo
+            valor="interno"
+            elegido={modo}
+            onElegir={elegirModo}
+            titulo="Acá, con Rezonar"
+            detalle="El evento muestra el botón de compra o reserva."
+          />
+        </div>
+      </fieldset>
+
+      {modo === 'externo' && (
+        <>
+          <div>
+            <label htmlFor="entradas-link" className="block text-sm font-bold text-gray-400 mb-2 tracking-wide">
+              LINK (OPCIONAL)
+            </label>
+            <input
+              id="entradas-link"
+              type="url"
+              value={link.url}
+              onChange={(e) => cambiarLink('url', e.target.value)}
+              placeholder="https://..."
+              className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+            />
+            <p className="text-xs text-gray-600 mt-1">
+              A dónde mandar a quien quiera la entrada. Sin link, el evento se
+              muestra igual pero sin botón.
+            </p>
+          </div>
+
+          <div>
+            <label htmlFor="entradas-texto-boton" className="block text-sm font-bold text-gray-400 mb-2 tracking-wide">
+              TEXTO DEL BOTÓN (OPCIONAL)
+            </label>
+            <input
+              id="entradas-texto-boton"
+              type="text"
+              value={link.url_text}
+              onChange={(e) => cambiarLink('url_text', e.target.value)}
+              placeholder="Más información"
+              className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+            />
+          </div>
+        </>
+      )}
+
+      {modo === 'interno' && (
         <>
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -226,6 +324,16 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio }) {
         </>
       )}
 
+      {/* Cambiar de "acá" a "en otro lado" apaga la venta, no la borra: lo
+          vendido sigue estando y se puede volver a prender sin recargar nada. */}
+      {modo === 'externo' && config && Number(config.activo) > 0 && (
+        <p className="flex items-start gap-2 text-amber-400 text-sm bg-amber-950 border border-amber-900 px-4 py-3">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+          Al guardar se deja de vender por Rezonar. Lo ya vendido no se toca y
+          lo seguís viendo en VENTAS.
+        </p>
+      )}
+
       {error && (
         <p className="text-sm text-red-400 bg-red-950 border border-red-900 px-4 py-3">{error}</p>
       )}
@@ -249,6 +357,38 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio }) {
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Una de las dos respuestas posibles.
+ *
+ * Es un radio de verdad y no un botón: son opciones excluyentes de una misma
+ * pregunta, y así se puede elegir con el teclado y un lector de pantalla lo
+ * lee como lo que es.
+ */
+function OpcionDeModo({ valor, elegido, onElegir, titulo, detalle }) {
+  const activo = elegido === valor;
+
+  return (
+    <label
+      className={`flex items-start gap-3 border p-4 cursor-pointer transition ${
+        activo ? 'border-white bg-black' : 'border-gray-800 hover:border-gray-600'
+      }`}
+    >
+      <input
+        type="radio"
+        name="modo-de-entradas"
+        value={valor}
+        checked={activo}
+        onChange={() => onElegir(valor)}
+        className="mt-1"
+      />
+      <span>
+        <span className="block text-white font-bold">{titulo}</span>
+        <span className="block text-sm text-gray-500">{detalle}</span>
+      </span>
+    </label>
   );
 }
 

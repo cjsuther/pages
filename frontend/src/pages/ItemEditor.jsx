@@ -128,6 +128,33 @@ function ItemEditor() {
     if (tipo === 'imagen') setItem({ ...item, embed_url: '' });
   };
 
+  /**
+   * Guarda el link del evento sin salir de la pantalla.
+   *
+   * El guardar de DATOS vuelve a la página al terminar, que es lo que se
+   * espera de un formulario que se completa una vez. Acá no: se está eligiendo
+   * cómo se venden las entradas y la pantalla tiene que seguir donde está.
+   */
+  const guardarEnlace = async ({ url, url_text }) => {
+    const actualizado = { ...item, url, url_text };
+
+    const r = await fetch(`${apiUrl}/links/detail.php?id=${item.id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(actualizado)
+    });
+
+    if (!r.ok) {
+      const cuerpo = await r.json().catch(() => ({}));
+      throw new Error(cuerpo.error || 'No se pudo guardar el link');
+    }
+
+    setItem(actualizado);
+  };
+
   const guardar = async (e) => {
     e.preventDefault();
 
@@ -306,7 +333,13 @@ function ItemEditor() {
         )}
 
         {tab === 'entradas' && group.type === 'eventos' && (
-          <PanelEntradas linkId={item.id} apiUrl={apiUrl} token={token} />
+          <PanelEntradas
+            linkId={item.id}
+            apiUrl={apiUrl}
+            token={token}
+            enlace={{ url: item.url, url_text: item.url_text }}
+            onGuardarEnlace={guardarEnlace}
+          />
         )}
 
         {tab === 'ventas' && group.type === 'eventos' && (
@@ -329,29 +362,7 @@ function ItemEditor() {
                   required
                 />
               </div>
-              {group.type === 'eventos' ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
-                  <div>
-                    <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">URL (OPCIONAL)</label>
-                    <input
-                      type="url"
-                      value={item.url || ''}
-                      onChange={(e) => setItem({ ...item, url: e.target.value })}
-                      className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">TEXTO DEL BOTÓN (OPCIONAL)</label>
-                    <input
-                      type="text"
-                      value={item.url_text || ''}
-                      onChange={(e) => setItem({ ...item, url_text: e.target.value })}
-                      placeholder="Más información"
-                      className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
-                    />
-                  </div>
-                </div>
-              ) : (
+              {group.type === 'eventos' ? null : (
                 <div>
                   <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">URL</label>
                   <input

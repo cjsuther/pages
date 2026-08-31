@@ -58,6 +58,7 @@ function mockearApi({ page = conItem(), results = [] } = {}) {
     'collaborations/detail.php': { message: 'ok' },
     'public/search.php': { results },
     'upload/image.php': { url: 'https://img/subida.png' },
+    'entradas/evento.php': { entradas: null, cobros: { configurado: false }, ocupadas: 0, comision: 0 },
   });
 }
 
@@ -174,8 +175,11 @@ describe('ItemEditor', () => {
       });
     });
 
-    // El texto del botón sólo se ofrece en los grupos de eventos.
-    it('permite editar el texto del botón de la URL de un evento', async () => {
+    /**
+     * El link de un evento y su texto viven en la solapa ENTRADAS: en un evento
+     * son cómo se consiguen las entradas, y esa decisión está entera ahí.
+     */
+    it('permite editar el link y su texto desde ENTRADAS', async () => {
       const { llamadas } = await render({
         page: conItem(
           { url: 'https://x.com', event_latitude: '-34.6', event_longitude: '-58.4' },
@@ -183,17 +187,28 @@ describe('ItemEditor', () => {
         ),
       });
 
-      fireEvent.change(screen.getByPlaceholderText('Más información'), {
+      fireEvent.click(screen.getByRole('button', { name: 'ENTRADAS' }));
+
+      fireEvent.change(await screen.findByLabelText('TEXTO DEL BOTÓN (OPCIONAL)'), {
         target: { value: 'Comprar' },
       });
-
-      // El formulario del evento tiene campos obligatorios que el fixture deja
-      // vacíos; se envía directamente para llegar al handler.
-      fireEvent.submit(screen.getByRole('button', { name: 'GUARDAR' }).closest('form'));
+      fireEvent.click(screen.getByRole('button', { name: 'GUARDAR ENTRADAS' }));
 
       await waitFor(() => {
         expect(cuerpoDe(put(llamadas, 'links/detail.php'))).toMatchObject({ url_text: 'Comprar' });
       });
+    });
+
+    /** El link del evento ya no está en DATOS: estaba en dos lugares a la vez. */
+    it('DATOS ya no pide el link de un evento', async () => {
+      await render({
+        page: conItem(
+          { url: 'https://x.com', event_latitude: '-34.6', event_longitude: '-58.4' },
+          'eventos'
+        ),
+      });
+
+      expect(screen.queryByPlaceholderText('Más información')).not.toBeInTheDocument();
     });
 
     it('un evento sin coordenadas no se puede guardar', async () => {
