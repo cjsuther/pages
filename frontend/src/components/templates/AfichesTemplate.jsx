@@ -144,10 +144,11 @@ function AfichesTemplate({ page }) {
                       <a
                         href={`/evento/${link.id}`}
                         onClick={e => e.stopPropagation()}
-                        className="absolute top-3 right-3 p-1.5 rounded-full bg-black bg-opacity-30 text-white hover:bg-opacity-50 transition z-10"
+                        className="absolute top-4 right-4 p-2 rounded-full shadow-md transition hover:scale-110 z-10"
+                        style={{ backgroundColor: colores.acento, color: textoSobre(colores.acento, colores.texto) }}
                         title="Ver enlace directo"
                       >
-                        <ExternalLink className="w-3.5 h-3.5" />
+                        <ExternalLink className="w-4 h-4" />
                       </a>
                       <img
                         src={link.image_url ?? 'https://images.pexels.com/photos/1190298/pexels-photo-1190298.jpeg?auto=compress&cs=tinysrgb&w=800'}

@@ -7,7 +7,7 @@ import BotonEntradas, { vendeEntradas } from '../BotonEntradas';
 import PrecioEvento from '../PrecioEvento';
 import RezonarBadge from '../RezonarBadge';
 import { MiniaturaGaleria, VisorGaleria } from '../MediaGaleria';
-import { paleta } from '../../utils/colores';
+import { textoSobre, paleta } from '../../utils/colores';
 import { CLASES_ALREDEDOR, CLASES_CAJA, estiloDeAlrededor, estiloDeCaja } from '../../utils/plantillas';
 import { ExternalLink } from 'lucide-react';
 
@@ -135,6 +135,9 @@ function CondensedTemplate({ page }) {
                           className="absolute left-2 w-12 h-12 object-cover rounded-full"
                         />
                       )}
+                      {/* Sin "Organiza" ni "Colabora": la fila queda de una
+                          línea y la lista se lee de un vistazo, que es el punto
+                          de esta plantilla. El dato sigue en el detalle. */}
                       <div className="flex-1 min-w-0 text-center">
                         <div className="font-semibold">{link.text}</div>
                         {(link.event_date || link.event_time) && (
@@ -150,12 +153,12 @@ function CondensedTemplate({ page }) {
                             })}
                           </div>
                         )}
-                        <EventCollaborators event={link} currentPageId={page.id} color={primaryColor} />
                       </div>
                       <a
                         href={`/evento/${link.id}`}
                         onClick={e => e.stopPropagation()}
-                        className="absolute right-4 p-1.5 opacity-40 hover:opacity-80 transition"
+                        className="absolute right-3 p-2 rounded-full shadow-md transition hover:scale-110"
+                        style={{ backgroundColor: colores.acento, color: textoSobre(colores.acento, colores.texto) }}
                         title="Ver enlace directo"
                       >
                         <ExternalLink className="w-4 h-4" />

@@ -7,7 +7,7 @@ import BotonEntradas, { vendeEntradas } from '../BotonEntradas';
 import PrecioEvento from '../PrecioEvento';
 import RezonarBadge from '../RezonarBadge';
 import { MiniaturaGaleria, VisorGaleria } from '../MediaGaleria';
-import { paleta } from '../../utils/colores';
+import { textoSobre, paleta } from '../../utils/colores';
 import { CLASES_ALREDEDOR, CLASES_CAJA, estiloDeAlrededor, estiloDeCaja } from '../../utils/plantillas';
 import { ExternalLink } from 'lucide-react';
 
@@ -116,10 +116,11 @@ function ModernTemplate({ page }) {
                         <a
                           href={`/evento/${link.id}`}
                           onClick={e => e.stopPropagation()}
-                          className="absolute top-2 right-2 p-1.5 rounded-full bg-white bg-opacity-10 hover:bg-opacity-20 transition z-10"
+                          className="absolute top-3 right-3 p-2 rounded-full shadow-md transition hover:scale-110 z-10"
+                        style={{ backgroundColor: colores.acento, color: textoSobre(colores.acento, colores.texto) }}
                           title="Ver enlace directo"
                         >
-                          <ExternalLink className="w-3.5 h-3.5" />
+                          <ExternalLink className="w-4 h-4" />
                         </a>
                         <img
                           src={link.image_url ?? 'https://images.pexels.com/photos/1190298/pexels-photo-1190298.jpeg?auto=compress&cs=tinysrgb&w=800'}
