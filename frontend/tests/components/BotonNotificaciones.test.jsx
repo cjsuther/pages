@@ -8,9 +8,20 @@ import * as push from '../../src/utils/pushNotifications';
 const conSesion = () => crearAuth({ token: 'tok-123', user: usuarioDePrueba() });
 const sinSesion = () => crearAuth({ token: null, user: null });
 
+const UA = {
+  telefono: 'Mozilla/5.0 (Linux; Android 14; SM-A546E) Chrome/126.0 Mobile Safari/537.36',
+  escritorio: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/126.0 Safari/537.36',
+};
+
+const conUA = (ua) =>
+  Object.defineProperty(navigator, 'userAgent', { value: ua, configurable: true });
+
 describe('BotonNotificaciones', () => {
   beforeEach(() => {
     global.fetch = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
+    // Un teléfono por defecto: en una computadora la campana no se muestra,
+    // porque las notificaciones no se llegan a activar ahí.
+    conUA(UA.telefono);
   });
 
   afterEach(() => {
@@ -25,6 +36,19 @@ describe('BotonNotificaciones', () => {
 
     return vista;
   };
+
+  /**
+   * La campana existe sólo para ofrecer las notificaciones. En una computadora
+   * no se llegan a activar, así que ofrecerlas es abrir un cartel que explica
+   * dos pasos y no tiene ningún botón debajo.
+   */
+  it('no aparece en una computadora', async () => {
+    conUA(UA.escritorio);
+
+    const { container } = await montar();
+
+    await waitFor(() => expect(container).toBeEmptyDOMElement());
+  });
 
   it('invita a activarlas cuando todavía no lo están', async () => {
     await montar();

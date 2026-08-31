@@ -27,7 +27,9 @@ function conUA(ua) {
  * @param suscrito   si ya hay una suscripción activa
  */
 function prepararEntorno({
-  ua = UA.escritorio,
+  // Un teléfono por defecto: en una computadora el componente no dibuja nada,
+  // porque las notificaciones no se llegan a activar ahí.
+  ua = UA.samsung,
   instalada = false,
   soporta = true,
   permiso = 'default',
@@ -81,6 +83,30 @@ function mockearApi() {
 }
 
 describe('ActivarNotificaciones', () => {
+
+  /**
+   * En una computadora las notificaciones no se llegan a activar, así que no se
+   * ofrece nada: un botón que no funciona es peor que ninguno, y una tarjeta
+   * explicando que acá no se puede es ruido en la pantalla.
+   */
+  describe('en una computadora', () => {
+    it('no muestra nada', async () => {
+      prepararEntorno({ ua: UA.escritorio, instalada: false });
+
+      const { container } = renderConProviders(<ActivarNotificaciones />, { auth: autenticado() });
+
+      await waitFor(() => expect(container).toBeEmptyDOMElement());
+    });
+
+    /** Quien ya las tenga activadas desde antes tiene que poder desactivarlas. */
+    it('si ya están activadas, deja desactivarlas', async () => {
+      prepararEntorno({ ua: UA.escritorio, instalada: false, suscrito: true });
+
+      renderConProviders(<ActivarNotificaciones />, { auth: autenticado() });
+
+      expect(await screen.findByText('Notificaciones activadas')).toBeInTheDocument();
+    });
+  });
   beforeEach(() => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     mockearApi();
@@ -238,7 +264,7 @@ describe('ActivarNotificaciones', () => {
 
   describe('activación', () => {
     it('registra la suscripción y confirma', async () => {
-      prepararEntorno({ ua: UA.escritorio, instalada: true });
+      prepararEntorno({ ua: UA.samsung, instalada: true });
       const { llamadas } = mockearApi();
 
       renderConProviders(<ActivarNotificaciones />, { auth: autenticado() });
@@ -250,7 +276,7 @@ describe('ActivarNotificaciones', () => {
     });
 
     it('avisa si el usuario rechaza el permiso', async () => {
-      prepararEntorno({ ua: UA.escritorio, instalada: true });
+      prepararEntorno({ ua: UA.samsung, instalada: true });
       window.Notification.requestPermission = vi.fn(() => Promise.resolve('denied'));
 
       renderConProviders(<ActivarNotificaciones />, { auth: autenticado() });
@@ -261,7 +287,7 @@ describe('ActivarNotificaciones', () => {
     });
 
     it('avisa si el servidor falla', async () => {
-      prepararEntorno({ ua: UA.escritorio, instalada: true });
+      prepararEntorno({ ua: UA.samsung, instalada: true });
       global.fetch = vi.fn((url) =>
         Promise.resolve(
           String(url).includes('vapid') ? respuesta(200, { public_key: 'aGVsbG8' }) : respuesta(500, {})
@@ -280,7 +306,7 @@ describe('ActivarNotificaciones', () => {
 
   describe('cuando ya está activado', () => {
     it('lo indica y ofrece desactivar', async () => {
-      prepararEntorno({ ua: UA.escritorio, instalada: true, suscrito: true });
+      prepararEntorno({ ua: UA.samsung, instalada: true, suscrito: true });
 
       renderConProviders(<ActivarNotificaciones />, { auth: autenticado() });
 
@@ -309,7 +335,7 @@ describe('ActivarNotificaciones', () => {
     });
 
     it('desactiva la suscripción', async () => {
-      prepararEntorno({ ua: UA.escritorio, instalada: true, suscrito: true });
+      prepararEntorno({ ua: UA.samsung, instalada: true, suscrito: true });
 
       renderConProviders(<ActivarNotificaciones />, { auth: autenticado() });
 

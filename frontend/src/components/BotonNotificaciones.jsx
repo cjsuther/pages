@@ -2,6 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { Bell, X } from 'lucide-react';
 import { AuthContext } from '../App';
 import { estaSuscrito } from '../utils/pushNotifications';
+import { diagnosticar, PASOS } from '../utils/pwa';
 import ActivarNotificaciones from './ActivarNotificaciones';
 
 /**
@@ -14,6 +15,10 @@ import ActivarNotificaciones from './ActivarNotificaciones';
  *
  * Desaparece cuando ya están activadas: un botón que ofrece lo que ya tenés
  * es ruido, y desactivarlas se hace desde la pantalla de páginas.
+ *
+ * Y desaparece en una computadora, donde no se llegan a activar. Este
+ * componente existe sólo para ofrecerlas: sin eso quedaba una campana que abre
+ * un cartel explicando dos pasos y no tiene ningún botón debajo.
  */
 function BotonNotificaciones() {
   const { token } = useContext(AuthContext);
@@ -35,7 +40,7 @@ function BotonNotificaciones() {
     };
   }, [token]);
 
-  if (!token || suscrito !== false) {
+  if (!token || suscrito !== false || diagnosticar().paso === PASOS.SOLO_MOVIL) {
     return null;
   }
 

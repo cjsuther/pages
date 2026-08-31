@@ -17,6 +17,7 @@
 export const PASOS = {
   NAVEGADOR: 'navegador',
   INSTALAR: 'instalar',
+  SOLO_MOVIL: 'solo_movil',
   SOPORTE: 'soporte',
   PERMISO_DENEGADO: 'permiso_denegado',
   LISTO: 'listo',
@@ -89,6 +90,9 @@ export function detectarEntorno() {
   return {
     esIOS,
     esAndroid,
+    // Ni teléfono ni tablet: una computadora. Los tablets caen en esIOS o
+    // esAndroid según su sistema, así que no hacen falta más categorías.
+    esEscritorio: !esIOS && !esAndroid,
     esSafariIOS,
     instalada: estaInstalada(),
     soportaPush,
@@ -157,7 +161,23 @@ export function diagnosticar(entorno = detectarEntorno()) {
     };
   }
 
-  // 3. Capacidad. Recién ahora hablar de versión tiene sentido.
+  // 3. Escritorio. Chrome y Firefox de computadora declaran soporte de push,
+  // así que sin esto el diagnóstico llegaba hasta el final y ofrecía activarlas.
+  // Acá las notificaciones no llegan a funcionar, y ofrecer un botón que no
+  // hace nada es peor que no ofrecer ninguno.
+  if (entorno.esEscritorio) {
+    return {
+      paso: PASOS.SOLO_MOVIL,
+      titulo: 'Las notificaciones son del teléfono',
+      mensaje:
+        'Se activan desde el teléfono, con la aplicación agregada a la pantalla ' +
+        'de inicio. Entrá a Rezonar desde el celular para configurarlas.',
+      instrucciones: [],
+      puedeSuscribirse: false,
+    };
+  }
+
+  // 4. Capacidad. Recién ahora hablar de versión tiene sentido.
   if (!entorno.soportaPush) {
     return {
       paso: PASOS.SOPORTE,
@@ -170,7 +190,7 @@ export function diagnosticar(entorno = detectarEntorno()) {
     };
   }
 
-  // 4. Permiso. Un "no" es definitivo: no se puede volver a preguntar.
+  // 5. Permiso. Un "no" es definitivo: no se puede volver a preguntar.
   if (entorno.permiso === 'denied') {
     return {
       paso: PASOS.PERMISO_DENEGADO,

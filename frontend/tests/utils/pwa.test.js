@@ -224,6 +224,31 @@ describe('pwa', () => {
       expect(d.instrucciones.join(' ')).toContain('Ajustes');
     });
 
+    /**
+     * Chrome y Firefox de computadora declaran soporte de push, así que sin
+     * esta rama el diagnóstico llegaba hasta LISTO y ofrecía activarlas. Acá no
+     * llegan a funcionar: mejor no ofrecer nada que un botón que no hace nada.
+     */
+    it('en una computadora no se pueden activar', () => {
+      const d = diagnosticar({
+        esIOS: false, esAndroid: false, esEscritorio: true, esSafariIOS: true,
+        instalada: false, soportaPush: true, permiso: 'default', marca: null,
+      });
+
+      expect(d.paso).toBe(PASOS.SOLO_MOVIL);
+      expect(d.puedeSuscribirse).toBe(false);
+    });
+
+    /** El teléfono no se ve afectado: ahí el diagnóstico sigue igual. */
+    it('en un teléfono la rama de escritorio no interfiere', () => {
+      const d = diagnosticar({
+        esIOS: false, esAndroid: true, esEscritorio: false, esSafariIOS: true,
+        instalada: true, soportaPush: true, permiso: 'default', marca: null,
+      });
+
+      expect(d.paso).toBe(PASOS.LISTO);
+    });
+
     it('todo en orden habilita la suscripción', () => {
       const d = diagnosticar({
         esIOS: true, esAndroid: false, esSafariIOS: true,

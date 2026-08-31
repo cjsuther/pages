@@ -154,6 +154,16 @@ function ActivarNotificaciones({ compacto = false }) {
     );
   }
 
+  // ------------------------------------------------------ sólo en el teléfono
+
+  // En una computadora no se llegan a activar, así que no se ofrece nada: una
+  // tarjeta explicando que acá no se puede es ruido en la pantalla. Va después
+  // de la rama de "ya suscrito" a propósito, para que alguien que las tenga
+  // activadas desde antes pueda desactivarlas igual.
+  if (diagnostico.paso === PASOS.SOLO_MOVIL) {
+    return null;
+  }
+
   // -------------------------------------------------------- falta algún paso
 
   return (
