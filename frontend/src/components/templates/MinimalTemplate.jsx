@@ -234,7 +234,7 @@ function MinimalTemplate({ page }) {
                 <img
                   src={modalEvent.image_url}
                   alt={modalEvent.text}
-                  className="w-full h-64 object-cover rounded-lg mb-6"
+                  className="w-full h-auto rounded-lg mb-6"
                 />
               )}
 

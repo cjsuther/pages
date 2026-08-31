@@ -254,7 +254,7 @@ function CardsTemplate({ page }) {
                 <img
                   src={modalEvent.image_url}
                   alt={modalEvent.text}
-                  className="w-full aspect-[1080/1350] object-cover rounded-lg mb-6"
+                  className="w-full h-auto rounded-lg mb-6"
                 />
               )}
 

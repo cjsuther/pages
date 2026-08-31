@@ -21,6 +21,27 @@ $hostPelado = preg_replace('/^www\./', '', explode(':', $host)[0]);
 $esDominioPropio = $hostPelado !== '' && $hostPelado !== 'localhost'
     && $hostPelado !== 'rezon.ar' && substr($hostPelado, -strlen('.rezon.ar')) !== '.rezon.ar';
 
+/** Trae un evento de la API. */
+function buscarEvento($apiUrl, $id) {
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $apiUrl . '/api/public/event.php?id=' . urlencode($id));
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($httpCode === 200 && $response) {
+        $data = json_decode($response, true);
+        if (isset($data['event'])) {
+            return $data['event'];
+        }
+    }
+
+    return null;
+}
+
 /** Trae una página de la API. $clave es 'slug' o 'dominio'. */
 function buscarPagina($apiUrl, $clave, $valor) {
     $ch = curl_init();
@@ -42,7 +63,22 @@ function buscarPagina($apiUrl, $clave, $valor) {
     return null;
 }
 
-if ($esDominioPropio && count($pathSegments) === 0) {
+// Compartir un evento tiene que mostrar el evento, no la marca. Sin esto
+// /evento/345 tomaba el "345" como si fuera el nombre de una página, no
+// encontraba nada y quien lo pegaba en WhatsApp veía el logo de Rezonar.
+//
+// array_values porque array_filter conserva las claves originales: sin eso los
+// índices no empiezan en cero y la comparación de abajo nunca da.
+$segmentos = array_values($pathSegments);
+$evento = null;
+
+if (count($segmentos) === 2 && $segmentos[0] === 'evento' && ctype_digit($segmentos[1])) {
+    $evento = buscarEvento($apiUrl, $segmentos[1]);
+}
+
+if ($evento) {
+    // El evento ya trae todo: no hace falta buscar la página.
+} elseif ($esDominioPropio && count($pathSegments) === 0) {
     $pageData = buscarPagina($apiUrl, 'dominio', $hostPelado);
 
     if ($pageData && isset($pageData['url_slug'])) {
@@ -61,6 +97,19 @@ if ($esDominioPropio && count($pathSegments) === 0) {
     }
 }
 
+/** Una línea: en un meta tag los saltos y los espacios de más no aportan. */
+function unaLinea($texto) {
+    return trim(preg_replace('/\s+/', ' ', (string) $texto));
+}
+
+if ($evento) {
+    $title = htmlspecialchars(unaLinea($evento['text']))
+        . (!empty($evento['page_title']) ? ' | ' . htmlspecialchars(unaLinea($evento['page_title'])) : ' | Rezonar');
+    $description = !empty($evento['description'])
+        ? htmlspecialchars(unaLinea($evento['description']))
+        : 'Mirá los detalles y reservá tu lugar.';
+    $ogImage = !empty($evento['image_url']) ? htmlspecialchars($evento['image_url']) : '';
+} else {
 $title = $pageData ? htmlspecialchars($pageData['title']) . ' | Rezonar' : 'Rezonar - Crea tu Espacio, Comparte Eventos, Conecta';
 $description = $pageData && $pageData['description']
     ? htmlspecialchars($pageData['description'])
@@ -68,6 +117,7 @@ $description = $pageData && $pageData['description']
 $ogImage = $pageData && ($pageData['profile_image'] || $pageData['background_image'])
     ? htmlspecialchars($pageData['profile_image'] ?: $pageData['background_image'])
     : '';
+}
 $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . '://' . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'];
 
 $manifestPath = __DIR__ . '/.vite/manifest.json';

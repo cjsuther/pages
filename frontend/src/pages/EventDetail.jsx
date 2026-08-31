@@ -65,7 +65,7 @@ function EventDetail() {
         <img
           src={event.image_url || 'https://images.pexels.com/photos/1190298/pexels-photo-1190298.jpeg?auto=compress&cs=tinysrgb&w=800'}
           alt={event.text}
-          className="w-full h-72 object-cover rounded-lg mb-8"
+          className="w-full h-auto rounded-lg mb-8"
         />
 
         {event.page_title && (
