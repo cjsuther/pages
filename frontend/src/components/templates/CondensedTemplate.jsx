@@ -254,10 +254,15 @@ function CondensedTemplate({ page }) {
 
       {modalEvent && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-4 overflow-y-auto"
+          className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-4"
           onClick={() => setModalEvent(null)}
         >
-          <div className="max-w-2xl w-full my-8" onClick={(e) => e.stopPropagation()}>
+          {/* El scroll va acá adentro y no en la capa de afuera. Con el scroll
+              afuera y items-center, un afiche alto hacía que el contenido
+              desbordara para arriba y para abajo, y la parte de arriba quedaba
+              inalcanzable: la imagen se veía cortada. Las otras cuatro
+              plantillas ya lo hacían así. */}
+          <div className="max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="rounded-lg p-6 md:p-8" style={modalStyle}>
               <button
                 onClick={() => setModalEvent(null)}
