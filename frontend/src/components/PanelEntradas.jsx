@@ -164,18 +164,18 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio, enlace = null, onGuard
 
         <div className="grid gap-3 sm:grid-cols-2">
           <OpcionDeModo
-            valor="externo"
-            elegido={modo}
-            onElegir={elegirModo}
-            titulo="En otro lado"
-            detalle="El evento muestra un link a donde se venden."
-          />
-          <OpcionDeModo
             valor="interno"
             elegido={modo}
             onElegir={elegirModo}
             titulo="Acá, con Rezonar"
             detalle="El evento muestra el botón de compra o reserva."
+          />
+          <OpcionDeModo
+            valor="externo"
+            elegido={modo}
+            onElegir={elegirModo}
+            titulo="En otro lado"
+            detalle="El evento muestra un link a donde se venden."
           />
         </div>
       </fieldset>
