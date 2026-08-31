@@ -46,9 +46,10 @@ export const CLASES_ALREDEDOR = 'min-h-screen sm:py-8';
  * se derramaba por todos lados y el contenido flotaba encima sin forma. Ahora
  * queda contenido en el recuadro.
  *
- * La imagen sigue anclada a la ventana (`fixed`), así que la caja funciona
- * como una ventana a la imagen: no se estira ni se deforma según cuánto
- * contenido tenga la página.
+ * La imagen se dimensiona contra la caja y no contra la ventana. Estuvo anclada
+ * a la ventana (`fixed`) y el efecto era que en una computadora se veía apenas
+ * una franja central de 580px de una imagen escalada a todo el ancho de la
+ * pantalla: quien la diseñaba para que se viera entera, no la reconocía.
  */
 export function estiloDeCaja({ backgroundColor, backgroundImage, textColor }) {
   return {
@@ -58,7 +59,6 @@ export function estiloDeCaja({ backgroundColor, backgroundImage, textColor }) {
       backgroundImage: `url(${backgroundImage})`,
       backgroundSize: 'cover',
       backgroundPosition: 'center',
-      backgroundAttachment: 'fixed',
     }),
   };
 }
