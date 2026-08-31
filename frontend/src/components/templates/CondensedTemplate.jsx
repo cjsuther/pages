@@ -9,6 +9,7 @@ import RezonarBadge from '../RezonarBadge';
 import { MiniaturaGaleria, VisorGaleria } from '../MediaGaleria';
 import { textoSobre, paleta } from '../../utils/colores';
 import { CLASES_ALREDEDOR, CLASES_CAJA, estiloDeAlrededor, estiloDeCaja } from '../../utils/plantillas';
+import { localidadDe } from '../../utils/eventos';
 import { ExternalLink } from 'lucide-react';
 
 function CondensedTemplate({ page }) {
@@ -151,6 +152,13 @@ function CondensedTemplate({ page }) {
                               minute: '2-digit',
                               hour12: false,
                             })}
+                            {/* Con guion y sólo si la dirección la deja
+                                deducir: en un evento de todas las semanas en
+                                el mismo lugar, saber dónde es importa tanto
+                                como cuándo. */}
+                            {localidadDe(link.event_address) && (
+                              <> - {localidadDe(link.event_address)}</>
+                            )}
                           </div>
                         )}
                       </div>
