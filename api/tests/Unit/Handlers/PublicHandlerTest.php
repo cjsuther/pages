@@ -148,6 +148,38 @@ class PublicHandlerTest extends HandlerTestCase
         $this->assertStringContainsString("ec.status = 'accepted'", $sql);
     }
 
+    /**
+     * El evento sale igual venga de donde venga.
+     *
+     * Los tres caminos —los eventos propios de un grupo, los colaborados y el
+     * de la URL suelta— pasan por completarEvento(). El bug que motivó esto
+     * fue justamente que cada uno lo armaba por su cuenta y uno se olvidaba de
+     * la disponibilidad. Si mañana alguien agrega una consulta que no delega,
+     * este test lo dice.
+     */
+    public function testLosTresCaminosArmanElEventoIgual()
+    {
+        $this->db->onSelect('FROM pages WHERE url_slug = ?', [['id' => 5]]);
+        $this->db->onSelect('FROM link_groups WHERE page_id = ?', [['id' => 20, 'type' => 'eventos']]);
+        $this->db->onSelect('WHERE group_id = ? AND event_date >= ?', [['id' => 100, 'text' => 'Propio']]);
+        $this->db->onSelect('FROM event_collaborations ec JOIN links l', [['id' => 300, 'text' => 'Compartido']]);
+        $this->db->onSelect('FROM links l JOIN link_groups lg', [['id' => 100, 'text' => 'Propio']]);
+
+        $pagina = PublicHandler::page($this->db, $this->get(['slug' => 'mi-pagina']))->body['page'];
+        $suelto = PublicHandler::event($this->db, $this->get(['id' => '100']))->body['event'];
+
+        $eventos = [
+            'propio'     => $pagina['groups'][0]['links'][0],
+            'colaborado' => $pagina['groups'][0]['collaborated_events'][0],
+            'suelto'     => $suelto,
+        ];
+
+        foreach ($eventos as $camino => $evento) {
+            $this->assertArrayHasKey('entradas', $evento, "el evento $camino llega sin disponibilidad");
+            $this->assertArrayHasKey('collaborators', $evento, "el evento $camino llega sin colaboradores");
+        }
+    }
+
     public function testPageDevuelve500SiLaBaseFalla()
     {
         $this->db->failOn('FROM pages WHERE url_slug = ?', 'sin conexión');

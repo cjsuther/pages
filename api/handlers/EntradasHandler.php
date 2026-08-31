@@ -36,12 +36,15 @@ class EntradasHandler
 
         if ($req->method === 'GET') {
             return Response::ok([
-                'cobros'     => Cobros::estado($db, $pageId),
-                'comision'   => Comision::porcentaje(),
+                'cobros'      => Cobros::estado($db, $pageId),
+                'comision'    => Comision::porcentaje(),
+                // Lo que cobra Mercado Pago va con lo nuestro: el dueño hace
+                // la cuenta con los dos descuentos o no le cierra.
+                'mercadopago' => Comision::mercadoPago(),
                 // Sin la aplicación de marketplace configurada no hay forma de
                 // conectar ninguna cuenta, y conviene decirlo en vez de mostrar
                 // un botón que lleva a un error de Mercado Pago.
-                'disponible' => MercadoPagoOAuth::configurado(),
+                'disponible'  => MercadoPagoOAuth::configurado(),
             ]);
         }
 
@@ -174,8 +177,10 @@ class EntradasHandler
                 'ocupadas' => Entradas::ocupadas($db, $linkId),
                 'cobros'   => Cobros::estado($db, self::pageIdDelLink($db, $linkId)),
                 // El dueño define el precio acá: necesita ver qué se le
-                // descuenta en la misma pantalla, no en otra sección.
+                // descuenta en la misma pantalla, no en otra sección. Y los
+                // dos descuentos, no sólo el nuestro.
                 'comision' => Comision::porcentaje(),
+                'mercadopago' => Comision::mercadoPago(),
             ]);
         }
 

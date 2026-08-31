@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Check, AlertTriangle, Loader2, ExternalLink } from 'lucide-react';
-import { MP_PORCENTAJE, MP_DIAS_ACREDITACION, formatearPorcentaje } from '../utils/comisiones';
+import { formatearPorcentaje } from '../utils/comisiones';
 
 /**
  * Sección del editor donde el dueño conecta su cuenta de Mercado Pago.
@@ -143,6 +143,7 @@ function SeccionEntradas({ pageId, apiUrl, token, emailContacto = '', onGuardarC
 
   const cobros = (datos && datos.cobros) || { configurado: false };
   const comision = (datos && datos.comision) || 0;
+  const mercadoPago = (datos && datos.mercadopago) || null;
   const disponible = datos && datos.disponible;
 
   return (
@@ -248,22 +249,25 @@ function SeccionEntradas({ pageId, apiUrl, token, emailContacto = '', onGuardarC
 
           {/* Sin esto el dueño hace la cuenta sólo con nuestra comisión y no le
               cierra con lo que ve en su cuenta. El porcentaje y el plazo van
-              juntos: en Mercado Pago uno depende del otro. */}
-          <p className="text-xs text-gray-500 border-t border-gray-800 pt-3">
-            <strong className="text-gray-400">Aparte de esto, Mercado Pago cobra{' '}
-            {formatearPorcentaje(MP_PORCENTAJE)}%</strong> por procesar el pago, y libera
-            la plata a los {MP_DIAS_ACREDITACION} días de la compra. Podés verlo en{' '}
-            <a
-              href="https://www.mercadopago.com.ar/costs-section/release-options"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-400 hover:text-white inline-flex items-center gap-1"
-            >
-              Mercado Pago → Costos
-              <ExternalLink className="w-3 h-3" />
-            </a>
-            .
-          </p>
+              juntos: en Mercado Pago uno depende del otro. Los dos salen de la
+              configuración del servidor; si no están, no inventamos un número. */}
+          {mercadoPago && (
+            <p className="text-xs text-gray-500 border-t border-gray-800 pt-3">
+              <strong className="text-gray-400">Aparte de esto, Mercado Pago cobra{' '}
+              {formatearPorcentaje(mercadoPago.porcentaje)}%</strong> por procesar el pago, y libera
+              la plata a los {mercadoPago.dias} días de la compra. Podés verlo en{' '}
+              <a
+                href="https://www.mercadopago.com.ar/costs-section/release-options"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-gray-400 hover:text-white inline-flex items-center gap-1"
+              >
+                Mercado Pago → Costos
+                <ExternalLink className="w-3 h-3" />
+              </a>
+              .
+            </p>
+          )}
         </div>
       )}
 

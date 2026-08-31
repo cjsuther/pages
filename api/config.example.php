@@ -56,6 +56,19 @@ define('PAYMENTS_ENCRYPTION_KEY', 'CAMBIA_ESTO_POR_UNA_CLAVE_LARGA_Y_ALEATORIA')
 // quedó deshabilitada.
 define('PLATFORM_FEE_PERCENT', 1.5);
 
+// Lo que cobra Mercado Pago por procesar el pago, aparte de lo nuestro. No se
+// calcula ni se cobra acá: Mercado Pago lo descuenta solo. Está para poder
+// mostrárselo al dueño de la página cuando pone un precio, así hace la cuenta
+// con los dos descuentos y no sólo con el nuestro.
+//
+// Los dos valores van juntos porque en Mercado Pago uno depende del otro: el
+// porcentaje cambia según el plazo de acreditación que tenga elegido la cuenta.
+// Se ven en Mercado Pago -> Costos. Si se borra cualquiera de los dos, la
+// pantalla no dice nada de Mercado Pago, que es mejor que decir un número
+// viejo.
+define('MP_FEE_PERCENT', 4.39);
+define('MP_RELEASE_DAYS', 10);
+
 // Aplicación de marketplace, desde Mercado Pago -> Tus integraciones. Es la
 // cuenta a la que llega la comisión.
 define('MP_APP_ID', 'TU_CLIENT_ID_DE_MERCADO_PAGO');

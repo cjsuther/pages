@@ -400,10 +400,17 @@ function ItemEditor() {
                     className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
                     required
                   />
+                  {/* Lo de "y que se pueda mostrar afuera" no sobra: hay
+                      posteos de cuentas públicas que Instagram igual se niega
+                      a servir. Desde acá no hay forma de saberlo de antemano,
+                      así que al menos se avisa dónde mirar cuando pasa. */}
                   <p className="text-xs text-gray-600 mt-1">
                     {tipoMedia === 'youtube'
                       ? 'Sirve el link del video, el de compartir o el de un short'
-                      : 'De Instagram se muestra sólo la foto, el carrusel o el video. La cuenta tiene que ser pública.'}
+                      : 'De Instagram se muestra sólo la foto, el carrusel o el video. '
+                        + 'La cuenta tiene que ser pública y el posteo tiene que poder mostrarse '
+                        + 'afuera de Instagram: si no se ve, probá abrir el link en una ventana '
+                        + 'de incógnito, y si ahí tampoco se ve, subí una portada.'}
                   </p>
                 </div>
               )}

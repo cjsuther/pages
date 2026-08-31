@@ -11,8 +11,19 @@ function respuestaDe(cuerpo, ok = true) {
 }
 
 /** Estado inicial que devuelve el servidor al abrir el panel. */
-function alAbrir({ entradas = null, cobros = CONECTADO, ocupadas = 0, comision = 3 } = {}) {
-  global.fetch.mockReturnValueOnce(respuestaDe({ entradas, cobros, ocupadas, comision }));
+// A propósito distintos de los reales (4,39% y 10 días): los valores vienen
+// del servidor, y así un test que pase porque el número quedó escrito en el
+// componente se cae.
+const MERCADO_PAGO = { porcentaje: 7.25, dias: 3 };
+
+function alAbrir({
+  entradas = null,
+  cobros = CONECTADO,
+  ocupadas = 0,
+  comision = 3,
+  mercadopago = MERCADO_PAGO,
+} = {}) {
+  global.fetch.mockReturnValueOnce(respuestaDe({ entradas, cobros, ocupadas, comision, mercadopago }));
 }
 
 async function montar(estado) {
@@ -219,7 +230,7 @@ describe('PanelEntradas', () => {
 
       fireEvent.change(screen.getByLabelText('PRECIO POR ENTRADA'), { target: { value: '10000' } });
 
-      expect(screen.getByText(/descuenta aparte 4,39%/)).toBeInTheDocument();
+      expect(screen.getByText(/descuenta aparte 7,25%/)).toBeInTheDocument();
     });
 
     /** Poner precio es decidir cuánto entra y cuándo: el plazo es parte. */
@@ -229,7 +240,18 @@ describe('PanelEntradas', () => {
 
       fireEvent.change(screen.getByLabelText('PRECIO POR ENTRADA'), { target: { value: '10000' } });
 
-      expect(screen.getByText(/a los 10 días\s+de la compra/)).toBeInTheDocument();
+      expect(screen.getByText(/a los 3 días\s+de la compra/)).toBeInTheDocument();
+    });
+
+    /** Sin el dato del servidor no inventamos un porcentaje. */
+    it('no habla de Mercado Pago si el servidor no lo informa', async () => {
+      await montar({ comision: 1.5, mercadopago: null });
+      activar();
+
+      fireEvent.change(screen.getByLabelText('PRECIO POR ENTRADA'), { target: { value: '10000' } });
+
+      expect(screen.getByText(/Menos la comisión de Rezonar/)).toBeInTheDocument();
+      expect(screen.queryByText(/Mercado Pago/)).not.toBeInTheDocument();
     });
 
     it('escribe los decimales de la comisión como se escriben acá', async () => {

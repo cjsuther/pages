@@ -18,15 +18,21 @@ function respuestaDe(cuerpo, ok = true, status = 200) {
   return Promise.resolve({ ok, status, json: () => Promise.resolve(cuerpo) });
 }
 
+// A propósito distintos de los reales (4,39% y 10 días): los valores vienen
+// del servidor, y así un test que pase porque el número quedó escrito en el
+// componente se cae.
+const MERCADO_PAGO = { porcentaje: 7.25, dias: 3 };
+
 async function montar({
   cobros = SIN_CONECTAR,
   comision = 10,
+  mercadopago = MERCADO_PAGO,
   disponible = true,
   ruta = '/page/5',
   emailContacto = '',
   onGuardarContacto = () => {},
 } = {}) {
-  global.fetch.mockReturnValueOnce(respuestaDe({ cobros, comision, disponible }));
+  global.fetch.mockReturnValueOnce(respuestaDe({ cobros, comision, mercadopago, disponible }));
 
   const vista = renderConProviders(
     <SeccionEntradas
@@ -187,14 +193,14 @@ describe('SeccionEntradas', () => {
     it('dice cuánto cobra Mercado Pago aparte', async () => {
       await montar({ comision: 1.5 });
 
-      expect(screen.getByText(/Mercado Pago cobra\s+4,39%/)).toBeInTheDocument();
+      expect(screen.getByText(/Mercado Pago cobra\s+7,25%/)).toBeInTheDocument();
     });
 
     /** El porcentaje sin el plazo deja la mitad de la cuenta sin hacer. */
     it('dice a los cuántos días se libera la plata', async () => {
       await montar({ comision: 1.5 });
 
-      expect(screen.getByText(/libera\s+la plata a los 10 días de la compra/)).toBeInTheDocument();
+      expect(screen.getByText(/libera\s+la plata a los 3 días de la compra/)).toBeInTheDocument();
     });
 
     // El porcentaje sale de la configuración del servidor y llega como número:
@@ -210,6 +216,17 @@ describe('SeccionEntradas', () => {
 
       expect(screen.getByRole('link', { name: /Costos/ }))
         .toHaveAttribute('href', expect.stringContaining('mercadopago'));
+    });
+
+    /**
+     * Una instalación que todavía no cargó los datos de Mercado Pago no tiene
+     * que ver un número inventado: mejor no decir nada que decir uno viejo.
+     */
+    it('no habla de Mercado Pago si el servidor no lo informa', async () => {
+      await montar({ comision: 1.5, mercadopago: null });
+
+      expect(screen.getByText(/Comisión de Rezonar: 1,5%/)).toBeInTheDocument();
+      expect(screen.queryByText(/Mercado Pago cobra/)).not.toBeInTheDocument();
     });
 
     it('aclara que las reservas sin costo no pagan comisión', async () => {

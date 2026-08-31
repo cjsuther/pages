@@ -94,17 +94,8 @@ class PublicHandler
             ORDER BY event_date, id
         ");
         $stmt->execute([$hoy, $groupId, $hoy]);
-        $links = $stmt->fetchAll();
 
-        foreach ($links as &$link) {
-            $link['collaborators'] = self::colaboradoresDe($db, $link['id']);
-            // Si el evento vende entradas, el modal usa la compra interna en
-            // lugar del link que tenga cargado.
-            $link['entradas'] = Entradas::disponibilidad($db, $link['id']);
-        }
-        unset($link);
-
-        return $links;
+        return self::completarEventos($db, $stmt->fetchAll());
     }
 
     private static function eventosColaborados($db, $groupId)
@@ -123,18 +114,40 @@ class PublicHandler
         ");
         $hoy = Fechas::hoy();
         $stmt->execute([$hoy, $groupId, $hoy]);
-        $colaborados = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        foreach ($colaborados as &$evento) {
-            $evento['collaborators'] = self::colaboradoresDe($db, $evento['id']);
-            // Igual que los eventos propios: sin esto el evento llega sin
-            // disponibilidad y la página que colabora no muestra el botón de
-            // reservar, aunque el mismo evento sí lo muestre en la de origen.
-            $evento['entradas'] = Entradas::disponibilidad($db, $evento['id']);
+        return self::completarEventos($db, $stmt->fetchAll(PDO::FETCH_ASSOC));
+    }
+
+    /**
+     * Lo que hay que agregarle a un evento recién salido de la base para que
+     * la página lo pueda dibujar entero.
+     *
+     * Es un solo lugar a propósito. Antes cada consulta lo armaba por su
+     * cuenta y la de eventos colaborados se olvidaba de la disponibilidad: el
+     * mismo show ofrecía el botón de reservar en la página que lo organiza y
+     * no en la que colabora. Una consulta nueva que pase por acá no se lo
+     * puede olvidar, y el evento sale igual venga de donde venga.
+     */
+    private static function completarEvento($db, array $evento)
+    {
+        // Quiénes lo hacen entre varios. La ficha los muestra bajo el título.
+        $evento['collaborators'] = self::colaboradoresDe($db, $evento['id']);
+
+        // Si vende entradas, la ficha ofrece la compra interna en lugar del
+        // link que tenga cargado.
+        $evento['entradas'] = Entradas::disponibilidad($db, $evento['id']);
+
+        return $evento;
+    }
+
+    /** completarEvento() sobre una lista. */
+    private static function completarEventos($db, array $eventos)
+    {
+        foreach ($eventos as $i => $evento) {
+            $eventos[$i] = self::completarEvento($db, $evento);
         }
-        unset($evento);
 
-        return $colaborados;
+        return $eventos;
     }
 
     private static function colaboradoresDe($db, $linkId)
@@ -190,9 +203,7 @@ class PublicHandler
             return Response::notFound('Evento no encontrado');
         }
 
-        $event['entradas'] = Entradas::disponibilidad($db, $event['id']);
-
-        return Response::ok(['event' => $event]);
+        return Response::ok(['event' => self::completarEvento($db, $event)]);
     }
 
     // ----------------------------------------------------------------- events

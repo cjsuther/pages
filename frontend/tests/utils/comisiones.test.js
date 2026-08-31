@@ -1,16 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { MP_PORCENTAJE, MP_DIAS_ACREDITACION, formatearPorcentaje } from '../../src/utils/comisiones';
-
-/**
- * Los dos datos de Mercado Pago van juntos —el porcentaje depende del plazo—
- * y viven en un solo lugar para que no queden distintos en cada pantalla.
- */
-describe('datos de Mercado Pago', () => {
-  it('son los de la cuenta de Rezonar', () => {
-    expect(MP_PORCENTAJE).toBe(4.39);
-    expect(MP_DIAS_ACREDITACION).toBe(10);
-  });
-});
+import { formatearPorcentaje } from '../../src/utils/comisiones';
 
 describe('formatearPorcentaje', () => {
   // La comisión sale de la configuración del servidor y llega como número:

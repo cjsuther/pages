@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Loader2, AlertTriangle, Check } from 'lucide-react';
 import { formatearPrecio, esGratis } from '../utils/entradas';
-import { MP_PORCENTAJE, MP_DIAS_ACREDITACION, formatearPorcentaje } from '../utils/comisiones';
+import { formatearPorcentaje } from '../utils/comisiones';
 
 /**
  * Configuración de venta de entradas de un evento, dentro del modal de edición.
@@ -13,6 +13,7 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio }) {
   const [cobros, setCobros] = useState(null);
   const [ocupadas, setOcupadas] = useState(0);
   const [comision, setComision] = useState(0);
+  const [mercadoPago, setMercadoPago] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState(null);
@@ -37,6 +38,7 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio }) {
         setCobros(cuerpo.cobros);
         setOcupadas(cuerpo.ocupadas || 0);
         setComision(cuerpo.comision || 0);
+        setMercadoPago(cuerpo.mercadopago || null);
         setConfig(cuerpo.entradas);
 
         if (cuerpo.entradas) {
@@ -162,12 +164,16 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio }) {
                   </p>
                   {/* El porcentaje y el plazo van juntos: en Mercado Pago uno
                       depende del otro, y a la hora de poner un precio lo que
-                      importa es cuánto entra y cuándo. */}
-                  <p className="text-xs text-gray-600 mt-1">
-                    A eso Mercado Pago le descuenta aparte {formatearPorcentaje(MP_PORCENTAJE)}%
-                    por procesar el pago, y libera la plata a los {MP_DIAS_ACREDITACION} días
-                    de la compra.
-                  </p>
+                      importa es cuánto entra y cuándo. Si el servidor no los
+                      tiene cargados no decimos nada: un número viejo acá es
+                      peor que ninguno. */}
+                  {mercadoPago && (
+                    <p className="text-xs text-gray-600 mt-1">
+                      A eso Mercado Pago le descuenta aparte {formatearPorcentaje(mercadoPago.porcentaje)}%
+                      por procesar el pago, y libera la plata a los {mercadoPago.dias} días
+                      de la compra.
+                    </p>
+                  )}
                 </>
               )}
             </div>

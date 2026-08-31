@@ -72,4 +72,19 @@ class ComisionTest extends TestCase
     {
         $this->assertGreaterThan(0, Comision::paraElVendedor(100));
     }
+
+    /**
+     * Lo que cobra Mercado Pago sale de config.php como todo lo demás.
+     *
+     * Antes estaba escrito en dos pantallas del frontend, así que cambiarlo
+     * era editar código. Los valores del bootstrap son distintos de los reales
+     * justamente para que esto no pase de nuevo sin que un test lo diga.
+     */
+    public function testInformaLoQueCobraMercadoPagoSegunLaConfiguracion()
+    {
+        $this->assertSame(
+            ['porcentaje' => 7.25, 'dias' => 3],
+            Comision::mercadoPago()
+        );
+    }
 }

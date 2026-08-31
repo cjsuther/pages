@@ -51,6 +51,10 @@ define('VAPID_SUBJECT', 'mailto:test@test.local');
 define('PAYMENTS_ENCRYPTION_KEY', 'clave-de-prueba-para-cifrar-credenciales-de-cobro');
 
 define('PLATFORM_FEE_PERCENT', 10);
+// A propósito distintos de los de producción (4.39 y 10): así un test
+// que pase sólo porque el número está escrito en el código se cae.
+define('MP_FEE_PERCENT', 7.25);
+define('MP_RELEASE_DAYS', 3);
 define('MP_APP_ID', '1234567890123456');
 define('MP_APP_SECRET', 'secreto-de-prueba-de-la-aplicacion');
 define('MP_OAUTH_REDIRECT_URI', 'https://api.test/api/entradas/oauth-callback.php');
