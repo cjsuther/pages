@@ -60,7 +60,7 @@ function EstadoOrden({ apiUrl }) {
   if (cargando && !orden) {
     return (
       <Marco>
-        <Loader2 className="w-8 h-8 animate-spin text-gray-600 mx-auto" />
+        <Loader2 className="w-8 h-8 animate-spin text-tinta-suave mx-auto" />
         {/* Un ícono girando no le dice nada a un lector de pantalla, que se
             queda con una página en blanco sin saber que está esperando. */}
         <span className="sr-only">Cargando…</span>
@@ -71,41 +71,41 @@ function EstadoOrden({ apiUrl }) {
   if (error) {
     return (
       <Marco>
-        <X className="w-12 h-12 text-red-400 mx-auto mb-4" />
-        <h1 className="text-2xl font-black text-white mb-2">No encontramos tu orden</h1>
-        <p className="text-gray-500">{error}</p>
+        <X className="w-12 h-12 text-red-700 mx-auto mb-4" />
+        <h1 className="text-2xl font-bold text-tinta mb-2">No encontramos tu orden</h1>
+        <p className="text-tinta-suave">{error}</p>
       </Marco>
     );
   }
 
   const estados = {
     pagada: {
-      icono: <Check className="w-8 h-8 text-white" />,
-      fondo: 'bg-emerald-600',
+      icono: <Check className="w-8 h-8 text-tinta" />,
+      fondo: 'bg-verde',
       titulo: '¡Listo!',
       detalle: 'Tu lugar está confirmado. Guardá este código, te lo van a pedir en la entrada.',
     },
     reservada: {
-      icono: <Clock className="w-8 h-8 text-white" />,
+      icono: <Clock className="w-8 h-8 text-tinta" />,
       fondo: 'bg-amber-600',
       titulo: 'Estamos confirmando tu pago',
       detalle: 'Mercado Pago todavía no nos confirmó la operación. Puede tardar unos segundos.',
     },
     vencida: {
-      icono: <Clock className="w-8 h-8 text-white" />,
-      fondo: 'bg-gray-700',
+      icono: <Clock className="w-8 h-8 text-tinta" />,
+      fondo: 'bg-papel-hueso',
       titulo: 'La reserva venció',
       detalle: 'Pasaron los 15 minutos sin que se completara el pago. Podés volver a intentarlo.',
     },
     rechazada: {
-      icono: <X className="w-8 h-8 text-white" />,
+      icono: <X className="w-8 h-8 text-tinta" />,
       fondo: 'bg-red-700',
       titulo: 'El pago fue rechazado',
       detalle: 'Mercado Pago no aprobó la operación. Podés intentar de nuevo con otro medio de pago.',
     },
     cancelada: {
-      icono: <X className="w-8 h-8 text-white" />,
-      fondo: 'bg-gray-700',
+      icono: <X className="w-8 h-8 text-tinta" />,
+      fondo: 'bg-papel-hueso',
       titulo: 'La orden se canceló',
       detalle: 'No llegó a completarse. Podés volver a intentarlo.',
     },
@@ -119,18 +119,18 @@ function EstadoOrden({ apiUrl }) {
         {estado.icono}
       </div>
 
-      <h1 className="text-3xl font-black text-white mb-2">{estado.titulo}</h1>
-      <p className="text-gray-500 mb-8">{estado.detalle}</p>
+      <h1 className="text-3xl font-bold text-tinta mb-2">{estado.titulo}</h1>
+      <p className="text-tinta-suave mb-8">{estado.detalle}</p>
 
-      <div className="border border-gray-800 bg-black p-6 text-left mb-6">
-        <p className="text-xs text-gray-600 tracking-wide mb-1">CÓDIGO</p>
-        <p className="text-2xl font-mono font-bold text-white tracking-wider mb-6">{orden.codigo}</p>
+      <div className="border border-borde bg-white p-6 text-left mb-6">
+        <p className="text-xs text-tinta-suave tracking-wide mb-1">Código</p>
+        <p className="text-2xl font-mono font-bold text-tinta tracking-wider mb-6">{orden.codigo}</p>
 
-        <p className="text-xs text-gray-600 tracking-wide mb-1">EVENTO</p>
-        <p className="text-white font-bold mb-4">{orden.evento}</p>
+        <p className="text-xs text-tinta-suave tracking-wide mb-1">Evento</p>
+        <p className="text-tinta font-bold mb-4">{orden.evento}</p>
 
         {orden.event_date && (
-          <p className="flex items-center gap-2 text-gray-400 text-sm mb-2">
+          <p className="flex items-center gap-2 text-tinta-media text-sm mb-2">
             <Calendar className="w-4 h-4 shrink-0" />
             {new Date(`${orden.event_date}T00:00:00`).toLocaleDateString('es-AR', {
               weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
@@ -140,24 +140,24 @@ function EstadoOrden({ apiUrl }) {
         )}
 
         {orden.event_address && (
-          <p className="flex items-center gap-2 text-gray-400 text-sm mb-4">
+          <p className="flex items-center gap-2 text-tinta-media text-sm mb-4">
             <MapPin className="w-4 h-4 shrink-0" />
             {orden.event_address}
           </p>
         )}
 
-        <div className="border-t border-gray-800 pt-4 flex justify-between text-sm">
-          <span className="text-gray-500">
+        <div className="border-t border-borde pt-4 flex justify-between text-sm">
+          <span className="text-tinta-suave">
             {orden.cantidad} {orden.cantidad === 1 ? 'entrada' : 'entradas'} a nombre de {orden.nombre}
           </span>
           {orden.total > 0 && (
-            <span className="text-white font-bold">{formatearPrecio(orden.total, orden.moneda)}</span>
+            <span className="text-tinta font-bold">{formatearPrecio(orden.total, orden.moneda)}</span>
           )}
         </div>
       </div>
 
       {orden.url_slug && (
-        <Link to={`/${orden.url_slug}`} className="text-gray-400 hover:text-white text-sm">
+        <Link to={`/${orden.url_slug}`} className="text-tinta-media hover:text-tinta text-sm">
           ← Volver a {orden.pagina}
         </Link>
       )}
@@ -167,7 +167,7 @@ function EstadoOrden({ apiUrl }) {
 
 function Marco({ children }) {
   return (
-    <div className="min-h-screen bg-black flex items-center justify-center p-6">
+    <div className="min-h-screen bg-white flex items-center justify-center p-6">
       <div className="max-w-md w-full text-center">{children}</div>
     </div>
   );

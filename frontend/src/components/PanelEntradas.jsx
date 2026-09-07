@@ -148,7 +148,7 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio, enlace = null, onGuard
   };
 
   if (cargando) {
-    return <p className="text-gray-500 py-6">Cargando...</p>;
+    return <p className="text-tinta-suave py-6">Cargando...</p>;
   }
 
   const sinMercadoPago = !cobros || !cobros.configurado;
@@ -158,7 +158,7 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio, enlace = null, onGuard
   return (
     <div className="space-y-6">
       <fieldset>
-        <legend className="text-sm font-bold text-gray-400 mb-3 tracking-wide">
+        <legend className="text-sm font-bold text-tinta-media mb-3 tracking-wide">
           ¿DÓNDE SE CONSIGUEN LAS ENTRADAS?
         </legend>
 
@@ -183,8 +183,8 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio, enlace = null, onGuard
       {modo === 'externo' && (
         <>
           <div>
-            <label htmlFor="entradas-link" className="block text-sm font-bold text-gray-400 mb-2 tracking-wide">
-              LINK (OPCIONAL)
+            <label htmlFor="entradas-link" className="block text-sm font-semibold text-tinta mb-1.5 tracking-wide">
+              Link (opcional)
             </label>
             <input
               id="entradas-link"
@@ -192,17 +192,17 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio, enlace = null, onGuard
               value={link.url}
               onChange={(e) => cambiarLink('url', e.target.value)}
               placeholder="https://..."
-              className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+              className="w-full px-4 py-3 rounded-xl bg-white border border-borde-fuerte text-tinta placeholder-tinta-suave focus:border-verde-oscuro focus:outline-none transition-colors"
             />
-            <p className="text-xs text-gray-600 mt-1">
+            <p className="text-xs text-tinta-suave mt-1">
               A dónde mandar a quien quiera la entrada. Sin link, el evento se
               muestra igual pero sin botón.
             </p>
           </div>
 
           <div>
-            <label htmlFor="entradas-texto-boton" className="block text-sm font-bold text-gray-400 mb-2 tracking-wide">
-              TEXTO DEL BOTÓN (OPCIONAL)
+            <label htmlFor="entradas-texto-boton" className="block text-sm font-semibold text-tinta mb-1.5 tracking-wide">
+              Texto del botón (opcional)
             </label>
             <input
               id="entradas-texto-boton"
@@ -210,7 +210,7 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio, enlace = null, onGuard
               value={link.url_text}
               onChange={(e) => cambiarLink('url_text', e.target.value)}
               placeholder="Más información"
-              className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+              className="w-full px-4 py-3 rounded-xl bg-white border border-borde-fuerte text-tinta placeholder-tinta-suave focus:border-verde-oscuro focus:outline-none transition-colors"
             />
           </div>
         </>
@@ -220,8 +220,8 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio, enlace = null, onGuard
         <>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label htmlFor="entradas-capacidad" className="block text-sm font-bold text-gray-400 mb-2 tracking-wide">
-                CAPACIDAD MÁXIMA
+              <label htmlFor="entradas-capacidad" className="block text-sm font-semibold text-tinta mb-1.5 tracking-wide">
+                Capacidad máxima
               </label>
               <input
                 id="entradas-capacidad"
@@ -229,13 +229,13 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio, enlace = null, onGuard
                 min="1"
                 value={form.capacidad}
                 onChange={(e) => cambiar('capacidad', Number(e.target.value))}
-                className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+                className="w-full px-4 py-3 rounded-xl bg-white border border-borde-fuerte text-tinta placeholder-tinta-suave focus:border-verde-oscuro focus:outline-none transition-colors"
               />
             </div>
 
             <div>
-              <label htmlFor="entradas-precio" className="block text-sm font-bold text-gray-400 mb-2 tracking-wide">
-                PRECIO POR ENTRADA
+              <label htmlFor="entradas-precio" className="block text-sm font-semibold text-tinta mb-1.5 tracking-wide">
+                Precio por entrada
               </label>
               <input
                 id="entradas-precio"
@@ -244,9 +244,9 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio, enlace = null, onGuard
                 step="0.01"
                 value={form.precio}
                 onChange={(e) => cambiar('precio', Number(e.target.value))}
-                className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+                className="w-full px-4 py-3 rounded-xl bg-white border border-borde-fuerte text-tinta placeholder-tinta-suave focus:border-verde-oscuro focus:outline-none transition-colors"
               />
-              <p className="text-xs text-gray-600 mt-1">
+              <p className="text-xs text-tinta-suave mt-1">
                 {esGratis(form.precio)
                   ? 'En 0 es una reserva sin costo'
                   : formatearPrecio(form.precio)}
@@ -256,7 +256,7 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio, enlace = null, onGuard
                   el comprador sino lo que termina entrando a la cuenta. */}
               {!esGratis(form.precio) && comision > 0 && cobros && cobros.admite_split && (
                 <>
-                  <p className="text-xs text-emerald-400 mt-1">
+                  <p className="text-xs text-verde-oscuro mt-1">
                     Menos la comisión de Rezonar ({formatearPorcentaje(comision)}%):{' '}
                     {formatearPrecio(form.precio * (100 - comision) / 100)} por entrada
                   </p>
@@ -266,7 +266,7 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio, enlace = null, onGuard
                       tiene cargados no decimos nada: un número viejo acá es
                       peor que ninguno. */}
                   {mercadoPago && (
-                    <p className="text-xs text-gray-600 mt-1">
+                    <p className="text-xs text-tinta-suave mt-1">
                       A eso Mercado Pago le descuenta aparte {formatearPorcentaje(mercadoPago.porcentaje)}%
                       por procesar el pago, y libera la plata a los {mercadoPago.dias} días
                       de la compra.
@@ -278,8 +278,8 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio, enlace = null, onGuard
           </div>
 
           <div>
-            <label htmlFor="entradas-max" className="block text-sm font-bold text-gray-400 mb-2 tracking-wide">
-              MÁXIMO POR COMPRA
+            <label htmlFor="entradas-max" className="block text-sm font-semibold text-tinta mb-1.5 tracking-wide">
+              Máximo por compra
             </label>
             <input
               id="entradas-max"
@@ -288,20 +288,20 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio, enlace = null, onGuard
               max="50"
               value={form.max_por_compra}
               onChange={(e) => cambiar('max_por_compra', Number(e.target.value))}
-              className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+              className="w-full px-4 py-3 rounded-xl bg-white border border-borde-fuerte text-tinta placeholder-tinta-suave focus:border-verde-oscuro focus:outline-none transition-colors"
             />
-            <p className="text-xs text-gray-600 mt-1">
+            <p className="text-xs text-tinta-suave mt-1">
               Para que una sola persona no se lleve todo el cupo.
             </p>
           </div>
 
           {ocupadas > 0 && (
-            <div className="border border-gray-800 bg-black p-4 text-sm">
-              <p className="text-gray-400">
-                Ya hay <strong className="text-white">{ocupadas}</strong> entradas tomadas
+            <div className="border border-borde bg-white p-4 text-sm">
+              <p className="text-tinta-media">
+                Ya hay <strong className="text-tinta">{ocupadas}</strong> entradas tomadas
                 (vendidas o reservándose ahora).
               </p>
-              <p className="text-gray-600 mt-1">
+              <p className="text-tinta-suave mt-1">
                 Quedan {disponibles} disponibles. No podés bajar la capacidad por debajo de {ocupadas}.
               </p>
             </div>
@@ -335,7 +335,7 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio, enlace = null, onGuard
       )}
 
       {error && (
-        <p className="text-sm text-red-400 bg-red-950 border border-red-900 px-4 py-3">{error}</p>
+        <p className="text-sm text-red-700 bg-red-50 border border-red-200 px-4 py-3">{error}</p>
       )}
 
       <div className="flex items-center gap-4">
@@ -343,14 +343,14 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio, enlace = null, onGuard
           type="button"
           onClick={guardar}
           disabled={guardando}
-          className="bg-white text-black px-6 py-3 font-bold hover:bg-gray-200 transition disabled:opacity-50 flex items-center gap-2"
+          className="inline-flex items-center justify-center gap-2 rounded-full bg-verde text-verde-tinta px-6 py-3 font-semibold hover:bg-verde-oscuro hover:text-white transition-colors disabled:opacity-50 flex items-center gap-2"
         >
           {guardando && <Loader2 className="w-4 h-4 animate-spin" />}
           {guardando ? 'GUARDANDO...' : 'GUARDAR ENTRADAS'}
         </button>
 
         {guardado && !guardando && (
-          <span className="flex items-center gap-2 text-emerald-400 text-sm font-medium">
+          <span className="flex items-center gap-2 text-verde-oscuro text-sm font-medium">
             <Check className="w-4 h-4" />
             Guardado
           </span>
@@ -373,7 +373,7 @@ function OpcionDeModo({ valor, elegido, onElegir, titulo, detalle }) {
   return (
     <label
       className={`flex items-start gap-3 border p-4 cursor-pointer transition ${
-        activo ? 'border-white bg-black' : 'border-gray-800 hover:border-gray-600'
+        activo ? 'border-verde bg-verde-claro' : 'border-borde hover:border-borde-fuerte'
       }`}
     >
       <input
@@ -385,8 +385,8 @@ function OpcionDeModo({ valor, elegido, onElegir, titulo, detalle }) {
         className="mt-1"
       />
       <span>
-        <span className="block text-white font-bold">{titulo}</span>
-        <span className="block text-sm text-gray-500">{detalle}</span>
+        <span className="block text-tinta font-bold">{titulo}</span>
+        <span className="block text-sm text-tinta-suave">{detalle}</span>
       </span>
     </label>
   );

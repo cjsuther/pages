@@ -12,11 +12,11 @@ function Settings() {
 
   if (!token) {
     return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center p-4">
-        <div className="bg-gray-900 border border-gray-800 p-8 text-center">
+      <div className="min-h-screen bg-white text-tinta flex items-center justify-center p-4">
+        <div className="bg-white border border-borde rounded-2xl p-6 sm:p-8 text-center">
           <h2 className="text-2xl font-bold mb-4">Acceso Denegado</h2>
-          <p className="text-gray-400 mb-6">Debes iniciar sesión para acceder al perfil</p>
-          <Link to="/login" className="bg-white text-black px-6 py-2 font-bold hover:bg-gray-200 transition">
+          <p className="text-tinta-media mb-6">Debes iniciar sesión para acceder al perfil</p>
+          <Link to="/login" className="bg-verde text-verde-tinta px-6 py-2 font-bold hover:bg-verde-oscuro hover:text-tinta transition">
             Iniciar Sesión
           </Link>
         </div>
@@ -25,23 +25,23 @@ function Settings() {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      <nav className="border-b border-gray-800">
+    <div className="min-h-screen bg-white text-tinta">
+      <nav className="border-b border-borde">
         <div className="max-w-7xl mx-auto px-6 py-6">
           <div className="flex justify-between items-center">
             <Link to="/">
-              <img src="/logo.png" alt="Rezonar" className="h-10" />
+              <img src="/logo-negro.png" alt="Rezonar" className="h-10" />
             </Link>
             <div className="flex items-center gap-6">
-              <Link to="/dashboard" className="text-gray-400 hover:text-white transition font-medium">
+              <Link to="/dashboard" className="text-tinta-media hover:text-tinta transition font-medium">
                 Dashboard
               </Link>
               <div className="text-right">
-                <p className="text-gray-500 text-sm font-medium">{user?.email}</p>
+                <p className="text-tinta-suave text-sm font-medium">{user?.email}</p>
               </div>
               <button
                 onClick={logout}
-                className="text-gray-400 hover:text-white transition font-medium"
+                className="text-tinta-media hover:text-tinta transition font-medium"
               >
                 Salir de la Cuenta
               </button>
@@ -51,54 +51,54 @@ function Settings() {
       </nav>
 
       <div className="max-w-7xl mx-auto px-6 py-16">
-        <h1 className="text-4xl font-bold mb-16">PERFIL</h1>
+        <h1 className="text-4xl font-bold mb-16">Perfil</h1>
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           <div className="lg:col-span-1">
-            <div className="bg-gray-900 border border-gray-800 p-6">
+            <div className="bg-white border border-borde rounded-2xl p-6">
               <nav className="space-y-3">
                 <button
                   onClick={() => setActiveTab('location')}
                   className={`w-full text-left px-4 py-3 font-bold transition ${
                     activeTab === 'location'
-                      ? 'bg-white text-black'
-                      : 'text-gray-400 hover:text-white'
+                      ? 'bg-verde text-verde-tinta'
+                      : 'text-tinta-media hover:text-tinta'
                   }`}
                 >
-                  MI UBICACIÓN
+                  Mi ubicación
                 </button>
 
                 <button
                   onClick={() => setActiveTab('search')}
                   className={`w-full text-left px-4 py-3 font-bold transition ${
                     activeTab === 'search'
-                      ? 'bg-white text-black'
-                      : 'text-gray-400 hover:text-white'
+                      ? 'bg-verde text-verde-tinta'
+                      : 'text-tinta-media hover:text-tinta'
                   }`}
                 >
-                  BUSCAR PÁGINAS
+                  Buscar páginas
                 </button>
 
                 <button
                   onClick={() => setActiveTab('following')}
                   className={`w-full text-left px-4 py-3 font-bold transition ${
                     activeTab === 'following'
-                      ? 'bg-white text-black'
-                      : 'text-gray-400 hover:text-white'
+                      ? 'bg-verde text-verde-tinta'
+                      : 'text-tinta-media hover:text-tinta'
                   }`}
                 >
-                  PÁGINAS QUE SIGO
+                  Páginas que sigo
                 </button>
 
                 <button
                   onClick={() => setActiveTab('claves')}
                   className={`w-full text-left px-4 py-3 font-bold transition ${
                     activeTab === 'claves'
-                      ? 'bg-white text-black'
-                      : 'text-gray-400 hover:text-white'
+                      ? 'bg-verde text-verde-tinta'
+                      : 'text-tinta-media hover:text-tinta'
                   }`}
                 >
-                  CLAVES DE API
+                  Claves de API
                 </button>
               </nav>
             </div>

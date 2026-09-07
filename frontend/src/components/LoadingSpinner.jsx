@@ -9,8 +9,8 @@ function LoadingSpinner({ size = 'md', message = 'Cargando...' }) {
 
   return (
     <div className="flex flex-col items-center justify-center gap-3">
-      <div className={`${sizeClasses[size]} border-blue-600 border-t-transparent rounded-full animate-spin`} />
-      {message && <p className="text-gray-600 text-sm">{message}</p>}
+      <div className={`${sizeClasses[size]} border-verde border-t-transparent rounded-full animate-spin`} />
+      {message && <p className="text-tinta-suave text-sm">{message}</p>}
     </div>
   );
 }

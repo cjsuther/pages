@@ -170,7 +170,7 @@ function PageQRDownload({ page }) {
       onClick={handleDownload}
       disabled={loading}
       title="Descargar QR"
-      className="text-gray-500 hover:text-white transition disabled:opacity-40"
+      className="text-tinta-suave hover:text-tinta transition disabled:opacity-40"
     >
       {loading
         ? <span className="text-xs">...</span>

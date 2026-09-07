@@ -1,6 +1,8 @@
 import React, { useState, useContext, useEffect } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { AuthContext } from '../App';
+import { Helmet } from 'react-helmet-async';
+import { PieDePagina } from '../components/Marco';
 import { trackEvent } from '../utils/analytics';
 
 /** Dónde se anota a dónde volver cuando hay que entrar primero. */
@@ -64,57 +66,62 @@ function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      <nav className="border-b border-gray-800">
-        <div className="max-w-7xl mx-auto px-6 py-6">
+    <div className="min-h-screen bg-white text-tinta flex flex-col">
+      <Helmet><title>Entrar — Rezonar</title></Helmet>
+
+      <nav className="border-b border-borde">
+        <div className="max-w-7xl mx-auto px-5 sm:px-6 h-16 sm:h-20 flex items-center">
           <Link to="/">
-            <img src="/logo.png" alt="Rezonar" className="h-10" />
+            <img src="/logo-negro.png" alt="Rezonar" className="h-8 sm:h-9" />
           </Link>
         </div>
       </nav>
 
-      <div className="flex items-center justify-center px-6 py-24">
-        <div className="max-w-md w-full space-y-8">
-          <div className="text-center space-y-4">
-            <h1 className="text-5xl font-black tracking-tight">BIENVENIDO</h1>
-            <p className="text-xl text-gray-400">Inicia sesión para continuar</p>
+      <div className="flex-1 flex items-center justify-center px-5 sm:px-6 py-16">
+        <div className="max-w-md w-full">
+          <div className="text-center">
+            <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-balance">
+              Entrá a Rezonar
+            </h1>
+            <p className="mt-3 text-tinta-media leading-relaxed">
+              Con tu cuenta seguís a los artistas que te gustan, recibís un aviso cuando
+              publican una fecha nueva y armás tu propia página.
+            </p>
           </div>
 
           {error && (
-            <div className="bg-red-900 border border-red-700 text-red-200 px-6 py-4 font-medium">
+            <div className="mt-6 px-4 py-3 rounded-xl border border-red-200 bg-red-50 text-red-800 text-sm">
               {error}
             </div>
           )}
 
-          <div className="space-y-4">
-            <button
-              onClick={handleGoogleLogin}
-              className="w-full flex items-center justify-center gap-3 bg-white text-black py-4 px-6 font-bold hover:bg-gray-200 transition"
-            >
-              <svg className="w-5 h-5" viewBox="0 0 24 24">
-                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-              </svg>
-              CONTINUAR CON GOOGLE
-            </button>
-          </div>
+          <button
+            onClick={handleGoogleLogin}
+            className="mt-8 w-full flex items-center justify-center gap-3 rounded-full bg-verde text-verde-tinta py-4 px-6 font-semibold hover:bg-verde-oscuro hover:text-white transition-colors"
+          >
+            <svg className="w-5 h-5" viewBox="0 0 24 24" aria-hidden="true">
+              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+            </svg>
+            Continuar con Google
+          </button>
 
-          <p className="text-center text-gray-500 text-sm mt-8">
-            Al continuar, aceptas nuestros términos y condiciones
+          <p className="text-center text-tinta-suave text-sm mt-6">
+            Al continuar aceptás nuestros términos y condiciones.
+          </p>
+
+          <p className="text-center text-sm mt-8 pt-8 border-t border-borde text-tinta-media">
+            ¿Sos artista y querés saber qué te ofrecemos?{' '}
+            <Link to="/artistas" className="text-verde-oscuro font-semibold hover:underline underline-offset-4">
+              Mirá acá
+            </Link>
           </p>
         </div>
       </div>
 
-      <footer className="border-t border-gray-800 py-12">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-6">
-            <img src="/logo.png" alt="Rezonar" className="h-8 opacity-50" />
-            <p className="text-gray-500 font-medium">© 2026 REZONAR</p>
-          </div>
-        </div>
-      </footer>
+      <PieDePagina />
     </div>
   );
 }

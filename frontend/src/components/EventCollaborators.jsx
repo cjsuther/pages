@@ -20,7 +20,7 @@ function EventCollaborators({ event, currentPageId, color = '#3b82f6' }) {
   if (!isCollaborated && otherCollaborators.length === 0) return null;
 
   return (
-    <div className="mt-3 pt-3 border-t border-gray-200 space-y-1.5">
+    <div className="mt-3 pt-3 border-t border-borde space-y-1.5">
       {isCollaborated && event.source_page_slug && (
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs font-semibold uppercase tracking-wide opacity-60">Organiza:</span>

@@ -107,27 +107,27 @@ function NotificationBell() {
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setShowDropdown(!showDropdown)}
-        className="relative p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors"
+        className="relative p-2 text-tinta-suave hover:text-tinta hover:bg-papel-hueso rounded-full transition-colors"
       >
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
         </svg>
         {unreadCount > 0 && (
-          <span className="absolute top-1 right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-semibold">
+          <span className="absolute top-1 right-1 bg-red-500 text-tinta text-xs rounded-full w-5 h-5 flex items-center justify-center font-semibold">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
       </button>
 
       {showDropdown && (
-        <div className="fixed inset-x-2 top-14 sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-96 bg-white rounded-lg shadow-xl border border-gray-200 z-50 max-h-[80vh] sm:max-h-[600px] flex flex-col">
-          <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-gray-900">Notificaciones</h3>
+        <div className="fixed inset-x-2 top-14 sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-96 bg-white rounded-lg shadow-xl border border-borde z-50 max-h-[80vh] sm:max-h-[600px] flex flex-col">
+          <div className="p-4 border-b border-borde flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-tinta">Notificaciones</h3>
             {unreadCount > 0 && (
               <button
                 onClick={markAllAsRead}
                 disabled={loading}
-                className="text-sm text-blue-600 hover:text-blue-800 disabled:opacity-50"
+                className="text-sm text-verde-oscuro hover:text-tinta disabled:opacity-50"
               >
                 Marcar todas como leídas
               </button>
@@ -136,8 +136,8 @@ function NotificationBell() {
 
           <div className="overflow-y-auto flex-1">
             {notifications.length === 0 ? (
-              <div className="p-8 text-center text-gray-500">
-                <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="p-8 text-center text-tinta-suave">
+                <svg className="w-16 h-16 mx-auto mb-4 text-tinta-media" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                 </svg>
                 <p className="text-sm">No tienes notificaciones</p>
@@ -147,25 +147,25 @@ function NotificationBell() {
                 <div
                   key={notification.id}
                   onClick={() => handleNotificationClick(notification)}
-                  className={`p-4 border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors ${
-                    !notification.is_read ? 'bg-blue-50' : ''
+                  className={`p-4 border-b border-borde hover:bg-papel-hueso cursor-pointer transition-colors ${
+                    !notification.is_read ? 'bg-verde-claro' : ''
                   }`}
                 >
                   <div className="flex items-start gap-3">
                     {!notification.is_read && (
-                      <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
+                      <div className="w-2 h-2 bg-verde-claro0 rounded-full mt-2 flex-shrink-0"></div>
                     )}
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-gray-900 text-sm mb-1">
+                      <p className="font-medium text-tinta text-sm mb-1">
                         {notification.title}
                         {notification.type === 'collaboration_request' && (
                           <span className="ml-2 text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded font-normal">Colaboración</span>
                         )}
                       </p>
-                      <p className="text-sm text-gray-600 mb-2">
+                      <p className="text-sm text-tinta-suave mb-2">
                         {notification.message}
                       </p>
-                      <div className="flex items-center gap-2 text-xs text-gray-500">
+                      <div className="flex items-center gap-2 text-xs text-tinta-suave">
                         <span>{notification.page_title}</span>
                         <span>•</span>
                         <span>{formatDate(notification.created_at)}</span>

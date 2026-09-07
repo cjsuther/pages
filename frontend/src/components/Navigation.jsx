@@ -1,11 +1,18 @@
 import React, { useContext, useState, useRef, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, X, ChevronDown, Check } from 'lucide-react';
+import { Menu, X, ChevronDown, Check, LogOut } from 'lucide-react';
 import { AuthContext } from '../App';
 import NotificationBell from './NotificationBell';
 import LocationIndicator from './LocationIndicator';
+import { Boton, Campo, Etiqueta } from './ui';
 
-function ProfileMenu() {
+const SECCIONES = [
+  { a: '/', texto: 'Inicio' },
+  { a: '/pages', texto: 'Seguir páginas' },
+  { a: '/my-pages', texto: 'Mis páginas' },
+];
+
+function MenuPerfil({ alNavegar = () => {} }) {
   const { user, token, logout, updateUser, apiUrl } = useContext(AuthContext);
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(user?.name || '');
@@ -49,45 +56,48 @@ function ProfileMenu() {
     }
   };
 
-  const displayLabel = user?.name || user?.email;
+  const iniciales = (user?.name || user?.email || '?').trim().charAt(0).toUpperCase();
 
   return (
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-1 text-gray-400 hover:text-white transition"
+        className="flex items-center gap-2 text-tinta-media hover:text-tinta transition-colors"
       >
-        <span className="text-sm font-medium">{displayLabel}</span>
+        <span className="w-8 h-8 rounded-full bg-verde-claro text-verde-oscuro font-bold text-sm flex items-center justify-center border border-verde-medio">
+          {iniciales}
+        </span>
+        <span className="text-sm font-medium max-w-[10rem] truncate hidden lg:inline">
+          {user?.name || user?.email}
+        </span>
         <ChevronDown className="w-3.5 h-3.5" />
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-72 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-50 p-4">
-          <p className="text-xs text-gray-500 mb-1">Email</p>
-          <p className="text-sm text-gray-300 mb-4 truncate">{user?.email}</p>
+        <div className="absolute right-0 mt-3 w-72 bg-white border border-borde rounded-2xl shadow-lg shadow-tinta/5 z-50 p-5">
+          <p className="text-xs text-tinta-suave mb-1">Sesión iniciada como</p>
+          <p className="text-sm text-tinta mb-5 truncate font-medium">{user?.email}</p>
 
-          <p className="text-xs text-gray-500 mb-1">Nombre</p>
-          <input
+          <Etiqueta htmlFor="nombre-perfil">Tu nombre</Etiqueta>
+          <Campo
+            id="nombre-perfil"
             type="text"
             value={name}
             onChange={e => setName(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleSave()}
-            placeholder="Tu nombre"
-            className="w-full bg-gray-800 border border-gray-700 text-white text-sm px-3 py-2 rounded focus:border-gray-500 focus:outline-none mb-3"
+            placeholder="Cómo querés que te vean"
+            className="mb-4 py-2"
           />
 
-          <div className="flex items-center justify-between">
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="flex items-center gap-1.5 px-4 py-1.5 bg-white text-black text-sm font-bold rounded hover:bg-gray-200 transition disabled:opacity-50"
-            >
+          <div className="flex items-center justify-between gap-3">
+            <Boton onClick={handleSave} disabled={saving} tamano="sm">
               {saved ? <><Check className="w-3.5 h-3.5" /> Guardado</> : saving ? 'Guardando...' : 'Guardar'}
-            </button>
+            </Boton>
             <button
-              onClick={() => { logout(); setOpen(false); }}
-              className="text-sm text-gray-500 hover:text-white transition"
+              onClick={() => { logout(); setOpen(false); alNavegar(); }}
+              className="flex items-center gap-1.5 text-sm text-tinta-suave hover:text-tinta transition-colors"
             >
+              <LogOut className="w-3.5 h-3.5" />
               Cerrar sesión
             </button>
           </div>
@@ -104,104 +114,119 @@ function Navigation() {
 
   const isActive = (path) => location.pathname === path;
 
+  const cerrar = () => setIsMenuOpen(false);
+
   return (
-    <nav className="border-b border-gray-800">
-      <div className="max-w-7xl mx-auto px-6 py-6">
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-8">
-            <Link to="/">
-              <img src="/logo.png" alt="Rezonar" className="h-10" />
+    <nav className="border-b border-borde bg-white sticky top-0 z-40">
+      <div className="max-w-7xl mx-auto px-5 sm:px-6">
+        <div className="flex justify-between items-center h-16 sm:h-20 gap-4">
+          <div className="flex items-center gap-8 min-w-0">
+            <Link to="/" className="flex-shrink-0" aria-label="Ir al inicio de Rezonar">
+              <img src="/logo-negro.png" alt="Rezonar" className="h-8 sm:h-9" />
             </Link>
+
             {token && (
-              <div className="hidden md:flex gap-6">
-                <Link
-                  to="/"
-                  className={`font-bold transition ${
-                    isActive('/') ? 'text-white' : 'text-gray-400 hover:text-white'
-                  }`}
-                >
-                  INICIO
-                </Link>
-                <Link
-                  to="/pages"
-                  className={`font-bold transition ${
-                    isActive('/pages') ? 'text-white' : 'text-gray-400 hover:text-white'
-                  }`}
-                >
-                  PÁGINAS
-                </Link>
-                <Link
-                  to="/my-pages"
-                  className={`font-bold transition ${
-                    isActive('/my-pages') ? 'text-white' : 'text-gray-400 hover:text-white'
-                  }`}
-                >
-                  MIS PÁGINAS
-                </Link>
+              <div className="hidden md:flex gap-1">
+                {SECCIONES.map(({ a, texto }) => (
+                  <Link
+                    key={a}
+                    to={a}
+                    className={`px-3 py-2 rounded-full text-sm font-semibold transition-colors ${
+                      isActive(a)
+                        ? 'bg-verde-claro text-verde-oscuro'
+                        : 'text-tinta-media hover:text-tinta hover:bg-papel-hueso'
+                    }`}
+                  >
+                    {texto}
+                  </Link>
+                ))}
               </div>
             )}
           </div>
 
-          <div className="hidden md:flex items-center gap-6">
+          <div className="hidden md:flex items-center gap-4">
             {token ? (
               <>
                 <LocationIndicator />
                 <NotificationBell />
-                <ProfileMenu />
+                <MenuPerfil />
               </>
             ) : (
-              <Link to="/login" className="text-gray-300 hover:text-white transition font-medium">
-                Iniciar Sesión / Registrarse
-              </Link>
+              <>
+                <Link
+                  to="/artistas"
+                  className="text-sm font-semibold text-tinta-media hover:text-tinta transition-colors"
+                >
+                  Para artistas
+                </Link>
+                <Link
+                  to="/login"
+                  className="text-sm font-semibold text-tinta-media hover:text-tinta transition-colors"
+                >
+                  Entrar
+                </Link>
+                <Boton a="/register" tamano="sm">Crear mi página</Boton>
+              </>
             )}
           </div>
 
-          {token && (
-            <button
-              onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="md:hidden text-gray-400 hover:text-white transition"
-            >
-              {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-            </button>
-          )}
+          <button
+            onClick={() => setIsMenuOpen(!isMenuOpen)}
+            className="md:hidden text-tinta-media hover:text-tinta transition-colors p-1"
+            aria-label={isMenuOpen ? 'Cerrar menú' : 'Abrir menú'}
+            aria-expanded={isMenuOpen}
+          >
+            {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+          </button>
         </div>
 
-        {isMenuOpen && token && (
-          <div className="md:hidden mt-6 pt-6 border-t border-gray-800 space-y-4">
-            <Link
-              to="/"
-              onClick={() => setIsMenuOpen(false)}
-              className={`block font-bold transition ${
-                isActive('/') ? 'text-white' : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              INICIO
-            </Link>
-            <Link
-              to="/pages"
-              onClick={() => setIsMenuOpen(false)}
-              className={`block font-bold transition ${
-                isActive('/pages') ? 'text-white' : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              PÁGINAS
-            </Link>
-            <Link
-              to="/my-pages"
-              onClick={() => setIsMenuOpen(false)}
-              className={`block font-bold transition ${
-                isActive('/my-pages') ? 'text-white' : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              MIS PÁGINAS
-            </Link>
-            <div className="flex items-center gap-4 pt-4 border-t border-gray-800">
-              <LocationIndicator />
-              <NotificationBell />
-            </div>
-            <div className="pt-2">
-              <ProfileMenu />
-            </div>
+        {isMenuOpen && (
+          <div className="md:hidden pb-6 pt-2 border-t border-borde space-y-1">
+            {token ? (
+              <>
+                {SECCIONES.map(({ a, texto }) => (
+                  <Link
+                    key={a}
+                    to={a}
+                    onClick={cerrar}
+                    className={`block px-3 py-2.5 rounded-xl font-semibold transition-colors ${
+                      isActive(a)
+                        ? 'bg-verde-claro text-verde-oscuro'
+                        : 'text-tinta-media hover:text-tinta hover:bg-papel-hueso'
+                    }`}
+                  >
+                    {texto}
+                  </Link>
+                ))}
+                <div className="flex items-center gap-4 px-3 pt-4 mt-2 border-t border-borde">
+                  <LocationIndicator />
+                  <NotificationBell />
+                </div>
+                <div className="px-3 pt-3">
+                  <MenuPerfil alNavegar={cerrar} />
+                </div>
+              </>
+            ) : (
+              <>
+                <Link
+                  to="/artistas"
+                  onClick={cerrar}
+                  className="block px-3 py-2.5 rounded-xl font-semibold text-tinta-media hover:text-tinta hover:bg-papel-hueso transition-colors"
+                >
+                  Para artistas
+                </Link>
+                <Link
+                  to="/login"
+                  onClick={cerrar}
+                  className="block px-3 py-2.5 rounded-xl font-semibold text-tinta-media hover:text-tinta hover:bg-papel-hueso transition-colors"
+                >
+                  Entrar
+                </Link>
+                <div className="px-3 pt-3">
+                  <Boton a="/register" onClick={cerrar} className="w-full">Crear mi página</Boton>
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>

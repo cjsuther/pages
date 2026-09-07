@@ -15,7 +15,7 @@ class PagesHandler
     public static $reservedSlugs = [
         'login', 'register', 'dashboard', 'page', 'api', 'admin', 'auth',
         'public', 'pages', 'groups', 'links', 'user', 'users', 'config',
-        'settings', 'logout', 'profile', 'account',
+        'settings', 'logout', 'profile', 'account', 'artistas',
     ];
 
     private static $defaults = [

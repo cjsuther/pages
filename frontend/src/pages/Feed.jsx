@@ -68,16 +68,16 @@ function Feed() {
 
 
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen bg-white text-tinta">
       <Navigation />
 
       <div className="max-w-7xl mx-auto px-6 py-16">
         <div className="flex justify-between items-center mb-8">
-          <h1 className="text-4xl font-bold">FEED DE EVENTOS</h1>
+          <h1 className="text-4xl font-bold">Feed de eventos</h1>
           <div className="flex items-center gap-4">
             <button
               onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-              className="p-2 hover:bg-gray-900 border border-gray-800 transition"
+              className="p-2 hover:bg-white border border-borde transition"
               title={sortOrder === 'asc' ? 'Orden ascendente' : 'Orden descendente'}
             >
               <ArrowUpDown className={`w-5 h-5 transition-transform ${sortOrder === 'desc' ? 'rotate-180' : ''}`} />
@@ -85,7 +85,7 @@ function Feed() {
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
-              className="bg-gray-900 border border-gray-800 text-white px-4 py-2 font-medium focus:border-white transition"
+              className="bg-white border border-borde text-tinta px-4 py-2 font-medium focus:border-verde-oscuro transition"
             >
               <option value="date">Por fecha</option>
               <option value="distance" disabled={!userLocation}>Por distancia</option>
@@ -94,8 +94,8 @@ function Feed() {
         </div>
 
         {!userLocation && sortBy === 'distance' && (
-          <div className="bg-gray-900 border border-gray-800 p-6 mb-8">
-            <p className="text-gray-400">
+          <div className="bg-white border border-borde rounded-2xl p-6 mb-8">
+            <p className="text-tinta-media">
               Para ordenar por distancia, necesitas configurar tu ubicación en el perfil.
             </p>
           </div>
@@ -103,18 +103,18 @@ function Feed() {
 
         {loading ? (
           <div className="text-center py-24">
-            <div className="text-gray-500 text-xl font-medium">Cargando eventos...</div>
+            <div className="text-tinta-suave text-xl font-medium">Cargando eventos...</div>
           </div>
         ) : events.length === 0 ? (
           <div className="text-center py-24 space-y-6">
-            <div className="w-32 h-32 bg-gray-900 mx-auto"></div>
-            <p className="text-gray-400 text-2xl font-light">No hay eventos</p>
-            <p className="text-gray-600 text-lg">Sigue algunas páginas para ver sus eventos aquí</p>
+            <div className="w-32 h-32 bg-white mx-auto"></div>
+            <p className="text-tinta-media text-2xl font-light">No hay eventos</p>
+            <p className="text-tinta-suave text-lg">Sigue algunas páginas para ver sus eventos aquí</p>
             <Link
               to="/pages"
-              className="inline-block bg-white text-black px-8 py-4 text-lg font-bold hover:bg-gray-200 transition"
+              className="inline-block inline-flex items-center justify-center gap-2 rounded-full bg-verde text-verde-tinta px-7 py-3.5 font-semibold hover:bg-verde-oscuro hover:text-white transition-colors"
             >
-              BUSCAR PÁGINAS
+              Buscar páginas
             </Link>
           </div>
         ) : (
@@ -123,7 +123,7 @@ function Feed() {
               <Link
                 key={event.id}
                 to={`/${event.page_slug}`}
-                className="bg-gray-900 border border-gray-800 overflow-hidden hover:border-gray-700 transition group"
+                className="bg-white border border-borde overflow-hidden hover:border-borde-fuerte transition group"
               >
                 <img
                   src={event.image_url || 'https://images.pexels.com/photos/1190298/pexels-photo-1190298.jpeg?auto=compress&cs=tinysrgb&w=800'}
@@ -139,9 +139,9 @@ function Feed() {
                         className="w-8 h-8 rounded-full object-cover"
                       />
                     )}
-                    <p className="text-sm text-gray-500">{event.page_title}</p>
+                    <p className="text-sm text-tinta-suave">{event.page_title}</p>
                   </div>
-                  <div className="flex items-center gap-2 text-sm text-gray-500 mb-3">
+                  <div className="flex items-center gap-2 text-sm text-tinta-suave mb-3">
                     <Calendar className="w-4 h-4" />
                     {new Date(event.event_date + ' ' + (event.event_time || '00:00')).toLocaleDateString('es-AR', {
                       timeZone: 'America/Argentina/Buenos_Aires',
@@ -155,13 +155,13 @@ function Feed() {
                   </div>
                   <h3 className="text-xl font-bold mb-2">{event.text}</h3>
                   {event.event_address && (
-                    <p className="text-sm text-gray-500 flex items-start gap-2">
+                    <p className="text-sm text-tinta-suave flex items-start gap-2">
                       <MapPin className="w-4 h-4 mt-0.5 flex-shrink-0" />
                       {event.event_address}
                     </p>
                   )}
                   {event.distance !== null && event.distance !== undefined && (
-                    <p className="text-sm text-gray-400 mt-2">
+                    <p className="text-sm text-tinta-media mt-2">
                       {event.distance.toFixed(1)} km
                     </p>
                   )}

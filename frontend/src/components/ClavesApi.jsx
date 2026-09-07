@@ -73,30 +73,30 @@ function ClavesApi() {
   };
 
   return (
-    <div className="bg-gray-900 border border-gray-800 p-8">
-      <h2 className="text-2xl font-black mb-2 tracking-tight">CLAVES DE API</h2>
-      <p className="text-sm text-gray-500 mb-8">
+    <div className="bg-white border border-borde rounded-2xl p-6 sm:p-8">
+      <h2 className="text-2xl font-bold mb-2 tracking-tight">Claves de API</h2>
+      <p className="text-sm text-tinta-suave mb-8">
         Sirven para conectar un asistente a tus páginas y que pueda crear y administrar
         eventos por vos. Da acceso a todo lo que vos podés hacer: compartila como
         compartirías una contraseña.
       </p>
 
       {recienCreada && (
-        <div className="border border-emerald-800 bg-emerald-950 p-4 mb-6">
-          <p className="text-sm text-emerald-300 font-bold mb-2">
+        <div className="border border-verde-medio bg-verde-claro p-4 mb-6">
+          <p className="text-sm text-verde-oscuro font-semibold mb-2">
             Guardala ahora: no la vas a poder volver a ver.
           </p>
           <div className="flex items-center gap-3">
-            <code className="flex-1 text-xs text-white bg-black px-3 py-2 overflow-x-auto whitespace-nowrap">
+            <code className="flex-1 text-xs text-tinta bg-papel-hueso border border-borde rounded-lg px-3 py-2 overflow-x-auto whitespace-nowrap">
               {recienCreada}
             </code>
             <button
               type="button"
               onClick={copiar}
-              className="shrink-0 text-gray-300 hover:text-white"
+              className="shrink-0 text-tinta-media hover:text-tinta"
               aria-label="Copiar la clave"
             >
-              {copiada ? <Check className="w-5 h-5 text-emerald-400" /> : <Copy className="w-5 h-5" />}
+              {copiada ? <Check className="w-5 h-5 text-verde-oscuro" /> : <Copy className="w-5 h-5" />}
             </button>
           </div>
         </div>
@@ -109,30 +109,30 @@ function ClavesApi() {
           onChange={(e) => setNombre(e.target.value)}
           placeholder="Para qué la vas a usar"
           aria-label="Nombre de la clave"
-          className="flex-1 bg-black border border-gray-700 px-4 py-3 text-white focus:border-white focus:outline-none"
+          className="flex-1 bg-white border border-borde-fuerte px-4 py-3 text-tinta focus:border-verde-oscuro focus:outline-none"
         />
         <button
           type="submit"
           disabled={!nombre.trim()}
-          className="px-6 py-3 bg-white text-black font-bold hover:bg-gray-200 transition disabled:opacity-40"
+          className="px-6 py-3 bg-verde text-verde-tinta font-bold hover:bg-verde-oscuro hover:text-tinta transition disabled:opacity-40"
         >
-          CREAR
+          Crear
         </button>
       </form>
 
-      {error && <p className="text-sm text-red-400 mb-6">{error}</p>}
+      {error && <p className="text-sm text-red-700 mb-6">{error}</p>}
 
       {cargando ? (
-        <p className="text-gray-500">Cargando...</p>
+        <p className="text-tinta-suave">Cargando...</p>
       ) : claves.length === 0 ? (
-        <p className="text-gray-500 text-sm">Todavía no creaste ninguna.</p>
+        <p className="text-tinta-suave text-sm">Todavía no creaste ninguna.</p>
       ) : (
-        <ul className="divide-y divide-gray-800 border-t border-gray-800">
+        <ul className="divide-y divide-borde border-t border-borde">
           {claves.map((c) => (
             <li key={c.id} className="py-4 flex items-center justify-between gap-4">
               <div className="min-w-0">
-                <p className="text-white font-bold truncate">{c.nombre}</p>
-                <p className="text-xs text-gray-600 font-mono">
+                <p className="text-tinta font-bold truncate">{c.nombre}</p>
+                <p className="text-xs text-tinta-suave font-mono">
                   {c.prefijo}…
                   {c.ultimo_uso_en ? ` · usada por última vez el ${c.ultimo_uso_en.slice(0, 10)}` : ' · sin usar todavía'}
                 </p>
@@ -140,7 +140,7 @@ function ClavesApi() {
               <button
                 type="button"
                 onClick={() => revocar(c.id)}
-                className="shrink-0 text-gray-500 hover:text-red-400 transition"
+                className="shrink-0 text-tinta-suave hover:text-red-700 transition"
                 aria-label={`Revocar ${c.nombre}`}
               >
                 <Trash2 className="w-4 h-4" />
@@ -150,11 +150,11 @@ function ClavesApi() {
         </ul>
       )}
 
-      <div className="mt-10 border-t border-gray-800 pt-6">
-        <p className="text-sm font-bold text-gray-400 mb-2">CUÁNDO HACE FALTA UNA CLAVE</p>
-        <p className="text-xs text-gray-600">
+      <div className="mt-10 border-t border-borde pt-6">
+        <p className="text-sm font-bold text-tinta-media mb-2">Cuándo hace falta una clave</p>
+        <p className="text-xs text-tinta-suave">
           Casi nunca. La mayoría de los asistentes se autoriza solo: alcanza con
-          agregar <code className="text-gray-400">https://rezon.ar/mcp</code> como
+          agregar <code className="text-tinta-media">https://rezon.ar/mcp</code> como
           servidor MCP y él te trae acá a dar el permiso. Una clave sirve para lo
           otro: un script propio, o un cliente viejo que sólo sepa mandar una
           credencial fija.
@@ -210,9 +210,9 @@ export function Conexiones() {
   }
 
   return (
-    <div className="bg-gray-900 border border-gray-800 p-8 mt-8">
-      <h2 className="text-2xl font-black mb-2 tracking-tight">APLICACIONES CONECTADAS</h2>
-      <p className="text-sm text-gray-500 mb-8">
+    <div className="bg-white border border-borde rounded-2xl p-6 sm:p-8 mt-8">
+      <h2 className="text-2xl font-bold mb-2 tracking-tight">Aplicaciones conectadas</h2>
+      <p className="text-sm text-tinta-suave mb-8">
         Programas a los que les diste permiso para administrar tus eventos.
       </p>
 
@@ -220,31 +220,31 @@ export function Conexiones() {
           buscar si hay algo conectado, y no encontrar nada no es lo mismo que
           no encontrar la sección. */}
       {conexiones.length === 0 && (
-        <div className="border border-gray-800 bg-black p-6">
-          <p className="text-sm text-gray-400 mb-4">
+        <div className="border border-borde bg-white p-6">
+          <p className="text-sm text-tinta-media mb-4">
             Todavía no conectaste ninguna. No hay nada que generar acá: agregá esta
             dirección como servidor MCP en tu asistente y él te va a traer a una
             pantalla de Rezonar para que le des permiso.
           </p>
-          <code className="block text-xs text-gray-300 bg-gray-900 px-3 py-2 overflow-x-auto whitespace-nowrap">
+          <code className="block text-xs text-tinta-media bg-white px-3 py-2 overflow-x-auto whitespace-nowrap">
             https://rezon.ar/mcp
           </code>
         </div>
       )}
 
-      <ul className="divide-y divide-gray-800 border-t border-gray-800">
+      <ul className="divide-y divide-borde border-t border-borde">
         {conexiones.map((c) => (
           <li key={c.client_id} className="py-4 flex items-center justify-between gap-4">
             <div className="min-w-0">
-              <p className="text-white font-bold truncate">{c.nombre || 'Aplicación sin nombre'}</p>
-              <p className="text-xs text-gray-600">
+              <p className="text-tinta font-bold truncate">{c.nombre || 'Aplicación sin nombre'}</p>
+              <p className="text-xs text-tinta-suave">
                 {c.ultimo_uso_en ? `Última vez el ${c.ultimo_uso_en.slice(0, 10)}` : 'Sin usar todavía'}
               </p>
             </div>
             <button
               type="button"
               onClick={() => desconectar(c.client_id, c.nombre)}
-              className="shrink-0 text-sm text-gray-500 hover:text-red-400 transition"
+              className="shrink-0 text-sm text-tinta-suave hover:text-red-700 transition"
             >
               Desconectar
             </button>

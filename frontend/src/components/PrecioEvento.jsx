@@ -28,7 +28,7 @@ function PrecioEvento({ evento, className = '' }) {
     <p className={`text-sm font-bold ${className}`}>
       <span
         className={`inline-block px-3 py-1 rounded ${
-          esGratis ? 'bg-emerald-900 text-emerald-300' : 'bg-gray-800 text-gray-200'
+          esGratis ? 'bg-verde-claro text-verde-oscuro' : 'bg-papel-hueso text-tinta-media'
         }`}
       >
         {texto}

@@ -1,30 +1,42 @@
-import React, { useState, useEffect, useContext } from 'react';
-import { AuthContext } from '../App';
+import React, { useState, useEffect, useContext, useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import { Search, Bell, ChevronDown, ExternalLink, Users } from 'lucide-react';
+import { AuthContext } from '../App';
+import { Avatar, Boton, Campo, Cargando, Chip, Tarjeta, Vacio } from './ui';
+import EleccionDeAlerta from './EleccionDeAlerta';
+import { cuerpoDePreferencia, describirAlerta, leerPreferencia } from '../utils/alertas';
 
-function FollowingManager() {
+const POR_PAGINA = 8;
+
+/**
+ * Las páginas que seguís, con el aviso de cada una a la vista.
+ *
+ * Antes había que abrir "Editar" en cada fila para saber qué avisos tenía
+ * configurados: la información más importante de la lista —de qué te vas a
+ * enterar— era justamente la única que no se veía. Ahora va en la fila, y
+ * abrir sirve para cambiarla, no para consultarla.
+ */
+function FollowingManager({ alCambiar = () => {} }) {
   const { token, apiUrl } = useContext(AuthContext);
+
   const [following, setFollowing] = useState([]);
-  const [filteredFollowing, setFilteredFollowing] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [editingId, setEditingId] = useState(null);
-  const [notificationType, setNotificationType] = useState('all');
-  const [search, setSearch] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 5;
+  const [busqueda, setBusqueda] = useState('');
+  const [pagina, setPagina] = useState(1);
+
+  const [abierta, setAbierta] = useState(null);
+  const [modo, setModo] = useState('todas');
+  const [radio, setRadio] = useState(50);
+  const [guardando, setGuardando] = useState(false);
 
   useEffect(() => {
     fetchFollowing();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    const filtered = following.filter(page =>
-      page.title.toLowerCase().includes(search.toLowerCase()) ||
-      (page.description && page.description.toLowerCase().includes(search.toLowerCase()))
-    );
-    setFilteredFollowing(filtered);
-    setCurrentPage(1);
-  }, [search, following]);
+    setPagina(1);
+  }, [busqueda]);
 
   const fetchFollowing = async () => {
     try {
@@ -33,7 +45,7 @@ function FollowingManager() {
       });
       const data = await response.json();
       setFollowing(data.following || []);
-      setFilteredFollowing(data.following || []);
+      alCambiar((data.following || []).length);
     } catch (err) {
       console.error('Error fetching following:', err);
     } finally {
@@ -41,31 +53,41 @@ function FollowingManager() {
     }
   };
 
-  const handleUnfollow = async (pageId) => {
-    if (!confirm('¿Dejar de seguir esta página?')) {
+  const dejarDeSeguir = async (page) => {
+    if (!confirm(`¿Dejar de seguir a ${page.title}? No vas a recibir más avisos de sus fechas.`)) {
       return;
     }
 
     try {
-      const response = await fetch(`${apiUrl}/pages/follow.php?page_id=${pageId}`, {
+      const response = await fetch(`${apiUrl}/pages/follow.php?page_id=${page.id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
       if (response.ok) {
-        setFollowing(following.filter(page => page.id !== pageId));
+        const quedan = following.filter(p => p.id !== page.id);
+        setFollowing(quedan);
+        alCambiar(quedan.length);
       }
     } catch (err) {
       console.error('Error unfollowing page:', err);
     }
   };
 
-  const handleEditPreferences = (page) => {
-    setEditingId(page.id);
-    setNotificationType(page.notify_all_events ? 'all' : 'nearby');
+  const abrir = (page) => {
+    if (abierta === page.id) {
+      setAbierta(null);
+      return;
+    }
+
+    const { modo: m, radio: r } = leerPreferencia(page);
+    setModo(m);
+    setRadio(r);
+    setAbierta(page.id);
   };
 
-  const handleSavePreferences = async (pageId) => {
+  const guardar = async (pageId) => {
+    setGuardando(true);
     try {
       const response = await fetch(`${apiUrl}/pages/follow.php`, {
         method: 'POST',
@@ -73,204 +95,163 @@ function FollowingManager() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({
-          page_id: pageId,
-          notify_all_events: notificationType === 'all',
-          max_distance_km: 30
-        })
+        body: JSON.stringify(cuerpoDePreferencia(pageId, modo, radio))
       });
 
       if (response.ok) {
         setFollowing(following.map(page =>
           page.id === pageId
-            ? { ...page, notify_all_events: notificationType === 'all', max_distance_km: 30 }
+            ? { ...page, notify_all_events: modo === 'todas', max_distance_km: radio }
             : page
         ));
-        setEditingId(null);
+        setAbierta(null);
       }
     } catch (err) {
       console.error('Error updating preferences:', err);
+    } finally {
+      setGuardando(false);
     }
   };
 
+  const filtradas = useMemo(() => {
+    const t = busqueda.trim().toLowerCase();
+    if (!t) return following;
+
+    return following.filter(page =>
+      page.title.toLowerCase().includes(t) ||
+      (page.description && page.description.toLowerCase().includes(t))
+    );
+  }, [busqueda, following]);
+
   if (loading) {
+    return <Cargando texto="Buscando las páginas que seguís..." />;
+  }
+
+  if (following.length === 0) {
     return (
-      <div className="flex justify-center items-center py-12">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
-      </div>
+      <Tarjeta>
+        <Vacio
+          icono={Users}
+          titulo="Todavía no seguís ninguna página"
+          detalle="Buscá a un artista en la pestaña Descubrir y tocá Seguir. Desde ahí elegís de qué fechas querés enterarte."
+        />
+      </Tarjeta>
     );
   }
 
-  const totalPages = Math.ceil(filteredFollowing.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedFollowing = filteredFollowing.slice(startIndex, startIndex + itemsPerPage);
+  const totalPaginas = Math.ceil(filtradas.length / POR_PAGINA);
+  const desde = (pagina - 1) * POR_PAGINA;
+  const visibles = filtradas.slice(desde, desde + POR_PAGINA);
 
   return (
-    <div className="bg-gray-900 border border-gray-800 p-8">
-      <h2 className="text-2xl font-bold mb-4">Páginas que Sigo</h2>
-      <p className="text-gray-400 mb-8">
-        Gestiona las páginas que sigues y configura tus preferencias de notificación.
-      </p>
+    <div className="space-y-4">
+      <div className="relative">
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-tinta-suave pointer-events-none" />
+        <Campo
+          type="search"
+          value={busqueda}
+          onChange={(e) => setBusqueda(e.target.value)}
+          placeholder={`Buscar entre las ${following.length} que seguís...`}
+          aria-label="Buscar entre las páginas que seguís"
+          className="pl-11"
+        />
+      </div>
 
-      {following.length > 0 && (
-        <div className="mb-6">
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar en tus páginas..."
-            className="w-full px-4 py-3 bg-black border border-gray-800 text-white placeholder-gray-500 focus:outline-none focus:border-gray-600"
-          />
-        </div>
+      {filtradas.length === 0 ? (
+        <Tarjeta>
+          <Vacio titulo="Ninguna coincide con esa búsqueda" />
+        </Tarjeta>
+      ) : (
+        <ul className="space-y-3">
+          {visibles.map((page) => {
+            const estaAbierta = abierta === page.id;
+            const soloCerca = !page.notify_all_events;
+
+            return (
+              <li key={page.id}>
+                <Tarjeta className="overflow-hidden">
+                  <div className="p-4 sm:p-5 flex flex-wrap items-center gap-4">
+                    {/* following.php la devuelve como image_url, no como profile_image. */}
+                    <Avatar src={page.image_url} nombre={page.title} />
+
+                    <div className="min-w-0 flex-1">
+                      <Link
+                        to={`/${page.slug}`}
+                        className="font-bold text-tinta hover:text-verde-oscuro transition-colors inline-flex items-center gap-1.5"
+                      >
+                        <span className="truncate">{page.title}</span>
+                        <ExternalLink className="w-3.5 h-3.5 flex-shrink-0 opacity-40" />
+                      </Link>
+                      <div className="mt-1.5">
+                        <Chip tono={soloCerca ? 'neutro' : 'verde'}>
+                          <Bell className="w-3 h-3" />
+                          {describirAlerta(page)}
+                        </Chip>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 ml-auto">
+                      <Boton
+                        variante="secundario"
+                        tamano="sm"
+                        onClick={() => abrir(page)}
+                        aria-expanded={estaAbierta}
+                      >
+                        Avisos
+                        <ChevronDown className={`w-3.5 h-3.5 transition-transform ${estaAbierta ? 'rotate-180' : ''}`} />
+                      </Boton>
+                      <Boton variante="fantasma" tamano="sm" onClick={() => dejarDeSeguir(page)}>
+                        Dejar de seguir
+                      </Boton>
+                    </div>
+                  </div>
+
+                  {estaAbierta && (
+                    <div className="border-t border-borde bg-papel-hueso p-4 sm:p-5">
+                      <EleccionDeAlerta
+                        modo={modo}
+                        radio={radio}
+                        alCambiarModo={setModo}
+                        alCambiarRadio={setRadio}
+                        nombre={`alerta-${page.id}`}
+                      />
+                      <div className="flex gap-3 mt-5">
+                        <Boton onClick={() => guardar(page.id)} disabled={guardando} tamano="sm">
+                          {guardando ? 'Guardando...' : 'Guardar'}
+                        </Boton>
+                        <Boton variante="fantasma" tamano="sm" onClick={() => setAbierta(null)}>
+                          Cancelar
+                        </Boton>
+                      </div>
+                    </div>
+                  )}
+                </Tarjeta>
+              </li>
+            );
+          })}
+        </ul>
       )}
 
-      {following.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-gray-500 mb-4">No sigues ninguna página todavía</p>
-          <p className="text-gray-600 text-sm">Usa la pestaña "BUSCAR PÁGINAS" para encontrar páginas y seguirlas</p>
+      {totalPaginas > 1 && (
+        <div className="flex items-center justify-between pt-2">
+          <Boton
+            variante="secundario"
+            tamano="sm"
+            onClick={() => setPagina(p => Math.max(1, p - 1))}
+            disabled={pagina === 1}
+          >
+            Anterior
+          </Boton>
+          <span className="text-sm text-tinta-suave">Página {pagina} de {totalPaginas}</span>
+          <Boton
+            variante="secundario"
+            tamano="sm"
+            onClick={() => setPagina(p => Math.min(totalPaginas, p + 1))}
+            disabled={pagina === totalPaginas}
+          >
+            Siguiente
+          </Boton>
         </div>
-      ) : filteredFollowing.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-gray-500">No se encontraron páginas con ese término de búsqueda</p>
-        </div>
-      ) : (
-        <>
-          <div className="space-y-4">
-            {paginatedFollowing.map((page) => (
-              <div key={page.id} className="bg-black border border-gray-800 p-6">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex-1">
-                    <Link
-                      to={`/${page.slug}`}
-                      className="text-lg font-bold text-white hover:text-gray-300 transition"
-                    >
-                      {page.title}
-                    </Link>
-                    {page.description && (
-                      <p className="text-sm text-gray-400 mt-1">{page.description}</p>
-                    )}
-                  </div>
-                </div>
-
-                {editingId === page.id ? (
-                  <div className="bg-gray-900 border border-gray-800 p-4 space-y-4">
-                    <p className="text-sm font-bold text-gray-300 mb-3">
-                      ¿Qué eventos quieres recibir?
-                    </p>
-
-                    <label
-                      className={`flex items-start gap-3 p-3 border-2 rounded cursor-pointer transition ${
-                        notificationType === 'all'
-                          ? 'border-white bg-gray-800'
-                          : 'border-gray-700 hover:border-gray-600'
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="notificationType"
-                        checked={notificationType === 'all'}
-                        onChange={() => setNotificationType('all')}
-                        className="mt-1"
-                      />
-                      <div>
-                        <div className="font-semibold text-white text-sm">Todos los eventos</div>
-                        <div className="text-xs text-gray-400">
-                          Recibirás notificaciones de todos los eventos
-                        </div>
-                      </div>
-                    </label>
-
-                    <label
-                      className={`flex items-start gap-3 p-3 border-2 rounded cursor-pointer transition ${
-                        notificationType === 'nearby'
-                          ? 'border-white bg-gray-800'
-                          : 'border-gray-700 hover:border-gray-600'
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="notificationType"
-                        checked={notificationType === 'nearby'}
-                        onChange={() => setNotificationType('nearby')}
-                        className="mt-1"
-                      />
-                      <div>
-                        <div className="font-semibold text-white text-sm">Solo eventos cercanos</div>
-                        <div className="text-xs text-gray-400">
-                          Solo eventos a menos de 30 km de tu ubicación
-                        </div>
-                      </div>
-                    </label>
-
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleSavePreferences(page.id)}
-                        className="px-4 py-2 bg-white text-black font-bold hover:bg-gray-200 transition text-sm"
-                      >
-                        Guardar
-                      </button>
-                      <button
-                        onClick={() => setEditingId(null)}
-                        className="px-4 py-2 bg-gray-700 text-white hover:bg-gray-600 transition text-sm"
-                      >
-                        Cancelar
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-between">
-                    <div className="text-sm text-gray-400">
-                      {page.notify_all_events ? (
-                        <span>Todos los eventos</span>
-                      ) : (
-                        <span>Solo eventos cercanos (30 km)</span>
-                      )}
-                    </div>
-
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleEditPreferences(page)}
-                        className="px-3 py-1 text-sm text-gray-300 hover:text-white transition"
-                      >
-                        Editar
-                      </button>
-                      <button
-                        onClick={() => handleUnfollow(page.id)}
-                        className="px-3 py-1 text-sm text-red-400 hover:text-red-300 transition"
-                      >
-                        Dejar de seguir
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between mt-6">
-              <button
-                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-                className="px-4 py-2 bg-white text-black font-bold hover:bg-gray-200 disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed transition"
-              >
-                Anterior
-              </button>
-
-              <span className="text-gray-400">
-                Página {currentPage} de {totalPages}
-              </span>
-
-              <button
-                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages}
-                className="px-4 py-2 bg-white text-black font-bold hover:bg-gray-200 disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed transition"
-              >
-                Siguiente
-              </button>
-            </div>
-          )}
-        </>
       )}
     </div>
   );

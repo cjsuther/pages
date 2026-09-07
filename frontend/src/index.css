@@ -7,17 +7,38 @@ body {
   /* La pila sale de tailwind.config.js: definirla acá otra vez es garantía de
      que un día digan cosas distintas. */
   font-family: theme('fontFamily.sans');
+  background-color: theme('colors.papel.DEFAULT');
+  color: theme('colors.tinta.DEFAULT');
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-input[type="date"]::-webkit-calendar-picker-indicator {
-  filter: invert(1) brightness(100%);
+/* El foco de teclado se ve en todo el sitio y siempre igual. Sin esto, los
+   botones con `outline-none` de Tailwind dejan a quien navega con tabulador
+   sin saber dónde está parado. */
+:focus-visible {
+  outline: 2px solid theme('colors.verde.oscuro');
+  outline-offset: 2px;
+}
+
+/* Los selectores de fecha y hora venían invertidos para el tema oscuro. Sobre
+   blanco se ven solos. */
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
+  opacity: .55;
+  cursor: pointer;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover,
+input[type="time"]::-webkit-calendar-picker-indicator:hover {
   opacity: 1;
 }
 
-input[type="time"]::-webkit-calendar-picker-indicator {
-  filter: invert(1) sepia(100%) saturate(500%) hue-rotate(180deg);
-  border-radius: 50%;
-  padding: 5px;
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

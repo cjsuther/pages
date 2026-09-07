@@ -43,7 +43,7 @@ function PublicPage({ slugForzado = null }) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center">
+      <div className="min-h-screen bg-white text-tinta flex items-center justify-center">
         <p className="text-xl font-medium">Cargando...</p>
       </div>
     );
@@ -51,10 +51,10 @@ function PublicPage({ slugForzado = null }) {
 
   if (error || !page) {
     return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center">
+      <div className="min-h-screen bg-white text-tinta flex items-center justify-center">
         <div className="text-center space-y-4">
-          <h1 className="text-6xl font-black">404</h1>
-          <p className="text-xl text-gray-400">{error || 'Página no encontrada'}</p>
+          <h1 className="text-6xl font-bold">404</h1>
+          <p className="text-xl text-tinta-media">{error || 'Página no encontrada'}</p>
         </div>
       </div>
     );

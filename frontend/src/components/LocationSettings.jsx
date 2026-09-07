@@ -1,14 +1,20 @@
 import React, { useState, useEffect, useContext } from 'react';
+import { MapPin, Crosshair, Check } from 'lucide-react';
 import { AuthContext } from '../App';
 import GooglePlacesAutocomplete from './GooglePlacesAutocomplete';
+import { Aviso, Boton, Etiqueta, Tarjeta } from './ui';
 
-function LocationSettings() {
+/**
+ * La ubicación de referencia de la persona.
+ *
+ * Se usa para decidir qué eventos entran en "cerca mío" y para las alertas de
+ * fechas cercanas. Es un punto, no un seguimiento: se guarda una vez y no se
+ * vuelve a preguntar.
+ */
+function LocationSettings({ alGuardar = () => {} }) {
   const { token, apiUrl } = useContext(AuthContext);
-  const [location, setLocation] = useState({
-    latitude: null,
-    longitude: null,
-    location_name: ''
-  });
+
+  const [location, setLocation] = useState({ latitude: null, longitude: null, location_name: '' });
   const [searchValue, setSearchValue] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
@@ -16,6 +22,7 @@ function LocationSettings() {
 
   useEffect(() => {
     fetchLocation();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchLocation = async () => {
@@ -26,8 +33,8 @@ function LocationSettings() {
       const data = await response.json();
       if (data.latitude && data.longitude) {
         setLocation({
-          latitude: data.latitude,
-          longitude: data.longitude,
+          latitude: Number(data.latitude),
+          longitude: Number(data.longitude),
           location_name: data.location_name || ''
         });
         setSearchValue(data.location_name || '');
@@ -43,7 +50,7 @@ function LocationSettings() {
     setMessage('');
 
     if (!navigator.geolocation) {
-      setError('Tu navegador no soporta geolocalización');
+      setError('Tu navegador no puede darnos la ubicación.');
       setLoading(false);
       return;
     }
@@ -52,30 +59,15 @@ function LocationSettings() {
       async (position) => {
         const lat = position.coords.latitude;
         const lng = position.coords.longitude;
+        const nombre = (await reverseGeocode(lat, lng)) || `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
 
-        try {
-          const locationName = await reverseGeocode(lat, lng);
-          setLocation({
-            latitude: lat,
-            longitude: lng,
-            location_name: locationName
-          });
-          setSearchValue(locationName);
-          setMessage('Ubicación obtenida correctamente');
-        } catch (err) {
-          const locName = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
-          setLocation({
-            latitude: lat,
-            longitude: lng,
-            location_name: locName
-          });
-          setSearchValue(locName);
-          setMessage('Ubicación obtenida (sin nombre)');
-        }
+        setLocation({ latitude: lat, longitude: lng, location_name: nombre });
+        setSearchValue(nombre);
+        setMessage('Listo. Acordate de guardar.');
         setLoading(false);
       },
-      (error) => {
-        setError('No se pudo obtener tu ubicación. Verifica los permisos.');
+      () => {
+        setError('No pudimos acceder a tu ubicación. Revisá los permisos del navegador.');
         setLoading(false);
       }
     );
@@ -103,11 +95,13 @@ function LocationSettings() {
       location_name: place.address
     });
     setSearchValue(place.address);
+    setMessage('');
+    setError('');
   };
 
   const saveLocation = async () => {
     if (!location.latitude || !location.longitude) {
-      setError('Debes seleccionar una ubicación primero');
+      setError('Elegí una ubicación antes de guardar.');
       return;
     }
 
@@ -135,83 +129,70 @@ function LocationSettings() {
       const data = await response.json();
 
       if (response.ok) {
-        setMessage('Ubicación guardada correctamente');
+        setMessage('Ubicación guardada.');
+        alGuardar();
       } else {
-        setError(data.error || 'Error al guardar ubicación');
+        setError(data.error || 'No se pudo guardar la ubicación.');
       }
     } catch (err) {
-      setError('Error al guardar ubicación');
+      setError('No se pudo guardar la ubicación.');
       console.error('Error saving location:', err);
     } finally {
       setLoading(false);
     }
   };
 
+  const tieneUbicacion = location.latitude !== null && location.longitude !== null;
+
   return (
-    <div className="bg-gray-900 border border-gray-800 p-8">
-      <h2 className="text-2xl font-bold mb-4">Mi Ubicación</h2>
-      <p className="text-gray-400 mb-8">
-        Configura tu ubicación principal para recibir notificaciones de eventos cercanos.
-      </p>
+    <Tarjeta className="p-6 space-y-5">
+      <div>
+        <Etiqueta htmlFor="buscar-ubicacion">Buscá tu ciudad o dirección</Etiqueta>
+        <GooglePlacesAutocomplete
+          id="buscar-ubicacion"
+          value={searchValue}
+          onChange={(e) => setSearchValue(e.target.value)}
+          onPlaceSelect={handlePlaceSelect}
+          placeholder="Por ejemplo: Villa Crespo, CABA"
+        />
+      </div>
 
-      <div className="space-y-6">
-        <div>
-          <label className="block text-sm font-bold text-gray-300 mb-3">
-            Buscar ubicación
-          </label>
-          <GooglePlacesAutocomplete
-            value={searchValue}
-            onChange={(e) => setSearchValue(e.target.value)}
-            onPlaceSelect={handlePlaceSelect}
-            placeholder="Ingresa una dirección o ciudad..."
-          />
-        </div>
+      <div className="flex items-center gap-4">
+        <span className="flex-1 h-px bg-borde" />
+        <span className="text-sm text-tinta-suave">o</span>
+        <span className="flex-1 h-px bg-borde" />
+      </div>
 
-        <div className="flex items-center gap-4">
-          <div className="flex-1 h-px bg-gray-800"></div>
-          <span className="text-sm text-gray-500">o</span>
-          <div className="flex-1 h-px bg-gray-800"></div>
-        </div>
+      <Boton variante="secundario" onClick={getCurrentLocation} disabled={loading} className="w-full">
+        <Crosshair className="w-4 h-4" />
+        Usar mi ubicación actual
+      </Boton>
 
-        <button
-          onClick={getCurrentLocation}
-          disabled={loading}
-          className="w-full bg-white text-black py-3 font-bold hover:bg-gray-200 disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors"
-        >
-          Usar mi ubicación actual
-        </button>
-
-        {location.latitude && location.longitude && (
-          <div className="bg-black border border-gray-800 p-6">
-            <h3 className="font-bold mb-3">Ubicación seleccionada:</h3>
-            <p className="text-sm text-gray-400 mb-2">{location.location_name || 'Sin nombre'}</p>
-            <p className="text-xs text-gray-500">
-              Lat: {location.latitude.toFixed(6)}, Lng: {location.longitude.toFixed(6)}
+      {tieneUbicacion && (
+        <div className="flex items-start gap-3 p-4 rounded-xl bg-papel-hueso border border-borde">
+          <MapPin className="w-4 h-4 text-verde-oscuro flex-shrink-0 mt-0.5" />
+          <div className="min-w-0">
+            <p className="font-semibold text-tinta text-sm">
+              {location.location_name || 'Ubicación sin nombre'}
+            </p>
+            <p className="text-xs text-tinta-suave mt-0.5 tabular-nums">
+              {Number(location.latitude).toFixed(4)}, {Number(location.longitude).toFixed(4)}
             </p>
           </div>
-        )}
+        </div>
+      )}
 
-        <button
-          onClick={saveLocation}
-          disabled={loading || !location.latitude || !location.longitude}
-          className="w-full bg-white text-black py-3 font-bold hover:bg-gray-200 disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors"
-        >
-          {loading ? 'Guardando...' : 'Guardar Ubicación'}
-        </button>
+      <Boton onClick={saveLocation} disabled={loading || !tieneUbicacion} className="w-full">
+        {loading ? 'Guardando...' : 'Guardar ubicación'}
+      </Boton>
 
-        {message && (
-          <div className="bg-green-900 border border-green-700 text-green-300 px-4 py-3">
-            {message}
-          </div>
-        )}
-
-        {error && (
-          <div className="bg-red-900 border border-red-700 text-red-300 px-4 py-3">
-            {error}
-          </div>
-        )}
-      </div>
-    </div>
+      {message && (
+        <Aviso tipo="ok">
+          <span className="flex items-center gap-2"><Check className="w-4 h-4" /> {message}</span>
+        </Aviso>
+      )}
+      {error && <Aviso tipo="error">{error}</Aviso>}
+    </Tarjeta>
   );
 }
 

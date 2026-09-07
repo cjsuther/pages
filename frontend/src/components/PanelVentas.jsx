@@ -114,11 +114,11 @@ function PanelVentas({ linkId, apiUrl, token }) {
   };
 
   if (cargando) {
-    return <p className="text-gray-500 py-6">Cargando ventas...</p>;
+    return <p className="text-tinta-suave py-6">Cargando ventas...</p>;
   }
 
   if (error) {
-    return <p className="text-sm text-red-400 bg-red-950 border border-red-900 px-4 py-3">{error}</p>;
+    return <p className="text-sm text-red-700 bg-red-50 border border-red-200 px-4 py-3">{error}</p>;
   }
 
   const { ordenes = [], resumen = {}, capacidad = 0 } = datos || {};
@@ -144,7 +144,7 @@ function PanelVentas({ linkId, apiUrl, token }) {
         <button
           type="button"
           onClick={cargar}
-          className="text-sm text-gray-400 hover:text-white flex items-center gap-2"
+          className="text-sm text-tinta-media hover:text-tinta flex items-center gap-2"
         >
           <RefreshCw className="w-4 h-4" />
           Actualizar
@@ -154,7 +154,7 @@ function PanelVentas({ linkId, apiUrl, token }) {
           <button
             type="button"
             onClick={exportar}
-            className="text-sm text-gray-400 hover:text-white flex items-center gap-2"
+            className="text-sm text-tinta-media hover:text-tinta flex items-center gap-2"
           >
             <Download className="w-4 h-4" />
             Exportar CSV
@@ -163,14 +163,14 @@ function PanelVentas({ linkId, apiUrl, token }) {
       </div>
 
       {ordenes.length === 0 ? (
-        <p className="text-gray-500 text-sm border border-gray-800 bg-black p-6">
+        <p className="text-tinta-suave text-sm border border-borde bg-white p-6">
           Todavía no hay ventas para este evento.
         </p>
       ) : (
-        <div className="overflow-x-auto border border-gray-800">
+        <div className="overflow-x-auto border border-borde">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-black text-gray-500 text-left">
+              <tr className="bg-papel-hueso text-tinta-suave text-left">
                 <th className="px-3 py-2 font-bold">Estado</th>
                 <th className="px-3 py-2 font-bold">Nombre</th>
                 <th className="px-3 py-2 font-bold">Contacto</th>
@@ -181,25 +181,25 @@ function PanelVentas({ linkId, apiUrl, token }) {
             </thead>
             <tbody>
               {ordenes.map((o) => (
-                <tr key={o.id} className="border-t border-gray-800">
+                <tr key={o.id} className="border-t border-borde">
                   <td className="px-3 py-2 whitespace-nowrap">
                     <span className={`text-xs px-2 py-0.5 rounded ${colorDeEstado(o.estado)}`}>
                       {etiquetaDeEstado(o.estado)}
                     </span>
                   </td>
-                  <td className="px-3 py-2 text-white">
+                  <td className="px-3 py-2 text-tinta">
                     {o.nombre}
-                    <span className="block text-xs text-gray-600 font-mono">{o.codigo}</span>
+                    <span className="block text-xs text-tinta-suave font-mono">{o.codigo}</span>
                   </td>
-                  <td className="px-3 py-2 text-gray-400">
-                    <a href={`mailto:${o.email}`} className="hover:text-white block">{o.email}</a>
+                  <td className="px-3 py-2 text-tinta-media">
+                    <a href={`mailto:${o.email}`} className="hover:text-tinta block">{o.email}</a>
                     <Telefono numero={o.telefono} nombre={o.nombre} />
                   </td>
-                  <td className="px-3 py-2 text-white text-right">{o.cantidad}</td>
-                  <td className="px-3 py-2 text-white text-right whitespace-nowrap">
+                  <td className="px-3 py-2 text-tinta text-right">{o.cantidad}</td>
+                  <td className="px-3 py-2 text-tinta text-right whitespace-nowrap">
                     {formatearPrecio(o.total, o.moneda)}
                     {o.mp_neto !== null && o.mp_neto !== undefined && (
-                      <span className="block text-xs text-gray-600">
+                      <span className="block text-xs text-tinta-suave">
                         te quedan {formatearPrecio(o.mp_neto, o.moneda)}
                         {fechaCorta(o.acreditacion_en) && ` el ${fechaCorta(o.acreditacion_en)}`}
                       </span>
@@ -210,7 +210,7 @@ function PanelVentas({ linkId, apiUrl, token }) {
                       <button
                         type="button"
                         onClick={() => setPorCancelar(o)}
-                        className="text-xs text-gray-500 hover:text-red-400 transition"
+                        className="text-xs text-tinta-suave hover:text-red-700 transition"
                       >
                         Cancelar
                       </button>
@@ -224,19 +224,19 @@ function PanelVentas({ linkId, apiUrl, token }) {
       )}
 
       {porCancelar && (
-        <div className="fixed inset-0 bg-black bg-opacity-80 z-50 flex items-center justify-center p-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-lg p-6 max-w-sm w-full">
-            <h4 className="text-white font-bold text-lg mb-2">¿Cancelar esta compra?</h4>
-            <p className="text-sm text-gray-400 mb-1">
+        <div className="fixed inset-0 bg-white bg-opacity-80 z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-borde-fuerte rounded-lg p-6 max-w-sm w-full">
+            <h4 className="text-tinta font-bold text-lg mb-2">¿Cancelar esta compra?</h4>
+            <p className="text-sm text-tinta-media mb-1">
               {porCancelar.cantidad}{' '}
               {porCancelar.cantidad === 1 ? 'entrada' : 'entradas'} de {porCancelar.nombre}.
             </p>
-            <p className="text-sm text-gray-500 mb-6">
+            <p className="text-sm text-tinta-suave mb-6">
               Los lugares vuelven a estar disponibles y la compra queda registrada como cancelada.
             </p>
 
             {errorCancelacion && (
-              <p role="alert" className="text-sm text-red-400 bg-red-950 border border-red-900 px-3 py-2 mb-4">
+              <p role="alert" className="text-sm text-red-700 bg-red-50 border border-red-200 px-3 py-2 mb-4">
                 {errorCancelacion}
               </p>
             )}
@@ -249,7 +249,7 @@ function PanelVentas({ linkId, apiUrl, token }) {
                   setErrorCancelacion(null);
                 }}
                 disabled={cancelando}
-                className="px-4 py-2 text-sm text-gray-400 hover:text-white transition"
+                className="px-4 py-2 text-sm text-tinta-media hover:text-tinta transition"
               >
                 Volver
               </button>
@@ -257,7 +257,7 @@ function PanelVentas({ linkId, apiUrl, token }) {
                 type="button"
                 onClick={confirmarCancelacion}
                 disabled={cancelando}
-                className="px-4 py-2 text-sm font-bold bg-red-600 text-white rounded hover:bg-red-500 transition disabled:opacity-50"
+                className="px-4 py-2 text-sm font-bold bg-red-600 text-tinta rounded hover:bg-red-500 transition disabled:opacity-50"
               >
                 {cancelando ? 'Cancelando...' : 'Cancelar la compra'}
               </button>
@@ -299,21 +299,21 @@ export function Acreditacion({ resumen }) {
   const proxima = fechaCorta(resumen.proxima_acreditacion);
 
   return (
-    <div className="border border-gray-800 bg-black p-4 text-sm">
+    <div className="border border-borde bg-white p-4 text-sm">
       <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
-        <span className="text-gray-500">
-          Ya disponible <strong className="text-white">{formatearPrecio(acreditado)}</strong>
+        <span className="text-tinta-suave">
+          Ya disponible <strong className="text-tinta">{formatearPrecio(acreditado)}</strong>
         </span>
 
         {porAcreditar > 0 && (
-          <span className="text-gray-500">
-            Por acreditarse <strong className="text-white">{formatearPrecio(porAcreditar)}</strong>
-            {proxima && <span className="text-gray-600"> · desde el {proxima}</span>}
+          <span className="text-tinta-suave">
+            Por acreditarse <strong className="text-tinta">{formatearPrecio(porAcreditar)}</strong>
+            {proxima && <span className="text-tinta-suave"> · desde el {proxima}</span>}
           </span>
         )}
       </div>
 
-      <p className="text-xs text-gray-600 mt-2">
+      <p className="text-xs text-tinta-suave mt-2">
         Según Mercado Pago, ya descontada su comisión. El plazo lo elegís en tu cuenta
         de Mercado Pago, en Costos y plazos.
         {sinDato > 0 && ` (${sinDato} ${sinDato === 1 ? 'venta' : 'ventas'} sin este dato: son anteriores a que lo empezáramos a guardar.)`}
@@ -344,7 +344,7 @@ function Telefono({ numero, nombre }) {
       target="_blank"
       rel="noopener noreferrer"
       aria-label={`Escribirle por WhatsApp a ${nombre}`}
-      className="hover:text-emerald-400 flex items-center gap-1 text-xs transition"
+      className="hover:text-verde-oscuro flex items-center gap-1 text-xs transition"
     >
       <IconoDeMarca red="whatsapp" className="w-3.5 h-3.5 shrink-0" />
       {numero}
@@ -354,10 +354,10 @@ function Telefono({ numero, nombre }) {
 
 function Dato({ etiqueta, valor, detalle }) {
   return (
-    <div className="border border-gray-800 bg-black p-4">
-      <p className="text-xs text-gray-500 tracking-wide mb-1">{etiqueta}</p>
-      <p className="text-xl font-black text-white">{valor}</p>
-      {detalle && <p className="text-xs text-gray-600 mt-1">{detalle}</p>}
+    <div className="border border-borde bg-white p-4">
+      <p className="text-xs text-tinta-suave tracking-wide mb-1">{etiqueta}</p>
+      <p className="text-xl font-bold text-tinta">{valor}</p>
+      {detalle && <p className="text-xs text-tinta-suave mt-1">{detalle}</p>}
     </div>
   );
 }

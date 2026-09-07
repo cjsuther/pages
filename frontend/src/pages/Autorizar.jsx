@@ -84,15 +84,15 @@ function Autorizar() {
   const rechazar = () => navigate('/');
 
   if (cargando) {
-    return <Marco><p className="text-gray-500">Revisando el pedido...</p></Marco>;
+    return <Marco><p className="text-tinta-suave">Revisando el pedido...</p></Marco>;
   }
 
   if (error && !pedido) {
     return (
       <Marco>
-        <h1 className="text-2xl font-black mb-3">No pudimos seguir</h1>
-        <p className="text-gray-400 mb-8">{error}</p>
-        <button onClick={rechazar} className="text-gray-400 hover:text-white">Volver al inicio</button>
+        <h1 className="text-2xl font-bold mb-3">No pudimos seguir</h1>
+        <p className="text-tinta-media mb-8">{error}</p>
+        <button onClick={rechazar} className="text-tinta-media hover:text-tinta">Volver al inicio</button>
       </Marco>
     );
   }
@@ -102,9 +102,9 @@ function Autorizar() {
   if (!token) {
     return (
       <Marco>
-        <h1 className="text-2xl font-black mb-3">Entrá para autorizar</h1>
-        <p className="text-gray-400 mb-8">
-          <strong className="text-white">{pedido.aplicacion}</strong> quiere acceso a tus
+        <h1 className="text-2xl font-bold mb-3">Entrá para autorizar</h1>
+        <p className="text-tinta-media mb-8">
+          <strong className="text-tinta">{pedido.aplicacion}</strong> quiere acceso a tus
           páginas. Primero entrá a tu cuenta.
         </p>
         <button
@@ -114,9 +114,9 @@ function Autorizar() {
             sessionStorage.setItem(DESTINO, window.location.pathname + window.location.search);
             navigate('/login');
           }}
-          className="w-full py-4 bg-white text-black font-bold hover:bg-gray-200 transition"
+          className="w-full py-4 bg-verde text-verde-tinta font-bold hover:bg-verde-oscuro hover:text-tinta transition"
         >
-          ENTRAR
+          Entrar
         </button>
       </Marco>
     );
@@ -124,33 +124,33 @@ function Autorizar() {
 
   return (
     <Marco>
-      <p className="text-xs text-gray-500 tracking-widest mb-3">PEDIDO DE ACCESO</p>
-      <h1 className="text-2xl font-black mb-6">
+      <p className="text-xs text-tinta-suave tracking-widest mb-3">Pedido de acceso</p>
+      <h1 className="text-2xl font-bold mb-6">
         {pedido.aplicacion} quiere administrar tus eventos
       </h1>
 
-      <div className="border border-gray-800 bg-black p-4 mb-8">
-        <p className="text-sm text-gray-400">{pedido.permiso}</p>
+      <div className="border border-borde bg-white p-4 mb-8">
+        <p className="text-sm text-tinta-media">{pedido.permiso}</p>
       </div>
 
-      <p className="text-xs text-gray-600 mb-8">
+      <p className="text-xs text-tinta-suave mb-8">
         Vas a poder desconectarla cuando quieras desde Perfil → Claves de API.
       </p>
 
-      {error && <p className="text-sm text-red-400 mb-6">{error}</p>}
+      {error && <p className="text-sm text-red-700 mb-6">{error}</p>}
 
       <div className="space-y-3">
         <button
           onClick={autorizar}
           disabled={autorizando}
-          className="w-full py-4 bg-white text-black font-bold hover:bg-gray-200 transition disabled:opacity-50"
+          className="w-full py-4 bg-verde text-verde-tinta font-bold hover:bg-verde-oscuro hover:text-tinta transition disabled:opacity-50"
         >
           {autorizando ? 'AUTORIZANDO...' : 'AUTORIZAR'}
         </button>
         <button
           onClick={rechazar}
           disabled={autorizando}
-          className="w-full py-4 text-gray-400 hover:text-white transition"
+          className="w-full py-4 text-tinta-media hover:text-tinta transition"
         >
           No, gracias
         </button>
@@ -161,8 +161,8 @@ function Autorizar() {
 
 function Marco({ children }) {
   return (
-    <div className="min-h-screen bg-black text-white flex items-center justify-center px-6">
-      <div className="w-full max-w-md bg-gray-900 border border-gray-800 p-8">{children}</div>
+    <div className="min-h-screen bg-white text-tinta flex items-center justify-center px-6">
+      <div className="w-full max-w-md bg-white border border-borde rounded-2xl p-6 sm:p-8">{children}</div>
     </div>
   );
 }

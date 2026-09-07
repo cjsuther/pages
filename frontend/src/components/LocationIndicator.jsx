@@ -143,7 +143,7 @@ function LocationIndicator() {
     <>
       <button
         onClick={() => setShowPopup(true)}
-        className="relative text-gray-400 hover:text-white transition"
+        className="relative text-tinta-media hover:text-tinta transition"
       >
         <MapPin className="w-5 h-5" />
         {!hasLocation && (
@@ -152,19 +152,19 @@ function LocationIndicator() {
       </button>
 
       {showPopup && (
-        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center p-4 z-50">
-          <div className="bg-gray-900 border border-gray-800 max-w-lg w-full p-8">
+        <div className="fixed inset-0 bg-tinta/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white border border-borde max-w-lg w-full p-8">
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold">UBICACIÓN</h2>
+              <h2 className="text-2xl font-bold">Ubicación</h2>
               <button
                 onClick={() => setShowPopup(false)}
-                className="text-gray-400 hover:text-white transition"
+                className="text-tinta-media hover:text-tinta transition"
               >
                 <X className="w-6 h-6" />
               </button>
             </div>
 
-            <p className="text-gray-400 mb-6">
+            <p className="text-tinta-media mb-6">
               Configura tu ubicación para recibir notificaciones de eventos cercanos
             </p>
 
@@ -172,7 +172,7 @@ function LocationIndicator() {
               <button
                 onClick={handleUseCurrentLocation}
                 disabled={loading}
-                className="w-full bg-white text-black px-6 py-4 font-bold hover:bg-gray-200 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                className="w-full bg-verde text-verde-tinta px-6 py-4 font-bold hover:bg-verde-oscuro hover:text-tinta transition disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {loading ? (
                   <>
@@ -182,24 +182,24 @@ function LocationIndicator() {
                 ) : (
                   <>
                     <MapPin className="w-5 h-5" />
-                    USAR MI UBICACIÓN ACTUAL
+                    Usar mi ubicación actual
                   </>
                 )}
               </button>
 
               <div className="relative">
                 <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-700"></div>
+                  <div className="w-full border-t border-borde-fuerte"></div>
                 </div>
                 <div className="relative flex justify-center text-sm">
-                  <span className="px-4 bg-gray-900 text-gray-500">O</span>
+                  <span className="px-4 bg-white text-tinta-suave">O</span>
                 </div>
               </div>
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-bold text-gray-400 mb-2">
-                    INGRESA TU DIRECCIÓN
+                  <label className="block text-sm font-semibold text-tinta mb-1.5">
+                    Ingresa tu dirección
                   </label>
                   <GooglePlacesAutocomplete
                     value={address}
@@ -218,9 +218,9 @@ function LocationIndicator() {
                 <button
                   onClick={handleSaveAddress}
                   disabled={loading || !coordinates}
-                  className="w-full bg-gray-800 text-white px-6 py-3 font-bold hover:bg-gray-700 transition disabled:opacity-50"
+                  className="w-full bg-papel-hueso text-tinta px-6 py-3 font-bold hover:bg-papel-hueso transition disabled:opacity-50"
                 >
-                  GUARDAR DIRECCIÓN
+                  Guardar dirección
                 </button>
               </div>
             </div>

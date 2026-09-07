@@ -8,6 +8,8 @@ import SeccionEntradas from '../components/SeccionEntradas';
 import { analizarEmbed, portadaDe } from '../utils/embeds';
 import { paleta } from '../utils/colores';
 import MiniaturaPlantilla from '../components/MiniaturaPlantilla';
+import Navigation from '../components/Navigation';
+import { ChevronLeft, ExternalLink } from 'lucide-react';
 
 /**
  * Los colores que se manejan desde el administrador, y qué pinta cada uno.
@@ -18,12 +20,12 @@ import MiniaturaPlantilla from '../components/MiniaturaPlantilla';
  * resuelve, y sirve para mostrar en el selector el color que está rigiendo.
  */
 const COLORES = [
-  { campo: 'text_color',       etiqueta: 'TEXTO',    ayuda: 'Toda la tipografía' },
-  { campo: 'background_color', etiqueta: 'FONDO',    ayuda: 'El fondo de la página' },
-  { campo: 'primary_color',    etiqueta: 'ACENTO',   ayuda: 'La barra debajo de cada grupo y los detalles' },
-  { campo: 'title_color',      etiqueta: 'TÍTULOS',  rol: 'titulo',  automatico: 'igual al texto' },
-  { campo: 'secondary_color',  etiqueta: 'BOTONES',  rol: 'boton',   automatico: 'igual al acento' },
-  { campo: 'card_color',       etiqueta: 'TARJETAS', rol: 'tarjeta', automatico: 'se calcula con el fondo' },
+  { campo: 'text_color',       etiqueta: 'Texto',    ayuda: 'Toda la tipografía' },
+  { campo: 'background_color', etiqueta: 'Fondo',    ayuda: 'El fondo de la página' },
+  { campo: 'primary_color',    etiqueta: 'Acento',   ayuda: 'La barra debajo de cada grupo y los detalles' },
+  { campo: 'title_color',      etiqueta: 'Títulos',  rol: 'titulo',  automatico: 'igual al texto' },
+  { campo: 'secondary_color',  etiqueta: 'Botones',  rol: 'boton',   automatico: 'igual al acento' },
+  { campo: 'card_color',       etiqueta: 'Tarjetas', rol: 'tarjeta', automatico: 'se calcula con el fondo' },
 ];
 
 /** Plantillas disponibles, en el orden en que se ofrecen. */
@@ -37,11 +39,11 @@ const PLANTILLAS = [
 
 /** Secciones del editor, en el orden en que se muestran. */
 const SECCIONES = [
-  { clave: 'general',   etiqueta: 'CONFIGURACIÓN' },
-  { clave: 'contenido', etiqueta: 'CONTENIDO' },
-  { clave: 'redes',     etiqueta: 'REDES SOCIALES' },
-  { clave: 'entradas',  etiqueta: 'ENTRADAS' },
-  { clave: 'admins',    etiqueta: 'ADMINISTRADORES', soloDueno: true },
+  { clave: 'general',   etiqueta: 'Configuración' },
+  { clave: 'contenido', etiqueta: 'Contenido' },
+  { clave: 'redes',     etiqueta: 'Redes sociales' },
+  { clave: 'entradas',  etiqueta: 'Entradas' },
+  { clave: 'admins',    etiqueta: 'Administradores', soloDueno: true },
 ];
 
 function PageEditor() {
@@ -637,60 +639,58 @@ function PageEditor() {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen bg-white text-tinta">
       {globalLoading && (
-        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50">
-          <div className="bg-gray-900 border border-gray-800 p-6">
+        <div className="fixed inset-0 bg-tinta/40 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white border border-borde rounded-2xl p-6">
             <LoadingSpinner />
           </div>
         </div>
       )}
 
-      <nav className="border-b border-gray-800">
-        <div className="max-w-7xl mx-auto px-6 py-6">
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-3xl font-black tracking-tight">EDITOR</h1>
-              <p className="text-gray-500 mt-1 font-medium">{page.title}</p>
-            </div>
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => navigate('/my-pages')}
-                className="text-gray-400 hover:text-white transition font-medium"
-              >
-                ← Volver
-              </button>
-              <a
-                href={`/${page.url_slug}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="bg-white text-black px-6 py-3 font-bold hover:bg-gray-200 transition"
-              >
-                VER PÁGINA
-              </a>
-            </div>
-          </div>
-        </div>
-      </nav>
+      <Navigation />
 
-      <div className="max-w-7xl mx-auto px-6 py-16">
+      <div className="max-w-7xl mx-auto px-5 sm:px-6 py-10 sm:py-14">
+        <header className="flex flex-wrap items-end justify-between gap-4 mb-8">
+          <div className="min-w-0">
+            <Link
+              to="/my-pages"
+              className="inline-flex items-center gap-1.5 text-sm font-semibold text-tinta-media hover:text-tinta transition-colors"
+            >
+              <ChevronLeft className="w-4 h-4" /> Mis páginas
+            </Link>
+            <h1 className="mt-2 text-3xl sm:text-4xl font-bold tracking-tight text-balance">
+              {page.title}
+            </h1>
+            <p className="text-tinta-suave mt-1">rezon.ar/{page.url_slug}</p>
+          </div>
+
+          <a
+            href={`/${page.url_slug}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center gap-2 rounded-full bg-verde text-verde-tinta px-6 py-3 font-semibold hover:bg-verde-oscuro hover:text-white transition-colors"
+          >
+            Ver mi página <ExternalLink className="w-4 h-4" />
+          </a>
+        </header>
 
         {/* Secciones del editor. Antes todo se apilaba en una sola columna y
             había que bajar mucho para llegar a los administradores. */}
-        <nav className="flex flex-wrap gap-2 mb-8 border-b border-gray-800">
+        <nav className="flex flex-wrap gap-2 mb-8 border-b border-borde">
           {SECCIONES.filter(s => !s.soloDueno || isOwner).map((s) => (
             <button
               key={s.clave}
               onClick={() => setSeccion(s.clave)}
               className={`px-5 py-3 font-bold text-sm tracking-wide transition border-b-2 -mb-px flex items-center gap-2 ${
                 seccion === s.clave
-                  ? 'border-white text-white'
-                  : 'border-transparent text-gray-500 hover:text-gray-300'
+                  ? 'border-verde text-tinta'
+                  : 'border-transparent text-tinta-suave hover:text-tinta-media'
               }`}
             >
               {s.etiqueta}
               {s.clave === 'contenido' && pendientesDeColaborar > 0 && (
-                <span className="bg-orange-500 text-black text-xs font-black rounded-full w-5 h-5 flex items-center justify-center">
+                <span className="bg-amber-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
                   {pendientesDeColaborar}
                 </span>
               )}
@@ -699,35 +699,35 @@ function PageEditor() {
         </nav>
 
         {seccion === 'general' && (
-          <div className="bg-gray-900 border border-gray-800 p-8 mb-8">
-            <h2 className="text-2xl font-black mb-8 tracking-tight">CONFIGURACIÓN</h2>
+          <div className="bg-white border border-borde rounded-2xl p-6 sm:p-8 mb-8">
+            <h2 className="text-2xl font-bold mb-8 tracking-tight">Configuración</h2>
 
             <div className="grid md:grid-cols-2 gap-6 mb-6">
               <div>
-                <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">TÍTULO</label>
+                <label className="block text-sm font-semibold text-tinta mb-1.5">Título</label>
                 <input
                   type="text"
                   value={page.title}
                   onChange={(e) => setPage({ ...page, title: e.target.value })}
                   onBlur={() => updatePage({ title: page.title })}
-                  className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+                  className="w-full px-4 py-3 rounded-xl bg-white border border-borde-fuerte text-tinta placeholder-tinta-suave focus:border-verde-oscuro focus:outline-none transition-colors"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">URL</label>
+                <label className="block text-sm font-semibold text-tinta mb-1.5">URL</label>
                 <input
                   type="text"
                   value={page.url_slug}
                   disabled
-                  className="w-full px-4 py-3 bg-gray-800 border border-gray-700 text-gray-500"
+                  className="w-full px-4 py-3 rounded-xl bg-papel-hueso border border-borde text-tinta-suave"
                 />
               </div>
             </div>
 
             <div className="mb-6">
-              <label htmlFor="dominio-propio" className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">
-                DOMINIO PROPIO (OPCIONAL)
+              <label htmlFor="dominio-propio" className="block text-sm font-semibold text-tinta mb-1.5">
+                Dominio propio (opcional)
               </label>
               <input
                 id="dominio-propio"
@@ -736,12 +736,12 @@ function PageEditor() {
                 onChange={(e) => setPage({ ...page, dominio: e.target.value })}
                 onBlur={() => guardarDominio(page.dominio)}
                 placeholder="maxipeque.com"
-                className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+                className="w-full px-4 py-3 rounded-xl bg-white border border-borde-fuerte text-tinta placeholder-tinta-suave focus:border-verde-oscuro focus:outline-none transition-colors"
               />
               {dominioError ? (
-                <p className="text-xs text-red-400 mt-2">{dominioError}</p>
+                <p className="text-xs text-red-700 mt-2">{dominioError}</p>
               ) : (
-                <p className="text-xs text-gray-600 mt-2">
+                <p className="text-xs text-tinta-suave mt-2">
                   Puedes cargar tu dominio aca si quieres que tu pagina de rezonar
                   tenga tu dominio propio. Para esto te debes comunicar antes con
                   cjsuther@gmail.com y contarle que lo quieres hacer
@@ -750,19 +750,19 @@ function PageEditor() {
             </div>
 
             <div className="mb-6">
-              <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">DESCRIPCIÓN</label>
+              <label className="block text-sm font-semibold text-tinta mb-1.5">Descripción</label>
               <textarea
                 value={page.description}
                 onChange={(e) => setPage({ ...page, description: e.target.value })}
                 onBlur={() => updatePage({ description: page.description })}
-                className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+                className="w-full px-4 py-3 rounded-xl bg-white border border-borde-fuerte text-tinta placeholder-tinta-suave focus:border-verde-oscuro focus:outline-none transition-colors"
                 rows="3"
               />
             </div>
 
             <div className="grid md:grid-cols-2 gap-6 mb-6">
               <div>
-                <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">IMAGEN DE PERFIL</label>
+                <label className="block text-sm font-semibold text-tinta mb-1.5">Imagen de perfil</label>
                 <div className="flex items-center gap-4">
                   {page.profile_image && (
                     <div className="relative">
@@ -772,7 +772,7 @@ function PageEditor() {
                           setPage({ ...page, profile_image: null });
                           updatePage({ profile_image: null });
                         }}
-                        className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-700"
+                        className="absolute -top-2 -right-2 bg-red-600 text-tinta rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-700"
                       >
                         ×
                       </button>
@@ -782,14 +782,14 @@ function PageEditor() {
                     type="file"
                     accept="image/*"
                     onChange={handleProfileImageUpload}
-                    className="text-sm text-gray-400"
+                    className="text-sm text-tinta-media"
                   />
                 </div>
-                <p className="text-xs text-gray-600 mt-1">JPG, PNG, GIF o WebP. Máximo 5MB</p>
+                <p className="text-xs text-tinta-suave mt-1">JPG, PNG, GIF o WebP. Máximo 5MB</p>
               </div>
 
               <div>
-                <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">IMAGEN DE FONDO</label>
+                <label className="block text-sm font-semibold text-tinta mb-1.5">Imagen de fondo</label>
                 <div className="flex items-center gap-4">
                   {page.background_image && (
                     <div className="relative">
@@ -799,7 +799,7 @@ function PageEditor() {
                           setPage({ ...page, background_image: null });
                           updatePage({ background_image: null });
                         }}
-                        className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-700"
+                        className="absolute -top-2 -right-2 bg-red-600 text-tinta rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-700"
                       >
                         ×
                       </button>
@@ -809,10 +809,10 @@ function PageEditor() {
                     type="file"
                     accept="image/*"
                     onChange={handleBackgroundImageUpload}
-                    className="text-sm text-gray-400"
+                    className="text-sm text-tinta-media"
                   />
                 </div>
-                <p className="text-xs text-gray-600 mt-1">JPG, PNG, GIF o WebP. Máximo 5MB</p>
+                <p className="text-xs text-tinta-suave mt-1">JPG, PNG, GIF o WebP. Máximo 5MB</p>
               </div>
             </div>
 
@@ -830,7 +830,7 @@ function PageEditor() {
 
                 return (
                   <div key={c.campo}>
-                    <label htmlFor={`color-${c.campo}`} className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">
+                    <label htmlFor={`color-${c.campo}`} className="block text-sm font-semibold text-tinta mb-1.5">
                       COLOR DE {c.etiqueta}
                     </label>
                     {/* Nunca deshabilitado: un input de color deshabilitado no
@@ -843,33 +843,33 @@ function PageEditor() {
                       value={vigente}
                       onChange={(e) => guardarColor(c.campo, e.target.value)}
                       className={`w-full h-10 rounded-lg cursor-pointer ${
-                        enAutomatico ? 'ring-2 ring-gray-600' : ''
+                        enAutomatico ? 'ring-2 ring-borde-fuerte' : ''
                       }`}
                     />
                     {c.rol ? (
                       enAutomatico ? (
-                        <p className="text-xs text-gray-600 mt-2">
+                        <p className="text-xs text-tinta-suave mt-2">
                           Automático: {c.automatico}. Elegí uno para separarlo.
                         </p>
                       ) : (
                         <button
                           type="button"
                           onClick={() => guardarColor(c.campo, null)}
-                          className="text-xs text-gray-500 hover:text-white transition mt-2"
+                          className="text-xs text-tinta-suave hover:text-tinta transition mt-2"
                         >
                           Volver al automático
                         </button>
                       )
                     ) : (
-                      <p className="text-xs text-gray-600 mt-2">{c.ayuda}</p>
+                      <p className="text-xs text-tinta-suave mt-2">{c.ayuda}</p>
                     )}
                   </div>
                 );
               })}
             </div>
 
-            <div className="mt-8 pt-8 border-t border-gray-800">
-              <label className="block text-sm font-bold text-gray-400 mb-4 tracking-wide">TEMPLATE DE DISEÑO</label>
+            <div className="mt-8 pt-8 border-t border-borde">
+              <label className="block text-sm font-bold text-tinta-media mb-4 tracking-wide">Template de diseño</label>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {PLANTILLAS.map((p) => {
                   const elegida = (page.template || 'minimal') === p.clave;
@@ -882,12 +882,12 @@ function PageEditor() {
                       }}
                       aria-pressed={elegida}
                       className={`p-3 border-2 text-left transition ${
-                        elegida ? 'border-white bg-gray-800' : 'border-gray-700 hover:border-gray-600'
+                        elegida ? 'border-white bg-papel-hueso' : 'border-borde-fuerte hover:border-borde-fuerte'
                       }`}
                     >
                       <MiniaturaPlantilla plantilla={p.clave} page={page} />
-                      <div className="font-bold mt-3 text-white">{p.nombre}</div>
-                      <div className="text-xs text-gray-500">{p.descripcion}</div>
+                      <div className="font-bold mt-3 text-tinta">{p.nombre}</div>
+                      <div className="text-xs text-tinta-suave">{p.descripcion}</div>
                     </button>
                   );
                 })}
@@ -918,9 +918,9 @@ function PageEditor() {
         )}
 
         {seccion === 'admins' && isOwner && (
-            <div className="bg-gray-900 border border-gray-800 p-8 mb-8">
-              <h2 className="text-2xl font-black mb-2 tracking-tight">ADMINISTRADORES</h2>
-              <p className="text-sm text-gray-500 mb-6">
+            <div className="bg-white border border-borde rounded-2xl p-6 sm:p-8 mb-8">
+              <h2 className="text-2xl font-bold mb-2 tracking-tight">Administradores</h2>
+              <p className="text-sm text-tinta-suave mb-6">
                 Invitá a otros usuarios (por email) a administrar esta página. Pueden editar contenido y ajustes, pero no borrar la página ni gestionar administradores.
               </p>
 
@@ -930,37 +930,37 @@ function PageEditor() {
                   value={inviteEmail}
                   onChange={(e) => setInviteEmail(e.target.value)}
                   placeholder="email@ejemplo.com"
-                  className="flex-1 px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+                  className="flex-1 px-4 py-3 bg-white border border-borde-fuerte text-tinta focus:border-verde-oscuro transition"
                   required
                 />
                 <button
                   type="submit"
                   disabled={invitingAdmin}
-                  className="bg-white text-black px-6 py-3 font-bold hover:bg-gray-200 transition disabled:opacity-50"
+                  className="inline-flex items-center justify-center gap-2 rounded-full bg-verde text-verde-tinta px-6 py-3 font-semibold hover:bg-verde-oscuro hover:text-white transition-colors disabled:opacity-50"
                 >
                   {invitingAdmin ? 'INVITANDO...' : 'INVITAR'}
                 </button>
               </form>
 
-              {adminError && <p className="text-red-400 text-sm mb-4">{adminError}</p>}
-              {adminMsg && <p className="text-emerald-400 text-sm mb-4">{adminMsg}</p>}
+              {adminError && <p className="text-red-700 text-sm mb-4">{adminError}</p>}
+              {adminMsg && <p className="text-verde-oscuro text-sm mb-4">{adminMsg}</p>}
 
               {admins.length === 0 ? (
-                <p className="text-gray-600 text-sm">Todavía no invitaste a nadie.</p>
+                <p className="text-tinta-suave text-sm">Todavía no invitaste a nadie.</p>
               ) : (
                 <div className="space-y-2">
                   {admins.map((a) => (
-                    <div key={a.id} className="flex items-center justify-between bg-black border border-gray-800 px-4 py-3">
+                    <div key={a.id} className="flex items-center justify-between bg-white border border-borde px-4 py-3">
                       <div>
-                        <span className="font-medium text-white">{a.user_name || a.user_email}</span>
-                        {a.user_name && <span className="text-gray-500 text-sm"> · {a.user_email}</span>}
-                        <span className={`ml-3 px-2 py-0.5 text-xs rounded-full ${a.status === 'accepted' ? 'bg-emerald-900 text-emerald-200' : 'bg-yellow-900 text-yellow-200'}`}>
+                        <span className="font-medium text-tinta">{a.user_name || a.user_email}</span>
+                        {a.user_name && <span className="text-tinta-suave text-sm"> · {a.user_email}</span>}
+                        <span className={`ml-3 px-2 py-0.5 text-xs rounded-full ${a.status === 'accepted' ? 'bg-verde-claro text-verde-oscuro border border-verde-medio' : 'bg-amber-50 text-amber-800 border border-amber-200'}`}>
                           {a.status === 'accepted' ? 'Administrador' : 'Pendiente'}
                         </span>
                       </div>
                       <button
                         onClick={() => removeAdmin(a.id)}
-                        className="text-red-400 hover:text-red-300 text-sm font-bold transition"
+                        className="text-red-700 hover:text-red-700 text-sm font-bold transition"
                       >
                         {a.status === 'accepted' ? 'QUITAR' : 'CANCELAR'}
                       </button>
@@ -974,37 +974,37 @@ function PageEditor() {
         {seccion === 'contenido' && (
           <>
             {pendingCollaborations.filter(c => c.collaborator_page_id == id).length > 0 && (
-              <div className="bg-gray-900 border border-orange-800 p-8 mb-8">
-                <h2 className="text-2xl font-black tracking-tight mb-6 text-orange-400">COLABORACIONES PENDIENTES</h2>
+              <div className="bg-white border border-amber-200 p-8 mb-8">
+                <h2 className="text-2xl font-bold tracking-tight mb-6 text-amber-700">Colaboraciones pendientes</h2>
                 <div className="space-y-4">
                   {pendingCollaborations.filter(c => c.collaborator_page_id == id).map((collab) => (
-                    <div key={collab.id} className="bg-black border border-gray-800 p-4 flex flex-col sm:flex-row sm:items-center gap-4">
+                    <div key={collab.id} className="bg-white border border-borde rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-4">
                       <div className="flex items-center gap-3 flex-1">
                         {collab.requester_page_image && (
                           <img src={collab.requester_page_image} alt={collab.requester_page_title} className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
                         )}
                         <div>
-                          <p className="font-bold text-white">{collab.requester_page_title}</p>
-                          <p className="text-sm text-gray-400">te invita a colaborar en <span className="text-white">{collab.event_title}</span></p>
+                          <p className="font-bold text-tinta">{collab.requester_page_title}</p>
+                          <p className="text-sm text-tinta-media">te invita a colaborar en <span className="text-tinta">{collab.event_title}</span></p>
                           {collab.event_date && (
-                            <p className="text-xs text-gray-600 mt-1">
+                            <p className="text-xs text-tinta-suave mt-1">
                               {new Date(collab.event_date + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                               {collab.event_time && ' · ' + collab.event_time}
                             </p>
                           )}
-                          <p className="text-xs text-gray-500 mt-1">Para tu página: <span className="text-gray-300">{collab.collaborator_page_title}</span></p>
+                          <p className="text-xs text-tinta-suave mt-1">Para tu página: <span className="text-tinta-media">{collab.collaborator_page_title}</span></p>
                         </div>
                       </div>
                       <div className="flex gap-2 flex-shrink-0">
                         <button
                           onClick={() => openAcceptCollabModal(collab)}
-                          className="px-4 py-2 bg-green-700 text-white text-sm font-bold hover:bg-green-600 transition"
+                          className="px-4 py-2 bg-green-700 text-tinta text-sm font-bold hover:bg-green-600 transition"
                         >
                           Aceptar
                         </button>
                         <button
                           onClick={() => rejectCollaboration(collab)}
-                          className="px-4 py-2 bg-gray-800 text-red-400 text-sm font-bold hover:bg-gray-700 transition"
+                          className="px-4 py-2 bg-papel-hueso text-red-700 text-sm font-bold hover:bg-papel-hueso transition"
                         >
                           Rechazar
                         </button>
@@ -1015,12 +1015,12 @@ function PageEditor() {
               </div>
             )}
 
-            <div className="bg-gray-900 border border-gray-800 p-8 mb-8">
+            <div className="bg-white border border-borde rounded-2xl p-6 sm:p-8 mb-8">
               <div className="flex justify-between items-center mb-4">
-                <h2 className="text-2xl font-black tracking-tight">GRUPOS DE LINKS</h2>
+                <h2 className="text-2xl font-bold tracking-tight">Grupos de links</h2>
                 <button
                   onClick={() => setShowGroupModal(true)}
-                  className="bg-white text-black px-6 py-3 font-bold hover:bg-gray-200 transition"
+                  className="inline-flex items-center justify-center gap-2 rounded-full bg-verde text-verde-tinta px-6 py-3 font-semibold hover:bg-verde-oscuro hover:text-white transition-colors"
                 >
                   + NUEVO GRUPO
                 </button>
@@ -1031,28 +1031,28 @@ function PageEditor() {
                   entender para cargar algo, y no estaba dicho en ninguna
                   parte: se creaba un grupo de links y después no se podía
                   poner una fecha. */}
-              <div className="border border-gray-800 bg-black p-5 mb-8">
-                <p className="text-sm text-gray-400 mb-3">
+              <div className="border border-borde bg-papel-hueso rounded-xl p-5 mb-8">
+                <p className="text-sm text-tinta-media mb-3">
                   Todo lo que publicás va adentro de un grupo, y el tipo que elijas define
                   cómo se muestra. Creá uno por cada clase de contenido:
                 </p>
-                <ul className="text-sm text-gray-500 space-y-1.5">
+                <ul className="text-sm text-tinta-suave space-y-1.5">
                   <li>
-                    <strong className="text-gray-300">Links —</strong> una lista de enlaces
+                    <strong className="text-tinta-media">Links —</strong> una lista de enlaces
                     con su descripción e imagen.
                   </li>
                   <li>
-                    <strong className="text-gray-300">Eventos —</strong> con fecha, hora y
+                    <strong className="text-tinta-media">Eventos —</strong> con fecha, hora y
                     dirección. Es el único que aparece en la agenda, en el mapa y en el
                     buscador, y el único que puede vender entradas.
                   </li>
                   <li>
-                    <strong className="text-gray-300">Galería —</strong> una cuadrícula de
+                    <strong className="text-tinta-media">Galería —</strong> una cuadrícula de
                     imágenes, videos de YouTube y contenido de Instagram, que se abren
                     en grande.
                   </li>
                 </ul>
-                <p className="text-xs text-gray-600 mt-3">
+                <p className="text-xs text-tinta-suave mt-3">
                   El tipo se elige al crear el grupo y conviene acertarlo: un evento cargado
                   como link no tiene dónde poner la fecha. Tus redes sociales no van acá,
                   se cargan en la sección Redes Sociales.
@@ -1060,11 +1060,11 @@ function PageEditor() {
               </div>
 
               {page.groups && page.groups.length === 0 ? (
-                <p className="text-gray-500 text-center py-8">No hay grupos todavía</p>
+                <p className="text-tinta-suave text-center py-8">No hay grupos todavía</p>
               ) : (
                 <div className="space-y-6">
                   {page.groups?.map((group, index) => (
-                    <div key={group.id} className="bg-black rounded-lg shadow-md p-6">
+                    <div key={group.id} className="bg-white rounded-lg shadow-md p-6">
                       {/* En mobile las acciones van debajo del título. Antes
                           compartían fila: un título largo empujaba los botones
                           fuera de la pantalla y no había forma de llegar a
@@ -1073,9 +1073,9 @@ function PageEditor() {
                       <div className="flex flex-col gap-3 md:flex-row md:justify-between md:items-center mb-4">
                         <div className="flex items-center gap-3 min-w-0">
                           <h3 className="text-xl font-semibold truncate">{group.title}</h3>
-                          <span className={`px-2 py-1 text-xs rounded-full ${group.type === 'galeria' ? 'bg-purple-100 text-purple-700' :
+                          <span className={`px-2 py-1 text-xs rounded-full ${group.type === 'galeria' ? 'bg-papel-hueso text-tinta-media border border-borde' :
                               group.type === 'eventos' ? 'bg-orange-100 text-orange-700' :
-                                  'bg-blue-100 text-blue-700'
+                                  'bg-papel-hueso text-tinta-media border border-borde'
                             }`}>
                             {group.type === 'galeria' ? 'Galería' :
                               group.type === 'eventos' ? 'Eventos' :
@@ -1086,7 +1086,7 @@ function PageEditor() {
                           <button
                             onClick={() => moveGroup(group.id, 'up')}
                             disabled={index === 0}
-                            className="px-3 py-1 rounded-lg hover:bg-gray-100 transition text-sm disabled:opacity-30 disabled:cursor-not-allowed"
+                            className="px-3 py-1 rounded-lg hover:bg-papel-hueso transition text-sm disabled:opacity-30 disabled:cursor-not-allowed"
                             title="Mover arriba"
                           >
                             ↑
@@ -1094,7 +1094,7 @@ function PageEditor() {
                           <button
                             onClick={() => moveGroup(group.id, 'down')}
                             disabled={index === page.groups.length - 1}
-                            className="px-3 py-1 rounded-lg hover:bg-gray-100 transition text-sm disabled:opacity-30 disabled:cursor-not-allowed"
+                            className="px-3 py-1 rounded-lg hover:bg-papel-hueso transition text-sm disabled:opacity-30 disabled:cursor-not-allowed"
                             title="Mover abajo"
                           >
                             ↓
@@ -1103,7 +1103,7 @@ function PageEditor() {
                           <div className="flex flex-wrap gap-2">
                             <button
                               onClick={() => openEditGroupModal(group)}
-                              className="text-blue-600 hover:bg-blue-50 px-3 py-1 rounded-lg transition text-sm"
+                              className="text-verde-oscuro hover:bg-verde-claro px-3 py-1 rounded-lg transition text-sm"
                             >
                               Editar Título
                             </button>
@@ -1113,7 +1113,7 @@ function PageEditor() {
                                 setTipoMedia('imagen');
                                 setShowLinkModal(true);
                               }}
-                              className="bg-green-600 text-white px-3 py-1 rounded-lg hover:bg-green-700 transition text-sm"
+                              className="bg-green-600 text-tinta px-3 py-1 rounded-lg hover:bg-green-700 transition text-sm"
                             >
                               {group.type === 'galeria' ? '+ Contenido' :
                                 group.type === 'eventos' ? '+ Evento' :
@@ -1131,7 +1131,7 @@ function PageEditor() {
                       </div>
 
                       {group.links && group.links.length === 0 && (!group.collaborated_events || group.collaborated_events.length === 0) ? (
-                        <p className="text-gray-400 text-sm">No hay links en este grupo</p>
+                        <p className="text-tinta-media text-sm">No hay links en este grupo</p>
                       ) : (
                         <div className="space-y-2">
                           {(group.type === 'eventos'
@@ -1146,30 +1146,30 @@ function PageEditor() {
                             : group.links
                           )?.map((link, linkIndex) => (
                             link._isCollaboration ? (
-                            <div key={`collab-${link.collaboration_id}`} className="flex items-center gap-4 p-3 bg-gray-800 rounded-lg border border-orange-900">
+                            <div key={`collab-${link.collaboration_id}`} className="flex items-center gap-4 p-3 bg-papel-hueso rounded-lg border border-amber-200">
                               {link.image_url && (
                                 <img src={link.image_url} alt={link.text} className="w-12 h-12 object-cover rounded" />
                               )}
                               <div className="flex-1">
                                 <div className="flex items-center gap-2 mb-1">
-                                  <span className="text-xs bg-orange-900 text-orange-300 px-2 py-0.5 rounded font-medium">Colaboración</span>
+                                  <span className="text-xs bg-amber-50 text-orange-300 px-2 py-0.5 rounded font-medium">Colaboración</span>
                                   {link.source_page_image && <img src={link.source_page_image} alt={link.source_page_title} className="w-4 h-4 rounded-full object-cover" />}
-                                  <span className="text-xs text-gray-400">{link.source_page_title}</span>
+                                  <span className="text-xs text-tinta-media">{link.source_page_title}</span>
                                 </div>
-                                <p className="text-white font-medium">{link.text}</p>
+                                <p className="text-tinta font-medium">{link.text}</p>
                                 {link.event_date && (
-                                  <p className="text-xs text-gray-500 mt-0.5">
+                                  <p className="text-xs text-tinta-suave mt-0.5">
                                     {new Date(link.event_date + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                                     {link.event_time && ' · ' + link.event_time}
                                   </p>
                                 )}
                                 {link.event_due == '1' && (
-                                  <p className="text-sm text-red-400 font-semibold mt-1">¡Evento vencido!</p>
+                                  <p className="text-sm text-red-700 font-semibold mt-1">¡Evento vencido!</p>
                                 )}
                               </div>
                               <button
                                 onClick={() => removeCollaboration(link.collaboration_id)}
-                                className="text-red-400 hover:bg-red-900 px-3 py-1 rounded transition text-sm flex-shrink-0"
+                                className="text-red-700 hover:bg-red-50 px-3 py-1 rounded transition text-sm flex-shrink-0"
                               >
                                 Quitar
                               </button>
@@ -1177,7 +1177,7 @@ function PageEditor() {
                             ) : (
                             <div
                               key={link.id}
-                              className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 p-3 bg-gray-50 rounded-lg hover:bg-gray-100"
+                              className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 p-3 bg-papel-hueso rounded-xl border border-borde hover:bg-papel-hueso"
                             >
                               {portadaDe(link) && (
                                 <img
@@ -1189,17 +1189,17 @@ function PageEditor() {
                               <div className="flex-1 min-w-0">
                                 <Link
                                   to={`/page/${id}/item/${link.id}`}
-                                  className="text-blue-600 hover:underline font-medium text-left"
+                                  className="text-verde-oscuro hover:underline font-medium text-left"
                                 >
                                   {link.text || (group.type === 'galeria' ? 'Sin título' : link.url)}
                                 </Link>
                                 {analizarEmbed(link.embed_url) && (
-                                  <span className="ml-2 text-xs px-2 py-0.5 rounded bg-gray-200 text-gray-700">
+                                  <span className="ml-2 text-xs px-2 py-0.5 rounded bg-papel-hueso text-tinta-media">
                                     {analizarEmbed(link.embed_url).tipo === 'youtube' ? 'YouTube' : 'Instagram'}
                                   </span>
                                 )}
                                 {link.description && (
-                                  <p className="text-sm text-gray-600">{link.description}</p>
+                                  <p className="text-sm text-tinta-suave">{link.description}</p>
                                 )}
                                 {link.event_due == '1' && (
                                   <p className="text-sm text-red-600 font-semibold mt-1">¡Evento vencido!</p>
@@ -1238,7 +1238,7 @@ function PageEditor() {
                                     <button
                                       onClick={() => moveLink(link.id, group.id, 'up')}
                                       disabled={linkIndex === 0}
-                                      className="px-2 py-1 rounded bg-black transition text-sm disabled:opacity-30 disabled:cursor-not-allowed"
+                                      className="px-2 py-1 rounded bg-white transition text-sm disabled:opacity-30 disabled:cursor-not-allowed"
                                       title="Mover arriba"
                                     >
                                       ↑
@@ -1246,7 +1246,7 @@ function PageEditor() {
                                     <button
                                       onClick={() => moveLink(link.id, group.id, 'down')}
                                       disabled={linkIndex === group.links.length - 1}
-                                      className="px-2 py-1 rounded bg-black transition text-sm disabled:opacity-30 disabled:cursor-not-allowed"
+                                      className="px-2 py-1 rounded bg-white transition text-sm disabled:opacity-30 disabled:cursor-not-allowed"
                                       title="Mover abajo"
                                     >
                                       ↓
@@ -1257,7 +1257,7 @@ function PageEditor() {
                                 <div className="flex flex-wrap gap-1">
                                   <Link
                                     to={`/page/${id}/item/${link.id}`}
-                                    className="text-blue-600 hover:bg-blue-50 px-3 py-1 rounded transition text-sm"
+                                    className="text-verde-oscuro hover:bg-verde-claro px-3 py-1 rounded transition text-sm"
                                   >
                                     Editar
                                   </Link>
@@ -1285,33 +1285,33 @@ function PageEditor() {
       </div>
 
       {showGroupModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center p-4 z-50">
-          <div className="bg-gray-900 border border-gray-800 max-w-lg w-full p-10">
-            <h2 className="text-3xl font-black mb-8 text-white">NUEVO GRUPO</h2>
+        <div className="fixed inset-0 bg-tinta/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white border border-borde max-w-lg w-full p-10">
+            <h2 className="text-3xl font-bold mb-8 text-tinta">Nuevo grupo</h2>
             <form onSubmit={createGroup} className="space-y-6">
               <div>
-                <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">TÍTULO DEL GRUPO</label>
+                <label className="block text-sm font-semibold text-tinta mb-1.5">Título del grupo</label>
                 <input
                   type="text"
                   value={newGroup.title}
                   onChange={(e) => setNewGroup({ ...newGroup, title: e.target.value })}
-                  className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+                  className="w-full px-4 py-3 rounded-xl bg-white border border-borde-fuerte text-tinta placeholder-tinta-suave focus:border-verde-oscuro focus:outline-none transition-colors"
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">TIPO DE GRUPO</label>
+                <label className="block text-sm font-semibold text-tinta mb-1.5">Tipo de grupo</label>
                 <select
                   value={newGroup.type}
                   onChange={(e) => setNewGroup({ ...newGroup, type: e.target.value })}
-                  className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+                  className="w-full px-4 py-3 rounded-xl bg-white border border-borde-fuerte text-tinta placeholder-tinta-suave focus:border-verde-oscuro focus:outline-none transition-colors"
                   required
                 >
                   <option value="links">Links</option>
                   <option value="galeria">Galería</option>
                   <option value="eventos">Eventos</option>
                 </select>
-                <p className="text-xs text-gray-600 mt-2">
+                <p className="text-xs text-tinta-suave mt-2">
                   {newGroup.type === 'links' && 'Lista de enlaces con descripción'}
                   {newGroup.type === 'galeria' && 'Cuadrícula de imágenes'}
                   {newGroup.type === 'eventos' && 'Eventos con fecha, hora y ubicación'}
@@ -1321,15 +1321,15 @@ function PageEditor() {
                 <button
                   type="button"
                   onClick={() => setShowGroupModal(false)}
-                  className="flex-1 px-4 py-3 border border-gray-700 text-white hover:bg-gray-800 transition font-bold"
+                  className="flex-1 px-4 py-3 border border-borde-fuerte text-tinta hover:bg-papel-hueso transition font-bold"
                 >
-                  CANCELAR
+                  Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 bg-white text-black px-4 py-3 font-bold hover:bg-gray-200 transition"
+                  className="flex-1 bg-verde text-verde-tinta px-4 py-3 font-bold hover:bg-verde-oscuro hover:text-tinta transition"
                 >
-                  CREAR
+                  Crear
                 </button>
               </div>
             </form>
@@ -1338,17 +1338,17 @@ function PageEditor() {
       )}
 
       {showEditGroupModal && editingGroup && (
-        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center p-4 z-50">
-          <div className="bg-gray-900 border border-gray-800 max-w-lg w-full p-10">
-            <h2 className="text-3xl font-black mb-8 text-white">EDITAR GRUPO</h2>
+        <div className="fixed inset-0 bg-tinta/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white border border-borde max-w-lg w-full p-10">
+            <h2 className="text-3xl font-bold mb-8 text-tinta">Editar grupo</h2>
             <form onSubmit={updateGroup} className="space-y-6">
               <div>
-                <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">TÍTULO DEL GRUPO</label>
+                <label className="block text-sm font-semibold text-tinta mb-1.5">Título del grupo</label>
                 <input
                   type="text"
                   value={editingGroup.title}
                   onChange={(e) => setEditingGroup({ ...editingGroup, title: e.target.value })}
-                  className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+                  className="w-full px-4 py-3 rounded-xl bg-white border border-borde-fuerte text-tinta placeholder-tinta-suave focus:border-verde-oscuro focus:outline-none transition-colors"
                   required
                 />
               </div>
@@ -1359,15 +1359,15 @@ function PageEditor() {
                     setShowEditGroupModal(false);
                     setEditingGroup(null);
                   }}
-                  className="flex-1 px-4 py-3 border border-gray-700 text-white hover:bg-gray-800 transition font-bold"
+                  className="flex-1 px-4 py-3 border border-borde-fuerte text-tinta hover:bg-papel-hueso transition font-bold"
                 >
-                  CANCELAR
+                  Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 bg-white text-black px-4 py-3 font-bold hover:bg-gray-200 transition"
+                  className="flex-1 bg-verde text-verde-tinta px-4 py-3 font-bold hover:bg-verde-oscuro hover:text-tinta transition"
                 >
-                  GUARDAR
+                  Guardar
                 </button>
               </div>
             </form>
@@ -1376,56 +1376,56 @@ function PageEditor() {
       )}
 
       {showLinkModal && selectedGroup && (
-        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-start justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-gray-900 border border-gray-800 max-w-lg w-full p-10 my-8">
-            <h2 className="text-3xl font-black mb-8 text-white">
+        <div className="fixed inset-0 bg-tinta/40 backdrop-blur-sm flex items-start justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white border border-borde max-w-lg w-full p-10 my-8">
+            <h2 className="text-3xl font-bold mb-8 text-tinta">
               {selectedGroup.type === 'galeria' ? 'NUEVO CONTENIDO' : selectedGroup.type === 'eventos' ? 'NUEVO EVENTO' : 'NUEVO LINK'}
             </h2>
             <form onSubmit={createLink} className="space-y-6">
               {selectedGroup.type !== 'galeria' && (
                 <>
                   <div>
-                    <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">
+                    <label className="block text-sm font-semibold text-tinta mb-1.5">
                       {selectedGroup.type === 'eventos' ? 'NOMBRE DEL EVENTO' : 'TEXTO'}
                     </label>
                     <input
                       type="text"
                       value={newLink.text}
                       onChange={(e) => setNewLink({ ...newLink, text: e.target.value })}
-                      className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+                      className="w-full px-4 py-3 rounded-xl bg-white border border-borde-fuerte text-tinta placeholder-tinta-suave focus:border-verde-oscuro focus:outline-none transition-colors"
                       required
                     />
                   </div>
                   {selectedGroup.type === 'eventos' ? (
                     <div className="grid grid-cols-2 gap-4 items-end">
                       <div>
-                        <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">URL (OPCIONAL)</label>
+                        <label className="block text-sm font-semibold text-tinta mb-1.5">URL (opcional)</label>
                         <input
                           type="url"
                           value={newLink.url}
                           onChange={(e) => setNewLink({ ...newLink, url: e.target.value })}
-                          className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+                          className="w-full px-4 py-3 rounded-xl bg-white border border-borde-fuerte text-tinta placeholder-tinta-suave focus:border-verde-oscuro focus:outline-none transition-colors"
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">TEXTO DEL BOTÓN (OPCIONAL)</label>
+                        <label className="block text-sm font-semibold text-tinta mb-1.5">Texto del botón (opcional)</label>
                         <input
                           type="text"
                           value={newLink.url_text}
                           onChange={(e) => setNewLink({ ...newLink, url_text: e.target.value })}
                           placeholder="Más información"
-                          className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+                          className="w-full px-4 py-3 rounded-xl bg-white border border-borde-fuerte text-tinta placeholder-tinta-suave focus:border-verde-oscuro focus:outline-none transition-colors"
                         />
                       </div>
                     </div>
                   ) : (
                     <div>
-                      <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">URL</label>
+                      <label className="block text-sm font-semibold text-tinta mb-1.5">URL</label>
                       <input
                         type="url"
                         value={newLink.url}
                         onChange={(e) => setNewLink({ ...newLink, url: e.target.value })}
-                        className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+                        className="w-full px-4 py-3 rounded-xl bg-white border border-borde-fuerte text-tinta placeholder-tinta-suave focus:border-verde-oscuro focus:outline-none transition-colors"
                         required
                       />
                     </div>
@@ -1436,8 +1436,8 @@ function PageEditor() {
               {selectedGroup.type === 'galeria' && (
                 <>
                   <div>
-                    <label htmlFor="nuevo-tipo-de-contenido" className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">
-                      TIPO DE CONTENIDO
+                    <label htmlFor="nuevo-tipo-de-contenido" className="block text-sm font-semibold text-tinta mb-1.5">
+                      Tipo de contenido
                     </label>
                     <select
                       id="nuevo-tipo-de-contenido"
@@ -1446,7 +1446,7 @@ function PageEditor() {
                         setTipoMedia(e.target.value);
                         if (e.target.value === 'imagen') setNewLink({ ...newLink, embed_url: '' });
                       }}
-                      className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+                      className="w-full px-4 py-3 rounded-xl bg-white border border-borde-fuerte text-tinta placeholder-tinta-suave focus:border-verde-oscuro focus:outline-none transition-colors"
                     >
                       <option value="imagen">Imagen</option>
                       <option value="youtube">Video de YouTube</option>
@@ -1456,7 +1456,7 @@ function PageEditor() {
 
                   {tipoMedia !== 'imagen' && (
                     <div>
-                      <label htmlFor="nueva-url-del-contenido" className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">
+                      <label htmlFor="nueva-url-del-contenido" className="block text-sm font-semibold text-tinta mb-1.5">
                         {tipoMedia === 'youtube' ? 'URL DEL VIDEO' : 'URL DEL CONTENIDO'}
                       </label>
                       <input
@@ -1467,10 +1467,10 @@ function PageEditor() {
                         placeholder={tipoMedia === 'youtube'
                           ? 'https://www.youtube.com/watch?v=...'
                           : 'https://www.instagram.com/p/...'}
-                        className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+                        className="w-full px-4 py-3 rounded-xl bg-white border border-borde-fuerte text-tinta placeholder-tinta-suave focus:border-verde-oscuro focus:outline-none transition-colors"
                         required
                       />
-                      <p className="text-xs text-gray-600 mt-1">
+                      <p className="text-xs text-tinta-suave mt-1">
                         {tipoMedia === 'youtube'
                           ? 'Sirve el link del video, el de compartir o el de un short'
                           : 'De Instagram se muestra sólo la foto, el carrusel o el video. La cuenta tiene que ser pública.'}
@@ -1481,7 +1481,7 @@ function PageEditor() {
               )}
 
               <div>
-                <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">
+                <label className="block text-sm font-semibold text-tinta mb-1.5">
                   {selectedGroup.type !== 'galeria' ? 'IMAGEN (OPCIONAL)'
                     : tipoMedia === 'imagen' ? 'IMAGEN'
                     : 'PORTADA (OPCIONAL)'}
@@ -1492,7 +1492,7 @@ function PageEditor() {
                       <img src={newLink.image_url} alt="Vista previa" className="w-16 h-16 object-cover rounded" />
                       <button
                         onClick={() => setNewLink({ ...newLink, image_url: null })}
-                        className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-700 text-lg font-bold"
+                        className="absolute -top-2 -right-2 bg-red-600 text-tinta rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-700 text-lg font-bold"
                         type="button"
                       >
                         ×
@@ -1504,12 +1504,12 @@ function PageEditor() {
                     accept="image/*"
                     onChange={(e) => handleLinkImageUpload(e)}
                     disabled={uploadingLinkImage}
-                    className="text-sm text-gray-400"
+                    className="text-sm text-tinta-media"
                     required={selectedGroup.type === 'galeria' && tipoMedia === 'imagen' && !newLink.image_url}
                   />
-                  {uploadingLinkImage && <span className="text-sm text-gray-500">Subiendo...</span>}
+                  {uploadingLinkImage && <span className="text-sm text-tinta-suave">Subiendo...</span>}
                 </div>
-                <p className="text-xs text-gray-600 mt-1">
+                <p className="text-xs text-tinta-suave mt-1">
                   {selectedGroup.type === 'galeria' && tipoMedia === 'instagram'
                     ? 'Sin portada, en la grilla se muestra el contenido tal como lo publica Instagram (máx 5MB)'
                     : selectedGroup.type === 'galeria' && tipoMedia === 'youtube'
@@ -1521,21 +1521,21 @@ function PageEditor() {
               {selectedGroup.type === 'galeria' && (
                 <>
                   <div>
-                    <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">TÍTULO (OPCIONAL)</label>
+                    <label className="block text-sm font-semibold text-tinta mb-1.5">Título (opcional)</label>
                     <input
                       type="text"
                       value={newLink.text}
                       onChange={(e) => setNewLink({ ...newLink, text: e.target.value })}
-                      className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+                      className="w-full px-4 py-3 rounded-xl bg-white border border-borde-fuerte text-tinta placeholder-tinta-suave focus:border-verde-oscuro focus:outline-none transition-colors"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">LINK (OPCIONAL)</label>
+                    <label className="block text-sm font-semibold text-tinta mb-1.5">Link (opcional)</label>
                     <input
                       type="url"
                       value={newLink.url}
                       onChange={(e) => setNewLink({ ...newLink, url: e.target.value })}
-                      className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+                      className="w-full px-4 py-3 rounded-xl bg-white border border-borde-fuerte text-tinta placeholder-tinta-suave focus:border-verde-oscuro focus:outline-none transition-colors"
                     />
                   </div>
                 </>
@@ -1545,28 +1545,28 @@ function PageEditor() {
                 <>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">FECHA</label>
+                      <label className="block text-sm font-semibold text-tinta mb-1.5">Fecha</label>
                       <input
                         type="date"
                         value={newLink.event_date}
                         onChange={(e) => setNewLink({ ...newLink, event_date: e.target.value })}
-                        className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+                        className="w-full px-4 py-3 rounded-xl bg-white border border-borde-fuerte text-tinta placeholder-tinta-suave focus:border-verde-oscuro focus:outline-none transition-colors"
                         required
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">HORA</label>
+                      <label className="block text-sm font-semibold text-tinta mb-1.5">Hora</label>
                       <input
                         type="time"
                         value={newLink.event_time}
                         onChange={(e) => setNewLink({ ...newLink, event_time: e.target.value })}
-                        className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+                        className="w-full px-4 py-3 rounded-xl bg-white border border-borde-fuerte text-tinta placeholder-tinta-suave focus:border-verde-oscuro focus:outline-none transition-colors"
                       />
                     </div>
                   </div>
                   <div>
-                    <label htmlFor="nuevo-precio-desde" className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">
-                      PRECIO DESDE (OPCIONAL)
+                    <label htmlFor="nuevo-precio-desde" className="block text-sm font-semibold text-tinta mb-1.5">
+                      Precio desde (opcional)
                     </label>
                     <input
                       id="nuevo-precio-desde"
@@ -1576,15 +1576,15 @@ function PageEditor() {
                       value={newLink.precio_desde ?? ''}
                       onChange={(e) => setNewLink({ ...newLink, precio_desde: e.target.value })}
                       placeholder="Vacío si no se sabe"
-                      className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+                      className="w-full px-4 py-3 rounded-xl bg-white border border-borde-fuerte text-tinta placeholder-tinta-suave focus:border-verde-oscuro focus:outline-none transition-colors"
                     />
-                    <p className="text-xs text-gray-600 mt-1">
+                    <p className="text-xs text-tinta-suave mt-1">
                       En 0 el evento se anuncia como gratis; vacío no muestra nada.
                     </p>
                   </div>
                   <div>
-                    <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">
-                      DIRECCIÓN <span className="text-red-500">*</span>
+                    <label className="block text-sm font-semibold text-tinta mb-1.5">
+                      Dirección<span className="text-red-500">*</span>
                     </label>
                     <GooglePlacesAutocomplete
                       value={newLink.event_address}
@@ -1593,7 +1593,7 @@ function PageEditor() {
                       placeholder="Buscar dirección en Google Maps..."
                       required={true}
                     />
-                    <p className="text-xs text-gray-600 mt-1">
+                    <p className="text-xs text-tinta-suave mt-1">
                       Selecciona una dirección de las sugerencias para capturar las coordenadas
                     </p>
                     {newLink.event_latitude && newLink.event_longitude && (
@@ -1607,13 +1607,13 @@ function PageEditor() {
 
               {selectedGroup.type !== 'galeria' && (
                 <div>
-                  <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">
+                  <label className="block text-sm font-semibold text-tinta mb-1.5">
                     {selectedGroup.type === 'eventos' ? 'DESCRIPCIÓN DEL EVENTO' : 'DESCRIPCIÓN (OPCIONAL)'}
                   </label>
                   <textarea
                     value={newLink.description}
                     onChange={(e) => setNewLink({ ...newLink, description: e.target.value })}
-                    className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+                    className="w-full px-4 py-3 rounded-xl bg-white border border-borde-fuerte text-tinta placeholder-tinta-suave focus:border-verde-oscuro focus:outline-none transition-colors"
                     rows="3"
                   />
                 </div>
@@ -1637,15 +1637,15 @@ function PageEditor() {
                       event_maps_url: ''
                     });
                   }}
-                  className="flex-1 px-4 py-3 border border-gray-700 text-white hover:bg-gray-800 transition font-bold"
+                  className="flex-1 px-4 py-3 border border-borde-fuerte text-tinta hover:bg-papel-hueso transition font-bold"
                 >
-                  CANCELAR
+                  Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 bg-white text-black px-4 py-3 font-bold hover:bg-gray-200 transition"
+                  className="flex-1 bg-verde text-verde-tinta px-4 py-3 font-bold hover:bg-verde-oscuro hover:text-tinta transition"
                 >
-                  CREAR
+                  Crear
                 </button>
               </div>
             </form>
@@ -1654,13 +1654,13 @@ function PageEditor() {
       )}
 
       {showCollabAcceptModal && acceptingCollab && (
-        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center p-4 z-50">
-          <div className="bg-gray-900 border border-gray-800 max-w-lg w-full p-10">
-            <h2 className="text-2xl font-black mb-2 text-white">ACEPTAR COLABORACIÓN</h2>
-            <p className="text-gray-400 mb-6 text-sm">
-              <span className="text-white font-medium">{acceptingCollab.requester_page_title}</span> te invita a colaborar en el evento <span className="text-white font-medium">&ldquo;{acceptingCollab.event_title}&rdquo;</span>.
+        <div className="fixed inset-0 bg-tinta/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white border border-borde max-w-lg w-full p-10">
+            <h2 className="text-2xl font-bold mb-2 text-tinta">Aceptar colaboración</h2>
+            <p className="text-tinta-media mb-6 text-sm">
+              <span className="text-tinta font-medium">{acceptingCollab.requester_page_title}</span> te invita a colaborar en el evento <span className="text-tinta font-medium">&ldquo;{acceptingCollab.event_title}&rdquo;</span>.
               {acceptingCollab.event_date && (
-                <span className="block mt-1 text-gray-500">
+                <span className="block mt-1 text-tinta-suave">
                   {new Date(acceptingCollab.event_date + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                   {acceptingCollab.event_time && ' · ' + acceptingCollab.event_time}
                 </span>
@@ -1671,24 +1671,24 @@ function PageEditor() {
                 {(() => {
                   const eventGroups = page?.groups?.filter(g => g.type === 'eventos') || [];
                   if (eventGroups.length === 0) {
-                    return <p className="text-red-400 text-sm">No tenés grupos de eventos en tu página &ldquo;{acceptingCollab.collaborator_page_title}&rdquo;. Creá uno primero.</p>;
+                    return <p className="text-red-700 text-sm">No tenés grupos de eventos en tu página &ldquo;{acceptingCollab.collaborator_page_title}&rdquo;. Creá uno primero.</p>;
                   }
                   if (eventGroups.length === 1) {
                     return (
-                      <p className="text-sm text-gray-300">
-                        El evento se agregará al grupo <span className="font-bold text-white">&ldquo;{eventGroups[0].title}&rdquo;</span>.
+                      <p className="text-sm text-tinta-media">
+                        El evento se agregará al grupo <span className="font-bold text-tinta">&ldquo;{eventGroups[0].title}&rdquo;</span>.
                       </p>
                     );
                   }
                   return (
                     <>
-                      <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">
+                      <label className="block text-sm font-semibold text-tinta mb-1.5">
                         ¿EN QUÉ GRUPO AGREGAR EL EVENTO?
                       </label>
                       <select
                         value={collabAcceptGroupId}
                         onChange={(e) => setCollabAcceptGroupId(e.target.value)}
-                        className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+                        className="w-full px-4 py-3 rounded-xl bg-white border border-borde-fuerte text-tinta placeholder-tinta-suave focus:border-verde-oscuro focus:outline-none transition-colors"
                         required
                       >
                         <option value="">Seleccionar grupo...</option>
@@ -1699,7 +1699,7 @@ function PageEditor() {
                     </>
                   );
                 })()}
-                <p className="text-xs text-gray-600 mt-2">
+                <p className="text-xs text-tinta-suave mt-2">
                   El evento aparecerá en ese grupo con un indicador de colaboración. También se agregará el link a tu página en el evento original.
                 </p>
               </div>
@@ -1711,16 +1711,16 @@ function PageEditor() {
                     setAcceptingCollab(null);
                     setCollabAcceptGroupId('');
                   }}
-                  className="flex-1 px-4 py-3 border border-gray-700 text-white hover:bg-gray-800 transition font-bold"
+                  className="flex-1 px-4 py-3 border border-borde-fuerte text-tinta hover:bg-papel-hueso transition font-bold"
                 >
-                  CANCELAR
+                  Cancelar
                 </button>
                 {page?.groups?.filter(g => g.type === 'eventos').length > 0 && (
                   <button
                     type="submit"
-                    className="flex-1 bg-green-700 text-white px-4 py-3 font-bold hover:bg-green-600 transition"
+                    className="flex-1 bg-green-700 text-tinta px-4 py-3 font-bold hover:bg-green-600 transition"
                   >
-                    ACEPTAR
+                    Aceptar
                   </button>
                 )}
               </div>

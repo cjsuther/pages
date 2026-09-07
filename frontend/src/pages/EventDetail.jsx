@@ -23,15 +23,15 @@ function EventDetail() {
   }, [id]);
 
   if (loading) return (
-    <div className="min-h-screen bg-black flex items-center justify-center">
-      <p className="text-gray-400">Cargando...</p>
+    <div className="min-h-screen bg-white flex items-center justify-center">
+      <p className="text-tinta-media">Cargando...</p>
     </div>
   );
 
   if (error || !event) return (
-    <div className="min-h-screen bg-black flex flex-col items-center justify-center gap-4">
-      <p className="text-gray-400">{error || 'Evento no encontrado'}</p>
-      <Link to="/" className="text-white underline">Ir al inicio</Link>
+    <div className="min-h-screen bg-white flex flex-col items-center justify-center gap-4">
+      <p className="text-tinta-media">{error || 'Evento no encontrado'}</p>
+      <Link to="/" className="text-tinta underline">Ir al inicio</Link>
     </div>
   );
 
@@ -47,14 +47,14 @@ function EventDetail() {
   });
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      <nav className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
+    <div className="min-h-screen bg-white text-tinta">
+      <nav className="flex items-center justify-between px-6 py-4 border-b border-borde">
         <a href="/">
-          <img src="/logo.png" alt="Rezonar" className="h-8" />
+          <img src="/logo-negro.png" alt="Rezonar" className="h-8" />
         </a>
         <Link
           to={`/${event.page_slug}`}
-          className="text-sm text-gray-400 hover:text-white transition flex items-center gap-1"
+          className="text-sm text-tinta-media hover:text-tinta transition flex items-center gap-1"
         >
           <ArrowLeft className="w-4 h-4" />
           Ver página
@@ -80,28 +80,28 @@ function EventDetail() {
                 className="w-10 h-10 rounded-full object-cover"
               />
             )}
-            <span className="text-gray-400 text-sm">{event.page_title}</span>
+            <span className="text-tinta-media text-sm">{event.page_title}</span>
           </Link>
         )}
 
-        <h1 className="text-4xl font-black mb-6">{event.text}</h1>
+        <h1 className="text-4xl font-bold mb-6">{event.text}</h1>
 
         {(event.event_date || event.event_time) && (
-          <div className="flex items-center gap-3 text-lg text-gray-300 mb-4">
-            <Calendar className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+          <div className="flex items-center gap-3 text-lg text-tinta-media mb-4">
+            <Calendar className="w-5 h-5 text-verde-oscuro flex-shrink-0" />
             <span className="capitalize">{formatDate(event.event_date, event.event_time)}</span>
           </div>
         )}
 
         {event.event_address && (
-          <div className="flex items-start gap-3 text-gray-300 mb-4">
-            <MapPin className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
+          <div className="flex items-start gap-3 text-tinta-media mb-4">
+            <MapPin className="w-5 h-5 text-verde-oscuro flex-shrink-0 mt-0.5" />
             {event.event_maps_url ? (
               <a
                 href={event.event_maps_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="hover:text-white underline"
+                className="hover:text-tinta underline"
               >
                 {event.event_address}
               </a>
@@ -112,7 +112,7 @@ function EventDetail() {
         )}
 
         {event.description && (
-          <p className="text-gray-300 text-lg leading-relaxed mt-6 border-t border-gray-800 pt-6">
+          <p className="text-tinta-media text-lg leading-relaxed mt-6 border-t border-borde pt-6">
             {event.description}
           </p>
         )}
@@ -124,7 +124,7 @@ function EventDetail() {
             href={event.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 mt-8 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded transition"
+            className="inline-flex items-center gap-2 mt-8 px-6 py-3 rounded-full bg-verde text-verde-tinta hover:bg-verde-oscuro hover:text-white font-semibold transition-colors"
           >
             <ExternalLink className="w-4 h-4" />
             {event.url_text || 'Más información'}

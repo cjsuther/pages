@@ -29,7 +29,7 @@ function BotonEntradas({ evento, color = '#3B82F6' }) {
   if (entradas.agotado) {
     return (
       <div className="mt-4">
-        <span className="inline-block px-6 py-3 rounded-lg font-bold bg-gray-800 text-gray-500 cursor-not-allowed">
+        <span className="inline-block px-6 py-3 rounded-lg font-bold bg-papel-hueso text-tinta-suave cursor-not-allowed">
           AGOTADO
         </span>
       </div>

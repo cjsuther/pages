@@ -281,12 +281,12 @@ function EventsMap({ events, userLocation, onEventClick }) {
 
   if (error) {
     return (
-      <div className="bg-gray-900 border border-gray-800 p-12 text-center">
-        <MapPin className="w-12 h-12 text-gray-700 mx-auto mb-4" />
-        <p className="text-gray-500 mb-4">{error}</p>
+      <div className="bg-white border border-borde p-12 text-center">
+        <MapPin className="w-12 h-12 text-tinta-media mx-auto mb-4" />
+        <p className="text-tinta-suave mb-4">{error}</p>
         <button
           onClick={handleRetry}
-          className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-6 py-3 transition-colors"
+          className="inline-flex items-center gap-2 rounded-full bg-verde text-verde-tinta hover:bg-verde-oscuro hover:text-white font-semibold px-6 py-3 transition-colors"
         >
           <RefreshCw className="w-4 h-4" />
           Cargar mapa
@@ -299,7 +299,7 @@ function EventsMap({ events, userLocation, onEventClick }) {
     <div className="relative">
       <div
         ref={mapRef}
-        className="w-full h-[500px] bg-gray-900 border border-gray-800"
+        className="w-full h-[500px] bg-white border border-borde"
       />
     </div>
   );

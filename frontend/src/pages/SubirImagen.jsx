@@ -54,19 +54,19 @@ function SubirImagen() {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white flex items-center justify-center px-6">
-      <div className="w-full max-w-md bg-gray-900 border border-gray-800 p-8">
+    <div className="min-h-screen bg-white text-tinta flex items-center justify-center px-6">
+      <div className="w-full max-w-md bg-white border border-borde rounded-2xl p-6 sm:p-8">
         {listo ? (
           <>
-            <h1 className="text-2xl font-black mb-3">Listo</h1>
-            <p className="text-gray-400">
+            <h1 className="text-2xl font-bold mb-3">Listo</h1>
+            <p className="text-tinta-media">
               La imagen ya quedó en el evento. Podés cerrar esta pestaña.
             </p>
           </>
         ) : (
           <>
-            <p className="text-xs text-gray-500 tracking-widest mb-3">IMAGEN DEL EVENTO</p>
-            <h1 className="text-2xl font-black mb-6">Soltá el afiche acá</h1>
+            <p className="text-xs text-tinta-suave tracking-widest mb-3">Imagen del evento</p>
+            <h1 className="text-2xl font-bold mb-6">Soltá el afiche acá</h1>
 
             <label
               onDragOver={(e) => {
@@ -80,7 +80,7 @@ function SubirImagen() {
                 subir(e.dataTransfer.files[0]);
               }}
               className={`block border-2 border-dashed p-10 text-center cursor-pointer transition ${
-                encima ? 'border-white bg-gray-800' : 'border-gray-700 hover:border-gray-500'
+                encima ? 'border-verde bg-verde-claro' : 'border-borde-fuerte hover:border-tinta'
               }`}
             >
               <input
@@ -91,16 +91,16 @@ function SubirImagen() {
                 onChange={(e) => subir(e.target.files[0])}
                 disabled={subiendo}
               />
-              <span className="text-gray-400">
+              <span className="text-tinta-media">
                 {subiendo ? 'Subiendo...' : 'Arrastrá el archivo o hacé clic para elegirlo'}
               </span>
             </label>
 
-            <p className="text-xs text-gray-600 mt-4">
+            <p className="text-xs text-tinta-suave mt-4">
               JPG, PNG, GIF o WebP, hasta 5 MB. El link sirve una sola vez.
             </p>
 
-            {error && <p role="alert" className="text-sm text-red-400 mt-4">{error}</p>}
+            {error && <p role="alert" className="text-sm text-red-700 mt-4">{error}</p>}
           </>
         )}
       </div>

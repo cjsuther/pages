@@ -201,7 +201,7 @@ function MiniaturaPlantilla({ plantilla, page }) {
 
   return (
     <div
-      className="w-full overflow-hidden rounded border border-gray-700 p-[3px]"
+      className="w-full overflow-hidden rounded border border-borde-fuerte p-[3px]"
       style={{ aspectRatio: '3 / 4', backgroundColor: fondo }}
       data-plantilla={plantilla}
       aria-hidden="true"

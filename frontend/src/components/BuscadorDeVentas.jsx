@@ -75,14 +75,14 @@ function BuscadorDeVentas({ pageId, apiUrl, token }) {
       <div>
         <button
           onClick={() => setElegido(null)}
-          className="flex items-center gap-2 text-sm text-gray-500 hover:text-white transition mb-6"
+          className="flex items-center gap-2 text-sm text-tinta-suave hover:text-tinta transition mb-6"
         >
           <ArrowLeft className="w-4 h-4" />
           Volver a los eventos
         </button>
 
-        <h3 className="text-xl font-black mb-1 tracking-tight">{elegido.text}</h3>
-        <p className="text-sm text-gray-500 mb-6">{fechaLegible(elegido)}</p>
+        <h3 className="text-xl font-bold mb-1 tracking-tight">{elegido.text}</h3>
+        <p className="text-sm text-tinta-suave mb-6">{fechaLegible(elegido)}</p>
 
         <PanelVentas linkId={elegido.id} apiUrl={apiUrl} token={token} />
       </div>
@@ -93,53 +93,53 @@ function BuscadorDeVentas({ pageId, apiUrl, token }) {
     <div>
       <div className="grid gap-3 md:grid-cols-[1fr_auto_auto] mb-6">
         <div className="relative">
-          <Search className="w-4 h-4 text-gray-600 absolute left-4 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-tinta-suave absolute left-4 top-1/2 -translate-y-1/2" />
           <input
             type="search"
             value={filtros.q}
             onChange={cambiar('q')}
             placeholder="Buscar por nombre del evento"
             aria-label="Buscar por nombre del evento"
-            className="w-full pl-11 pr-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+            className="w-full pl-11 pr-4 py-3 bg-white border border-borde-fuerte text-tinta focus:border-verde-oscuro transition"
           />
         </div>
 
-        <label className="flex items-center gap-2 text-xs text-gray-500">
-          DESDE
+        <label className="flex items-center gap-2 text-xs text-tinta-suave">
+          Desde
           <input
             type="date"
             value={filtros.desde}
             onChange={cambiar('desde')}
             aria-label="Desde"
-            className="px-3 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+            className="px-3 py-3 bg-white border border-borde-fuerte text-tinta focus:border-verde-oscuro transition"
           />
         </label>
 
-        <label className="flex items-center gap-2 text-xs text-gray-500">
-          HASTA
+        <label className="flex items-center gap-2 text-xs text-tinta-suave">
+          Hasta
           <input
             type="date"
             value={filtros.hasta}
             onChange={cambiar('hasta')}
             aria-label="Hasta"
-            className="px-3 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+            className="px-3 py-3 bg-white border border-borde-fuerte text-tinta focus:border-verde-oscuro transition"
           />
         </label>
       </div>
 
       {error && (
-        <p className="text-sm text-red-400 border border-red-900 bg-red-950 p-4">{error}</p>
+        <p className="text-sm text-red-700 border border-red-200 bg-red-50 p-4">{error}</p>
       )}
 
       {cargando && (
-        <p className="flex items-center gap-2 text-gray-500 py-8">
+        <p className="flex items-center gap-2 text-tinta-suave py-8">
           <Loader2 className="w-4 h-4 animate-spin" />
           <span>Buscando eventos…</span>
         </p>
       )}
 
       {!cargando && !error && eventos && eventos.length === 0 && (
-        <p className="text-gray-500 py-8">
+        <p className="text-tinta-suave py-8">
           {filtros.q || filtros.desde || filtros.hasta
             ? 'Ningún evento con entradas coincide con la búsqueda.'
             : 'Todavía no hay eventos con entradas en esta página.'}
@@ -147,25 +147,25 @@ function BuscadorDeVentas({ pageId, apiUrl, token }) {
       )}
 
       {!cargando && !error && eventos && eventos.length > 0 && (
-        <ul className="divide-y divide-gray-800 border border-gray-800">
+        <ul className="divide-y divide-borde border border-borde">
           {eventos.map((evento) => (
             <li key={evento.id}>
               <button
                 onClick={() => setElegido(evento)}
-                className="w-full text-left px-5 py-4 hover:bg-black transition flex items-center justify-between gap-4 flex-wrap"
+                className="w-full text-left px-5 py-4 hover:bg-papel-hueso transition-colors flex items-center justify-between gap-4 flex-wrap"
               >
                 <span>
                   <span className="block font-bold">{evento.text}</span>
-                  <span className="block text-xs text-gray-500 mt-1">{fechaLegible(evento)}</span>
+                  <span className="block text-xs text-tinta-suave mt-1">{fechaLegible(evento)}</span>
                 </span>
 
                 <span className="flex items-center gap-4 text-sm">
-                  <span className="flex items-center gap-2 text-gray-300">
-                    <Ticket className="w-4 h-4 text-gray-600" />
+                  <span className="flex items-center gap-2 text-tinta-media">
+                    <Ticket className="w-4 h-4 text-tinta-suave" />
                     {vendidasLegibles(evento)}
                   </span>
                   {evento.recaudado > 0 && (
-                    <span className="text-emerald-400 font-bold">
+                    <span className="text-verde-oscuro font-bold">
                       {formatearPrecio(evento.recaudado)}
                     </span>
                   )}

@@ -42,29 +42,29 @@ function FollowersPopup({ pageId, followerCount, className = '' }) {
 
       {open && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          className="fixed inset-0 bg-tinta/40 backdrop-blur-sm flex items-center justify-center z-50 p-4"
           onClick={close}
         >
           <div
             className="bg-white rounded-lg max-w-md w-full max-h-96 overflow-hidden flex flex-col shadow-xl"
             onClick={e => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
-              <h3 className="text-base font-bold text-gray-900">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-borde">
+              <h3 className="text-base font-bold text-tinta">
                 {followerCount} {followerCount === 1 ? 'seguidor' : 'seguidores'}
               </h3>
-              <button onClick={() => setOpen(false)} className="text-gray-400 hover:text-gray-600 transition">
+              <button onClick={() => setOpen(false)} className="text-tinta-media hover:text-tinta-suave transition">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <div className="overflow-y-auto flex-1">
               {loading ? (
-                <p className="p-4 text-center text-sm text-gray-500">Cargando...</p>
+                <p className="p-4 text-center text-sm text-tinta-suave">Cargando...</p>
               ) : followers.length === 0 ? (
-                <p className="p-4 text-center text-sm text-gray-500">Sin seguidores</p>
+                <p className="p-4 text-center text-sm text-tinta-suave">Sin seguidores</p>
               ) : (
-                <ul className="divide-y divide-gray-100">
+                <ul className="divide-y divide-borde">
                   {followers.map((f, i) => (
                     <li key={i} className="px-4 py-3 flex items-center justify-between gap-4">
                       <div className="min-w-0">
@@ -73,15 +73,15 @@ function FollowersPopup({ pageId, followerCount, className = '' }) {
                             href={`/${f.page_slug}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="font-medium text-gray-900 hover:underline truncate block"
+                            className="font-medium text-tinta hover:underline truncate block"
                           >
                             {f.page_title || f.email}
                           </a>
                         ) : (
-                          <span className="font-medium text-gray-900 truncate block">{f.email}</span>
+                          <span className="font-medium text-tinta truncate block">{f.email}</span>
                         )}
                       </div>
-                      <span className="text-xs text-gray-400 whitespace-nowrap flex-shrink-0">
+                      <span className="text-xs text-tinta-media whitespace-nowrap flex-shrink-0">
                         {new Date(f.followed_at).toLocaleDateString('es-AR', {
                           day: '2-digit',
                           month: '2-digit',

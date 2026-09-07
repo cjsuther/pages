@@ -48,9 +48,9 @@ function SeccionRedes({ socials = SIN_REDES, guardando = false, onGuardar }) {
   };
 
   return (
-    <div className="bg-gray-900 border border-gray-800 p-8 mb-8">
-      <h2 className="text-2xl font-black mb-2 tracking-tight">REDES SOCIALES</h2>
-      <p className="text-sm text-gray-500 mb-8">
+    <div className="bg-white border border-borde rounded-2xl p-6 sm:p-8 mb-8">
+      <h2 className="text-2xl font-bold mb-2 tracking-tight">Redes sociales</h2>
+      <p className="text-sm text-tinta-suave mb-8">
         Completá sólo las que uses. En tu página aparecen como iconos arriba de todo;
         las que dejes vacías no se muestran.
       </p>
@@ -60,14 +60,14 @@ function SeccionRedes({ socials = SIN_REDES, guardando = false, onGuardar }) {
           <div key={red.clave}>
             <label
               htmlFor={`red-${red.clave}`}
-              className="block text-sm font-bold text-gray-400 mb-2 tracking-wide"
+              className="block text-sm font-semibold text-tinta mb-1.5 tracking-wide"
             >
               {red.nombre.toUpperCase()}
             </label>
 
             <div className="flex items-stretch">
               {red.base && (
-                <span className="px-3 flex items-center bg-black border border-r-0 border-gray-700 text-gray-600 text-sm whitespace-nowrap">
+                <span className="px-3 flex items-center bg-white border border-r-0 border-borde-fuerte text-tinta-suave text-sm whitespace-nowrap">
                   {red.base.replace(/^https?:\/\//, '')}
                 </span>
               )}
@@ -77,29 +77,29 @@ function SeccionRedes({ socials = SIN_REDES, guardando = false, onGuardar }) {
                 value={valores[red.clave] || ''}
                 onChange={(e) => cambiar(red.clave, e.target.value)}
                 placeholder={red.ejemplo}
-                className="flex-1 min-w-0 px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+                className="flex-1 min-w-0 px-4 py-3 bg-white border border-borde-fuerte text-tinta focus:border-verde-oscuro transition"
               />
             </div>
 
-            {red.ayuda && <p className="text-xs text-gray-600 mt-1">{red.ayuda}</p>}
+            {red.ayuda && <p className="text-xs text-tinta-suave mt-1">{red.ayuda}</p>}
           </div>
         ))}
       </div>
 
       {/* Ver el resultado antes de guardar evita el viaje de ida y vuelta a
           la página pública para comprobar que quedó bien. */}
-      <div className="border-t border-gray-800 pt-6 mb-6">
-        <div className="flex items-center gap-2 text-gray-500 text-sm mb-4">
+      <div className="border-t border-borde pt-6 mb-6">
+        <div className="flex items-center gap-2 text-tinta-suave text-sm mb-4">
           <Eye className="w-4 h-4" />
           <span>Así se van a ver en tu página</span>
         </div>
 
         {aGuardar.length > 0 ? (
-          <div className="bg-black border border-gray-800 py-6">
+          <div className="bg-white border border-borde py-6">
             <RedesSociales socials={aGuardar} />
           </div>
         ) : (
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-tinta-suave">
             Todavía no cargaste ninguna. Mientras estén vacías, la sección no aparece en tu página.
           </p>
         )}
@@ -109,13 +109,13 @@ function SeccionRedes({ socials = SIN_REDES, guardando = false, onGuardar }) {
         <button
           onClick={guardar}
           disabled={guardando}
-          className="bg-white text-black px-6 py-3 font-bold hover:bg-gray-200 transition disabled:opacity-50"
+          className="inline-flex items-center justify-center gap-2 rounded-full bg-verde text-verde-tinta px-6 py-3 font-semibold hover:bg-verde-oscuro hover:text-white transition-colors disabled:opacity-50"
         >
           {guardando ? 'GUARDANDO...' : 'GUARDAR REDES'}
         </button>
 
         {guardado && !guardando && (
-          <span className="flex items-center gap-2 text-emerald-400 text-sm font-medium">
+          <span className="flex items-center gap-2 text-verde-oscuro text-sm font-medium">
             <Check className="w-4 h-4" />
             Guardado
           </span>

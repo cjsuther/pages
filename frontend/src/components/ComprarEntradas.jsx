@@ -98,23 +98,23 @@ function ComprarEntradas({ evento, entradas, apiUrl, color = '#3B82F6', onCerrar
             className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-5"
             style={{ backgroundColor: color }}
           >
-            <Check className="w-7 h-7 text-white" />
+            <Check className="w-7 h-7 text-tinta" />
           </div>
 
-          <h3 className="text-2xl font-black text-white mb-2">¡Lugar reservado!</h3>
-          <p className="text-gray-400 mb-6">
+          <h3 className="text-2xl font-bold text-tinta mb-2">¡Lugar reservado!</h3>
+          <p className="text-tinta-media mb-6">
             Te esperamos en {evento.text}.
           </p>
 
-          <p className="text-sm text-gray-500 mb-1">Tu código de reserva</p>
-          <p className="text-xl font-mono font-bold text-white tracking-wider mb-6">{reservado}</p>
+          <p className="text-sm text-tinta-suave mb-1">Tu código de reserva</p>
+          <p className="text-xl font-mono font-bold text-tinta tracking-wider mb-6">{reservado}</p>
 
           <a
             href={`/entrada/${reservado}`}
-            className="inline-block px-6 py-3 font-bold text-white"
+            className="inline-block px-6 py-3 font-bold text-tinta"
             style={{ backgroundColor: color }}
           >
-            VER MI RESERVA
+            Ver mi reserva
           </a>
         </div>
       </Marco>
@@ -123,10 +123,10 @@ function ComprarEntradas({ evento, entradas, apiUrl, color = '#3B82F6', onCerrar
 
   return (
     <Marco onCerrar={onCerrar}>
-      <h3 className="text-2xl font-black text-white mb-1">
+      <h3 className="text-2xl font-bold text-tinta mb-1">
         {entradas.es_gratis ? 'Reservar lugar' : 'Comprar entradas'}
       </h3>
-      <p className="text-gray-500 text-sm mb-6">{evento.text}</p>
+      <p className="text-tinta-suave text-sm mb-6">{evento.text}</p>
 
       <form onSubmit={enviar} className="space-y-4">
         <Campo
@@ -154,7 +154,7 @@ function ComprarEntradas({ evento, entradas, apiUrl, color = '#3B82F6', onCerrar
           />
 
           {avisoEmail && (
-            <p id="entrada-email-aviso" role="alert" className="text-xs text-red-400 mt-1">
+            <p id="entrada-email-aviso" role="alert" className="text-xs text-red-700 mt-1">
               {avisoEmail}
             </p>
           )}
@@ -190,14 +190,14 @@ function ComprarEntradas({ evento, entradas, apiUrl, color = '#3B82F6', onCerrar
         />
 
         <div>
-          <label htmlFor="entrada-cantidad" className="block text-sm font-bold text-gray-400 mb-2 tracking-wide">
-            CANTIDAD
+          <label htmlFor="entrada-cantidad" className="block text-sm font-semibold text-tinta mb-1.5 tracking-wide">
+            Cantidad
           </label>
           <select
             id="entrada-cantidad"
             value={datos.cantidad}
             onChange={(e) => cambiar('cantidad', Number(e.target.value))}
-            className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+            className="w-full px-4 py-3 rounded-xl bg-white border border-borde-fuerte text-tinta placeholder-tinta-suave focus:border-verde-oscuro focus:outline-none transition-colors"
           >
             {cantidades.map((n) => (
               <option key={n} value={n}>{n}</option>
@@ -212,22 +212,22 @@ function ComprarEntradas({ evento, entradas, apiUrl, color = '#3B82F6', onCerrar
         </div>
 
         {!entradas.es_gratis && (
-          <div className="flex items-baseline justify-between border-t border-gray-800 pt-4">
-            <span className="text-gray-400">Total</span>
-            <span className="text-2xl font-black text-white">
+          <div className="flex items-baseline justify-between border-t border-borde pt-4">
+            <span className="text-tinta-media">Total</span>
+            <span className="text-2xl font-bold text-tinta">
               {formatearPrecio(total, entradas.moneda)}
             </span>
           </div>
         )}
 
         {error && (
-          <p className="text-sm text-red-400 bg-red-950 border border-red-900 px-4 py-3">{error}</p>
+          <p className="text-sm text-red-700 bg-red-50 border border-red-200 px-4 py-3">{error}</p>
         )}
 
         <button
           type="submit"
           disabled={enviando}
-          className="w-full py-4 font-bold text-white flex items-center justify-center gap-2 disabled:opacity-60"
+          className="w-full py-4 font-bold text-tinta flex items-center justify-center gap-2 disabled:opacity-60"
           style={{ backgroundColor: color }}
         >
           {enviando && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -239,7 +239,7 @@ function ComprarEntradas({ evento, entradas, apiUrl, color = '#3B82F6', onCerrar
         </button>
 
         {!entradas.es_gratis && (
-          <p className="text-xs text-gray-600 text-center">
+          <p className="text-xs text-tinta-suave text-center">
             Te vamos a llevar a Mercado Pago para completar el pago.
             Tu lugar queda reservado 15 minutos.
           </p>
@@ -252,18 +252,18 @@ function ComprarEntradas({ evento, entradas, apiUrl, color = '#3B82F6', onCerrar
 function Marco({ children, onCerrar }) {
   return (
     <div
-      className="fixed inset-0 bg-black bg-opacity-90 flex items-start justify-center p-4 z-[60] overflow-y-auto"
+      className="fixed inset-0 bg-tinta/40 backdrop-blur-sm flex items-start justify-center p-4 z-[60] overflow-y-auto"
       onClick={onCerrar}
     >
       <div
-        className="bg-gray-900 border border-gray-800 max-w-md w-full p-8 my-8 relative"
+        className="bg-white border border-borde max-w-md w-full p-8 my-8 relative"
         onClick={(e) => e.stopPropagation()}
       >
         <button
           type="button"
           onClick={onCerrar}
           aria-label="Cerrar"
-          className="absolute top-4 right-4 text-gray-500 hover:text-white transition"
+          className="absolute top-4 right-4 text-tinta-suave hover:text-tinta transition"
         >
           <X className="w-5 h-5" />
         </button>
@@ -278,7 +278,7 @@ function Campo({ id, etiqueta, ayuda, value, onChange, type = 'text', ...resto }
   const conProblema = resto['aria-invalid'] === 'true';
   return (
     <div>
-      <label htmlFor={id} className="block text-sm font-bold text-gray-400 mb-2 tracking-wide">
+      <label htmlFor={id} className="block text-sm font-semibold text-tinta mb-1.5 tracking-wide">
         {etiqueta}
       </label>
       <input
@@ -286,12 +286,12 @@ function Campo({ id, etiqueta, ayuda, value, onChange, type = 'text', ...resto }
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className={`w-full px-4 py-3 bg-black border text-white focus:border-white transition ${
-          conProblema ? 'border-red-700' : 'border-gray-700'
+        className={`w-full px-4 py-3 bg-white border text-tinta focus:border-verde-oscuro transition ${
+          conProblema ? 'border-red-200' : 'border-borde-fuerte'
         }`}
         {...resto}
       />
-      {ayuda && <p className="text-xs text-gray-600 mt-1">{ayuda}</p>}
+      {ayuda && <p className="text-xs text-tinta-suave mt-1">{ayuda}</p>}
     </div>
   );
 }

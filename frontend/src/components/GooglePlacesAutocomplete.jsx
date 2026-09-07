@@ -60,11 +60,11 @@ function GooglePlacesAutocomplete({ value, onChange, onPlaceSelect, placeholder,
         value={value}
         onChange={handleChange}
         placeholder={placeholder || "Buscar dirección..."}
-        className="w-full px-4 py-3 bg-black border border-gray-800 text-white placeholder-gray-500 focus:outline-none focus:border-gray-600"
+        className="w-full px-4 py-3 rounded-xl bg-white border border-borde-fuerte text-tinta placeholder-tinta-suave focus:outline-none focus:border-verde-oscuro transition-colors"
         required={required}
       />
       {required && !hasSelectedPlace && value && (
-        <p className="text-xs text-yellow-500 mt-2">
+        <p className="text-xs text-amber-600 mt-2">
           Debes seleccionar una dirección de las sugerencias de Google Maps
         </p>
       )}

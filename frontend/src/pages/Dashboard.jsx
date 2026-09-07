@@ -79,27 +79,27 @@ function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      <nav className="border-b border-gray-800">
+    <div className="min-h-screen bg-white text-tinta">
+      <nav className="border-b border-borde">
         <div className="max-w-7xl mx-auto px-6 py-6">
           <div className="flex justify-between items-center">
             <Link to="/">
-              <img src="/logo.png" alt="Rezonar" className="h-10" />
+              <img src="/logo-negro.png" alt="Rezonar" className="h-10" />
             </Link>
             <div className="flex items-center gap-6">
               <NotificationBell />
               <Link
                 to="/profile"
-                className="text-gray-400 hover:text-white transition font-medium"
+                className="text-tinta-media hover:text-tinta transition font-medium"
               >
                 Perfil
               </Link>
               <div className="text-right">
-                <p className="text-gray-500 text-sm font-medium">{user?.email}</p>
+                <p className="text-tinta-suave text-sm font-medium">{user?.email}</p>
               </div>
               <button
                 onClick={logout}
-                className="text-gray-400 hover:text-white transition font-medium"
+                className="text-tinta-media hover:text-tinta transition font-medium"
               >
                 {user ? 'Salir de la Cuenta' : 'Iniciar Sesión / Registrarse'}
               </button>
@@ -111,34 +111,34 @@ function Dashboard() {
       <div className="max-w-7xl mx-auto px-6 py-16">
         <button
           onClick={() => setShowCreateModal(true)}
-          className="mb-16 bg-white text-black px-8 py-4 text-lg font-bold hover:bg-gray-200 transition"
+          className="mb-16 inline-flex items-center justify-center gap-2 rounded-full bg-verde text-verde-tinta px-7 py-3.5 font-semibold hover:bg-verde-oscuro hover:text-white transition-colors"
         >
           + NUEVA PÁGINA
         </button>
 
         {loading ? (
           <div className="text-center py-24">
-            <div className="text-gray-500 text-xl font-medium">Cargando...</div>
+            <div className="text-tinta-suave text-xl font-medium">Cargando...</div>
           </div>
         ) : pages.length === 0 ? (
           <div className="text-center py-24 space-y-6">
-            <div className="w-32 h-32 bg-gray-900 mx-auto"></div>
-            <p className="text-gray-400 text-2xl font-light">No tienes páginas todavía</p>
-            <p className="text-gray-600 text-lg">Crea tu primera página personal</p>
+            <div className="w-32 h-32 bg-white mx-auto"></div>
+            <p className="text-tinta-media text-2xl font-light">No tienes páginas todavía</p>
+            <p className="text-tinta-suave text-lg">Crea tu primera página personal</p>
           </div>
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
             {pages.map((page) => (
-              <div key={page.id} className="bg-gray-900 border border-gray-800 p-8 hover:border-gray-700 transition group">
+              <div key={page.id} className="bg-white border border-borde rounded-2xl p-6 sm:p-8 hover:border-borde-fuerte transition group">
                 <h3 className="text-2xl font-bold mb-4">{page.title}</h3>
-                <p className="text-gray-400 mb-8 leading-relaxed">{page.description}</p>
+                <p className="text-tinta-media mb-8 leading-relaxed">{page.description}</p>
                 <div className="mb-8">
-                  <span className="text-gray-600 text-sm font-medium">URL</span>
+                  <span className="text-tinta-suave text-sm font-medium">URL</span>
                   <a
                     href={`/${page.url_slug}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="block text-white hover:text-gray-300 transition mt-1 font-medium"
+                    className="block text-tinta hover:text-tinta-media transition mt-1 font-medium"
                   >
                     /{page.url_slug}
                   </a>
@@ -146,15 +146,15 @@ function Dashboard() {
                 <div className="space-y-3">
                   <Link
                     to={`/page/${page.id}`}
-                    className="block text-center bg-white text-black px-6 py-3 font-bold hover:bg-gray-200 transition"
+                    className="block text-center inline-flex items-center justify-center gap-2 rounded-full bg-verde text-verde-tinta px-6 py-3 font-semibold hover:bg-verde-oscuro hover:text-white transition-colors"
                   >
-                    EDITAR
+                    Editar
                   </Link>
                   <button
                     onClick={() => deletePage(page.id)}
-                    className="w-full text-center text-red-400 hover:text-red-300 px-6 py-3 font-bold transition"
+                    className="w-full text-center text-red-700 hover:text-red-700 px-6 py-3 font-bold transition"
                   >
-                    ELIMINAR
+                    Eliminar
                   </button>
                 </div>
               </div>
@@ -164,51 +164,51 @@ function Dashboard() {
       </div>
 
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center p-4 z-50">
-          <div className="bg-gray-900 border border-gray-800 max-w-lg w-full p-10">
-            <h2 className="text-3xl font-black mb-8">NUEVA PÁGINA</h2>
+        <div className="fixed inset-0 bg-tinta/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white border border-borde max-w-lg w-full p-10">
+            <h2 className="text-3xl font-bold mb-8">Nueva página</h2>
 
             {error && (
-              <div className="bg-red-900 border border-red-700 text-red-200 px-4 py-3 mb-6 font-medium">
+              <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 mb-6 font-medium">
                 {error}
               </div>
             )}
 
             <form onSubmit={createPage} className="space-y-6">
               <div>
-                <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">
-                  TÍTULO
+                <label className="block text-sm font-semibold text-tinta mb-1.5">
+                  Título
                 </label>
                 <input
                   type="text"
                   value={newPage.title}
                   onChange={(e) => setNewPage({ ...newPage, title: e.target.value })}
-                  className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+                  className="w-full px-4 py-3 rounded-xl bg-white border border-borde-fuerte text-tinta placeholder-tinta-suave focus:border-verde-oscuro focus:outline-none transition-colors"
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">
-                  DESCRIPCIÓN
+                <label className="block text-sm font-semibold text-tinta mb-1.5">
+                  Descripción
                 </label>
                 <textarea
                   value={newPage.description}
                   onChange={(e) => setNewPage({ ...newPage, description: e.target.value })}
-                  className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+                  className="w-full px-4 py-3 rounded-xl bg-white border border-borde-fuerte text-tinta placeholder-tinta-suave focus:border-verde-oscuro focus:outline-none transition-colors"
                   rows="3"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-bold text-gray-400 mb-3 tracking-wide">
+                <label className="block text-sm font-semibold text-tinta mb-1.5">
                   URL
                 </label>
                 <input
                   type="text"
                   value={newPage.url_slug}
                   onChange={(e) => setNewPage({ ...newPage, url_slug: e.target.value.toLowerCase() })}
-                  className="w-full px-4 py-3 bg-black border border-gray-700 text-white focus:border-white transition"
+                  className="w-full px-4 py-3 rounded-xl bg-white border border-borde-fuerte text-tinta placeholder-tinta-suave focus:border-verde-oscuro focus:outline-none transition-colors"
                   pattern="[a-z0-9-]+"
                   placeholder="solo-letras-numeros-guiones"
                   required
@@ -222,15 +222,15 @@ function Dashboard() {
                     setShowCreateModal(false);
                     setError('');
                   }}
-                  className="flex-1 px-6 py-3 border border-gray-700 hover:border-gray-600 transition font-bold"
+                  className="flex-1 px-6 py-3 rounded-full border border-borde-fuerte hover:border-tinta transition-colors font-semibold"
                 >
-                  CANCELAR
+                  Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 bg-white text-black px-6 py-3 font-bold hover:bg-gray-200 transition"
+                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-full bg-verde text-verde-tinta px-6 py-3 font-semibold hover:bg-verde-oscuro hover:text-white transition-colors"
                 >
-                  CREAR
+                  Crear
                 </button>
               </div>
             </form>

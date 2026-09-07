@@ -128,9 +128,9 @@ export function MiniaturaGaleria({ link, className = '', style }) {
       {portada ? (
         // Sobre una imagen quieta hace falta decir que hay algo que reproducir.
         <span className="absolute inset-0 flex items-center justify-center" aria-hidden="true">
-          <span className="flex items-center justify-center w-12 h-12 rounded-full bg-black bg-opacity-60">
+          <span className="flex items-center justify-center w-12 h-12 rounded-full bg-tinta/50">
             <Marca
-              className="w-6 h-6 text-white"
+              className="w-6 h-6 text-tinta"
               fill={embed.tipo === 'youtube' ? 'currentColor' : 'none'}
             />
           </span>
@@ -139,8 +139,8 @@ export function MiniaturaGaleria({ link, className = '', style }) {
         // Sobre el contenido en vivo alcanza con una marca chica: taparlo con
         // un botón grande sería esconder justamente lo que se quiere ver.
         <span className="absolute top-1.5 right-1.5" aria-hidden="true">
-          <span className="flex items-center justify-center w-6 h-6 rounded-full bg-black bg-opacity-50">
-            <Instagram className="w-3.5 h-3.5 text-white" />
+          <span className="flex items-center justify-center w-6 h-6 rounded-full bg-tinta/40 backdrop-blur-sm">
+            <Instagram className="w-3.5 h-3.5 text-tinta" />
           </span>
         </span>
       )}

@@ -115,12 +115,12 @@ function ActivarNotificaciones({ compacto = false }) {
 
   if (suscrito) {
     return (
-      <div className="bg-gray-900 border border-gray-800 p-6 space-y-4">
+      <div className="bg-white border border-borde rounded-2xl p-6 space-y-4">
         <div className="flex items-center gap-3">
-          <Bell className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+          <Bell className="w-5 h-5 text-verde-oscuro flex-shrink-0" />
           <div className="flex-1">
-            <p className="font-bold text-white">Notificaciones activadas</p>
-            <p className="text-sm text-gray-400">
+            <p className="font-bold text-tinta">Notificaciones activadas</p>
+            <p className="text-sm text-tinta-media">
               En este dispositivo{entorno.instalada ? ', con la app instalada' : ''}.
             </p>
           </div>
@@ -131,13 +131,13 @@ function ActivarNotificaciones({ compacto = false }) {
         {/* El ahorro de batería del fabricante demora o bloquea las
             notificaciones. Es del sistema operativo, no de la PWA. */}
         {entorno.esAndroid && guiaBateria && (
-          <div className="flex gap-3 bg-black border border-gray-800 p-4">
-            <BatteryWarning className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" />
+          <div className="flex gap-3 bg-white border border-borde rounded-xl p-4">
+            <BatteryWarning className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
             <div className="text-sm">
-              <p className="text-gray-300 font-medium mb-1">
+              <p className="text-tinta-media font-medium mb-1">
                 Tu {entorno.marca} puede demorar las notificaciones
               </p>
-              <p className="text-gray-500">{guiaBateria}</p>
+              <p className="text-tinta-suave">{guiaBateria}</p>
             </div>
           </div>
         )}
@@ -145,7 +145,7 @@ function ActivarNotificaciones({ compacto = false }) {
         <button
           onClick={desactivar}
           disabled={cargando}
-          className="text-sm text-gray-500 hover:text-gray-300 transition disabled:opacity-50 flex items-center gap-2"
+          className="text-sm text-tinta-suave hover:text-tinta-media transition disabled:opacity-50 flex items-center gap-2"
         >
           <BellOff className="w-4 h-4" />
           {cargando ? 'Desactivando...' : 'Desactivar en este dispositivo'}
@@ -167,20 +167,20 @@ function ActivarNotificaciones({ compacto = false }) {
   // -------------------------------------------------------- falta algún paso
 
   return (
-    <div className={`bg-gray-900 border border-gray-800 ${compacto ? 'p-4' : 'p-6'} space-y-4`}>
+    <div className={`bg-white border border-borde ${compacto ? 'p-4' : 'p-6'} space-y-4`}>
       <div className="flex items-start gap-3">
         <IconoDelPaso paso={diagnostico.paso} />
         <div className="flex-1">
-          <p className="font-bold text-white">{diagnostico.titulo}</p>
-          <p className="text-sm text-gray-400 mt-1">{diagnostico.mensaje}</p>
+          <p className="font-bold text-tinta">{diagnostico.titulo}</p>
+          <p className="text-sm text-tinta-media mt-1">{diagnostico.mensaje}</p>
         </div>
       </div>
 
       {diagnostico.instrucciones.length > 0 && (
         <ol className="space-y-2 pl-1">
           {diagnostico.instrucciones.map((instruccion, i) => (
-            <li key={i} className="flex gap-3 text-sm text-gray-300">
-              <span className="flex-shrink-0 w-5 h-5 rounded-full bg-gray-800 text-gray-400 text-xs flex items-center justify-center font-bold">
+            <li key={i} className="flex gap-3 text-sm text-tinta-media">
+              <span className="flex-shrink-0 w-5 h-5 rounded-full bg-papel-hueso text-tinta-media text-xs flex items-center justify-center font-bold">
                 {i + 1}
               </span>
               <span>{instruccion}</span>
@@ -192,12 +192,12 @@ function ActivarNotificaciones({ compacto = false }) {
       {/* iOS no expone ningún botón de instalar: la referencia visual al icono
           de Compartir es lo único que orienta al usuario. */}
       {diagnostico.paso === PASOS.INSTALAR && entorno.esIOS && (
-        <div className="flex items-center gap-4 bg-black border border-gray-800 p-4 text-gray-400">
+        <div className="flex items-center gap-4 bg-white border border-borde rounded-xl p-4 text-tinta-media">
           <div className="flex flex-col items-center gap-1">
             <Share className="w-6 h-6" />
             <span className="text-[10px] uppercase tracking-wide">Compartir</span>
           </div>
-          <span className="text-gray-700">→</span>
+          <span className="text-tinta-media">→</span>
           <div className="flex flex-col items-center gap-1">
             <PlusSquare className="w-6 h-6" />
             <span className="text-[10px] uppercase tracking-wide text-center">Agregar a inicio</span>
@@ -211,7 +211,7 @@ function ActivarNotificaciones({ compacto = false }) {
         {promptInstalar && (
           <button
             onClick={instalar}
-            className="bg-white text-black px-5 py-2.5 font-bold hover:bg-gray-200 transition flex items-center gap-2"
+            className="bg-verde text-verde-tinta px-5 py-2.5 font-bold hover:bg-verde-oscuro hover:text-tinta transition flex items-center gap-2"
           >
             <Smartphone className="w-4 h-4" />
             Instalar aplicación
@@ -222,7 +222,7 @@ function ActivarNotificaciones({ compacto = false }) {
           <button
             onClick={activar}
             disabled={cargando}
-            className="bg-emerald-600 text-white px-5 py-2.5 font-bold hover:bg-emerald-500 transition disabled:opacity-50 flex items-center gap-2"
+            className="bg-verde text-tinta px-5 py-2.5 font-bold hover:bg-verde-oscuro transition disabled:opacity-50 flex items-center gap-2"
           >
             <Bell className="w-4 h-4" />
             {cargando ? 'Activando...' : 'Activar notificaciones'}
@@ -235,14 +235,14 @@ function ActivarNotificaciones({ compacto = false }) {
 
 function IconoDelPaso({ paso }) {
   if (paso === PASOS.INSTALAR) {
-    return <Smartphone className="w-5 h-5 text-white flex-shrink-0 mt-0.5" />;
+    return <Smartphone className="w-5 h-5 text-tinta flex-shrink-0 mt-0.5" />;
   }
 
   if (paso === PASOS.PERMISO_DENEGADO || paso === PASOS.SOPORTE || paso === PASOS.NAVEGADOR) {
-    return <BellOff className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" />;
+    return <BellOff className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />;
   }
 
-  return <Bell className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />;
+  return <Bell className="w-5 h-5 text-verde-oscuro flex-shrink-0 mt-0.5" />;
 }
 
 function Aviso({ mensaje }) {
@@ -252,8 +252,8 @@ function Aviso({ mensaje }) {
     <div
       className={`flex items-start gap-2 px-4 py-3 text-sm border ${
         esOk
-          ? 'bg-emerald-950 border-emerald-800 text-emerald-200'
-          : 'bg-red-950 border-red-800 text-red-200'
+          ? 'bg-verde-claro border-verde-medio text-verde-oscuro'
+          : 'bg-red-50 border-red-200 text-red-800'
       }`}
     >
       {esOk && <Check className="w-4 h-4 flex-shrink-0 mt-0.5" />}

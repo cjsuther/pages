@@ -25,8 +25,8 @@ const ERRORES = {
 
 /** Las dos mitades de la sección, en el orden en que se muestran. */
 const SUBSECCIONES = [
-  { clave: 'cobros', etiqueta: 'CONFIGURACIÓN' },
-  { clave: 'ventas', etiqueta: 'VENTAS' },
+  { clave: 'cobros', etiqueta: 'Configuración' },
+  { clave: 'ventas', etiqueta: 'Ventas' },
 ];
 
 function SeccionEntradas({ pageId, apiUrl, token, emailContacto = '', onGuardarContacto }) {
@@ -158,7 +158,7 @@ function SeccionEntradas({ pageId, apiUrl, token, emailContacto = '', onGuardarC
 
   if (cargando) {
     return (
-      <div className="bg-gray-900 border border-gray-800 p-8 mb-8 text-gray-500">
+      <div className="bg-white border border-borde rounded-2xl p-6 sm:p-8 mb-8 text-tinta-suave">
         Cargando...
       </div>
     );
@@ -170,21 +170,21 @@ function SeccionEntradas({ pageId, apiUrl, token, emailContacto = '', onGuardarC
   const disponible = datos && datos.disponible;
 
   return (
-    <div className="bg-gray-900 border border-gray-800 p-8 mb-8">
-      <h2 className="text-2xl font-black mb-2 tracking-tight">ENTRADAS</h2>
+    <div className="bg-white border border-borde rounded-2xl p-6 sm:p-8 mb-8">
+      <h2 className="text-2xl font-bold mb-2 tracking-tight">Entradas</h2>
 
       {/* Dos cosas distintas viven acá: cómo se cobra, que se toca una vez, y
           qué se vendió, que se mira seguido. Apiladas, lo segundo quedaba
           debajo de toda la configuración de Mercado Pago. */}
-      <nav className="flex gap-2 mb-8 border-b border-gray-800">
+      <nav className="flex gap-2 mb-8 border-b border-borde">
         {SUBSECCIONES.map((sub) => (
           <button
             key={sub.clave}
             onClick={() => setSubseccion(sub.clave)}
             className={`px-4 py-2 font-bold text-xs tracking-wide transition border-b-2 -mb-px ${
               subseccion === sub.clave
-                ? 'border-white text-white'
-                : 'border-transparent text-gray-500 hover:text-gray-300'
+                ? 'border-verde text-verde-oscuro'
+                : 'border-transparent text-tinta-suave hover:text-tinta-media'
             }`}
           >
             {sub.etiqueta}
@@ -196,7 +196,7 @@ function SeccionEntradas({ pageId, apiUrl, token, emailContacto = '', onGuardarC
         <BuscadorDeVentas pageId={pageId} apiUrl={apiUrl} token={token} />
       ) : (
       <>
-        <p className="text-sm text-gray-500 mb-8">
+        <p className="text-sm text-tinta-suave mb-8">
           Conectá tu cuenta de Mercado Pago para cobrar entradas. El dinero va directo
           a tu cuenta. Para eventos con reserva sin costo no hace falta.
         </p>
@@ -207,17 +207,17 @@ function SeccionEntradas({ pageId, apiUrl, token, emailContacto = '', onGuardarC
         />
 
         {cobros.configurado ? (
-          <div className="border border-gray-800 bg-black p-6 mb-6">
+          <div className="border border-borde bg-white p-6 mb-6">
             <div className="flex items-start justify-between gap-4 flex-wrap">
               <div>
-                <p className="flex items-center gap-2 text-emerald-400 font-bold mb-2">
+                <p className="flex items-center gap-2 text-verde-oscuro font-bold mb-2">
                   <Check className="w-4 h-4" />
                   Mercado Pago conectado
                 </p>
 
                 {cobros.cuenta && (
-                  <p className="text-sm text-gray-500">
-                    Cuenta <span className="font-mono text-gray-300">{cobros.cuenta}</span>
+                  <p className="text-sm text-tinta-suave">
+                    Cuenta <span className="font-mono text-tinta-media">{cobros.cuenta}</span>
                   </p>
                 )}
 
@@ -243,15 +243,15 @@ function SeccionEntradas({ pageId, apiUrl, token, emailContacto = '', onGuardarC
               <button
                 type="button"
                 onClick={() => desconectar(false)}
-                className="text-red-400 hover:text-red-300 text-sm font-bold"
+                className="text-red-700 hover:text-red-700 text-sm font-bold"
               >
-                DESCONECTAR
+                Desconectar
               </button>
             </div>
           </div>
         ) : (
-          <div className="border border-gray-800 bg-black p-6 mb-6">
-            <p className="text-sm text-gray-500 mb-6">
+          <div className="border border-borde bg-white p-6 mb-6">
+            <p className="text-sm text-tinta-suave mb-6">
               Todavía no conectaste Mercado Pago. Sin esto sólo podés ofrecer reservas
               sin costo.
             </p>
@@ -260,7 +260,7 @@ function SeccionEntradas({ pageId, apiUrl, token, emailContacto = '', onGuardarC
               type="button"
               onClick={conectar}
               disabled={conectando || !disponible}
-              className="bg-[#009ee3] text-white px-6 py-3 font-bold hover:opacity-90 transition disabled:opacity-50 flex items-center gap-2"
+              className="bg-[#009ee3] text-tinta px-6 py-3 font-bold hover:opacity-90 transition disabled:opacity-50 flex items-center gap-2"
             >
               {conectando && <Loader2 className="w-4 h-4 animate-spin" />}
               {conectando ? 'REDIRIGIENDO...' : 'CONECTAR CON MERCADO PAGO'}
@@ -274,7 +274,7 @@ function SeccionEntradas({ pageId, apiUrl, token, emailContacto = '', onGuardarC
               </p>
             )}
 
-            <p className="text-xs text-gray-600 mt-4">
+            <p className="text-xs text-tinta-suave mt-4">
               Te vamos a llevar a Mercado Pago para que autorices el cobro en tu nombre.
               No vemos ni guardamos tu usuario ni tu contraseña.
             </p>
@@ -282,12 +282,12 @@ function SeccionEntradas({ pageId, apiUrl, token, emailContacto = '', onGuardarC
         )}
 
         {comision > 0 && (
-          <div className="border border-gray-800 bg-black p-6 mb-6">
-            <p className="text-sm text-gray-400 mb-2">
-              <strong className="text-white">Comisión de Rezonar: {formatearPorcentaje(comision)}%</strong> de cada
+          <div className="border border-borde bg-white p-6 mb-6">
+            <p className="text-sm text-tinta-media mb-2">
+              <strong className="text-tinta">Comisión de Rezonar: {formatearPorcentaje(comision)}%</strong> de cada
               entrada vendida.
             </p>
-            <p className="text-xs text-gray-600 mb-3">
+            <p className="text-xs text-tinta-suave mb-3">
               Se descuenta en el momento del cobro: el comprador paga una sola vez y a
               tu cuenta entra el resto. En una entrada de $10.000 son{' '}
               ${(10000 * comision / 100).toLocaleString('es-AR')} de comisión.
@@ -299,15 +299,15 @@ function SeccionEntradas({ pageId, apiUrl, token, emailContacto = '', onGuardarC
                 juntos: en Mercado Pago uno depende del otro. Los dos salen de la
                 configuración del servidor; si no están, no inventamos un número. */}
             {mercadoPago && (
-              <p className="text-xs text-gray-500 border-t border-gray-800 pt-3">
-                <strong className="text-gray-400">Aparte de esto, Mercado Pago cobra{' '}
+              <p className="text-xs text-tinta-suave border-t border-borde pt-3">
+                <strong className="text-tinta-media">Aparte de esto, Mercado Pago cobra{' '}
                 {formatearPorcentaje(mercadoPago.porcentaje)}%</strong> por procesar el pago, y libera
                 la plata a los {mercadoPago.dias} días de la compra. Podés verlo en{' '}
                 <a
                   href="https://www.mercadopago.com.ar/costs-section/release-options"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-gray-400 hover:text-white inline-flex items-center gap-1"
+                  className="text-tinta-media hover:text-tinta inline-flex items-center gap-1"
                 >
                   Mercado Pago → Costos
                   <ExternalLink className="w-3 h-3" />
@@ -319,22 +319,22 @@ function SeccionEntradas({ pageId, apiUrl, token, emailContacto = '', onGuardarC
         )}
 
         {error && (
-          <p className="text-sm text-red-400 bg-red-950 border border-red-900 px-4 py-3">{error}</p>
+          <p className="text-sm text-red-700 bg-red-50 border border-red-200 px-4 py-3">{error}</p>
         )}
 
         {aviso && (
-          <p className="text-sm text-emerald-400 bg-emerald-950 border border-emerald-900 px-4 py-3">
+          <p className="text-sm text-verde-oscuro bg-verde-claro border border-verde-medio rounded-xl px-4 py-3">
             {aviso}
           </p>
         )}
 
-        <p className="text-xs text-gray-600 mt-6">
+        <p className="text-xs text-tinta-suave mt-6">
           Podés revisar los permisos otorgados en{' '}
           <a
             href="https://www.mercadopago.com.ar/settings/security/connected-apps"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-gray-400 hover:text-white inline-flex items-center gap-1"
+            className="text-tinta-media hover:text-tinta inline-flex items-center gap-1"
           >
             Mercado Pago → Aplicaciones conectadas
             <ExternalLink className="w-3 h-3" />
@@ -384,9 +384,9 @@ function ContactoDeCompradores({ valor, onGuardar }) {
   };
 
   return (
-    <div className="border border-gray-800 bg-black p-6 mb-6">
-      <label htmlFor="email-contacto" className="block text-sm font-bold text-gray-400 mb-2 tracking-wide">
-        EMAIL DE CONTACTO
+    <div className="border border-borde bg-white p-6 mb-6">
+      <label htmlFor="email-contacto" className="block text-sm font-semibold text-tinta mb-1.5 tracking-wide">
+        Email de contacto
       </label>
       <input
         id="email-contacto"
@@ -395,9 +395,9 @@ function ContactoDeCompradores({ valor, onGuardar }) {
         onChange={(e) => setEmail(e.target.value)}
         onBlur={guardar}
         placeholder="hola@tulugar.com"
-        className="w-full bg-gray-900 border border-gray-700 px-4 py-3 text-white focus:border-white focus:outline-none"
+        className="w-full bg-white border border-borde-fuerte px-4 py-3 text-tinta focus:border-verde-oscuro focus:outline-none"
       />
-      <p className="text-xs text-gray-600 mt-2">
+      <p className="text-xs text-tinta-suave mt-2">
         {invalido
           ? 'Revisá el email: no parece una dirección válida.'
           : 'Cuando alguien responda el mail de su entrada, le llega acá. Si lo dejás vacío, el mail no invita a responder.'}
