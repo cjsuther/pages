@@ -111,7 +111,7 @@ function SeccionRedes({ socials = SIN_REDES, guardando = false, onGuardar }) {
           disabled={guardando}
           className="inline-flex items-center justify-center gap-2 rounded-full bg-verde text-verde-tinta px-6 py-3 font-semibold hover:bg-verde-oscuro hover:text-white transition-colors disabled:opacity-50"
         >
-          {guardando ? 'GUARDANDO...' : 'GUARDAR REDES'}
+          {guardando ? 'Guardando...' : 'Guardar redes'}
         </button>
 
         {guardado && !guardando && (

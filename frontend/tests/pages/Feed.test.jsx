@@ -36,7 +36,7 @@ function mockearFeed(events = [], ubicacion = { latitude: null, longitude: null 
 async function render(events = [], ubicacion) {
   const mock = mockearFeed(events, ubicacion);
   const resultado = renderConProviders(<Feed />, { auth: autenticado() });
-  await screen.findByRole('heading', { name: 'FEED DE EVENTOS' });
+  await screen.findByRole('heading', { name: 'Feed de eventos' });
   return { ...resultado, ...mock };
 }
 
@@ -97,7 +97,7 @@ describe('Feed', () => {
     it('enlaza al buscador de páginas', async () => {
       await render([]);
 
-      expect(await screen.findByRole('link', { name: 'BUSCAR PÁGINAS' })).toHaveAttribute(
+      expect(await screen.findByRole('link', { name: 'Buscar páginas' })).toHaveAttribute(
         'href',
         '/pages'
       );

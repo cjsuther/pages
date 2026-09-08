@@ -170,7 +170,7 @@ describe('App', () => {
 
       render(<App />);
 
-      expect(await screen.findByRole('heading', { name: 'BIENVENIDO' })).toBeInTheDocument();
+      expect(await screen.findByRole('heading', { name: 'Entrá a Rezonar' })).toBeInTheDocument();
     });
 
     it('un slug desconocido va a la página pública', async () => {

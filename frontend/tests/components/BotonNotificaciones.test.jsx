@@ -53,7 +53,7 @@ describe('BotonNotificaciones', () => {
   it('invita a activarlas cuando todavía no lo están', async () => {
     await montar();
 
-    expect(await screen.findByRole('button', { name: /ACTIVÁ LAS NOTIFICACIONES/ })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /Activá las notificaciones/ })).toBeInTheDocument();
   });
 
   /** Un botón que ofrece lo que ya tenés es ruido. */
@@ -88,7 +88,7 @@ describe('BotonNotificaciones', () => {
   describe('el popup', () => {
     const abrir = async () => {
       await montar();
-      fireEvent.click(await screen.findByRole('button', { name: /ACTIVÁ LAS NOTIFICACIONES/ }));
+      fireEvent.click(await screen.findByRole('button', { name: /Activá las notificaciones/ }));
 
       return screen.findByRole('dialog');
     };

@@ -234,7 +234,7 @@ function ComprarEntradas({ evento, entradas, apiUrl, color = '#3B82F6', onCerrar
           {enviando
             ? 'PROCESANDO...'
             : entradas.es_gratis
-              ? 'CONFIRMAR RESERVA'
+              ? 'Confirmar reserva'
               : 'IR A PAGAR'}
         </button>
 

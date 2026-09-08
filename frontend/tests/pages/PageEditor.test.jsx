@@ -86,13 +86,14 @@ async function render(datos = {}, seccion = null) {
     route: '/page/5',
     path: '/page/:id',
   });
-  await screen.findByRole('heading', { name: 'EDITOR' });
+  // El encabezado del editor es el nombre de la página, no la palabra "editor".
+  await screen.findByRole('heading', { name: 'Mi Página' });
 
   if (seccion) {
     // El nombre accesible puede incluir el badge de pendientes ("CONTENIDO 1").
     fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${seccion}`) }));
     await screen.findByRole('heading', {
-      name: seccion === 'CONTENIDO' ? 'GRUPOS DE LINKS' : seccion,
+      name: seccion === 'Contenido' ? 'Grupos de links' : seccion,
     });
   }
 
@@ -121,7 +122,7 @@ describe('PageEditor', () => {
     it('ofrece las cinco secciones en el submenú', async () => {
       await render();
 
-      ['CONFIGURACIÓN', 'CONTENIDO', 'REDES SOCIALES', 'ENTRADAS', 'ADMINISTRADORES'].forEach((s) => {
+      ['Configuración', 'Contenido', 'Redes sociales', 'Entradas', 'Administradores'].forEach((s) => {
         expect(screen.getByRole('button', { name: new RegExp(`^${s}`) })).toBeInTheDocument();
       });
     });
@@ -129,36 +130,36 @@ describe('PageEditor', () => {
     it('la solapa de entradas abre la configuración de cobros', async () => {
       await render();
 
-      fireEvent.click(screen.getByRole('button', { name: /^ENTRADAS/ }));
+      fireEvent.click(screen.getByRole('button', { name: /^Entradas/ }));
 
-      expect(await screen.findByRole('heading', { name: 'ENTRADAS' })).toBeInTheDocument();
+      expect(await screen.findByRole('heading', { name: 'Entradas' })).toBeInTheDocument();
     });
 
     it('abre en configuración', async () => {
       await render();
 
-      expect(screen.getByRole('heading', { name: 'CONFIGURACIÓN' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Configuración' })).toBeInTheDocument();
       // El resto vive en sus solapas y no se renderiza hasta abrirlas.
-      expect(screen.queryByRole('heading', { name: 'GRUPOS DE LINKS' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: 'Grupos de links' })).not.toBeInTheDocument();
     });
 
     it('cambia de sección al tocar el submenú', async () => {
       await render();
 
-      fireEvent.click(screen.getByRole('button', { name: /^CONTENIDO/ }));
+      fireEvent.click(screen.getByRole('button', { name: /^Contenido/ }));
 
-      expect(await screen.findByRole('heading', { name: 'GRUPOS DE LINKS' })).toBeInTheDocument();
-      expect(screen.queryByRole('heading', { name: 'CONFIGURACIÓN' })).not.toBeInTheDocument();
+      expect(await screen.findByRole('heading', { name: 'Grupos de links' })).toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: 'Configuración' })).not.toBeInTheDocument();
     });
 
     it('quien no es dueño no ve la solapa de administradores', async () => {
       await render({ page: pagina({ user_id: 77 }) });
 
-      expect(screen.queryByRole('button', { name: /^ADMINISTRADORES/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /^Administradores/ })).not.toBeInTheDocument();
     });
 
     it('avisa si la página no tiene grupos', async () => {
-      await render({ page: pagina({ groups: [] }) }, 'CONTENIDO');
+      await render({ page: pagina({ groups: [] }) }, 'Contenido');
 
       expect(screen.getByText('No hay grupos todavía')).toBeInTheDocument();
     });
@@ -184,7 +185,7 @@ describe('PageEditor', () => {
             grupo({ id: 3, title: 'Fotos', type: 'galeria' }),
           ],
         }),
-      }, 'CONTENIDO');
+      }, 'Contenido');
 
       expect(screen.getByText('Mis Links')).toBeInTheDocument();
       expect(screen.getByText('Links')).toBeInTheDocument();
@@ -199,7 +200,7 @@ describe('PageEditor', () => {
     it('un grupo de un tipo que ya no existe se muestra como links', async () => {
       await render({
         page: pagina({ groups: [grupo({ id: 4, title: 'Redes', type: 'redes' })] }),
-      }, 'CONTENIDO');
+      }, 'Contenido');
 
       expect(screen.getByText('Links')).toBeInTheDocument();
       expect(screen.queryByText('Redes Sociales')).not.toBeInTheDocument();
@@ -212,7 +213,7 @@ describe('PageEditor', () => {
      * fecha.
      */
     it('explica para qué sirve cada tipo de grupo', async () => {
-      await render({}, 'CONTENIDO');
+      await render({}, 'Contenido');
 
       expect(screen.getByText(/Todo lo que publicás va adentro de un grupo/)).toBeInTheDocument();
       expect(screen.getByText('Links —')).toBeInTheDocument();
@@ -222,20 +223,20 @@ describe('PageEditor', () => {
 
     /** Es el único tipo que llega a la agenda, al mapa y a las entradas. */
     it('aclara qué gana un evento por serlo', async () => {
-      await render({}, 'CONTENIDO');
+      await render({}, 'Contenido');
 
       expect(screen.getByText(/aparece en la agenda, en el mapa y en el buscador/)).toBeInTheDocument();
     });
 
     /** Las redes son de la página, no un bloque de contenido. */
     it('manda las redes sociales a su sección', async () => {
-      await render({}, 'CONTENIDO');
+      await render({}, 'Contenido');
 
       expect(screen.getByText(/se cargan en la sección Redes Sociales/)).toBeInTheDocument();
     });
 
     it('ya no ofrece crear un grupo de redes sociales', async () => {
-      await render({}, 'CONTENIDO');
+      await render({}, 'Contenido');
 
       fireEvent.click(screen.getByRole('button', { name: '+ NUEVO GRUPO' }));
 
@@ -244,22 +245,22 @@ describe('PageEditor', () => {
     });
 
     it('abre el modal de nuevo grupo', async () => {
-      await render({}, 'CONTENIDO');
+      await render({}, 'Contenido');
 
       fireEvent.click(screen.getByRole('button', { name: '+ NUEVO GRUPO' }));
 
-      expect(await screen.findByRole('heading', { name: 'NUEVO GRUPO' })).toBeInTheDocument();
+      expect(await screen.findByRole('heading', { name: 'Nuevo grupo' })).toBeInTheDocument();
     });
 
     it('crea el grupo con el page_id de la ruta', async () => {
-      const { llamadas } = await render({}, 'CONTENIDO');
+      const { llamadas } = await render({}, 'Contenido');
 
       fireEvent.click(screen.getByRole('button', { name: '+ NUEVO GRUPO' }));
-      await screen.findByRole('heading', { name: 'NUEVO GRUPO' });
+      await screen.findByRole('heading', { name: 'Nuevo grupo' });
 
-      const modal = screen.getByRole('heading', { name: 'NUEVO GRUPO' }).closest('div');
+      const modal = screen.getByRole('heading', { name: 'Nuevo grupo' }).closest('div');
       fireEvent.change(within(modal).getAllByRole('textbox')[0], { target: { value: 'Nuevo Grupo' } });
-      fireEvent.click(screen.getByRole('button', { name: 'CREAR' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Crear' }));
 
       await waitFor(() => {
         const post = llamadas.find(
@@ -270,14 +271,14 @@ describe('PageEditor', () => {
     });
 
     it('el tipo por defecto es links', async () => {
-      const { llamadas } = await render({}, 'CONTENIDO');
+      const { llamadas } = await render({}, 'Contenido');
 
       fireEvent.click(screen.getByRole('button', { name: '+ NUEVO GRUPO' }));
-      await screen.findByRole('heading', { name: 'NUEVO GRUPO' });
+      await screen.findByRole('heading', { name: 'Nuevo grupo' });
 
-      const modal = screen.getByRole('heading', { name: 'NUEVO GRUPO' }).closest('div');
+      const modal = screen.getByRole('heading', { name: 'Nuevo grupo' }).closest('div');
       fireEvent.change(within(modal).getAllByRole('textbox')[0], { target: { value: 'G' } });
-      fireEvent.click(screen.getByRole('button', { name: 'CREAR' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Crear' }));
 
       await waitFor(() => {
         const post = llamadas.find(
@@ -288,14 +289,14 @@ describe('PageEditor', () => {
     });
 
     it('se puede cancelar la creación', async () => {
-      const { llamadas } = await render({}, 'CONTENIDO');
+      const { llamadas } = await render({}, 'Contenido');
 
       fireEvent.click(screen.getByRole('button', { name: '+ NUEVO GRUPO' }));
-      await screen.findByRole('heading', { name: 'NUEVO GRUPO' });
-      fireEvent.click(screen.getAllByRole('button', { name: 'CANCELAR' })[0]);
+      await screen.findByRole('heading', { name: 'Nuevo grupo' });
+      fireEvent.click(screen.getAllByRole('button', { name: 'Cancelar' })[0]);
 
       await waitFor(() => {
-        expect(screen.queryByRole('heading', { name: 'NUEVO GRUPO' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('heading', { name: 'Nuevo grupo' })).not.toBeInTheDocument();
       });
       expect(
         llamadas.find((l) => l.url.includes('groups/index.php') && l.options.method === 'POST')
@@ -303,14 +304,14 @@ describe('PageEditor', () => {
     });
 
     it('recarga la página tras crear el grupo', async () => {
-      const { llamadas } = await render({}, 'CONTENIDO');
+      const { llamadas } = await render({}, 'Contenido');
       const antes = llamadas.filter((l) => l.url.includes('pages/detail.php')).length;
 
       fireEvent.click(screen.getByRole('button', { name: '+ NUEVO GRUPO' }));
-      await screen.findByRole('heading', { name: 'NUEVO GRUPO' });
-      const modal = screen.getByRole('heading', { name: 'NUEVO GRUPO' }).closest('div');
+      await screen.findByRole('heading', { name: 'Nuevo grupo' });
+      const modal = screen.getByRole('heading', { name: 'Nuevo grupo' }).closest('div');
       fireEvent.change(within(modal).getAllByRole('textbox')[0], { target: { value: 'G' } });
-      fireEvent.click(screen.getByRole('button', { name: 'CREAR' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Crear' }));
 
       await waitFor(() => {
         const despues = llamadas.filter((l) => l.url.includes('pages/detail.php')).length;
@@ -329,21 +330,21 @@ describe('PageEditor', () => {
       });
 
     it('el primer grupo no puede subir', async () => {
-      await render({ page: dosGrupos() }, 'CONTENIDO');
+      await render({ page: dosGrupos() }, 'Contenido');
 
       const subir = screen.getAllByTitle('Mover arriba');
       expect(subir[0]).toBeDisabled();
     });
 
     it('el último grupo no puede bajar', async () => {
-      await render({ page: dosGrupos() }, 'CONTENIDO');
+      await render({ page: dosGrupos() }, 'Contenido');
 
       const bajar = screen.getAllByTitle('Mover abajo');
       expect(bajar[bajar.length - 1]).toBeDisabled();
     });
 
     it('mover un grupo actualiza las posiciones', async () => {
-      const { llamadas } = await render({ page: dosGrupos() }, 'CONTENIDO');
+      const { llamadas } = await render({ page: dosGrupos() }, 'Contenido');
 
       fireEvent.click(screen.getAllByTitle('Mover abajo')[0]);
 
@@ -364,13 +365,13 @@ describe('PageEditor', () => {
       });
 
     it('lista los links del grupo', async () => {
-      await render({ page: conLinks() }, 'CONTENIDO');
+      await render({ page: conLinks() }, 'Contenido');
 
       expect(screen.getByText('Instagram')).toBeInTheDocument();
     });
 
     it('ofrece agregar un link al grupo', async () => {
-      await render({ page: conLinks() }, 'CONTENIDO');
+      await render({ page: conLinks() }, 'Contenido');
 
       expect(screen.getByRole('button', { name: '+ Link' })).toBeInTheDocument();
     });
@@ -384,7 +385,7 @@ describe('PageEditor', () => {
             grupo({ id: 3, type: 'galeria' }),
           ],
         }),
-      }, 'CONTENIDO');
+      }, 'Contenido');
 
       expect(screen.getByRole('button', { name: '+ Link' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: '+ Evento' })).toBeInTheDocument();
@@ -397,10 +398,10 @@ describe('PageEditor', () => {
       pagina({ groups: [grupo({ id: 20, title: 'Agenda', type: 'eventos', links: [] })] });
 
     it('no deja crear un evento sin dirección de Google Maps', async () => {
-      const { llamadas } = await render({ page: grupoEventos() }, 'CONTENIDO');
+      const { llamadas } = await render({ page: grupoEventos() }, 'Contenido');
 
       fireEvent.click(screen.getByRole('button', { name: '+ Evento' }));
-      const crear = await screen.findByRole('button', { name: 'CREAR' });
+      const crear = await screen.findByRole('button', { name: 'Crear' });
 
       // Se completan los campos obligatorios para que el navegador deje
       // enviar el formulario y se llegue a la validación de coordenadas.
@@ -424,7 +425,7 @@ describe('PageEditor', () => {
 
   describe('administradores', () => {
     it('carga la lista al montar', async () => {
-      const { llamadas } = await render({}, 'ADMINISTRADORES');
+      const { llamadas } = await render({}, 'Administradores');
 
       expect(llamadaA(llamadas, 'admins/index.php').url).toContain('page_id=5');
     });
@@ -434,19 +435,19 @@ describe('PageEditor', () => {
         admins: [
           { id: 1, user_id: 11, user_name: 'Beto', user_email: 'beto@test.local', status: 'accepted' },
         ],
-      }, 'ADMINISTRADORES');
+      }, 'Administradores');
 
       const encontrados = await screen.findAllByText(/beto@test.local|Beto/);
       expect(encontrados.length).toBeGreaterThan(0);
     });
 
     it('invita por email', async () => {
-      const { llamadas } = await render({}, 'ADMINISTRADORES');
+      const { llamadas } = await render({}, 'Administradores');
 
       fireEvent.change(screen.getByPlaceholderText('email@ejemplo.com'), {
         target: { value: 'nuevo@test.local' },
       });
-      fireEvent.click(screen.getByRole('button', { name: 'INVITAR' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Invitar' }));
 
       await waitFor(() => {
         const post = llamadas.find(
@@ -457,7 +458,7 @@ describe('PageEditor', () => {
     });
 
     it('muestra el error que devuelve la API al invitar', async () => {
-      await render({}, 'ADMINISTRADORES');
+      await render({}, 'Administradores');
 
       mockFetch({
         'admins/index.php': {
@@ -469,7 +470,7 @@ describe('PageEditor', () => {
       fireEvent.change(screen.getByPlaceholderText('email@ejemplo.com'), {
         target: { value: 'nadie@test.local' },
       });
-      fireEvent.click(screen.getByRole('button', { name: 'INVITAR' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Invitar' }));
 
       expect(
         await screen.findByText('No hay ningún usuario registrado con ese email')
@@ -479,9 +480,9 @@ describe('PageEditor', () => {
 
   describe('colaboraciones pendientes', () => {
     it('no muestra la sección si no hay', async () => {
-      await render({ pending: [] }, 'CONTENIDO');
+      await render({ pending: [] }, 'Contenido');
 
-      expect(screen.queryByText('COLABORACIONES PENDIENTES')).not.toBeInTheDocument();
+      expect(screen.queryByText('Colaboraciones pendientes')).not.toBeInTheDocument();
     });
 
     it('muestra las invitaciones recibidas', async () => {
@@ -496,9 +497,9 @@ describe('PageEditor', () => {
             status: 'pending',
           },
         ],
-      }, 'CONTENIDO');
+      }, 'Contenido');
 
-      expect(await screen.findByText('COLABORACIONES PENDIENTES')).toBeInTheDocument();
+      expect(await screen.findByText('Colaboraciones pendientes')).toBeInTheDocument();
       expect(screen.getByText(/Recital Compartido/)).toBeInTheDocument();
     });
   });
@@ -514,7 +515,7 @@ describe('PageEditor', () => {
     it('ofrece elegir plantilla', async () => {
       await render();
 
-      expect(screen.getByText('TEMPLATE DE DISEÑO')).toBeInTheDocument();
+      expect(screen.getByText('Template de diseño')).toBeInTheDocument();
     });
 
     it('enlaza a la página pública', async () => {

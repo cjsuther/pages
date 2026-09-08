@@ -31,7 +31,7 @@ function mockearDashboard(pages = []) {
 async function render(pages = []) {
   const mock = mockearDashboard(pages);
   const resultado = renderConProviders(<Dashboard />, { auth: autenticado() });
-  await screen.findByRole('button', { name: '+ NUEVA PÁGINA' });
+  await screen.findByRole('button', { name: 'Nueva página' });
   return { ...resultado, ...mock };
 }
 
@@ -57,7 +57,7 @@ describe('Dashboard', () => {
     it('enlaza al editor', async () => {
       await render([pagina({ id: 5 })]);
 
-      expect(await screen.findByRole('link', { name: 'EDITAR' })).toHaveAttribute('href', '/page/5');
+      expect(await screen.findByRole('link', { name: 'Editar' })).toHaveAttribute('href', '/page/5');
     });
 
     it('no rompe si falla la carga', async () => {
@@ -72,13 +72,13 @@ describe('Dashboard', () => {
   describe('crear página', () => {
     async function abrirModal() {
       const mock = await render([]);
-      fireEvent.click(screen.getByRole('button', { name: '+ NUEVA PÁGINA' }));
-      await screen.findByRole('heading', { name: 'NUEVA PÁGINA' });
+      fireEvent.click(screen.getByRole('button', { name: 'Nueva página' }));
+      await screen.findByRole('heading', { name: 'Nueva página' });
       return mock;
     }
 
     function completar({ titulo = 'Nueva', slug = 'nueva-pagina' } = {}) {
-      const modal = screen.getByRole('heading', { name: 'NUEVA PÁGINA' }).closest('div');
+      const modal = screen.getByRole('heading', { name: 'Nueva página' }).closest('div');
       const campos = modal.querySelectorAll('input, textarea');
 
       fireEvent.change(campos[0], { target: { value: titulo } });
@@ -97,7 +97,7 @@ describe('Dashboard', () => {
       const { llamadas } = await abrirModal();
 
       completar({ slug: 'login' });
-      fireEvent.click(screen.getByRole('button', { name: 'CREAR' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Crear' }));
 
       expect(
         await screen.findByText('Esta URL está reservada y no puede ser utilizada')
@@ -109,7 +109,7 @@ describe('Dashboard', () => {
       const { llamadas } = await abrirModal();
 
       completar({ titulo: 'Nueva', slug: 'nueva-pagina' });
-      fireEvent.click(screen.getByRole('button', { name: 'CREAR' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Crear' }));
 
       await waitFor(() => {
         const post = llamadas.find((l) => l.options.method === 'POST');
@@ -122,7 +122,7 @@ describe('Dashboard', () => {
 
       mockFetch({ 'pages/index.php': { status: 400, body: { error: 'URL slug already exists' } } });
       completar();
-      fireEvent.click(screen.getByRole('button', { name: 'CREAR' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Crear' }));
 
       expect(await screen.findByText('URL slug already exists')).toBeInTheDocument();
     });
@@ -132,7 +132,7 @@ describe('Dashboard', () => {
       const { llamadas } = await abrirModal();
 
       completar({ slug: 'feed' });
-      fireEvent.click(screen.getByRole('button', { name: 'CREAR' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Crear' }));
 
       await waitFor(() => {
         expect(llamadas.find((l) => l.options.method === 'POST')).toBeDefined();
@@ -144,7 +144,7 @@ describe('Dashboard', () => {
     it('pide confirmación', async () => {
       await render([pagina()]);
 
-      fireEvent.click(await screen.findByRole('button', { name: 'ELIMINAR' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Eliminar' }));
 
       expect(window.confirm).toHaveBeenCalledWith('¿Estás seguro de eliminar esta página?');
     });
@@ -153,7 +153,7 @@ describe('Dashboard', () => {
       window.confirm = vi.fn(() => false);
       const { llamadas } = await render([pagina()]);
 
-      fireEvent.click(await screen.findByRole('button', { name: 'ELIMINAR' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Eliminar' }));
 
       await waitFor(() => {
         expect(llamadas.find((l) => l.options.method === 'DELETE')).toBeUndefined();
@@ -163,7 +163,7 @@ describe('Dashboard', () => {
     it('envía el DELETE con el id', async () => {
       const { llamadas } = await render([pagina({ id: 5 })]);
 
-      fireEvent.click(await screen.findByRole('button', { name: 'ELIMINAR' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Eliminar' }));
 
       await waitFor(() => {
         const del = llamadas.find((l) => l.options.method === 'DELETE');

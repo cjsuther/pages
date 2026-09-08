@@ -352,7 +352,7 @@ function ItemEditor() {
             <>
               <div>
                 <label className="block text-sm font-semibold text-tinta mb-1.5">
-                  {group.type === 'eventos' ? 'NOMBRE DEL EVENTO' : 'TEXTO'}
+                  {group.type === 'eventos' ? 'Nombre del evento' : 'Texto'}
                 </label>
                 <input
                   type="text"
@@ -398,7 +398,7 @@ function ItemEditor() {
               {tipoMedia !== 'imagen' && (
                 <div>
                   <label htmlFor="url-del-contenido" className="block text-sm font-semibold text-tinta mb-1.5">
-                    {tipoMedia === 'youtube' ? 'URL DEL VIDEO' : 'URL DEL CONTENIDO'}
+                    {tipoMedia === 'youtube' ? 'URL del video' : 'URL del contenido'}
                   </label>
                   <input
                     id="url-del-contenido"
@@ -431,7 +431,7 @@ function ItemEditor() {
           <div>
             <label className="block text-sm font-semibold text-tinta mb-1.5">
               {group.type !== 'galeria' ? 'IMAGEN (OPCIONAL)'
-                : tipoMedia === 'imagen' ? 'IMAGEN'
+                : tipoMedia === 'imagen' ? 'Imagen'
                 : 'PORTADA (OPCIONAL)'}
             </label>
             <div className="flex items-center gap-4">
@@ -544,7 +544,7 @@ function ItemEditor() {
                   Selecciona una dirección de las sugerencias para capturar las coordenadas
                 </p>
                 {item.event_latitude && item.event_longitude && (
-                  <p className="text-xs text-green-500 mt-1">
+                  <p className="text-xs text-verde-oscuro mt-1">
                     ✓ Coordenadas capturadas correctamente
                   </p>
                 )}
@@ -555,7 +555,7 @@ function ItemEditor() {
           {group.type !== 'galeria' && (
             <div>
               <label className="block text-sm font-semibold text-tinta mb-1.5">
-                {group.type === 'eventos' ? 'DESCRIPCIÓN DEL EVENTO' : 'DESCRIPCIÓN (OPCIONAL)'}
+                {group.type === 'eventos' ? 'Descripción del evento' : 'Descripción (opcional)'}
               </label>
               <textarea
                 value={item.description || ''}

@@ -41,7 +41,7 @@ function mockearMisPaginas({ pages = [], invitations = [], pending = [] } = {}) 
 async function render(opciones = {}) {
   const mock = mockearMisPaginas(opciones);
   const resultado = renderConProviders(<MyPages />, { auth: autenticado() });
-  await screen.findByRole('heading', { name: 'MIS PÁGINAS' });
+  await screen.findByRole('heading', { name: 'Mis páginas' });
   return { ...resultado, ...mock };
 }
 
@@ -55,7 +55,7 @@ describe('MyPages', () => {
     it('avisa si no hay páginas', async () => {
       await render({ pages: [] });
 
-      expect(await screen.findByText('No tienes páginas todavía')).toBeInTheDocument();
+      expect(await screen.findByText('Todavía no tenés ninguna página')).toBeInTheDocument();
     });
 
     it('muestra cada página con su título y descripción', async () => {
@@ -68,7 +68,7 @@ describe('MyPages', () => {
     it('enlaza a la página pública', async () => {
       await render({ pages: [pagina({ url_slug: 'mi-pagina' })] });
 
-      const enlace = await screen.findByRole('link', { name: '/mi-pagina' });
+      const enlace = await screen.findByRole('link', { name: /rezon\.ar\/mi-pagina/ });
       expect(enlace).toHaveAttribute('href', '/mi-pagina');
       expect(enlace).toHaveAttribute('target', '_blank');
     });
@@ -76,7 +76,7 @@ describe('MyPages', () => {
     it('enlaza al editor', async () => {
       await render({ pages: [pagina({ id: 5 })] });
 
-      expect(await screen.findByRole('link', { name: 'EDITAR' })).toHaveAttribute('href', '/page/5');
+      expect(await screen.findByRole('link', { name: 'Editar' })).toHaveAttribute('href', '/page/5');
     });
 
     it('no rompe si falla la carga', async () => {
@@ -92,36 +92,36 @@ describe('MyPages', () => {
     it('la página propia ofrece eliminar', async () => {
       await render({ pages: [pagina({ is_owner: 1 })] });
 
-      expect(await screen.findByRole('button', { name: 'ELIMINAR' })).toBeInTheDocument();
-      expect(screen.queryByText('DEJAR DE ADMINISTRAR')).not.toBeInTheDocument();
+      expect(await screen.findByRole('button', { name: 'Eliminar' })).toBeInTheDocument();
+      expect(screen.queryByText('Dejar de administrar')).not.toBeInTheDocument();
     });
 
     it('la página administrada ofrece dejar de administrar', async () => {
       await render({ pages: [pagina({ is_owner: 0 })] });
 
-      expect(await screen.findByRole('button', { name: 'DEJAR DE ADMINISTRAR' })).toBeInTheDocument();
-      expect(screen.queryByText('ELIMINAR')).not.toBeInTheDocument();
+      expect(await screen.findByRole('button', { name: 'Dejar de administrar' })).toBeInTheDocument();
+      expect(screen.queryByText('Eliminar')).not.toBeInTheDocument();
     });
 
     it('marca las administradas con la etiqueta ADMIN', async () => {
       await render({ pages: [pagina({ is_owner: 0 })] });
 
-      expect(await screen.findByText('ADMIN')).toBeInTheDocument();
+      expect(await screen.findByText('Administrás esta página')).toBeInTheDocument();
     });
 
     it('no marca las propias', async () => {
       await render({ pages: [pagina({ is_owner: 1 })] });
 
       await screen.findByText('Mi Página');
-      expect(screen.queryByText('ADMIN')).not.toBeInTheDocument();
+      expect(screen.queryByText('Administrás esta página')).not.toBeInTheDocument();
     });
 
     it('interpreta is_owner como texto (lo que devuelve MySQL)', async () => {
       await render({ pages: [pagina({ is_owner: '1' })] });
 
       await screen.findByText('Mi Página');
-      expect(screen.queryByText('ADMIN')).not.toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'ELIMINAR' })).toBeInTheDocument();
+      expect(screen.queryByText('Administrás esta página')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Eliminar' })).toBeInTheDocument();
     });
   });
 
@@ -147,13 +147,13 @@ describe('MyPages', () => {
     it('no muestra el bloque si no hay invitaciones', async () => {
       await render({ invitations: [] });
 
-      expect(screen.queryByText('INVITACIONES PARA ADMINISTRAR')).not.toBeInTheDocument();
+      expect(screen.queryByText('Te invitaron a administrar')).not.toBeInTheDocument();
     });
 
     it('lista las invitaciones recibidas', async () => {
       await render({ invitations: [invitacion({ page_title: 'Página Ajena', owner_name: 'Beto' })] });
 
-      expect(await screen.findByText('INVITACIONES PARA ADMINISTRAR')).toBeInTheDocument();
+      expect(await screen.findByText('Te invitaron a administrar')).toBeInTheDocument();
       expect(screen.getByText('Página Ajena')).toBeInTheDocument();
       expect(screen.getByText(/te invitó Beto/)).toBeInTheDocument();
     });
@@ -167,7 +167,7 @@ describe('MyPages', () => {
     it('acepta la invitación', async () => {
       const { llamadas } = await render({ invitations: [invitacion({ id: 3 })] });
 
-      fireEvent.click(await screen.findByRole('button', { name: 'ACEPTAR' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Aceptar' }));
 
       await waitFor(() => {
         const put = llamadas.find((l) => l.options.method === 'PUT');
@@ -179,7 +179,7 @@ describe('MyPages', () => {
     it('rechaza la invitación', async () => {
       const { llamadas } = await render({ invitations: [invitacion({ id: 3 })] });
 
-      fireEvent.click(await screen.findByRole('button', { name: 'RECHAZAR' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Rechazar' }));
 
       await waitFor(() => {
         const put = llamadas.find((l) => l.options.method === 'PUT');
@@ -191,7 +191,7 @@ describe('MyPages', () => {
       const { llamadas } = await render({ invitations: [invitacion()] });
       const antes = llamadas.filter((l) => l.url.includes('pages/index.php')).length;
 
-      fireEvent.click(await screen.findByRole('button', { name: 'ACEPTAR' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Aceptar' }));
 
       await waitFor(() => {
         const despues = llamadas.filter((l) => l.url.includes('pages/index.php')).length;
@@ -203,7 +203,7 @@ describe('MyPages', () => {
       const { llamadas } = await render({ invitations: [invitacion()] });
       const antes = llamadas.filter((l) => l.url.includes('pages/index.php')).length;
 
-      fireEvent.click(await screen.findByRole('button', { name: 'RECHAZAR' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Rechazar' }));
 
       await waitFor(() => {
         expect(llamadas.find((l) => l.options.method === 'PUT')).toBeDefined();
@@ -215,43 +215,43 @@ describe('MyPages', () => {
   describe('crear página', () => {
     async function abrirModal() {
       const mock = await render({ pages: [] });
-      fireEvent.click(screen.getByRole('button', { name: '+ NUEVA PÁGINA' }));
-      await screen.findByRole('heading', { name: 'NUEVA PÁGINA' });
+      fireEvent.click(screen.getByRole('button', { name: 'Nueva página' }));
+      await screen.findByRole('heading', { name: 'Nueva página' });
       return mock;
     }
 
     function completar({ titulo = 'Nueva', descripcion = 'Desc', slug = 'nueva-pagina' } = {}) {
-      fireEvent.change(screen.getByLabelText('TÍTULO'), { target: { value: titulo } });
-      fireEvent.change(screen.getByLabelText('DESCRIPCIÓN'), { target: { value: descripcion } });
-      fireEvent.change(screen.getByLabelText('URL'), { target: { value: slug } });
+      fireEvent.change(screen.getByLabelText('Título'), { target: { value: titulo } });
+      fireEvent.change(screen.getByLabelText('Descripción'), { target: { value: descripcion } });
+      fireEvent.change(screen.getByLabelText('Tu dirección'), { target: { value: slug } });
     }
 
     it('abre el modal', async () => {
       await abrirModal();
 
-      expect(screen.getByLabelText('TÍTULO')).toBeInTheDocument();
-      expect(screen.getByLabelText('URL')).toBeInTheDocument();
+      expect(screen.getByLabelText('Título')).toBeInTheDocument();
+      expect(screen.getByLabelText('Tu dirección')).toBeInTheDocument();
     });
 
     it('pasa el slug a minúsculas mientras se escribe', async () => {
       await abrirModal();
 
-      fireEvent.change(screen.getByLabelText('URL'), { target: { value: 'MiPagina' } });
+      fireEvent.change(screen.getByLabelText('Tu dirección'), { target: { value: 'MiPagina' } });
 
-      expect(screen.getByLabelText('URL')).toHaveValue('mipagina');
+      expect(screen.getByLabelText('Tu dirección')).toHaveValue('mipagina');
     });
 
     it('restringe el slug por patrón', async () => {
       await abrirModal();
 
-      expect(screen.getByLabelText('URL')).toHaveAttribute('pattern', '[a-z0-9-]+');
+      expect(screen.getByLabelText('Tu dirección')).toHaveAttribute('pattern', '[a-z0-9-]+');
     });
 
     it('rechaza los slugs reservados sin llamar a la API', async () => {
       const { llamadas } = await abrirModal();
 
       completar({ slug: 'login' });
-      fireEvent.click(screen.getByRole('button', { name: 'CREAR' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Crear página' }));
 
       expect(
         await screen.findByText('Esta URL está reservada y no puede ser utilizada')
@@ -265,7 +265,7 @@ describe('MyPages', () => {
         await abrirModal();
 
         completar({ slug });
-        fireEvent.click(screen.getByRole('button', { name: 'CREAR' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Crear página' }));
 
         expect(
           await screen.findByText('Esta URL está reservada y no puede ser utilizada')
@@ -277,7 +277,7 @@ describe('MyPages', () => {
       const { llamadas } = await abrirModal();
 
       completar({ titulo: 'Nueva', descripcion: 'Desc', slug: 'nueva-pagina' });
-      fireEvent.click(screen.getByRole('button', { name: 'CREAR' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Crear página' }));
 
       await waitFor(() => {
         const post = llamadas.find((l) => l.options.method === 'POST');
@@ -294,7 +294,7 @@ describe('MyPages', () => {
 
       mockFetch({ 'pages/index.php': { status: 400, body: { error: 'URL slug already exists' } } });
       completar();
-      fireEvent.click(screen.getByRole('button', { name: 'CREAR' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Crear página' }));
 
       expect(await screen.findByText('URL slug already exists')).toBeInTheDocument();
     });
@@ -302,10 +302,10 @@ describe('MyPages', () => {
     it('se puede cancelar', async () => {
       await abrirModal();
 
-      fireEvent.click(screen.getByRole('button', { name: 'CANCELAR' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
 
       await waitFor(() => {
-        expect(screen.queryByRole('heading', { name: 'NUEVA PÁGINA' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('heading', { name: 'Nueva página' })).not.toBeInTheDocument();
       });
     });
 
@@ -313,13 +313,13 @@ describe('MyPages', () => {
       await abrirModal();
 
       completar({ slug: 'login' });
-      fireEvent.click(screen.getByRole('button', { name: 'CREAR' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Crear página' }));
       await screen.findByText('Esta URL está reservada y no puede ser utilizada');
 
-      fireEvent.click(screen.getByRole('button', { name: 'CANCELAR' }));
-      fireEvent.click(screen.getByRole('button', { name: '+ NUEVA PÁGINA' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Nueva página' }));
 
-      await screen.findByRole('heading', { name: 'NUEVA PÁGINA' });
+      await screen.findByRole('heading', { name: 'Nueva página' });
       expect(screen.queryByText('Esta URL está reservada y no puede ser utilizada')).not.toBeInTheDocument();
     });
   });
@@ -328,7 +328,7 @@ describe('MyPages', () => {
     it('pide confirmación', async () => {
       await render({ pages: [pagina({ is_owner: 1 })] });
 
-      fireEvent.click(await screen.findByRole('button', { name: 'ELIMINAR' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Eliminar' }));
 
       expect(window.confirm).toHaveBeenCalledWith('¿Estás seguro de eliminar esta página?');
     });
@@ -337,7 +337,7 @@ describe('MyPages', () => {
       window.confirm = vi.fn(() => false);
       const { llamadas } = await render({ pages: [pagina({ is_owner: 1 })] });
 
-      fireEvent.click(await screen.findByRole('button', { name: 'ELIMINAR' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Eliminar' }));
 
       await waitFor(() => {
         expect(llamadas.find((l) => l.options.method === 'DELETE')).toBeUndefined();
@@ -347,7 +347,7 @@ describe('MyPages', () => {
     it('envía el DELETE con el id de la página', async () => {
       const { llamadas } = await render({ pages: [pagina({ id: 5, is_owner: 1 })] });
 
-      fireEvent.click(await screen.findByRole('button', { name: 'ELIMINAR' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Eliminar' }));
 
       await waitFor(() => {
         const del = llamadas.find((l) => l.options.method === 'DELETE');
@@ -360,7 +360,7 @@ describe('MyPages', () => {
     it('pide confirmación', async () => {
       await render({ pages: [pagina({ is_owner: 0 })] });
 
-      fireEvent.click(await screen.findByRole('button', { name: 'DEJAR DE ADMINISTRAR' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Dejar de administrar' }));
 
       expect(window.confirm).toHaveBeenCalledWith('¿Dejar de administrar esta página?');
     });
@@ -368,7 +368,7 @@ describe('MyPages', () => {
     it('envía el DELETE al endpoint de administradores', async () => {
       const { llamadas } = await render({ pages: [pagina({ id: 5, is_owner: 0 })] });
 
-      fireEvent.click(await screen.findByRole('button', { name: 'DEJAR DE ADMINISTRAR' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Dejar de administrar' }));
 
       await waitFor(() => {
         const del = llamadas.find((l) => l.options.method === 'DELETE');
@@ -380,7 +380,7 @@ describe('MyPages', () => {
       window.confirm = vi.fn(() => false);
       const { llamadas } = await render({ pages: [pagina({ is_owner: 0 })] });
 
-      fireEvent.click(await screen.findByRole('button', { name: 'DEJAR DE ADMINISTRAR' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Dejar de administrar' }));
 
       await waitFor(() => {
         expect(llamadas.find((l) => l.options.method === 'DELETE')).toBeUndefined();

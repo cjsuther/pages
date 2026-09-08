@@ -56,7 +56,7 @@ describe('ComprarEntradas', () => {
       expect(screen.getByLabelText('NOMBRE Y APELLIDO')).toBeInTheDocument();
       expect(screen.getByLabelText('EMAIL')).toBeInTheDocument();
       expect(screen.getByLabelText('TELÉFONO (OPCIONAL)')).toBeInTheDocument();
-      expect(screen.getByLabelText('CANTIDAD')).toBeInTheDocument();
+      expect(screen.getByLabelText('Cantidad')).toBeInTheDocument();
     });
 
     it('el nombre y el email son obligatorios', () => {
@@ -119,7 +119,7 @@ describe('ComprarEntradas', () => {
     it('el total acompaña la cantidad elegida', async () => {
       montar();
 
-      fireEvent.change(screen.getByLabelText('CANTIDAD'), { target: { value: '3' } });
+      fireEvent.change(screen.getByLabelText('Cantidad'), { target: { value: '3' } });
 
       expect(await screen.findByText(/4\.500/)).toBeInTheDocument();
     });
@@ -183,7 +183,7 @@ describe('ComprarEntradas', () => {
     it('el botón dice que se reserva, no que se paga', () => {
       montar({ entradas: gratis });
 
-      expect(screen.getByRole('button', { name: 'CONFIRMAR RESERVA' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Confirmar reserva' })).toBeInTheDocument();
     });
 
     it('no menciona Mercado Pago', () => {
@@ -198,7 +198,7 @@ describe('ComprarEntradas', () => {
       montar({ entradas: gratis });
       completarFormulario();
 
-      fireEvent.click(screen.getByRole('button', { name: 'CONFIRMAR RESERVA' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Confirmar reserva' }));
 
       expect(await screen.findByText('ABC123DEF456')).toBeInTheDocument();
       expect(window.location.href).toBe('');
@@ -209,9 +209,9 @@ describe('ComprarEntradas', () => {
       montar({ entradas: gratis });
       completarFormulario();
 
-      fireEvent.click(screen.getByRole('button', { name: 'CONFIRMAR RESERVA' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Confirmar reserva' }));
 
-      expect(await screen.findByRole('link', { name: 'VER MI RESERVA' }))
+      expect(await screen.findByRole('link', { name: 'Ver mi reserva' }))
         .toHaveAttribute('href', '/entrada/ABC123DEF456');
     });
   });

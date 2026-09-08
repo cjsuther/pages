@@ -831,7 +831,7 @@ function PageEditor() {
                 return (
                   <div key={c.campo}>
                     <label htmlFor={`color-${c.campo}`} className="block text-sm font-semibold text-tinta mb-1.5">
-                      COLOR DE {c.etiqueta}
+                      Color de {c.etiqueta.toLowerCase()}
                     </label>
                     {/* Nunca deshabilitado: un input de color deshabilitado no
                         abre el selector del sistema, y el control queda muerto.
@@ -938,7 +938,7 @@ function PageEditor() {
                   disabled={invitingAdmin}
                   className="inline-flex items-center justify-center gap-2 rounded-full bg-verde text-verde-tinta px-6 py-3 font-semibold hover:bg-verde-oscuro hover:text-white transition-colors disabled:opacity-50"
                 >
-                  {invitingAdmin ? 'INVITANDO...' : 'INVITAR'}
+                  {invitingAdmin ? 'Invitando...' : 'Invitar'}
                 </button>
               </form>
 
@@ -962,7 +962,7 @@ function PageEditor() {
                         onClick={() => removeAdmin(a.id)}
                         className="text-red-700 hover:text-red-700 text-sm font-bold transition"
                       >
-                        {a.status === 'accepted' ? 'QUITAR' : 'CANCELAR'}
+                        {a.status === 'accepted' ? 'Quitar' : 'Cancelar'}
                       </button>
                     </div>
                   ))}
@@ -998,7 +998,7 @@ function PageEditor() {
                       <div className="flex gap-2 flex-shrink-0">
                         <button
                           onClick={() => openAcceptCollabModal(collab)}
-                          className="px-4 py-2 bg-green-700 text-tinta text-sm font-bold hover:bg-green-600 transition"
+                          className="rounded-full px-4 py-2 bg-verde text-verde-tinta text-sm font-semibold hover:bg-verde-oscuro hover:text-white transition-colors"
                         >
                           Aceptar
                         </button>
@@ -1113,7 +1113,7 @@ function PageEditor() {
                                 setTipoMedia('imagen');
                                 setShowLinkModal(true);
                               }}
-                              className="bg-green-600 text-tinta px-3 py-1 rounded-lg hover:bg-green-700 transition text-sm"
+                              className="rounded-full bg-verde text-verde-tinta px-3 py-1 hover:bg-verde-oscuro hover:text-white transition-colors text-sm"
                             >
                               {group.type === 'galeria' ? '+ Contenido' :
                                 group.type === 'eventos' ? '+ Evento' :
@@ -1210,7 +1210,7 @@ function PageEditor() {
                                       <span
                                         key={c.id}
                                         className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${
-                                          c.status === 'accepted' ? 'bg-green-100 text-green-700' :
+                                          c.status === 'accepted' ? 'bg-verde-claro text-verde-oscuro border border-verde-medio' :
                                           c.status === 'rejected' ? 'bg-red-100 text-red-600' :
                                           'bg-yellow-100 text-yellow-700'
                                         }`}
@@ -1379,14 +1379,14 @@ function PageEditor() {
         <div className="fixed inset-0 bg-tinta/40 backdrop-blur-sm flex items-start justify-center p-4 z-50 overflow-y-auto">
           <div className="bg-white border border-borde max-w-lg w-full p-10 my-8">
             <h2 className="text-3xl font-bold mb-8 text-tinta">
-              {selectedGroup.type === 'galeria' ? 'NUEVO CONTENIDO' : selectedGroup.type === 'eventos' ? 'NUEVO EVENTO' : 'NUEVO LINK'}
+              {selectedGroup.type === 'galeria' ? 'Nuevo contenido' : selectedGroup.type === 'eventos' ? 'Nuevo evento' : 'Nuevo link'}
             </h2>
             <form onSubmit={createLink} className="space-y-6">
               {selectedGroup.type !== 'galeria' && (
                 <>
                   <div>
                     <label className="block text-sm font-semibold text-tinta mb-1.5">
-                      {selectedGroup.type === 'eventos' ? 'NOMBRE DEL EVENTO' : 'TEXTO'}
+                      {selectedGroup.type === 'eventos' ? 'Nombre del evento' : 'Texto'}
                     </label>
                     <input
                       type="text"
@@ -1457,7 +1457,7 @@ function PageEditor() {
                   {tipoMedia !== 'imagen' && (
                     <div>
                       <label htmlFor="nueva-url-del-contenido" className="block text-sm font-semibold text-tinta mb-1.5">
-                        {tipoMedia === 'youtube' ? 'URL DEL VIDEO' : 'URL DEL CONTENIDO'}
+                        {tipoMedia === 'youtube' ? 'URL del video' : 'URL del contenido'}
                       </label>
                       <input
                         id="nueva-url-del-contenido"
@@ -1483,7 +1483,7 @@ function PageEditor() {
               <div>
                 <label className="block text-sm font-semibold text-tinta mb-1.5">
                   {selectedGroup.type !== 'galeria' ? 'IMAGEN (OPCIONAL)'
-                    : tipoMedia === 'imagen' ? 'IMAGEN'
+                    : tipoMedia === 'imagen' ? 'Imagen'
                     : 'PORTADA (OPCIONAL)'}
                 </label>
                 <div className="flex items-center gap-4">
@@ -1597,7 +1597,7 @@ function PageEditor() {
                       Selecciona una dirección de las sugerencias para capturar las coordenadas
                     </p>
                     {newLink.event_latitude && newLink.event_longitude && (
-                      <p className="text-xs text-green-500 mt-1">
+                      <p className="text-xs text-verde-oscuro mt-1">
                         ✓ Coordenadas capturadas correctamente
                       </p>
                     )}
@@ -1608,7 +1608,7 @@ function PageEditor() {
               {selectedGroup.type !== 'galeria' && (
                 <div>
                   <label className="block text-sm font-semibold text-tinta mb-1.5">
-                    {selectedGroup.type === 'eventos' ? 'DESCRIPCIÓN DEL EVENTO' : 'DESCRIPCIÓN (OPCIONAL)'}
+                    {selectedGroup.type === 'eventos' ? 'Descripción del evento' : 'Descripción (opcional)'}
                   </label>
                   <textarea
                     value={newLink.description}
@@ -1718,9 +1718,9 @@ function PageEditor() {
                 {page?.groups?.filter(g => g.type === 'eventos').length > 0 && (
                   <button
                     type="submit"
-                    className="flex-1 bg-green-700 text-tinta px-4 py-3 font-bold hover:bg-green-600 transition"
+                    className="flex-1 rounded-full bg-verde text-verde-tinta px-4 py-3 font-semibold hover:bg-verde-oscuro hover:text-white transition-colors"
                   >
-                    Aceptar
+                    Aceptar colaboración
                   </button>
                 )}
               </div>

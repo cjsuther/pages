@@ -346,7 +346,7 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio, enlace = null, onGuard
           className="inline-flex items-center justify-center gap-2 rounded-full bg-verde text-verde-tinta px-6 py-3 font-semibold hover:bg-verde-oscuro hover:text-white transition-colors disabled:opacity-50 flex items-center gap-2"
         >
           {guardando && <Loader2 className="w-4 h-4 animate-spin" />}
-          {guardando ? 'GUARDANDO...' : 'GUARDAR ENTRADAS'}
+          {guardando ? 'Guardando...' : 'Guardar entradas'}
         </button>
 
         {guardado && !guardando && (

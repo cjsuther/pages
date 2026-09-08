@@ -263,7 +263,7 @@ function SeccionEntradas({ pageId, apiUrl, token, emailContacto = '', onGuardarC
               className="bg-[#009ee3] text-tinta px-6 py-3 font-bold hover:opacity-90 transition disabled:opacity-50 flex items-center gap-2"
             >
               {conectando && <Loader2 className="w-4 h-4 animate-spin" />}
-              {conectando ? 'REDIRIGIENDO...' : 'CONECTAR CON MERCADO PAGO'}
+              {conectando ? 'Redirigiendo...' : 'Conectar con Mercado Pago'}
             </button>
 
             {!disponible && (

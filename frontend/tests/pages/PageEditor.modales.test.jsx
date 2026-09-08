@@ -76,11 +76,12 @@ async function render(datos = {}) {
     route: '/page/5',
     path: '/page/:id',
   });
-  await screen.findByRole('heading', { name: 'EDITOR' });
+  // El encabezado del editor es el nombre de la página, no la palabra "editor".
+  await screen.findByRole('heading', { name: 'Mi Página' });
 
   // Todo lo que prueba este archivo vive en la solapa de contenido.
-  fireEvent.click(screen.getByRole('button', { name: /^CONTENIDO/ }));
-  await screen.findByRole('heading', { name: 'GRUPOS DE LINKS' });
+  fireEvent.click(screen.getByRole('button', { name: /^Contenido/ }));
+  await screen.findByRole('heading', { name: 'Grupos de links' });
 
   return { ...resultado, ...mock };
 }
@@ -138,7 +139,7 @@ describe('PageEditor — modales de link', () => {
       const mock = await render({ page: pagina({ groups: [grupo({ id: 10, type: tipo })] }) });
       const etiqueta = tipo === 'galeria' ? '+ Contenido' : tipo === 'eventos' ? '+ Evento' : '+ Link';
       fireEvent.click(screen.getByRole('button', { name: etiqueta }));
-      await screen.findByRole('button', { name: 'CREAR' });
+      await screen.findByRole('button', { name: 'Crear' });
       return mock;
     }
 
@@ -197,8 +198,8 @@ describe('PageEditor — modales de link', () => {
     it('la galería ofrece título y link opcionales', async () => {
       await abrirAlta('galeria');
 
-      expect(screen.getByText('TÍTULO (OPCIONAL)')).toBeInTheDocument();
-      expect(screen.getByText('LINK (OPCIONAL)')).toBeInTheDocument();
+      expect(screen.getByText('Título (opcional)')).toBeInTheDocument();
+      expect(screen.getByText('Link (opcional)')).toBeInTheDocument();
     });
   });
 
@@ -210,23 +211,23 @@ describe('PageEditor — modales de link', () => {
     async function abrirAltaGaleria() {
       const mock = await render({ page: pagina({ groups: [grupo({ id: 10, type: 'galeria' })] }) });
       fireEvent.click(screen.getByRole('button', { name: '+ Contenido' }));
-      await screen.findByRole('button', { name: 'CREAR' });
+      await screen.findByRole('button', { name: 'Crear' });
       return mock;
     }
 
     it('la galería arranca en imagen', async () => {
       await abrirAltaGaleria();
 
-      expect(screen.getByLabelText('TIPO DE CONTENIDO')).toHaveValue('imagen');
-      expect(screen.queryByLabelText('URL DEL VIDEO')).not.toBeInTheDocument();
+      expect(screen.getByLabelText('Tipo de contenido')).toHaveValue('imagen');
+      expect(screen.queryByLabelText('URL del video')).not.toBeInTheDocument();
     });
 
     it('crea un video de YouTube', async () => {
       const { llamadas } = await abrirAltaGaleria();
 
-      fireEvent.change(screen.getByLabelText('TIPO DE CONTENIDO'), { target: { value: 'youtube' } });
-      fireEvent.change(screen.getByLabelText('URL DEL VIDEO'), { target: { value: VIDEO } });
-      fireEvent.submit(screen.getByRole('button', { name: 'CREAR' }).closest('form'));
+      fireEvent.change(screen.getByLabelText('Tipo de contenido'), { target: { value: 'youtube' } });
+      fireEvent.change(screen.getByLabelText('URL del video'), { target: { value: VIDEO } });
+      fireEvent.submit(screen.getByRole('button', { name: 'Crear' }).closest('form'));
 
       await waitFor(() => {
         const post = llamadas.find(
@@ -242,7 +243,7 @@ describe('PageEditor — modales de link', () => {
       await abrirAltaGaleria();
       expect(inputDeArchivoDelModal()).toBeRequired();
 
-      fireEvent.change(screen.getByLabelText('TIPO DE CONTENIDO'), { target: { value: 'youtube' } });
+      fireEvent.change(screen.getByLabelText('Tipo de contenido'), { target: { value: 'youtube' } });
 
       expect(inputDeArchivoDelModal()).not.toBeRequired();
     });
@@ -250,11 +251,11 @@ describe('PageEditor — modales de link', () => {
     it('no crea nada si el link no es del servicio elegido', async () => {
       const { llamadas } = await abrirAltaGaleria();
 
-      fireEvent.change(screen.getByLabelText('TIPO DE CONTENIDO'), { target: { value: 'youtube' } });
-      fireEvent.change(screen.getByLabelText('URL DEL VIDEO'), {
+      fireEvent.change(screen.getByLabelText('Tipo de contenido'), { target: { value: 'youtube' } });
+      fireEvent.change(screen.getByLabelText('URL del video'), {
         target: { value: 'https://www.instagram.com/p/CxAbC123_-x/' },
       });
-      fireEvent.submit(screen.getByRole('button', { name: 'CREAR' }).closest('form'));
+      fireEvent.submit(screen.getByRole('button', { name: 'Crear' }).closest('form'));
 
       await waitFor(() => {
         expect(window.alert).toHaveBeenCalledWith('Ese link no parece un video de YouTube');
@@ -270,22 +271,22 @@ describe('PageEditor — modales de link', () => {
       const listeners = instalarGoogleMaps();
       const mock = await render({ page: pagina({ groups: [grupo({ id: 20, type: 'eventos' })] }) });
       fireEvent.click(screen.getByRole('button', { name: '+ Evento' }));
-      await screen.findByRole('button', { name: 'CREAR' });
+      await screen.findByRole('button', { name: 'Crear' });
       return { ...mock, listeners };
     }
 
     it('el formulario pide fecha, hora y dirección', async () => {
       await abrirAltaEvento();
 
-      expect(screen.getByText('FECHA')).toBeInTheDocument();
-      expect(screen.getByText('HORA')).toBeInTheDocument();
+      expect(screen.getByText('Fecha')).toBeInTheDocument();
+      expect(screen.getByText('Hora')).toBeInTheDocument();
       expect(screen.getByPlaceholderText('Buscar dirección en Google Maps...')).toBeInTheDocument();
     });
 
     it('al elegir una dirección guarda las coordenadas y deja crear', async () => {
       const { listeners, llamadas } = await abrirAltaEvento();
 
-      const crear = screen.getByRole('button', { name: 'CREAR' });
+      const crear = screen.getByRole('button', { name: 'Crear' });
       const form = crear.closest('form');
 
       // Primero los campos obligatorios y recién después la dirección: cada

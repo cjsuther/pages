@@ -113,7 +113,7 @@ function Dashboard() {
           onClick={() => setShowCreateModal(true)}
           className="mb-16 inline-flex items-center justify-center gap-2 rounded-full bg-verde text-verde-tinta px-7 py-3.5 font-semibold hover:bg-verde-oscuro hover:text-white transition-colors"
         >
-          + NUEVA PÁGINA
+          Nueva página
         </button>
 
         {loading ? (

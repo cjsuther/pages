@@ -53,7 +53,7 @@ function instalarGoogleMaps() {
 async function render(respuesta = sinUbicacion, extra = {}) {
   const mock = mockFetch({ 'users/location.php': respuesta, ...extra });
   const resultado = renderConProviders(<LocationSettings />, { auth: autenticado() });
-  await screen.findByRole('heading', { name: 'Mi Ubicación' });
+  await screen.findByRole('button', { name: 'Usar mi ubicación actual' });
   return { ...resultado, ...mock };
 }
 
@@ -78,13 +78,13 @@ describe('LocationSettings', () => {
     it('no muestra ubicación seleccionada si no hay ninguna', async () => {
       await render(sinUbicacion);
 
-      expect(screen.queryByText('Ubicación seleccionada:')).not.toBeInTheDocument();
+      expect(screen.queryByText('Ubicación sin nombre')).not.toBeInTheDocument();
     });
 
     it('precarga la ubicación existente', async () => {
       await render(conUbicacion);
 
-      expect(await screen.findByText('Ubicación seleccionada:')).toBeInTheDocument();
+      expect(await screen.findByText(/-34\.6037/)).toBeInTheDocument();
       expect(screen.getByText('Buenos Aires')).toBeInTheDocument();
       expect(screen.getByRole('textbox')).toHaveValue('Buenos Aires');
     });
@@ -92,13 +92,13 @@ describe('LocationSettings', () => {
     it('muestra las coordenadas con seis decimales', async () => {
       await render(conUbicacion);
 
-      expect(await screen.findByText('Lat: -34.603700, Lng: -58.381600')).toBeInTheDocument();
+      expect(await screen.findByText('-34.6037, -58.3816')).toBeInTheDocument();
     });
 
     it('muestra "Sin nombre" si no hay etiqueta', async () => {
       await render({ latitude: -34.6, longitude: -58.4, location_name: null });
 
-      expect(await screen.findByText('Sin nombre')).toBeInTheDocument();
+      expect(await screen.findByText('Ubicación sin nombre')).toBeInTheDocument();
     });
 
     it('no rompe si falla la consulta', async () => {
@@ -114,14 +114,14 @@ describe('LocationSettings', () => {
     it('arranca deshabilitado sin ubicación', async () => {
       await render(sinUbicacion);
 
-      expect(screen.getByRole('button', { name: 'Guardar Ubicación' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Guardar ubicación' })).toBeDisabled();
     });
 
     it('se habilita con una ubicación cargada', async () => {
       await render(conUbicacion);
 
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: 'Guardar Ubicación' })).toBeEnabled();
+        expect(screen.getByRole('button', { name: 'Guardar ubicación' })).toBeEnabled();
       });
     });
   });
@@ -133,7 +133,7 @@ describe('LocationSettings', () => {
 
       fireEvent.click(screen.getByRole('button', { name: 'Usar mi ubicación actual' }));
 
-      expect(await screen.findByText('Tu navegador no soporta geolocalización')).toBeInTheDocument();
+      expect(await screen.findByText('Tu navegador no puede darnos la ubicación.')).toBeInTheDocument();
     });
 
     it('avisa si el usuario deniega el permiso', async () => {
@@ -143,7 +143,7 @@ describe('LocationSettings', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Usar mi ubicación actual' }));
 
       expect(
-        await screen.findByText('No se pudo obtener tu ubicación. Verifica los permisos.')
+        await screen.findByText('No pudimos acceder a tu ubicación. Revisá los permisos del navegador.')
       ).toBeInTheDocument();
     });
 
@@ -159,7 +159,7 @@ describe('LocationSettings', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Usar mi ubicación actual' }));
       });
 
-      expect(await screen.findByText('Ubicación obtenida correctamente')).toBeInTheDocument();
+      expect(await screen.findByText('Listo. Acordate de guardar.')).toBeInTheDocument();
       expect(screen.getByText('Av. Corrientes 1234, CABA')).toBeInTheDocument();
     });
 
@@ -174,8 +174,8 @@ describe('LocationSettings', () => {
       });
 
       // Sin nombre: se muestra la ubicación igual, identificada por coordenadas.
-      expect(await screen.findByText('Ubicación seleccionada:')).toBeInTheDocument();
-      expect(screen.getByText('Lat: -34.603700, Lng: -58.381600')).toBeInTheDocument();
+      expect(await screen.findByText(/-34\.6037/)).toBeInTheDocument();
+      expect(screen.getByText('-34.6037, -58.3816')).toBeInTheDocument();
     });
   });
 
@@ -187,7 +187,7 @@ describe('LocationSettings', () => {
       act(() => listeners.place_changed());
 
       expect(await screen.findByText('Av. Corrientes 1234')).toBeInTheDocument();
-      expect(screen.getByText('Lat: -34.603700, Lng: -58.381600')).toBeInTheDocument();
+      expect(screen.getByText('-34.6037, -58.3816')).toBeInTheDocument();
     });
 
     it('habilita el guardado', async () => {
@@ -197,7 +197,7 @@ describe('LocationSettings', () => {
       act(() => listeners.place_changed());
 
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: 'Guardar Ubicación' })).toBeEnabled();
+        expect(screen.getByRole('button', { name: 'Guardar ubicación' })).toBeEnabled();
       });
     });
   });
@@ -210,10 +210,10 @@ describe('LocationSettings', () => {
     it('envía POST con latitude, longitude y address', async () => {
       const { llamadas } = await render(conUbicacion);
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: 'Guardar Ubicación' })).toBeEnabled();
+        expect(screen.getByRole('button', { name: 'Guardar ubicación' })).toBeEnabled();
       });
 
-      fireEvent.click(screen.getByRole('button', { name: 'Guardar Ubicación' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar ubicación' }));
 
       await waitFor(() => {
         const guardado = llamadas.find((l) => l.options.method === 'POST');
@@ -229,10 +229,10 @@ describe('LocationSettings', () => {
     it('no usa PUT', async () => {
       const { llamadas } = await render(conUbicacion);
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: 'Guardar Ubicación' })).toBeEnabled();
+        expect(screen.getByRole('button', { name: 'Guardar ubicación' })).toBeEnabled();
       });
 
-      fireEvent.click(screen.getByRole('button', { name: 'Guardar Ubicación' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar ubicación' }));
 
       await waitFor(() => {
         expect(llamadas.find((l) => l.options.method === 'POST')).toBeDefined();
@@ -243,12 +243,12 @@ describe('LocationSettings', () => {
     it('confirma al usuario', async () => {
       await render(conUbicacion);
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: 'Guardar Ubicación' })).toBeEnabled();
+        expect(screen.getByRole('button', { name: 'Guardar ubicación' })).toBeEnabled();
       });
 
-      fireEvent.click(screen.getByRole('button', { name: 'Guardar Ubicación' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar ubicación' }));
 
-      expect(await screen.findByText('Ubicación guardada correctamente')).toBeInTheDocument();
+      expect(await screen.findByText('Ubicación guardada.')).toBeInTheDocument();
     });
 
     it('muestra el error que devuelve la API', async () => {
@@ -269,9 +269,9 @@ describe('LocationSettings', () => {
       );
 
       renderConProviders(<LocationSettings />, { auth: autenticado() });
-      await screen.findByRole('heading', { name: 'Mi Ubicación' });
+      await screen.findByRole('button', { name: 'Usar mi ubicación actual' });
 
-      const guardar = await screen.findByRole('button', { name: 'Guardar Ubicación' });
+      const guardar = await screen.findByRole('button', { name: 'Guardar ubicación' });
       await waitFor(() => expect(guardar).toBeEnabled());
 
       fireEvent.click(guardar);
@@ -282,13 +282,13 @@ describe('LocationSettings', () => {
     it('avisa si falla la red', async () => {
       await render(conUbicacion);
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: 'Guardar Ubicación' })).toBeEnabled();
+        expect(screen.getByRole('button', { name: 'Guardar ubicación' })).toBeEnabled();
       });
 
       global.fetch = vi.fn(() => Promise.reject(new Error('sin red')));
-      fireEvent.click(screen.getByRole('button', { name: 'Guardar Ubicación' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar ubicación' }));
 
-      expect(await screen.findByText('Error al guardar ubicación')).toBeInTheDocument();
+      expect(await screen.findByText('No se pudo guardar la ubicación.')).toBeInTheDocument();
     });
   });
 });

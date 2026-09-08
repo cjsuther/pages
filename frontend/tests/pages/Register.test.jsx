@@ -16,7 +16,7 @@ function espiarLocation() {
 function completar({ email = 'ana@test.local', password = 'secreto123', confirmar = 'secreto123' } = {}) {
   fireEvent.change(screen.getByLabelText('Email'), { target: { value: email } });
   fireEvent.change(screen.getByLabelText('Contraseña'), { target: { value: password } });
-  fireEvent.change(screen.getByLabelText('Confirmar Contraseña'), { target: { value: confirmar } });
+  fireEvent.change(screen.getByLabelText('Repetí la contraseña'), { target: { value: confirmar } });
 }
 
 describe('Register', () => {
@@ -35,20 +35,20 @@ describe('Register', () => {
     it('muestra el título', () => {
       renderConProviders(<Register />);
 
-      expect(screen.getByRole('heading', { name: 'Crear Cuenta' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Creá tu cuenta' })).toBeInTheDocument();
     });
 
     it('ofrece Google y Apple', () => {
       renderConProviders(<Register />);
 
-      expect(screen.getByRole('button', { name: /Registrarse con Google/ })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /Registrarse con Apple/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Continuar con Google/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Continuar con Apple/ })).toBeInTheDocument();
     });
 
     it('enlaza al login', () => {
       renderConProviders(<Register />);
 
-      expect(screen.getByRole('link', { name: 'Inicia sesión' })).toHaveAttribute('href', '/login');
+      expect(screen.getByRole('link', { name: 'Entrá' })).toHaveAttribute('href', '/login');
     });
 
     it('los tres campos son obligatorios', () => {
@@ -66,7 +66,7 @@ describe('Register', () => {
       renderConProviders(<Register />);
 
       completar({ password: 'secreto123', confirmar: 'otra-cosa' });
-      fireEvent.click(screen.getByRole('button', { name: 'Registrarse' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Crear cuenta' }));
 
       expect(await screen.findByText('Las contraseñas no coinciden')).toBeInTheDocument();
       expect(llamadas).toHaveLength(0);
@@ -77,7 +77,7 @@ describe('Register', () => {
       renderConProviders(<Register />);
 
       completar({ password: '12345', confirmar: '12345' });
-      fireEvent.click(screen.getByRole('button', { name: 'Registrarse' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Crear cuenta' }));
 
       expect(await screen.findByText('La contraseña debe tener al menos 6 caracteres')).toBeInTheDocument();
       expect(llamadas).toHaveLength(0);
@@ -90,7 +90,7 @@ describe('Register', () => {
       renderConProviders(<Register />);
 
       completar({ password: '123456', confirmar: '123456' });
-      fireEvent.click(screen.getByRole('button', { name: 'Registrarse' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Crear cuenta' }));
 
       await waitFor(() => expect(llamadas).toHaveLength(1));
     });
@@ -104,7 +104,7 @@ describe('Register', () => {
       renderConProviders(<Register />);
 
       completar({ email: 'nueva@test.local' });
-      fireEvent.click(screen.getByRole('button', { name: 'Registrarse' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Crear cuenta' }));
 
       await waitFor(() => {
         expect(llamadas[0].url).toBe(`${API_URL}/auth/register.php`);
@@ -121,7 +121,7 @@ describe('Register', () => {
       renderConProviders(<Register />);
 
       completar();
-      fireEvent.click(screen.getByRole('button', { name: 'Registrarse' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Crear cuenta' }));
 
       await waitFor(() => {
         expect(cuerpoDe(llamadas[0])).not.toHaveProperty('confirmPassword');
@@ -136,7 +136,7 @@ describe('Register', () => {
       renderConProviders(<Register />, { auth });
 
       completar();
-      fireEvent.click(screen.getByRole('button', { name: 'Registrarse' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Crear cuenta' }));
 
       await waitFor(() => {
         expect(auth.login).toHaveBeenCalledWith('tok-nuevo', usuario);
@@ -148,7 +148,7 @@ describe('Register', () => {
       renderConProviders(<Register />);
 
       completar();
-      fireEvent.click(screen.getByRole('button', { name: 'Registrarse' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Crear cuenta' }));
 
       await waitFor(() => {
         expect(window.gtag).toHaveBeenCalledWith('event', 'sign_up', { method: 'email' });
@@ -164,7 +164,7 @@ describe('Register', () => {
       renderConProviders(<Register />, { auth });
 
       completar();
-      fireEvent.click(screen.getByRole('button', { name: 'Registrarse' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Crear cuenta' }));
 
       expect(await screen.findByText('Email already exists')).toBeInTheDocument();
       expect(auth.login).not.toHaveBeenCalled();
@@ -175,7 +175,7 @@ describe('Register', () => {
       renderConProviders(<Register />);
 
       completar();
-      fireEvent.click(screen.getByRole('button', { name: 'Registrarse' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Crear cuenta' }));
 
       expect(await screen.findByText('Error al registrarse')).toBeInTheDocument();
     });
@@ -185,7 +185,7 @@ describe('Register', () => {
       renderConProviders(<Register />);
 
       completar();
-      fireEvent.click(screen.getByRole('button', { name: 'Registrarse' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Crear cuenta' }));
 
       expect(await screen.findByText('sin conexión')).toBeInTheDocument();
     });
@@ -196,25 +196,25 @@ describe('Register', () => {
 
       renderConProviders(<Register />);
       completar();
-      fireEvent.click(screen.getByRole('button', { name: 'Registrarse' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Crear cuenta' }));
 
-      const boton = await screen.findByRole('button', { name: 'Cargando...' });
+      const boton = await screen.findByRole('button', { name: 'Creando tu cuenta...' });
       expect(boton).toBeDisabled();
 
       resolver({ ok: true, status: 200, json: () => Promise.resolve({ token: 't', user: {} }) });
-      await waitFor(() => expect(screen.getByRole('button', { name: 'Registrarse' })).toBeEnabled());
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Crear cuenta' })).toBeEnabled());
     });
 
     it('limpia el error anterior al reintentar', async () => {
       renderConProviders(<Register />);
 
       completar({ confirmar: 'distinta' });
-      fireEvent.click(screen.getByRole('button', { name: 'Registrarse' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Crear cuenta' }));
       await screen.findByText('Las contraseñas no coinciden');
 
       mockFetch({ 'auth/register.php': { token: 'tok', user: {} } });
       completar();
-      fireEvent.click(screen.getByRole('button', { name: 'Registrarse' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Crear cuenta' }));
 
       await waitFor(() => {
         expect(screen.queryByText('Las contraseñas no coinciden')).not.toBeInTheDocument();
@@ -226,7 +226,7 @@ describe('Register', () => {
     it('Google redirige al endpoint de OAuth', () => {
       renderConProviders(<Register />);
 
-      fireEvent.click(screen.getByRole('button', { name: /Registrarse con Google/ }));
+      fireEvent.click(screen.getByRole('button', { name: /Continuar con Google/ }));
 
       expect(window.location.href).toBe(`${API_URL}/auth/google-login.php`);
       expect(window.gtag).toHaveBeenCalledWith('event', 'register_attempt', { method: 'google' });
@@ -235,7 +235,7 @@ describe('Register', () => {
     it('Apple redirige al endpoint de OAuth', () => {
       renderConProviders(<Register />);
 
-      fireEvent.click(screen.getByRole('button', { name: /Registrarse con Apple/ }));
+      fireEvent.click(screen.getByRole('button', { name: /Continuar con Apple/ }));
 
       expect(window.location.href).toBe(`${API_URL}/auth/apple-login.php`);
       expect(window.gtag).toHaveBeenCalledWith('event', 'register_attempt', { method: 'apple' });

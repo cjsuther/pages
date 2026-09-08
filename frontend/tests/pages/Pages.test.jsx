@@ -5,12 +5,18 @@ import Pages from '../../src/pages/Pages';
 import { renderAutenticado } from '../helpers/render';
 import { mockFetch } from '../helpers/api';
 
+/**
+ * La pantalla tiene tres etapas de lo mismo: encontrar a quién seguir,
+ * administrar lo que ya seguís y configurar los avisos. Antes eran dos solapas
+ * con la activación de notificaciones colgada arriba de todo.
+ */
 describe('Pages', () => {
   beforeEach(() => {
     window.gtag = vi.fn();
-    // Los dos paneles hijos consultan la API al montar.
+    // Los paneles hijos consultan la API al montar.
     mockFetch({
       'public/search.php': { results: [] },
+      'public/recent-pages.php': { pages: [] },
       'pages/following.php': { following: [], total: 0 },
       'notifications/index.php': { notifications: [], unread_count: 0 },
       'admins/index.php': { invitations: [] },
@@ -19,49 +25,60 @@ describe('Pages', () => {
     });
   });
 
-  it('muestra el título de la sección', () => {
+  const solapa = (nombre) => screen.getByRole('button', { name: new RegExp(`^${nombre}`) });
+
+  it('explica para qué sirve seguir una página', () => {
     renderAutenticado(<Pages />);
 
-    expect(screen.getByRole('heading', { name: 'PÁGINAS' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Seguí páginas y elegí de qué te enterás' })
+    ).toBeInTheDocument();
   });
 
-  it('ofrece las dos solapas', () => {
+  it('ofrece las tres solapas', () => {
     renderAutenticado(<Pages />);
 
-    expect(screen.getByRole('button', { name: 'BUSCAR PÁGINAS' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'PÁGINAS QUE SIGO' })).toBeInTheDocument();
+    expect(solapa('Descubrir')).toBeInTheDocument();
+    expect(solapa('Las que sigo')).toBeInTheDocument();
+    expect(solapa('Mis alertas')).toBeInTheDocument();
   });
 
-  it('arranca en la solapa de búsqueda', () => {
+  it('arranca en la de descubrir', () => {
     renderAutenticado(<Pages />);
 
-    const buscar = screen.getByRole('button', { name: 'BUSCAR PÁGINAS' });
-    expect(buscar.className).toContain('bg-white');
+    expect(solapa('Descubrir').className).toContain('bg-verde');
   });
 
   it('la solapa inactiva no está resaltada', () => {
     renderAutenticado(<Pages />);
 
-    const siguiendo = screen.getByRole('button', { name: 'PÁGINAS QUE SIGO' });
-    expect(siguiendo.className).not.toContain('bg-white');
+    expect(solapa('Las que sigo').className).not.toContain('bg-verde');
   });
 
-  it('cambia a la solapa de páginas seguidas', () => {
+  it('cambia a las páginas que sigo', () => {
     renderAutenticado(<Pages />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'PÁGINAS QUE SIGO' }));
+    fireEvent.click(solapa('Las que sigo'));
 
-    expect(screen.getByRole('button', { name: 'PÁGINAS QUE SIGO' }).className).toContain('bg-white');
-    expect(screen.getByRole('button', { name: 'BUSCAR PÁGINAS' }).className).not.toContain('bg-white');
+    expect(solapa('Las que sigo').className).toContain('bg-verde');
+    expect(solapa('Descubrir').className).not.toContain('bg-verde');
   });
 
-  it('vuelve a la solapa de búsqueda', () => {
+  it('cambia a las alertas', () => {
     renderAutenticado(<Pages />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'PÁGINAS QUE SIGO' }));
-    fireEvent.click(screen.getByRole('button', { name: 'BUSCAR PÁGINAS' }));
+    fireEvent.click(solapa('Mis alertas'));
 
-    expect(screen.getByRole('button', { name: 'BUSCAR PÁGINAS' }).className).toContain('bg-white');
+    expect(solapa('Mis alertas').className).toContain('bg-verde');
+  });
+
+  it('vuelve a descubrir', () => {
+    renderAutenticado(<Pages />);
+
+    fireEvent.click(solapa('Las que sigo'));
+    fireEvent.click(solapa('Descubrir'));
+
+    expect(solapa('Descubrir').className).toContain('bg-verde');
   });
 
   it('incluye la navegación principal', () => {

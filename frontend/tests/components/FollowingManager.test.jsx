@@ -27,12 +27,26 @@ function mockearSeguidas(following = []) {
   });
 }
 
+/**
+ * El componente ya no tiene título propio: el encabezado lo pone la pantalla
+ * que lo contiene. Se espera al buscador —o al cartel de vacío— para saber que
+ * terminó de cargar.
+ */
 async function render(following = []) {
   const mock = mockearSeguidas(following);
   const resultado = renderConProviders(<FollowingManager />, { auth: autenticado() });
-  await screen.findByRole('heading', { name: 'Páginas que Sigo' });
+
+  if (following.length === 0) {
+    await screen.findByText('Todavía no seguís ninguna página');
+  } else {
+    await screen.findByPlaceholderText(buscador(following.length));
+  }
+
   return { ...resultado, ...mock };
 }
+
+/** El placeholder dice cuántas seguís, así que depende del caso. */
+const buscador = (n) => `Buscar entre las ${n} que seguís...`;
 
 describe('FollowingManager', () => {
   beforeEach(() => {
@@ -52,13 +66,13 @@ describe('FollowingManager', () => {
     it('avisa si no sigue ninguna página', async () => {
       await render([]);
 
-      expect(screen.getByText('No sigues ninguna página todavía')).toBeInTheDocument();
+      expect(screen.getByText('Todavía no seguís ninguna página')).toBeInTheDocument();
     });
 
     it('no muestra el buscador sin páginas seguidas', async () => {
       await render([]);
 
-      expect(screen.queryByPlaceholderText('Buscar en tus páginas...')).not.toBeInTheDocument();
+      expect(screen.queryByPlaceholderText(/Buscar entre las/)).not.toBeInTheDocument();
     });
 
     it('lista las páginas seguidas', async () => {
@@ -80,7 +94,7 @@ describe('FollowingManager', () => {
       renderConProviders(<FollowingManager />, { auth: autenticado() });
 
       await waitFor(() => expect(console.error).toHaveBeenCalled());
-      expect(await screen.findByText('No sigues ninguna página todavía')).toBeInTheDocument();
+      expect(await screen.findByText('Todavía no seguís ninguna página')).toBeInTheDocument();
     });
   });
 
@@ -88,13 +102,13 @@ describe('FollowingManager', () => {
     it('indica cuando recibe todos los eventos', async () => {
       await render([seguida({ notify_all_events: true })]);
 
-      expect(screen.getByText('Todos los eventos')).toBeInTheDocument();
+      expect(screen.getByText('Todas sus fechas')).toBeInTheDocument();
     });
 
     it('indica cuando sólo recibe los cercanos', async () => {
       await render([seguida({ notify_all_events: false })]);
 
-      expect(screen.getByText('Solo eventos cercanos (30 km)')).toBeInTheDocument();
+      expect(screen.getByText('Solo a menos de 30 km')).toBeInTheDocument();
     });
   });
 
@@ -109,7 +123,7 @@ describe('FollowingManager', () => {
     it('filtra por título', async () => {
       await renderVarias();
 
-      fireEvent.change(screen.getByPlaceholderText('Buscar en tus páginas...'), {
+      fireEvent.change(screen.getByPlaceholderText(/Buscar entre las/), {
         target: { value: 'jazz' },
       });
 
@@ -122,7 +136,7 @@ describe('FollowingManager', () => {
     it('filtra por descripción', async () => {
       await renderVarias();
 
-      fireEvent.change(screen.getByPlaceholderText('Buscar en tus páginas...'), {
+      fireEvent.change(screen.getByPlaceholderText(/Buscar entre las/), {
         target: { value: 'recitales' },
       });
 
@@ -135,7 +149,7 @@ describe('FollowingManager', () => {
     it('ignora mayúsculas', async () => {
       await renderVarias();
 
-      fireEvent.change(screen.getByPlaceholderText('Buscar en tus páginas...'), {
+      fireEvent.change(screen.getByPlaceholderText(/Buscar entre las/), {
         target: { value: 'JAZZ' },
       });
 
@@ -145,24 +159,24 @@ describe('FollowingManager', () => {
     it('avisa si el filtro no encuentra nada', async () => {
       await renderVarias();
 
-      fireEvent.change(screen.getByPlaceholderText('Buscar en tus páginas...'), {
+      fireEvent.change(screen.getByPlaceholderText(/Buscar entre las/), {
         target: { value: 'cumbia' },
       });
 
       expect(
-        await screen.findByText('No se encontraron páginas con ese término de búsqueda')
+        await screen.findByText('Ninguna coincide con esa búsqueda')
       ).toBeInTheDocument();
     });
 
     it('no rompe con páginas sin descripción', async () => {
       await render([seguida({ description: null })]);
 
-      fireEvent.change(screen.getByPlaceholderText('Buscar en tus páginas...'), {
+      fireEvent.change(screen.getByPlaceholderText(/Buscar entre las/), {
         target: { value: 'algo' },
       });
 
       expect(
-        await screen.findByText('No se encontraron páginas con ese término de búsqueda')
+        await screen.findByText('Ninguna coincide con esa búsqueda')
       ).toBeInTheDocument();
     });
   });
@@ -171,43 +185,43 @@ describe('FollowingManager', () => {
     const muchas = (n) =>
       Array.from({ length: n }, (_, i) => seguida({ id: i + 1, title: `Página ${i + 1}` }));
 
-    it('no pagina con cinco o menos', async () => {
-      await render(muchas(5));
+    it('no pagina con ocho o menos', async () => {
+      await render(muchas(8));
 
       expect(screen.queryByRole('button', { name: 'Siguiente' })).not.toBeInTheDocument();
     });
 
-    it('muestra cinco por página', async () => {
-      await render(muchas(7));
+    it('muestra ocho por página', async () => {
+      await render(muchas(10));
 
       expect(screen.getByText('Página 1')).toBeInTheDocument();
-      expect(screen.getByText('Página 5')).toBeInTheDocument();
-      expect(screen.queryByText('Página 6')).not.toBeInTheDocument();
+      expect(screen.getByText('Página 8')).toBeInTheDocument();
+      expect(screen.queryByText('Página 9')).not.toBeInTheDocument();
     });
 
     it('indica en qué página está', async () => {
-      await render(muchas(7));
+      await render(muchas(10));
 
       expect(screen.getByText('Página 1 de 2')).toBeInTheDocument();
     });
 
     it('avanza a la página siguiente', async () => {
-      await render(muchas(7));
+      await render(muchas(10));
 
       fireEvent.click(screen.getByRole('button', { name: 'Siguiente' }));
 
-      expect(await screen.findByText('Página 6')).toBeInTheDocument();
+      expect(await screen.findByText('Página 9')).toBeInTheDocument();
       expect(screen.queryByText('Página 1')).not.toBeInTheDocument();
     });
 
     it('el botón anterior está deshabilitado en la primera', async () => {
-      await render(muchas(7));
+      await render(muchas(10));
 
       expect(screen.getByRole('button', { name: 'Anterior' })).toBeDisabled();
     });
 
     it('el botón siguiente está deshabilitado en la última', async () => {
-      await render(muchas(7));
+      await render(muchas(10));
 
       fireEvent.click(screen.getByRole('button', { name: 'Siguiente' }));
 
@@ -217,12 +231,12 @@ describe('FollowingManager', () => {
     });
 
     it('vuelve a la primera página al filtrar', async () => {
-      await render(muchas(7));
+      await render(muchas(10));
 
       fireEvent.click(screen.getByRole('button', { name: 'Siguiente' }));
-      await screen.findByText('Página 6');
+      await screen.findByText('Página 9');
 
-      fireEvent.change(screen.getByPlaceholderText('Buscar en tus páginas...'), {
+      fireEvent.change(screen.getByPlaceholderText(/Buscar entre las/), {
         target: { value: 'Página' },
       });
 
@@ -234,7 +248,7 @@ describe('FollowingManager', () => {
     it('abre el editor con la preferencia actual', async () => {
       await render([seguida({ notify_all_events: false })]);
 
-      fireEvent.click(screen.getByRole('button', { name: 'Editar' }));
+      fireEvent.click(screen.getByRole('button', { name: /^Avisos/ }));
 
       const [todos, cercanos] = screen.getAllByRole('radio');
       expect(cercanos).toBeChecked();
@@ -244,7 +258,7 @@ describe('FollowingManager', () => {
     it('guarda la preferencia elegida', async () => {
       const { llamadas } = await render([seguida({ id: 7, notify_all_events: true })]);
 
-      fireEvent.click(screen.getByRole('button', { name: 'Editar' }));
+      fireEvent.click(screen.getByRole('button', { name: /^Avisos/ }));
       fireEvent.click(screen.getAllByRole('radio')[1]);
       fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
 
@@ -261,21 +275,21 @@ describe('FollowingManager', () => {
     it('refleja el cambio en la lista', async () => {
       await render([seguida({ notify_all_events: true })]);
 
-      fireEvent.click(screen.getByRole('button', { name: 'Editar' }));
+      fireEvent.click(screen.getByRole('button', { name: /^Avisos/ }));
       fireEvent.click(screen.getAllByRole('radio')[1]);
       fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
 
-      expect(await screen.findByText('Solo eventos cercanos (30 km)')).toBeInTheDocument();
+      expect(await screen.findByText('Solo a menos de 30 km')).toBeInTheDocument();
     });
 
     it('se puede cancelar sin guardar', async () => {
       const { llamadas } = await render([seguida()]);
 
-      fireEvent.click(screen.getByRole('button', { name: 'Editar' }));
+      fireEvent.click(screen.getByRole('button', { name: /^Avisos/ }));
       fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
 
       await waitFor(() => {
-        expect(screen.queryByText('¿Qué eventos quieres recibir?')).not.toBeInTheDocument();
+        expect(screen.queryAllByRole('radio')).toHaveLength(0);
       });
       expect(llamadas.find((l) => l.options.method === 'POST')).toBeUndefined();
     });
@@ -287,7 +301,9 @@ describe('FollowingManager', () => {
 
       fireEvent.click(screen.getByRole('button', { name: 'Dejar de seguir' }));
 
-      expect(window.confirm).toHaveBeenCalledWith('¿Dejar de seguir esta página?');
+      expect(window.confirm).toHaveBeenCalledWith(
+        '¿Dejar de seguir a Rock del Sur? No vas a recibir más avisos de sus fechas.'
+      );
     });
 
     it('no hace nada si el usuario cancela', async () => {

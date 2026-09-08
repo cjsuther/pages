@@ -47,7 +47,7 @@ describe('SeccionRedes', () => {
       render(<SeccionRedes onGuardar={onGuardar} />);
 
       fireEvent.change(screen.getByLabelText('INSTAGRAM'), { target: { value: 'mi-banda' } });
-      fireEvent.click(screen.getByRole('button', { name: 'GUARDAR REDES' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar redes' }));
 
       await waitFor(() => {
         expect(onGuardar).toHaveBeenCalledWith([
@@ -62,7 +62,7 @@ describe('SeccionRedes', () => {
 
       fireEvent.change(screen.getByLabelText('INSTAGRAM'), { target: { value: 'mi-banda' } });
       fireEvent.change(screen.getByLabelText('TIKTOK'), { target: { value: '   ' } });
-      fireEvent.click(screen.getByRole('button', { name: 'GUARDAR REDES' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar redes' }));
 
       await waitFor(() => {
         expect(onGuardar.mock.calls[0][0]).toHaveLength(1);
@@ -79,7 +79,7 @@ describe('SeccionRedes', () => {
       );
 
       fireEvent.change(screen.getByLabelText('INSTAGRAM'), { target: { value: '' } });
-      fireEvent.click(screen.getByRole('button', { name: 'GUARDAR REDES' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar redes' }));
 
       await waitFor(() => {
         expect(onGuardar).toHaveBeenCalledWith([]);
@@ -91,7 +91,7 @@ describe('SeccionRedes', () => {
       render(<SeccionRedes onGuardar={onGuardar} />);
 
       fireEvent.change(screen.getByLabelText('WHATSAPP'), { target: { value: '+54 9 11 2233-4455' } });
-      fireEvent.click(screen.getByRole('button', { name: 'GUARDAR REDES' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar redes' }));
 
       await waitFor(() => {
         expect(onGuardar).toHaveBeenCalledWith([
@@ -104,7 +104,7 @@ describe('SeccionRedes', () => {
       render(<SeccionRedes onGuardar={vi.fn()} />);
 
       fireEvent.change(screen.getByLabelText('INSTAGRAM'), { target: { value: 'yo' } });
-      fireEvent.click(screen.getByRole('button', { name: 'GUARDAR REDES' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar redes' }));
 
       expect(await screen.findByText('Guardado')).toBeInTheDocument();
     });
@@ -113,7 +113,7 @@ describe('SeccionRedes', () => {
       render(<SeccionRedes onGuardar={vi.fn()} />);
 
       fireEvent.change(screen.getByLabelText('INSTAGRAM'), { target: { value: 'yo' } });
-      fireEvent.click(screen.getByRole('button', { name: 'GUARDAR REDES' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar redes' }));
       await screen.findByText('Guardado');
 
       fireEvent.change(screen.getByLabelText('TIKTOK'), { target: { value: 'yo' } });
@@ -124,7 +124,7 @@ describe('SeccionRedes', () => {
     it('deshabilita el botón mientras guarda', () => {
       render(<SeccionRedes onGuardar={vi.fn()} guardando />);
 
-      expect(screen.getByRole('button', { name: 'GUARDANDO...' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Guardando...' })).toBeDisabled();
     });
   });
 

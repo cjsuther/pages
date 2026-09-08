@@ -28,7 +28,7 @@ describe('FollowButton', () => {
         auth: crearAuth({ token: 'tok', user: usuarioDePrueba() }),
       });
 
-      const boton = await screen.findByRole('button', { name: 'SEGUIR' });
+      const boton = await screen.findByRole('button', { name: 'Seguir' });
       expect(boton).toHaveStyle({ backgroundColor: '#7c3aed' });
     });
 
@@ -40,7 +40,7 @@ describe('FollowButton', () => {
         auth: crearAuth({ token: 'tok', user: usuarioDePrueba() }),
       });
 
-      const boton = await screen.findByRole('button', { name: 'SIGUIENDO' });
+      const boton = await screen.findByRole('button', { name: 'Siguiendo' });
       expect(boton).toHaveStyle({ backgroundColor: '#7c3aed' });
     });
 
@@ -52,7 +52,7 @@ describe('FollowButton', () => {
         auth: crearAuth({ token: 'tok', user: usuarioDePrueba() }),
       });
 
-      const boton = await screen.findByRole('button', { name: 'SEGUIR' });
+      const boton = await screen.findByRole('button', { name: 'Seguir' });
       expect(boton.getAttribute('style')).toBeFalsy();
     });
   });
@@ -68,17 +68,17 @@ describe('FollowButton', () => {
 
       renderConProviders(<FollowButton pageId={5} />);
 
-      expect(await screen.findByRole('button', { name: 'SEGUIR' })).toBeInTheDocument();
+      expect(await screen.findByRole('button', { name: 'Seguir' })).toBeInTheDocument();
       expect(llamadas).toHaveLength(0);
     });
 
     it('manda al login al intentar seguir', async () => {
       renderConProviders(<FollowButton pageId={5} />);
 
-      fireEvent.click(await screen.findByRole('button', { name: 'SEGUIR' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Seguir' }));
 
       await waitFor(() => {
-        expect(screen.queryByText('¿Qué eventos quieres recibir?')).not.toBeInTheDocument();
+        expect(screen.queryByText('¿De qué querés enterarte?')).not.toBeInTheDocument();
       });
     });
   });
@@ -100,7 +100,7 @@ describe('FollowButton', () => {
 
       renderConProviders(<FollowButton pageId={5} />, { auth: autenticado() });
 
-      expect(await screen.findByRole('button', { name: 'SEGUIR' })).toBeInTheDocument();
+      expect(await screen.findByRole('button', { name: 'Seguir' })).toBeInTheDocument();
     });
 
     it('muestra SIGUIENDO si ya lo sigue', async () => {
@@ -108,7 +108,7 @@ describe('FollowButton', () => {
 
       renderConProviders(<FollowButton pageId={5} />, { auth: autenticado() });
 
-      expect(await screen.findByRole('button', { name: 'SIGUIENDO' })).toBeInTheDocument();
+      expect(await screen.findByRole('button', { name: 'Siguiendo' })).toBeInTheDocument();
     });
 
     it('no muestra nada mientras carga', () => {
@@ -124,7 +124,7 @@ describe('FollowButton', () => {
 
       renderConProviders(<FollowButton pageId={5} />, { auth: autenticado() });
 
-      expect(await screen.findByRole('button', { name: 'SEGUIR' })).toBeInTheDocument();
+      expect(await screen.findByRole('button', { name: 'Seguir' })).toBeInTheDocument();
     });
   });
 
@@ -132,15 +132,15 @@ describe('FollowButton', () => {
     async function abrirModal() {
       mockFetch({ 'pages/follow.php': { is_following: false } });
       renderConProviders(<FollowButton pageId={5} />, { auth: autenticado() });
-      fireEvent.click(await screen.findByRole('button', { name: 'SEGUIR' }));
-      await screen.findByText('¿Qué eventos quieres recibir?');
+      fireEvent.click(await screen.findByRole('button', { name: 'Seguir' }));
+      await screen.findByText('¿De qué querés enterarte?');
     }
 
     it('abre el modal de preferencias', async () => {
       await abrirModal();
 
-      expect(screen.getByText('Todos los eventos')).toBeInTheDocument();
-      expect(screen.getByText('Solo eventos cercanos')).toBeInTheDocument();
+      expect(screen.getByText('Todas sus fechas')).toBeInTheDocument();
+      expect(screen.getByText('Solo si es cerca')).toBeInTheDocument();
     });
 
     it('viene con "todos los eventos" preseleccionado', async () => {
@@ -163,13 +163,13 @@ describe('FollowButton', () => {
     it('se cierra con Cancelar sin enviar nada', async () => {
       const { llamadas } = mockFetch({ 'pages/follow.php': { is_following: false } });
       renderConProviders(<FollowButton pageId={5} />, { auth: autenticado() });
-      fireEvent.click(await screen.findByRole('button', { name: 'SEGUIR' }));
-      await screen.findByText('¿Qué eventos quieres recibir?');
+      fireEvent.click(await screen.findByRole('button', { name: 'Seguir' }));
+      await screen.findByText('¿De qué querés enterarte?');
 
       fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
 
       await waitFor(() => {
-        expect(screen.queryByText('¿Qué eventos quieres recibir?')).not.toBeInTheDocument();
+        expect(screen.queryByText('¿De qué querés enterarte?')).not.toBeInTheDocument();
       });
       expect(llamadas.filter((l) => l.options.method === 'POST')).toHaveLength(0);
     });
@@ -177,8 +177,8 @@ describe('FollowButton', () => {
     it('envía la preferencia "todos" al confirmar', async () => {
       const { llamadas } = mockFetch({ 'pages/follow.php': { is_following: false } });
       renderConProviders(<FollowButton pageId={5} />, { auth: autenticado() });
-      fireEvent.click(await screen.findByRole('button', { name: 'SEGUIR' }));
-      await screen.findByText('¿Qué eventos quieres recibir?');
+      fireEvent.click(await screen.findByRole('button', { name: 'Seguir' }));
+      await screen.findByText('¿De qué querés enterarte?');
 
       fireEvent.click(screen.getByRole('button', { name: 'Seguir página' }));
 
@@ -187,7 +187,7 @@ describe('FollowButton', () => {
         expect(cuerpoDe(post)).toEqual({
           page_id: 5,
           notify_all_events: true,
-          max_distance_km: 30,
+          max_distance_km: 50,
         });
       });
     });
@@ -195,8 +195,8 @@ describe('FollowButton', () => {
     it('envía la preferencia "cercanos" al confirmar', async () => {
       const { llamadas } = mockFetch({ 'pages/follow.php': { is_following: false } });
       renderConProviders(<FollowButton pageId={5} />, { auth: autenticado() });
-      fireEvent.click(await screen.findByRole('button', { name: 'SEGUIR' }));
-      await screen.findByText('¿Qué eventos quieres recibir?');
+      fireEvent.click(await screen.findByRole('button', { name: 'Seguir' }));
+      await screen.findByText('¿De qué querés enterarte?');
 
       fireEvent.click(screen.getAllByRole('radio')[1]);
       fireEvent.click(screen.getByRole('button', { name: 'Seguir página' }));
@@ -210,12 +210,12 @@ describe('FollowButton', () => {
     it('pasa a SIGUIENDO tras confirmar', async () => {
       mockFetch({ 'pages/follow.php': { is_following: false } });
       renderConProviders(<FollowButton pageId={5} />, { auth: autenticado() });
-      fireEvent.click(await screen.findByRole('button', { name: 'SEGUIR' }));
-      await screen.findByText('¿Qué eventos quieres recibir?');
+      fireEvent.click(await screen.findByRole('button', { name: 'Seguir' }));
+      await screen.findByText('¿De qué querés enterarte?');
 
       fireEvent.click(screen.getByRole('button', { name: 'Seguir página' }));
 
-      expect(await screen.findByRole('button', { name: 'SIGUIENDO' })).toBeInTheDocument();
+      expect(await screen.findByRole('button', { name: 'Siguiendo' })).toBeInTheDocument();
     });
   });
 
@@ -223,34 +223,43 @@ describe('FollowButton', () => {
     async function renderSiguiendo() {
       const mock = mockFetch({ 'pages/follow.php': { is_following: true, notify_all_events: true } });
       renderConProviders(<FollowButton pageId={5} />, { auth: autenticado() });
-      await screen.findByRole('button', { name: 'SIGUIENDO' });
+      await screen.findByRole('button', { name: 'Siguiendo' });
       return mock;
     }
 
-    it('pide confirmación', async () => {
+    /**
+     * Siguiendo ya no dispara un confirm(): abre el mismo panel donde se
+     * eligen los avisos. Dejar de seguir es una acción más de ese panel, así
+     * que se puede cambiar la preferencia sin arriesgarse a perder el
+     * seguimiento de un clic.
+     */
+    it('al tocar Siguiendo abre los avisos, no un confirm', async () => {
       await renderSiguiendo();
 
-      fireEvent.click(screen.getByRole('button', { name: 'SIGUIENDO' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Siguiendo' }));
 
-      expect(window.confirm).toHaveBeenCalledWith('¿Dejar de seguir esta página?');
+      expect(await screen.findByText('Tus avisos de esta página')).toBeInTheDocument();
+      expect(window.confirm).not.toHaveBeenCalled();
     });
 
-    it('no hace nada si el usuario cancela', async () => {
-      window.confirm = vi.fn(() => false);
+    it('cerrar el panel no deja de seguir', async () => {
       const { llamadas } = await renderSiguiendo();
 
-      fireEvent.click(screen.getByRole('button', { name: 'SIGUIENDO' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Siguiendo' }));
+      await screen.findByText('Tus avisos de esta página');
+      fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
 
       await waitFor(() => {
         expect(llamadas.filter((l) => l.options.method === 'DELETE')).toHaveLength(0);
       });
-      expect(screen.getByRole('button', { name: 'SIGUIENDO' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Siguiendo' })).toBeInTheDocument();
     });
 
     it('envía el DELETE con el id de la página', async () => {
       const { llamadas } = await renderSiguiendo();
 
-      fireEvent.click(screen.getByRole('button', { name: 'SIGUIENDO' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Siguiendo' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Dejar de seguir' }));
 
       await waitFor(() => {
         const del = llamadas.find((l) => l.options.method === 'DELETE');
@@ -259,24 +268,29 @@ describe('FollowButton', () => {
       });
     });
 
-    it('vuelve a SEGUIR al dejar de seguir', async () => {
+    it('vuelve a Seguir al dejar de seguir', async () => {
       await renderSiguiendo();
 
-      fireEvent.click(screen.getByRole('button', { name: 'SIGUIENDO' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Siguiendo' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Dejar de seguir' }));
 
-      expect(await screen.findByRole('button', { name: 'SEGUIR' })).toBeInTheDocument();
+      expect(await screen.findByRole('button', { name: 'Seguir' })).toBeInTheDocument();
     });
 
-    it('avisa si falla', async () => {
+    /** Si el DELETE falla se sigue siguiendo: el botón no miente. */
+    it('si falla, sigue mostrando Siguiendo', async () => {
       mockFetch({ 'pages/follow.php': { is_following: true, notify_all_events: true } });
       renderConProviders(<FollowButton pageId={5} />, { auth: autenticado() });
-      await screen.findByRole('button', { name: 'SIGUIENDO' });
+      await screen.findByRole('button', { name: 'Siguiendo' });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Siguiendo' }));
+      const dejar = await screen.findByRole('button', { name: 'Dejar de seguir' });
 
       global.fetch = vi.fn(() => Promise.reject(new Error('sin red')));
-      fireEvent.click(screen.getByRole('button', { name: 'SIGUIENDO' }));
+      fireEvent.click(dejar);
 
       await waitFor(() => {
-        expect(window.alert).toHaveBeenCalledWith('Error al dejar de seguir la página');
+        expect(screen.getByRole('button', { name: 'Siguiendo' })).toBeInTheDocument();
       });
     });
   });
@@ -286,11 +300,10 @@ describe('FollowButton', () => {
       mockFetch({ 'pages/follow.php': { is_following: true, notify_all_events: false } });
 
       renderConProviders(<FollowButton pageId={5} />, { auth: autenticado() });
-      await screen.findByRole('button', { name: 'SIGUIENDO' });
+      await screen.findByRole('button', { name: 'Siguiendo' });
 
-      // Se deja de seguir y se vuelve a abrir el modal: conserva la preferencia.
-      fireEvent.click(screen.getByRole('button', { name: 'SIGUIENDO' }));
-      fireEvent.click(await screen.findByRole('button', { name: 'SEGUIR' }));
+      // El panel se abre desde Siguiendo y muestra lo que estaba guardado.
+      fireEvent.click(screen.getByRole('button', { name: 'Siguiendo' }));
 
       const [todos, cercanos] = await screen.findAllByRole('radio');
       expect(cercanos).toBeChecked();

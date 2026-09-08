@@ -131,7 +131,7 @@ describe('LocationIndicator', () => {
     it('se abre al tocar el indicador', async () => {
       await abrir();
 
-      expect(screen.getByRole('heading', { name: 'UBICACIÓN' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Ubicación' })).toBeInTheDocument();
     });
 
     it('explica para qué sirve', async () => {
@@ -143,14 +143,14 @@ describe('LocationIndicator', () => {
     it('ofrece las dos formas de cargar la ubicación', async () => {
       await abrir();
 
-      expect(screen.getByRole('button', { name: /USAR MI UBICACIÓN ACTUAL/ })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'GUARDAR DIRECCIÓN' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Usar mi ubicación actual/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Guardar dirección' })).toBeInTheDocument();
     });
 
     it('el botón de guardar arranca deshabilitado', async () => {
       await abrir();
 
-      expect(screen.getByRole('button', { name: 'GUARDAR DIRECCIÓN' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Guardar dirección' })).toBeDisabled();
     });
 
     it('se cierra con la X', async () => {
@@ -160,7 +160,7 @@ describe('LocationIndicator', () => {
       fireEvent.click(cerrar);
 
       await waitFor(() => {
-        expect(screen.queryByRole('heading', { name: 'UBICACIÓN' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('heading', { name: 'Ubicación' })).not.toBeInTheDocument();
       });
     });
   });
@@ -174,7 +174,7 @@ describe('LocationIndicator', () => {
 
       const gps = instalarGeolocalizacion(opciones);
       await act(async () => {
-        fireEvent.click(screen.getByRole('button', { name: /USAR MI UBICACIÓN ACTUAL/ }));
+        fireEvent.click(screen.getByRole('button', { name: /Usar mi ubicación actual/ }));
       });
       return { ...mock, gps };
     }
@@ -208,7 +208,7 @@ describe('LocationIndicator', () => {
       await abrirYUsarGPS();
 
       await waitFor(() => {
-        expect(screen.queryByRole('heading', { name: 'UBICACIÓN' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('heading', { name: 'Ubicación' })).not.toBeInTheDocument();
       });
     });
 
@@ -229,7 +229,7 @@ describe('LocationIndicator', () => {
       fireEvent.click(screen.getAllByRole('button')[0]);
 
       delete navigator.geolocation;
-      fireEvent.click(screen.getByRole('button', { name: /USAR MI UBICACIÓN ACTUAL/ }));
+      fireEvent.click(screen.getByRole('button', { name: /Usar mi ubicación actual/ }));
 
       expect(window.alert).toHaveBeenCalledWith('Tu navegador no soporta geolocalización');
     });
@@ -251,7 +251,7 @@ describe('LocationIndicator', () => {
       act(() => listeners.place_changed());
 
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: 'GUARDAR DIRECCIÓN' })).toBeEnabled();
+        expect(screen.getByRole('button', { name: 'Guardar dirección' })).toBeEnabled();
       });
     });
 
@@ -259,7 +259,7 @@ describe('LocationIndicator', () => {
       const { listeners, llamadas } = await abrirConGoogle();
 
       act(() => listeners.place_changed());
-      fireEvent.click(screen.getByRole('button', { name: 'GUARDAR DIRECCIÓN' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar dirección' }));
 
       await waitFor(() => {
         const post = llamadas.find((l) => l.options.method === 'POST');
@@ -275,7 +275,7 @@ describe('LocationIndicator', () => {
       const { listeners } = await abrirConGoogle();
 
       act(() => listeners.place_changed());
-      fireEvent.click(screen.getByRole('button', { name: 'GUARDAR DIRECCIÓN' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar dirección' }));
 
       await waitFor(() => {
         expect(window.alert).toHaveBeenCalledWith('Ubicación guardada correctamente');
@@ -287,7 +287,7 @@ describe('LocationIndicator', () => {
 
       act(() => listeners.place_changed());
       global.fetch = vi.fn(() => Promise.reject(new Error('sin red')));
-      fireEvent.click(screen.getByRole('button', { name: 'GUARDAR DIRECCIÓN' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar dirección' }));
 
       await waitFor(() => {
         expect(window.alert).toHaveBeenCalledWith('Error al guardar la ubicación');

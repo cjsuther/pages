@@ -77,13 +77,14 @@ async function render(datos = {}, seccion = null) {
     route: '/page/5',
     path: '/page/:id',
   });
-  await screen.findByRole('heading', { name: 'EDITOR' });
+  // El encabezado del editor es el nombre de la página, no la palabra "editor".
+  await screen.findByRole('heading', { name: 'Mi Página' });
 
   if (seccion) {
     // El nombre accesible puede incluir el badge de pendientes ("CONTENIDO 1").
     fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${seccion}`) }));
     await screen.findByRole('heading', {
-      name: seccion === 'CONTENIDO' ? 'GRUPOS DE LINKS' : seccion,
+      name: seccion === 'Contenido' ? 'Grupos de links' : seccion,
     });
   }
 
@@ -165,8 +166,8 @@ describe('PageEditor — flujos de edición', () => {
     it('ofrece los seis colores', async () => {
       await render();
 
-      ['TEXTO', 'FONDO', 'ACENTO', 'TÍTULOS', 'BOTONES', 'TARJETAS'].forEach((etiqueta) => {
-        expect(screen.getByLabelText(`COLOR DE ${etiqueta}`)).toBeInTheDocument();
+      ['texto', 'fondo', 'acento', 'títulos', 'botones', 'tarjetas'].forEach((etiqueta) => {
+        expect(screen.getByLabelText(`Color de ${etiqueta}`)).toBeInTheDocument();
       });
     });
 
@@ -176,12 +177,12 @@ describe('PageEditor — flujos de edición', () => {
      * los tests no lo vieron, porque fireEvent.change funciona igual sobre un
      * input deshabilitado.
      */
-    it.each(['TÍTULOS', 'BOTONES', 'TARJETAS'])(
+    it.each(['títulos', 'botones', 'tarjetas'])(
       'el selector de %s se puede abrir aunque esté en automático',
       async (etiqueta) => {
         await render({ page: pagina({ secondary_color: null, title_color: null, card_color: null }) });
 
-        expect(screen.getByLabelText(`COLOR DE ${etiqueta}`)).not.toBeDisabled();
+        expect(screen.getByLabelText(`Color de ${etiqueta}`)).not.toBeDisabled();
       }
     );
 
@@ -190,7 +191,7 @@ describe('PageEditor — flujos de edición', () => {
         page: pagina({ primary_color: '#abcdef', secondary_color: null }),
       });
 
-      fireEvent.change(screen.getByLabelText('COLOR DE BOTONES'), { target: { value: '#00ff00' } });
+      fireEvent.change(screen.getByLabelText('Color de botones'), { target: { value: '#00ff00' } });
 
       await waitFor(() => {
         expect(cuerpoDe(put(llamadas, 'pages/detail.php'))).toEqual({ secondary_color: '#00ff00' });
@@ -200,7 +201,7 @@ describe('PageEditor — flujos de edición', () => {
     it('guarda un color opcional cuando se elige', async () => {
       const { llamadas } = await render({ page: pagina({ secondary_color: '#123456' }) });
 
-      fireEvent.change(screen.getByLabelText('COLOR DE BOTONES'), { target: { value: '#00ff00' } });
+      fireEvent.change(screen.getByLabelText('Color de botones'), { target: { value: '#00ff00' } });
 
       await waitFor(() => {
         expect(cuerpoDe(put(llamadas, 'pages/detail.php'))).toEqual({ secondary_color: '#00ff00' });
@@ -213,7 +214,7 @@ describe('PageEditor — flujos de edición', () => {
         page: pagina({ primary_color: '#111111', secondary_color: null }),
       });
 
-      fireEvent.change(screen.getByLabelText('COLOR DE ACENTO'), { target: { value: '#222222' } });
+      fireEvent.change(screen.getByLabelText('Color de acento'), { target: { value: '#222222' } });
 
       await waitFor(() => {
         expect(cuerpoDe(put(llamadas, 'pages/detail.php'))).toEqual({ primary_color: '#222222' });
@@ -236,13 +237,13 @@ describe('PageEditor — flujos de edición', () => {
     it('en automático el selector muestra el color que rige', async () => {
       await render({ page: pagina({ primary_color: '#abcdef', secondary_color: null }) });
 
-      expect(screen.getByLabelText('COLOR DE BOTONES')).toHaveValue('#abcdef');
+      expect(screen.getByLabelText('Color de botones')).toHaveValue('#abcdef');
     });
 
     it('elegido, muestra el elegido y ofrece volver atrás', async () => {
       await render({ page: pagina({ primary_color: '#abcdef', secondary_color: '#00ff00' }) });
 
-      expect(screen.getByLabelText('COLOR DE BOTONES')).toHaveValue('#00ff00');
+      expect(screen.getByLabelText('Color de botones')).toHaveValue('#00ff00');
       expect(screen.getByRole('button', { name: 'Volver al automático' })).toBeInTheDocument();
     });
 
@@ -258,7 +259,7 @@ describe('PageEditor — flujos de edición', () => {
         page: pagina({ dominio: null }),
       });
 
-      const campo = screen.getByLabelText('DOMINIO PROPIO (OPCIONAL)');
+      const campo = screen.getByLabelText('Dominio propio (opcional)');
       fireEvent.change(campo, { target: { value: 'https://www.maxipeque.com/' } });
       fireEvent.blur(campo);
 
@@ -271,7 +272,7 @@ describe('PageEditor — flujos de edición', () => {
     it('vaciarlo es la forma de dejar de usar un dominio propio', async () => {
       const { llamadas } = await render({ page: pagina({ dominio: 'maxipeque.com' }) });
 
-      const campo = screen.getByLabelText('DOMINIO PROPIO (OPCIONAL)');
+      const campo = screen.getByLabelText('Dominio propio (opcional)');
       fireEvent.change(campo, { target: { value: '' } });
       fireEvent.blur(campo);
 
@@ -305,7 +306,7 @@ describe('PageEditor — flujos de edición', () => {
         return original(url, opciones);
       });
 
-      const campo = screen.getByLabelText('DOMINIO PROPIO (OPCIONAL)');
+      const campo = screen.getByLabelText('Dominio propio (opcional)');
       fireEvent.change(campo, { target: { value: 'maxipeque.com' } });
       fireEvent.blur(campo);
 
@@ -483,7 +484,7 @@ describe('PageEditor — flujos de edición', () => {
      * apilan debajo del título cuando no entran.
      */
     it('las acciones del grupo existen una sola vez y siempre visibles', async () => {
-      await render({ page: unGrupo() }, 'CONTENIDO');
+      await render({ page: unGrupo() }, 'Contenido');
 
       expect(screen.getAllByText('Editar Título')).toHaveLength(1);
       expect(screen.getAllByText('Eliminar')).toHaveLength(1);
@@ -493,7 +494,7 @@ describe('PageEditor — flujos de edición', () => {
     it('un título largo no desplaza las acciones', async () => {
       await render({
         page: unGrupo({ title: 'Un título larguísimo que en un teléfono no entra de ninguna manera' }),
-      }, 'CONTENIDO');
+      }, 'Contenido');
 
       const titulo = screen.getByRole('heading', { level: 3 });
 
@@ -502,14 +503,14 @@ describe('PageEditor — flujos de edición', () => {
     });
 
     it('edita el título del grupo', async () => {
-      const { llamadas } = await render({ page: unGrupo() }, 'CONTENIDO');
+      const { llamadas } = await render({ page: unGrupo() }, 'Contenido');
 
       fireEvent.click(accionDeGrupo('Editar Título'));
 
-      await screen.findByRole('heading', { name: 'EDITAR GRUPO' });
+      await screen.findByRole('heading', { name: 'Editar grupo' });
       const input = document.querySelector('form input[type="text"]');
       fireEvent.change(input, { target: { value: 'Otro Título' } });
-      fireEvent.click(screen.getByRole('button', { name: 'GUARDAR' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
 
       await waitFor(() => {
         expect(cuerpoDe(put(llamadas, 'groups/detail.php'))).toEqual({ title: 'Otro Título' });
@@ -517,7 +518,7 @@ describe('PageEditor — flujos de edición', () => {
     });
 
     it('elimina el grupo tras confirmar', async () => {
-      const { llamadas } = await render({ page: unGrupo() }, 'CONTENIDO');
+      const { llamadas } = await render({ page: unGrupo() }, 'Contenido');
 
       fireEvent.click(accionDeGrupo('Eliminar'));
 
@@ -532,7 +533,7 @@ describe('PageEditor — flujos de edición', () => {
 
     it('no elimina el grupo si se cancela', async () => {
       window.confirm = vi.fn(() => false);
-      const { llamadas } = await render({ page: unGrupo() }, 'CONTENIDO');
+      const { llamadas } = await render({ page: unGrupo() }, 'Contenido');
 
       fireEvent.click(accionDeGrupo('Eliminar'));
 
@@ -552,10 +553,10 @@ describe('PageEditor — flujos de edición', () => {
       pagina({ groups: [grupo({ id: 10, type: 'links', links: [link({ id: 100, text: 'Instagram' })] })] });
 
     it('crea un link con sus datos', async () => {
-      const { llamadas } = await render({ page: pagina({ groups: [grupo({ id: 10 })] }) }, 'CONTENIDO');
+      const { llamadas } = await render({ page: pagina({ groups: [grupo({ id: 10 })] }) }, 'Contenido');
 
       fireEvent.click(screen.getByRole('button', { name: '+ Link' }));
-      const crear = await screen.findByRole('button', { name: 'CREAR' });
+      const crear = await screen.findByRole('button', { name: 'Crear' });
       const form = crear.closest('form');
 
       const campos = form.querySelectorAll('input[type="text"], input[type="url"], textarea');
@@ -574,21 +575,21 @@ describe('PageEditor — flujos de edición', () => {
     // La edición vive en su propia pantalla (ver ItemEditor.test.jsx): acá se
     // comprueba que tanto el título como "Editar" llevan hasta ella.
     it('el título del link lleva a su edición', async () => {
-      await render({ page: conLink() }, 'CONTENIDO');
+      await render({ page: conLink() }, 'Contenido');
 
       expect(screen.getByRole('link', { name: 'Instagram' }))
         .toHaveAttribute('href', '/page/5/item/100');
     });
 
     it('el botón Editar lleva a la edición del link', async () => {
-      await render({ page: conLink() }, 'CONTENIDO');
+      await render({ page: conLink() }, 'Contenido');
 
       expect(screen.getByRole('link', { name: 'Editar' }))
         .toHaveAttribute('href', '/page/5/item/100');
     });
 
     it('elimina el link tras confirmar', async () => {
-      const { llamadas } = await render({ page: conLink() }, 'CONTENIDO');
+      const { llamadas } = await render({ page: conLink() }, 'Contenido');
 
       // [0] es el del grupo, [1] el del link.
       fireEvent.click(screen.getAllByRole('button', { name: 'Eliminar' })[1]);
@@ -604,7 +605,7 @@ describe('PageEditor — flujos de edición', () => {
 
     it('no elimina el link si se cancela', async () => {
       window.confirm = vi.fn(() => false);
-      const { llamadas } = await render({ page: conLink() }, 'CONTENIDO');
+      const { llamadas } = await render({ page: conLink() }, 'Contenido');
 
       fireEvent.click(screen.getAllByRole('button', { name: 'Eliminar' })[1]);
 
@@ -625,7 +626,7 @@ describe('PageEditor — flujos de edición', () => {
             }),
           ],
         }),
-      }, 'CONTENIDO');
+      }, 'Contenido');
 
       // [0] mueve el grupo; [1] es el primer link, el único que puede bajar.
       const bajar = screen.getAllByTitle('Mover abajo');
@@ -646,7 +647,7 @@ describe('PageEditor — flujos de edición', () => {
             grupo({ id: 20, type: 'eventos', links: [link({ id: 200, text: 'Viejo', event_due: '1' })] }),
           ],
         }),
-      }, 'CONTENIDO');
+      }, 'Contenido');
 
       expect(screen.getByText('¡Evento vencido!')).toBeInTheDocument();
     });
@@ -656,7 +657,7 @@ describe('PageEditor — flujos de edición', () => {
         page: pagina({
           groups: [grupo({ id: 20, type: 'eventos', links: [link({ id: 200 })] })],
         }),
-      }, 'CONTENIDO');
+      }, 'Contenido');
 
       // Sólo quedan las flechas del grupo, no las de los links.
       expect(screen.getAllByTitle('Mover arriba')).toHaveLength(1);
@@ -684,7 +685,7 @@ describe('PageEditor — flujos de edición', () => {
           { id: 2, status: 'pending', page_title: 'Pendiente', collaborator_page_id: 8 },
           { id: 3, status: 'rejected', page_title: 'Rechazada', collaborator_page_id: 9 },
         ]),
-      }, 'CONTENIDO');
+      }, 'Contenido');
 
       expect(screen.getByText(/aceptó/)).toBeInTheDocument();
       expect(screen.getByText(/pendiente/)).toBeInTheDocument();
@@ -694,7 +695,7 @@ describe('PageEditor — flujos de edición', () => {
     it('quita un colaborador', async () => {
       const { llamadas } = await render({
         page: conEvento([{ id: 1, status: 'accepted', page_title: 'Otra', collaborator_page_id: 7 }]),
-      }, 'CONTENIDO');
+      }, 'Contenido');
 
       fireEvent.click(screen.getByTitle('Quitar colaborador'));
 
@@ -725,15 +726,15 @@ describe('PageEditor — flujos de edición', () => {
 
     /** Con un único grupo de eventos el modal lo asigna solo, sin preguntar. */
     it('con un solo grupo de eventos no pregunta y lo asigna', async () => {
-      const { llamadas } = await render(conPendiente(), 'CONTENIDO');
+      const { llamadas } = await render(conPendiente(), 'Contenido');
 
       fireEvent.click(await screen.findByRole('button', { name: 'Aceptar' }));
-      await screen.findByRole('heading', { name: 'ACEPTAR COLABORACIÓN' });
+      await screen.findByRole('heading', { name: 'Aceptar colaboración' });
 
       expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
       expect(screen.getByText(/El evento se agregará al grupo/)).toBeInTheDocument();
 
-      fireEvent.click(screen.getByRole('button', { name: 'ACEPTAR' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Aceptar colaboración' }));
 
       await waitFor(() => {
         expect(cuerpoDe(put(llamadas, 'collaborations/detail.php'))).toEqual({
@@ -753,16 +754,16 @@ describe('PageEditor — flujos de edición', () => {
           ],
         }),
         pending: conPendiente().pending,
-      }, 'CONTENIDO');
+      }, 'Contenido');
 
       fireEvent.click(await screen.findByRole('button', { name: 'Aceptar' }));
-      await screen.findByRole('heading', { name: 'ACEPTAR COLABORACIÓN' });
+      await screen.findByRole('heading', { name: 'Aceptar colaboración' });
 
       const select = screen.getByRole('combobox');
       expect(within(select).getAllByRole('option')).toHaveLength(3); // vacío + 2 grupos
 
       fireEvent.change(select, { target: { value: '21' } });
-      fireEvent.click(screen.getByRole('button', { name: 'ACEPTAR' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Aceptar colaboración' }));
 
       await waitFor(() => {
         expect(cuerpoDe(put(llamadas, 'collaborations/detail.php'))).toEqual({
@@ -773,7 +774,7 @@ describe('PageEditor — flujos de edición', () => {
     });
 
     it('rechaza la colaboración', async () => {
-      const { llamadas } = await render(conPendiente(), 'CONTENIDO');
+      const { llamadas } = await render(conPendiente(), 'Contenido');
 
       fireEvent.click(await screen.findByRole('button', { name: 'Rechazar' }));
 
@@ -784,15 +785,15 @@ describe('PageEditor — flujos de edición', () => {
     });
 
     it('se puede cancelar el modal de aceptación', async () => {
-      const { llamadas } = await render(conPendiente(), 'CONTENIDO');
+      const { llamadas } = await render(conPendiente(), 'Contenido');
 
       fireEvent.click(await screen.findByRole('button', { name: 'Aceptar' }));
-      await screen.findByRole('heading', { name: 'ACEPTAR COLABORACIÓN' });
-      fireEvent.click(screen.getAllByRole('button', { name: 'CANCELAR' })[0]);
+      await screen.findByRole('heading', { name: 'Aceptar colaboración' });
+      fireEvent.click(screen.getAllByRole('button', { name: 'Cancelar' })[0]);
 
       await waitFor(() => {
         expect(
-          screen.queryByRole('heading', { name: 'ACEPTAR COLABORACIÓN' })
+          screen.queryByRole('heading', { name: 'Aceptar colaboración' })
         ).not.toBeInTheDocument();
       });
       expect(put(llamadas, 'collaborations/detail.php')).toBeUndefined();
@@ -807,9 +808,9 @@ describe('PageEditor — flujos de edición', () => {
         admins: [
           { id: 3, user_id: 11, user_name: 'Beto', user_email: 'beto@test.local', status: 'accepted' },
         ],
-      }, 'ADMINISTRADORES');
+      }, 'Administradores');
 
-      fireEvent.click(await screen.findByRole('button', { name: 'QUITAR' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Quitar' }));
 
       await waitFor(() => {
         const del = llamadas.find(
@@ -824,9 +825,9 @@ describe('PageEditor — flujos de edición', () => {
         admins: [
           { id: 4, user_id: 12, user_name: null, user_email: 'pend@test.local', status: 'pending' },
         ],
-      }, 'ADMINISTRADORES');
+      }, 'Administradores');
 
-      fireEvent.click(await screen.findByRole('button', { name: 'CANCELAR' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Cancelar' }));
 
       await waitFor(() => {
         const del = llamadas.find(

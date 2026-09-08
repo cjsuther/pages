@@ -29,7 +29,7 @@ describe('Navigation', () => {
     it('ofrece iniciar sesión', () => {
       renderConProviders(<Navigation />);
 
-      expect(screen.getByRole('link', { name: 'Iniciar Sesión / Registrarse' })).toHaveAttribute(
+      expect(screen.getByRole('link', { name: 'Entrar' })).toHaveAttribute(
         'href',
         '/login'
       );
@@ -38,14 +38,19 @@ describe('Navigation', () => {
     it('no muestra los enlaces privados', () => {
       renderConProviders(<Navigation />);
 
-      expect(screen.queryByRole('link', { name: 'MIS PÁGINAS' })).not.toBeInTheDocument();
-      expect(screen.queryByRole('link', { name: 'PÁGINAS' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'Mis páginas' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'Seguir páginas' })).not.toBeInTheDocument();
     });
 
-    it('no muestra el botón de menú móvil', () => {
+    it('ofrece el menú móvil con los accesos de invitado', () => {
       const { container } = renderConProviders(<Navigation />);
 
-      expect(container.querySelector('button.md\\:hidden')).toBeNull();
+      const boton = container.querySelector('button.md\\:hidden');
+      expect(boton).not.toBeNull();
+
+      fireEvent.click(boton);
+      expect(screen.getAllByRole('link', { name: 'Para artistas' }).length).toBeGreaterThan(0);
+      expect(screen.getAllByRole('link', { name: 'Crear mi página' }).length).toBeGreaterThan(0);
     });
 
     it('el logo lleva al inicio', () => {
@@ -59,28 +64,28 @@ describe('Navigation', () => {
     it('muestra los enlaces de navegación', () => {
       renderConProviders(<Navigation />, { auth: autenticado() });
 
-      expect(screen.getByRole('link', { name: 'INICIO' })).toHaveAttribute('href', '/');
-      expect(screen.getByRole('link', { name: 'PÁGINAS' })).toHaveAttribute('href', '/pages');
-      expect(screen.getByRole('link', { name: 'MIS PÁGINAS' })).toHaveAttribute('href', '/my-pages');
+      expect(screen.getByRole('link', { name: 'Inicio' })).toHaveAttribute('href', '/');
+      expect(screen.getByRole('link', { name: 'Seguir páginas' })).toHaveAttribute('href', '/pages');
+      expect(screen.getByRole('link', { name: 'Mis páginas' })).toHaveAttribute('href', '/my-pages');
     });
 
     it('no ofrece iniciar sesión', () => {
       renderConProviders(<Navigation />, { auth: autenticado() });
 
-      expect(screen.queryByText('Iniciar Sesión / Registrarse')).not.toBeInTheDocument();
+      expect(screen.queryByText('Entrar')).not.toBeInTheDocument();
     });
 
     it('resalta la sección activa', () => {
       renderConProviders(<Navigation />, { auth: autenticado(), route: '/pages' });
 
-      expect(screen.getByRole('link', { name: 'PÁGINAS' }).className).toContain('text-white');
-      expect(screen.getByRole('link', { name: 'MIS PÁGINAS' }).className).toContain('text-gray-400');
+      expect(screen.getByRole('link', { name: 'Seguir páginas' }).className).toContain('text-verde-oscuro');
+      expect(screen.getByRole('link', { name: 'Mis páginas' }).className).toContain('text-tinta-media');
     });
 
     it('resalta el inicio en la raíz', () => {
       renderConProviders(<Navigation />, { auth: autenticado(), route: '/' });
 
-      expect(screen.getByRole('link', { name: 'INICIO' }).className).toContain('text-white');
+      expect(screen.getByRole('link', { name: 'Inicio' }).className).toContain('text-verde-oscuro');
     });
   });
 
@@ -89,7 +94,7 @@ describe('Navigation', () => {
       renderConProviders(<Navigation />, { auth: autenticado() });
 
       // Cerrado: cada enlace aparece una sola vez (el de escritorio).
-      expect(screen.getAllByRole('link', { name: 'INICIO' })).toHaveLength(1);
+      expect(screen.getAllByRole('link', { name: 'Inicio' })).toHaveLength(1);
     });
 
     it('se abre y duplica los enlaces', () => {
@@ -97,16 +102,16 @@ describe('Navigation', () => {
 
       fireEvent.click(container.querySelector('button.md\\:hidden'));
 
-      expect(screen.getAllByRole('link', { name: 'INICIO' })).toHaveLength(2);
+      expect(screen.getAllByRole('link', { name: 'Inicio' })).toHaveLength(2);
     });
 
     it('se cierra al elegir un enlace', () => {
       const { container } = renderConProviders(<Navigation />, { auth: autenticado() });
 
       fireEvent.click(container.querySelector('button.md\\:hidden'));
-      fireEvent.click(screen.getAllByRole('link', { name: 'PÁGINAS' })[1]);
+      fireEvent.click(screen.getAllByRole('link', { name: 'Seguir páginas' })[1]);
 
-      expect(screen.getAllByRole('link', { name: 'PÁGINAS' })).toHaveLength(1);
+      expect(screen.getAllByRole('link', { name: 'Seguir páginas' })).toHaveLength(1);
     });
 
     it('se cierra con el botón', () => {
@@ -116,7 +121,7 @@ describe('Navigation', () => {
       fireEvent.click(boton);
       fireEvent.click(boton);
 
-      expect(screen.getAllByRole('link', { name: 'INICIO' })).toHaveLength(1);
+      expect(screen.getAllByRole('link', { name: 'Inicio' })).toHaveLength(1);
     });
   });
 
@@ -145,7 +150,7 @@ describe('Navigation', () => {
     it('al abrirse muestra el email y el nombre editable', () => {
       abrirPerfil(usuarioDePrueba({ name: 'Ana', email: 'ana@test.local' }));
 
-      expect(screen.getByPlaceholderText('Tu nombre')).toHaveValue('Ana');
+      expect(screen.getByPlaceholderText('Cómo querés que te vean')).toHaveValue('Ana');
       expect(screen.getByText('ana@test.local')).toBeInTheDocument();
     });
 
@@ -155,7 +160,7 @@ describe('Navigation', () => {
       });
       abrirPerfil();
 
-      fireEvent.change(screen.getByPlaceholderText('Tu nombre'), {
+      fireEvent.change(screen.getByPlaceholderText('Cómo querés que te vean'), {
         target: { value: '  Ana María  ' },
       });
       fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
@@ -172,7 +177,7 @@ describe('Navigation', () => {
       mockearWidgets({ 'users/profile.php': { success: true, user: { name: 'Ana María' } } });
       const { auth } = abrirPerfil();
 
-      fireEvent.change(screen.getByPlaceholderText('Tu nombre'), { target: { value: 'Ana María' } });
+      fireEvent.change(screen.getByPlaceholderText('Cómo querés que te vean'), { target: { value: 'Ana María' } });
       fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
 
       await waitFor(() => {
@@ -197,7 +202,7 @@ describe('Navigation', () => {
       });
       abrirPerfil();
 
-      fireEvent.keyDown(screen.getByPlaceholderText('Tu nombre'), { key: 'Enter' });
+      fireEvent.keyDown(screen.getByPlaceholderText('Cómo querés que te vean'), { key: 'Enter' });
 
       await waitFor(() => {
         expect(llamadaA(llamadas, 'users/profile.php')).not.toBeNull();
@@ -210,7 +215,7 @@ describe('Navigation', () => {
       });
       abrirPerfil();
 
-      fireEvent.keyDown(screen.getByPlaceholderText('Tu nombre'), { key: 'a' });
+      fireEvent.keyDown(screen.getByPlaceholderText('Cómo querés que te vean'), { key: 'a' });
 
       await waitFor(() => {
         expect(llamadaA(llamadas, 'users/profile.php')).toBeNull();
@@ -251,21 +256,21 @@ describe('Navigation', () => {
     it('se cierra al hacer click fuera', async () => {
       abrirPerfil();
 
-      expect(screen.getByPlaceholderText('Tu nombre')).toBeInTheDocument();
+      expect(screen.getByPlaceholderText('Cómo querés que te vean')).toBeInTheDocument();
 
       fireEvent.mouseDown(document.body);
 
       await waitFor(() => {
-        expect(screen.queryByPlaceholderText('Tu nombre')).not.toBeInTheDocument();
+        expect(screen.queryByPlaceholderText('Cómo querés que te vean')).not.toBeInTheDocument();
       });
     });
 
     it('no se cierra al hacer click dentro', () => {
       abrirPerfil();
 
-      fireEvent.mouseDown(screen.getByPlaceholderText('Tu nombre'));
+      fireEvent.mouseDown(screen.getByPlaceholderText('Cómo querés que te vean'));
 
-      expect(screen.getByPlaceholderText('Tu nombre')).toBeInTheDocument();
+      expect(screen.getByPlaceholderText('Cómo querés que te vean')).toBeInTheDocument();
     });
   });
 });

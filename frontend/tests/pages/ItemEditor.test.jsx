@@ -70,7 +70,7 @@ async function render(datos = {}, linkId = 100) {
     path: '/page/:id/item/:linkId',
     rutasExtra: [editorDePrueba],
   });
-  await screen.findByRole('button', { name: 'GUARDAR' });
+  await screen.findByRole('button', { name: 'Guardar' });
   return { ...resultado, ...mock };
 }
 
@@ -105,14 +105,14 @@ describe('ItemEditor', () => {
       await render({ page: conItem({ text: 'Instagram' }) });
 
       expect(screen.getByDisplayValue('Instagram')).toBeInTheDocument();
-      expect(screen.getByRole('heading', { name: 'EDITAR LINK' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Editar link' })).toBeInTheDocument();
       expect(screen.getByText(/Mi Página · Mis Links/)).toBeInTheDocument();
     });
 
     it('el título dice qué se está editando según el tipo de grupo', async () => {
       await render({ page: conItem({ event_latitude: '-34.6', event_longitude: '-58.4' }, 'eventos') });
 
-      expect(screen.getByRole('heading', { name: 'EDITAR EVENTO' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Editar evento' })).toBeInTheDocument();
     });
 
     it('ofrece volver al editor si el item no existe', async () => {
@@ -124,7 +124,7 @@ describe('ItemEditor', () => {
         rutasExtra: [editorDePrueba],
       });
 
-      const volver = await screen.findByRole('link', { name: 'VOLVER AL EDITOR' });
+      const volver = await screen.findByRole('link', { name: 'Volver al editor' });
       expect(volver).toHaveAttribute('href', '/page/5?s=contenido');
     });
 
@@ -145,7 +145,7 @@ describe('ItemEditor', () => {
       fireEvent.change(screen.getByDisplayValue('Instagram'), {
         target: { value: 'Instagram editado' },
       });
-      fireEvent.click(screen.getByRole('button', { name: 'GUARDAR' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
 
       await waitFor(() => {
         const editado = put(llamadas, 'links/detail.php');
@@ -167,7 +167,7 @@ describe('ItemEditor', () => {
         expect(llamadaA(llamadas, 'upload/image.php')).not.toBeNull();
       });
 
-      fireEvent.click(screen.getByRole('button', { name: 'GUARDAR' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
 
       await waitFor(() => {
         expect(cuerpoDe(put(llamadas, 'links/detail.php')))
@@ -187,12 +187,12 @@ describe('ItemEditor', () => {
         ),
       });
 
-      fireEvent.click(screen.getByRole('button', { name: 'ENTRADAS' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Entradas' }));
 
-      fireEvent.change(await screen.findByLabelText('TEXTO DEL BOTÓN (OPCIONAL)'), {
+      fireEvent.change(await screen.findByLabelText('Texto del botón (opcional)'), {
         target: { value: 'Comprar' },
       });
-      fireEvent.click(screen.getByRole('button', { name: 'GUARDAR ENTRADAS' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar entradas' }));
 
       await waitFor(() => {
         expect(cuerpoDe(put(llamadas, 'links/detail.php'))).toMatchObject({ url_text: 'Comprar' });
@@ -216,7 +216,7 @@ describe('ItemEditor', () => {
         page: conItem({ text: 'Mi Evento', event_latitude: null, event_longitude: null }, 'eventos'),
       });
 
-      fireEvent.submit(screen.getByRole('button', { name: 'GUARDAR' }).closest('form'));
+      fireEvent.submit(screen.getByRole('button', { name: 'Guardar' }).closest('form'));
 
       await waitFor(() => {
         expect(window.alert).toHaveBeenCalledWith(
@@ -230,7 +230,7 @@ describe('ItemEditor', () => {
       const { llamadas } = await render({ page: conItem({ text: 'Instagram' }) });
 
       fireEvent.change(screen.getByDisplayValue('Instagram'), { target: { value: 'Otro' } });
-      fireEvent.click(screen.getByRole('button', { name: 'CANCELAR' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
 
       expect(await screen.findByText('Editor de la página')).toBeInTheDocument();
       expect(put(llamadas, 'links/detail.php')).toBeUndefined();
@@ -366,8 +366,8 @@ describe('ItemEditor', () => {
     it('una imagen de toda la vida se edita como antes', async () => {
       await render({ page: galeria({ image_url: 'https://img/1.jpg' }) });
 
-      expect(screen.getByLabelText('TIPO DE CONTENIDO')).toHaveValue('imagen');
-      expect(screen.queryByLabelText('URL DEL VIDEO')).not.toBeInTheDocument();
+      expect(screen.getByLabelText('Tipo de contenido')).toHaveValue('imagen');
+      expect(screen.queryByLabelText('URL del video')).not.toBeInTheDocument();
     });
 
     // El tipo no se guarda: se deduce de la URL, así que al abrir el item el
@@ -375,23 +375,23 @@ describe('ItemEditor', () => {
     it('un item con URL de YouTube se abre como video', async () => {
       await render({ page: galeria({ embed_url: VIDEO }) });
 
-      expect(screen.getByLabelText('TIPO DE CONTENIDO')).toHaveValue('youtube');
-      expect(screen.getByLabelText('URL DEL VIDEO')).toHaveValue(VIDEO);
+      expect(screen.getByLabelText('Tipo de contenido')).toHaveValue('youtube');
+      expect(screen.getByLabelText('URL del video')).toHaveValue(VIDEO);
     });
 
     it('un item con URL de Instagram se abre como Instagram', async () => {
       await render({ page: galeria({ embed_url: 'https://www.instagram.com/p/CxAbC123_-x/' }) });
 
-      expect(screen.getByLabelText('TIPO DE CONTENIDO')).toHaveValue('instagram');
-      expect(screen.getByLabelText('URL DEL CONTENIDO')).toBeInTheDocument();
+      expect(screen.getByLabelText('Tipo de contenido')).toHaveValue('instagram');
+      expect(screen.getByLabelText('URL del contenido')).toBeInTheDocument();
     });
 
     it('convierte una imagen en un video', async () => {
       const { llamadas } = await render({ page: galeria({ image_url: 'https://img/1.jpg' }) });
 
-      fireEvent.change(screen.getByLabelText('TIPO DE CONTENIDO'), { target: { value: 'youtube' } });
-      fireEvent.change(screen.getByLabelText('URL DEL VIDEO'), { target: { value: VIDEO } });
-      fireEvent.click(screen.getByRole('button', { name: 'GUARDAR' }));
+      fireEvent.change(screen.getByLabelText('Tipo de contenido'), { target: { value: 'youtube' } });
+      fireEvent.change(screen.getByLabelText('URL del video'), { target: { value: VIDEO } });
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
 
       await waitFor(() => {
         expect(cuerpoDe(put(llamadas, 'links/detail.php'))).toMatchObject({ embed_url: VIDEO });
@@ -403,8 +403,8 @@ describe('ItemEditor', () => {
     it('volver a imagen borra la URL del video', async () => {
       const { llamadas } = await render({ page: galeria({ embed_url: VIDEO }) });
 
-      fireEvent.change(screen.getByLabelText('TIPO DE CONTENIDO'), { target: { value: 'imagen' } });
-      fireEvent.click(screen.getByRole('button', { name: 'GUARDAR' }));
+      fireEvent.change(screen.getByLabelText('Tipo de contenido'), { target: { value: 'imagen' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
 
       await waitFor(() => {
         expect(cuerpoDe(put(llamadas, 'links/detail.php'))).toMatchObject({ embed_url: '' });
@@ -414,11 +414,11 @@ describe('ItemEditor', () => {
     it('avisa si el link no es de YouTube', async () => {
       const { llamadas } = await render({ page: galeria({ image_url: 'https://img/1.jpg' }) });
 
-      fireEvent.change(screen.getByLabelText('TIPO DE CONTENIDO'), { target: { value: 'youtube' } });
-      fireEvent.change(screen.getByLabelText('URL DEL VIDEO'), {
+      fireEvent.change(screen.getByLabelText('Tipo de contenido'), { target: { value: 'youtube' } });
+      fireEvent.change(screen.getByLabelText('URL del video'), {
         target: { value: 'https://vimeo.com/123456' },
       });
-      fireEvent.submit(screen.getByRole('button', { name: 'GUARDAR' }).closest('form'));
+      fireEvent.submit(screen.getByRole('button', { name: 'Guardar' }).closest('form'));
 
       await waitFor(() => {
         expect(window.alert).toHaveBeenCalledWith('Ese link no parece un video de YouTube');
@@ -431,9 +431,9 @@ describe('ItemEditor', () => {
     it('avisa si el link es del otro servicio', async () => {
       const { llamadas } = await render({ page: galeria({ image_url: 'https://img/1.jpg' }) });
 
-      fireEvent.change(screen.getByLabelText('TIPO DE CONTENIDO'), { target: { value: 'instagram' } });
-      fireEvent.change(screen.getByLabelText('URL DEL CONTENIDO'), { target: { value: VIDEO } });
-      fireEvent.submit(screen.getByRole('button', { name: 'GUARDAR' }).closest('form'));
+      fireEvent.change(screen.getByLabelText('Tipo de contenido'), { target: { value: 'instagram' } });
+      fireEvent.change(screen.getByLabelText('URL del contenido'), { target: { value: VIDEO } });
+      fireEvent.submit(screen.getByRole('button', { name: 'Guardar' }).closest('form'));
 
       await waitFor(() => {
         expect(window.alert).toHaveBeenCalledWith(
@@ -459,7 +459,7 @@ describe('ItemEditor', () => {
     it('un link no tiene solapas', async () => {
       await render();
 
-      expect(screen.queryByRole('button', { name: 'ENTRADAS' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Entradas' })).not.toBeInTheDocument();
     });
 
     it('un evento ofrece datos, entradas y ventas', async () => {
@@ -467,9 +467,9 @@ describe('ItemEditor', () => {
         page: conItem({ event_latitude: '-34.6', event_longitude: '-58.4' }, 'eventos'),
       });
 
-      expect(screen.getByRole('button', { name: 'DATOS' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'ENTRADAS' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'VENTAS' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Datos' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Entradas' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Ventas' })).toBeInTheDocument();
     });
   });
 });

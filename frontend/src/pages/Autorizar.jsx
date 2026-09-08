@@ -145,7 +145,7 @@ function Autorizar() {
           disabled={autorizando}
           className="w-full py-4 bg-verde text-verde-tinta font-bold hover:bg-verde-oscuro hover:text-tinta transition disabled:opacity-50"
         >
-          {autorizando ? 'AUTORIZANDO...' : 'AUTORIZAR'}
+          {autorizando ? 'Autorizando...' : 'Autorizar'}
         </button>
         <button
           onClick={rechazar}

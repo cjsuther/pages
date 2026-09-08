@@ -28,13 +28,13 @@ describe('Login', () => {
     it('muestra el título de bienvenida', () => {
       renderConProviders(<Login />);
 
-      expect(screen.getByRole('heading', { name: 'BIENVENIDO' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Entrá a Rezonar' })).toBeInTheDocument();
     });
 
     it('ofrece continuar con Google', () => {
       renderConProviders(<Login />);
 
-      expect(screen.getByRole('button', { name: /CONTINUAR CON GOOGLE/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Continuar con Google/ })).toBeInTheDocument();
     });
 
     it('el logo lleva al inicio', () => {
@@ -55,7 +55,7 @@ describe('Login', () => {
     it('redirige al endpoint de OAuth', () => {
       renderConProviders(<Login />);
 
-      fireEvent.click(screen.getByRole('button', { name: /CONTINUAR CON GOOGLE/ }));
+      fireEvent.click(screen.getByRole('button', { name: /Continuar con Google/ }));
 
       expect(window.location.href).toBe(`${API_URL}/auth/google-login.php`);
     });
@@ -63,7 +63,7 @@ describe('Login', () => {
     it('registra el intento en analytics', () => {
       renderConProviders(<Login />);
 
-      fireEvent.click(screen.getByRole('button', { name: /CONTINUAR CON GOOGLE/ }));
+      fireEvent.click(screen.getByRole('button', { name: /Continuar con Google/ }));
 
       expect(window.gtag).toHaveBeenCalledWith('event', 'login_attempt', { method: 'google' });
     });

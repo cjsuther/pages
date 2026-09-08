@@ -1,5 +1,5 @@
 import React from 'react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, fireEvent, waitFor } from '@testing-library/react';
 import PageSearch from '../../src/components/PageSearch';
 import { renderConProviders, crearAuth, usuarioDePrueba } from '../helpers/render';
@@ -12,41 +12,68 @@ const resultado = (overrides = {}) => ({
   title: 'Página Encontrada',
   description: 'Una descripción',
   slug: 'pagina-encontrada',
+  profile_image: null,
   follower_count: 3,
   type: 'page',
   ...overrides,
 });
 
-function mockearBusqueda(results = [], following = []) {
+const sugerida = (overrides = {}) => ({
+  id: 42,
+  title: 'Página Nueva',
+  description: 'Recién llegada',
+  url_slug: 'pagina-nueva',
+  profile_image: null,
+  follower_count: 0,
+  ...overrides,
+});
+
+function mockear({ results = [], following = [], recientes = [] } = {}) {
   return mockFetch({
     'pages/following.php': { following, total: following.length },
+    'public/recent-pages.php': { pages: recientes },
     'public/search.php': { results },
-    'pages/follow.php': { success: true },
+    'pages/follow.php': { is_following: false },
     'public/followers.php': { followers: [] },
   });
 }
 
+/** El campo espera 300 ms antes de consultar: una consulta por tecla es una de más. */
 async function buscar(texto = 'rock') {
-  fireEvent.change(screen.getByPlaceholderText('Buscar páginas...'), { target: { value: texto } });
+  fireEvent.change(
+    screen.getByPlaceholderText('Buscá por nombre de artista, banda, ciclo o sala...'),
+    { target: { value: texto } }
+  );
+  await vi.advanceTimersByTimeAsync(400);
 }
 
 describe('PageSearch', () => {
   beforeEach(() => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
-    window.alert = vi.fn();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   describe('estado inicial', () => {
-    it('invita a escribir un término', async () => {
-      mockearBusqueda();
+    /**
+     * Con el campo vacío se muestran las páginas nuevas, no un cartel pidiendo
+     * que se escriba algo: quien entra a descubrir casi nunca sabe todavía a
+     * quién buscar.
+     */
+    it('sugiere las páginas nuevas antes de buscar nada', async () => {
+      mockear({ recientes: [sugerida()] });
 
       renderConProviders(<PageSearch />, { auth: autenticado() });
 
-      expect(await screen.findByText('Ingresa un término de búsqueda')).toBeInTheDocument();
+      expect(await screen.findByText('Página Nueva')).toBeInTheDocument();
+      expect(screen.getByText('Páginas nuevas en Rezonar')).toBeInTheDocument();
     });
 
     it('consulta las páginas ya seguidas al montar', async () => {
-      const { llamadas } = mockearBusqueda();
+      const { llamadas } = mockear();
 
       renderConProviders(<PageSearch />, { auth: autenticado() });
 
@@ -56,222 +83,141 @@ describe('PageSearch', () => {
     });
 
     it('no busca con el campo vacío', async () => {
-      const { llamadas } = mockearBusqueda();
+      const { llamadas } = mockear();
 
       renderConProviders(<PageSearch />, { auth: autenticado() });
+      await waitFor(() => expect(llamadaA(llamadas, 'pages/following.php')).not.toBeNull());
 
-      await waitFor(() => expect(llamadas.length).toBeGreaterThan(0));
       expect(llamadaA(llamadas, 'public/search.php')).toBeNull();
     });
 
-    it('no rompe si falla la consulta de seguidas', async () => {
-      global.fetch = vi.fn(() => Promise.reject(new Error('sin red')));
+    /** Con una sola letra el LIKE del servidor devolvería medio catálogo. */
+    it('no busca con una sola letra', async () => {
+      const { llamadas } = mockear();
 
       renderConProviders(<PageSearch />, { auth: autenticado() });
+      await buscar('a');
 
-      await waitFor(() => expect(console.error).toHaveBeenCalled());
+      expect(llamadaA(llamadas, 'public/search.php')).toBeNull();
     });
   });
 
   describe('búsqueda', () => {
     it('consulta la API con el término escrito', async () => {
-      const { llamadas } = mockearBusqueda([resultado()]);
-      renderConProviders(<PageSearch />, { auth: autenticado() });
+      const { llamadas } = mockear();
 
-      await buscar('rock nacional');
+      renderConProviders(<PageSearch />, { auth: autenticado() });
+      await buscar('rock');
 
       await waitFor(() => {
-        const busqueda = llamadaA(llamadas, 'public/search.php');
-        expect(busqueda.url).toContain('q=rock%20nacional');
-        expect(busqueda.url).toContain('limit=10');
-        expect(busqueda.url).toContain('offset=0');
+        expect(llamadaA(llamadas, 'public/search.php').url).toContain('q=rock');
       });
     });
 
     it('muestra los resultados', async () => {
-      mockearBusqueda([resultado({ title: 'Rock del Sur' })]);
-      renderConProviders(<PageSearch />, { auth: autenticado() });
+      mockear({ results: [resultado()] });
 
+      renderConProviders(<PageSearch />, { auth: autenticado() });
       await buscar();
 
-      expect(await screen.findByText('Rock del Sur')).toBeInTheDocument();
+      expect(await screen.findByText('Página Encontrada')).toBeInTheDocument();
+      expect(screen.getByText('Una descripción')).toBeInTheDocument();
     });
 
     it('enlaza a la página encontrada', async () => {
-      mockearBusqueda([resultado({ slug: 'rock-del-sur', title: 'Rock del Sur' })]);
-      renderConProviders(<PageSearch />, { auth: autenticado() });
+      mockear({ results: [resultado()] });
 
+      renderConProviders(<PageSearch />, { auth: autenticado() });
       await buscar();
 
-      expect(await screen.findByRole('link', { name: 'Rock del Sur' })).toHaveAttribute(
-        'href',
-        '/rock-del-sur'
-      );
+      const enlace = await screen.findByRole('link', { name: /Página Encontrada/ });
+      expect(enlace).toHaveAttribute('href', '/pagina-encontrada');
     });
 
-    it('muestra la descripción y los seguidores', async () => {
-      mockearBusqueda([resultado({ description: 'Agenda de recitales', follower_count: 12 })]);
-      renderConProviders(<PageSearch />, { auth: autenticado() });
+    /** Los eventos que devuelve el buscador no van acá: esta pantalla es de páginas. */
+    it('descarta los resultados que no son páginas', async () => {
+      mockear({ results: [resultado(), { id: 9, type: 'event', title: 'Un Show' }] });
 
+      renderConProviders(<PageSearch />, { auth: autenticado() });
       await buscar();
 
-      expect(await screen.findByText('Agenda de recitales')).toBeInTheDocument();
-      expect(screen.getByText(/12 seguidores/)).toBeInTheDocument();
+      await screen.findByText('Página Encontrada');
+      expect(screen.queryByText('Un Show')).not.toBeInTheDocument();
     });
 
     it('avisa cuando no hay resultados', async () => {
-      mockearBusqueda([]);
+      mockear({ results: [] });
+
       renderConProviders(<PageSearch />, { auth: autenticado() });
+      await buscar('inexistente');
 
-      await buscar('no-existe');
-
-      expect(await screen.findByText('No se encontraron páginas')).toBeInTheDocument();
+      expect(
+        await screen.findByText('No encontramos páginas con ese nombre')
+      ).toBeInTheDocument();
     });
 
+    /** Lo que ya seguís no se vuelve a ofrecer: para eso está la otra solapa. */
     it('oculta las páginas que el usuario ya sigue', async () => {
-      mockFetch({
-        'pages/following.php': { following: [{ id: 7 }], total: 1 },
-        'public/search.php': {
-          results: [resultado({ id: 7, title: 'Ya seguida' }), resultado({ id: 8, title: 'Nueva' })],
-        },
-        'public/followers.php': { followers: [] },
+      mockear({
+        results: [resultado(), resultado({ id: 8, title: 'Otra Página' })],
+        following: [{ id: 7 }],
       });
 
       renderConProviders(<PageSearch />, { auth: autenticado() });
-      await waitFor(() => expect(screen.getByPlaceholderText('Buscar páginas...')).toBeInTheDocument());
-
       await buscar();
 
-      expect(await screen.findByText('Nueva')).toBeInTheDocument();
-      expect(screen.queryByText('Ya seguida')).not.toBeInTheDocument();
+      expect(await screen.findByText('Otra Página')).toBeInTheDocument();
+      expect(screen.queryByText('Página Encontrada')).not.toBeInTheDocument();
     });
 
     it('no rompe si falla la búsqueda', async () => {
-      mockearBusqueda();
-      renderConProviders(<PageSearch />, { auth: autenticado() });
-      await waitFor(() => expect(screen.getByPlaceholderText('Buscar páginas...')).toBeInTheDocument());
-
-      global.fetch = vi.fn(() => Promise.reject(new Error('sin red')));
-      await buscar();
-
-      await waitFor(() => expect(console.error).toHaveBeenCalled());
-    });
-  });
-
-  describe('paginación', () => {
-    const diez = () => Array.from({ length: 10 }, (_, i) => resultado({ id: i + 1, title: `Página ${i + 1}` }));
-
-    it('ofrece cargar más si vino una página completa', async () => {
-      mockearBusqueda(diez());
-      renderConProviders(<PageSearch />, { auth: autenticado() });
-
-      await buscar();
-
-      expect(await screen.findByRole('button', { name: 'Cargar Más' })).toBeInTheDocument();
-    });
-
-    it('no ofrece cargar más con menos de diez', async () => {
-      mockearBusqueda([resultado()]);
-      renderConProviders(<PageSearch />, { auth: autenticado() });
-
-      await buscar();
-      await screen.findByText('Página Encontrada');
-
-      expect(screen.queryByRole('button', { name: 'Cargar Más' })).not.toBeInTheDocument();
-    });
-
-    it('pide la página siguiente con el offset correcto', async () => {
-      const { llamadas } = mockearBusqueda(diez());
-      renderConProviders(<PageSearch />, { auth: autenticado() });
-
-      await buscar();
-      fireEvent.click(await screen.findByRole('button', { name: 'Cargar Más' }));
-
-      await waitFor(() => {
-        const conOffset = llamadas.filter((l) => l.url.includes('offset=10'));
-        expect(conOffset.length).toBeGreaterThan(0);
+      mockFetch({
+        'pages/following.php': { following: [], total: 0 },
+        'public/recent-pages.php': { pages: [] },
+        'public/search.php': { status: 500, body: { error: 'boom' } },
       });
+
+      renderConProviders(<PageSearch />, { auth: autenticado() });
+      await buscar();
+
+      expect(
+        await screen.findByText('No encontramos páginas con ese nombre')
+      ).toBeInTheDocument();
     });
   });
 
   describe('seguir una página', () => {
-    async function abrirModal() {
-      const mock = mockearBusqueda([resultado()]);
+    /**
+     * El botón es el mismo componente que en el resto del sitio. Antes esta
+     * pantalla tenía su propia copia del diálogo, con el radio de distancia
+     * clavado en 30 km: seguir desde acá guardaba algo distinto que seguir
+     * desde la página del artista.
+     */
+    it('ofrece seguir con el botón compartido', async () => {
+      mockear({ results: [resultado()] });
+
       renderConProviders(<PageSearch />, { auth: autenticado() });
       await buscar();
-      await screen.findByText('Página Encontrada');
-      fireEvent.click(screen.getByRole('button', { name: 'SEGUIR' }));
-      return mock;
-    }
 
-    it('abre el modal de preferencias', async () => {
-      await abrirModal();
-
-      expect(screen.getByText('¿Qué eventos quieres recibir?')).toBeInTheDocument();
+      expect(await screen.findByRole('button', { name: 'Seguir' })).toBeInTheDocument();
     });
 
-    it('arranca con "todos los eventos"', async () => {
-      await abrirModal();
+    it('guarda la preferencia elegida', async () => {
+      const { llamadas } = mockear({ results: [resultado()] });
 
-      expect(screen.getAllByRole('radio')[0]).toBeChecked();
-    });
+      renderConProviders(<PageSearch />, { auth: autenticado() });
+      await buscar();
 
-    it('envía la preferencia elegida', async () => {
-      const { llamadas } = await abrirModal();
-
-      fireEvent.click(screen.getAllByRole('radio')[1]);
-      fireEvent.click(screen.getByRole('button', { name: 'Seguir página' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Seguir' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Seguir página' }));
 
       await waitFor(() => {
         const post = llamadas.find((l) => l.options.method === 'POST');
         expect(cuerpoDe(post)).toEqual({
           page_id: 7,
-          notify_all_events: false,
-          max_distance_km: 30,
+          notify_all_events: true,
+          max_distance_km: 50,
         });
-      });
-    });
-
-    it('quita la página de los resultados al seguirla', async () => {
-      await abrirModal();
-
-      fireEvent.click(screen.getByRole('button', { name: 'Seguir página' }));
-
-      await waitFor(() => {
-        expect(screen.queryByText('Página Encontrada')).not.toBeInTheDocument();
-      });
-    });
-
-    it('confirma al usuario', async () => {
-      await abrirModal();
-
-      fireEvent.click(screen.getByRole('button', { name: 'Seguir página' }));
-
-      await waitFor(() => {
-        expect(window.alert).toHaveBeenCalledWith('Ahora sigues esta página');
-      });
-    });
-
-    it('se puede cancelar', async () => {
-      const { llamadas } = await abrirModal();
-
-      fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
-
-      await waitFor(() => {
-        expect(screen.queryByText('¿Qué eventos quieres recibir?')).not.toBeInTheDocument();
-      });
-      expect(llamadas.find((l) => l.options.method === 'POST')).toBeUndefined();
-      expect(screen.getByText('Página Encontrada')).toBeInTheDocument();
-    });
-
-    it('avisa si falla', async () => {
-      await abrirModal();
-      global.fetch = vi.fn(() => Promise.reject(new Error('sin red')));
-
-      fireEvent.click(screen.getByRole('button', { name: 'Seguir página' }));
-
-      await waitFor(() => {
-        expect(window.alert).toHaveBeenCalledWith('Error al seguir la página');
       });
     });
   });

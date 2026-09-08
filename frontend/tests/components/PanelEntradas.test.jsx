@@ -58,18 +58,18 @@ describe('PanelEntradas', () => {
       await montar();
 
       expect(screen.getByRole('radio', { name: /En otro lado/ })).toBeChecked();
-      expect(screen.getByLabelText('LINK (OPCIONAL)')).toBeInTheDocument();
+      expect(screen.getByLabelText('Link (opcional)')).toBeInTheDocument();
     });
 
     it('los campos de la venta interna aparecen recién al elegirla', async () => {
       await montar();
 
-      expect(screen.queryByLabelText('CAPACIDAD MÁXIMA')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Capacidad máxima')).not.toBeInTheDocument();
 
       activar();
 
-      expect(screen.getByLabelText('CAPACIDAD MÁXIMA')).toBeInTheDocument();
-      expect(screen.queryByLabelText('LINK (OPCIONAL)')).not.toBeInTheDocument();
+      expect(screen.getByLabelText('Capacidad máxima')).toBeInTheDocument();
+      expect(screen.queryByLabelText('Link (opcional)')).not.toBeInTheDocument();
     });
 
     /** Con la venta interna prendida, el público no ve el link: manda ella. */
@@ -79,9 +79,9 @@ describe('PanelEntradas', () => {
       });
 
       expect(screen.getByRole('radio', { name: /Acá, con Rezonar/ })).toBeChecked();
-      expect(screen.getByLabelText('CAPACIDAD MÁXIMA')).toHaveValue(250);
-      expect(screen.getByLabelText('PRECIO POR ENTRADA')).toHaveValue(2500);
-      expect(screen.getByLabelText('MÁXIMO POR COMPRA')).toHaveValue(4);
+      expect(screen.getByLabelText('Capacidad máxima')).toHaveValue(250);
+      expect(screen.getByLabelText('Precio por entrada')).toHaveValue(2500);
+      expect(screen.getByLabelText('Máximo por compra')).toHaveValue(4);
     });
 
     /** Con la venta apagada el link es lo único que hay: no hay conflicto. */
@@ -106,8 +106,8 @@ describe('PanelEntradas', () => {
       );
       await waitFor(() => expect(screen.queryByText('Cargando...')).not.toBeInTheDocument());
 
-      expect(screen.getByLabelText('LINK (OPCIONAL)')).toHaveValue('https://venta.test/show');
-      expect(screen.getByLabelText('TEXTO DEL BOTÓN (OPCIONAL)')).toHaveValue('Comprar');
+      expect(screen.getByLabelText('Link (opcional)')).toHaveValue('https://venta.test/show');
+      expect(screen.getByLabelText('Texto del botón (opcional)')).toHaveValue('Comprar');
     });
   });
 
@@ -133,13 +133,13 @@ describe('PanelEntradas', () => {
     it('guarda el link y su texto', async () => {
       const onGuardarEnlace = await montarConLink();
 
-      fireEvent.change(screen.getByLabelText('LINK (OPCIONAL)'), {
+      fireEvent.change(screen.getByLabelText('Link (opcional)'), {
         target: { value: 'https://venta.test/show' },
       });
-      fireEvent.change(screen.getByLabelText('TEXTO DEL BOTÓN (OPCIONAL)'), {
+      fireEvent.change(screen.getByLabelText('Texto del botón (opcional)'), {
         target: { value: 'Comprar' },
       });
-      fireEvent.click(screen.getByRole('button', { name: 'GUARDAR ENTRADAS' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar entradas' }));
 
       await waitFor(() => expect(onGuardarEnlace)
         .toHaveBeenCalledWith({ url: 'https://venta.test/show', url_text: 'Comprar' }));
@@ -155,7 +155,7 @@ describe('PanelEntradas', () => {
       enOtroLado();
 
       global.fetch.mockReturnValueOnce(respuestaDe({ entradas: { activo: 0 } }));
-      fireEvent.click(screen.getByRole('button', { name: 'GUARDAR ENTRADAS' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar entradas' }));
 
       await waitFor(() => {
         const enviado = JSON.parse(global.fetch.mock.calls[1][1].body);
@@ -168,7 +168,7 @@ describe('PanelEntradas', () => {
     it('no toca la venta interna si nunca estuvo prendida', async () => {
       await montarConLink();
 
-      fireEvent.click(screen.getByRole('button', { name: 'GUARDAR ENTRADAS' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar entradas' }));
 
       await waitFor(() => expect(screen.getByText('Guardado')).toBeInTheDocument());
 
@@ -196,7 +196,7 @@ describe('PanelEntradas', () => {
       await waitFor(() => expect(screen.queryByText('Cargando...')).not.toBeInTheDocument());
 
       enOtroLado();
-      fireEvent.click(screen.getByRole('button', { name: 'GUARDAR ENTRADAS' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar entradas' }));
 
       expect(await screen.findByText('No se pudo guardar el link')).toBeInTheDocument();
       expect(global.fetch).toHaveBeenCalledTimes(1);
@@ -216,7 +216,7 @@ describe('PanelEntradas', () => {
       await montar();
       activar();
 
-      fireEvent.change(screen.getByLabelText('PRECIO POR ENTRADA'), { target: { value: '0' } });
+      fireEvent.change(screen.getByLabelText('Precio por entrada'), { target: { value: '0' } });
 
       expect(screen.getByText(/reserva sin costo/)).toBeInTheDocument();
     });
@@ -225,7 +225,7 @@ describe('PanelEntradas', () => {
       await montar();
       activar();
 
-      fireEvent.change(screen.getByLabelText('PRECIO POR ENTRADA'), { target: { value: '1500' } });
+      fireEvent.change(screen.getByLabelText('Precio por entrada'), { target: { value: '1500' } });
 
       expect(screen.getByText(/1\.500/)).toBeInTheDocument();
     });
@@ -237,7 +237,7 @@ describe('PanelEntradas', () => {
       await montar({ cobros: SIN_CONECTAR });
       activar();
 
-      fireEvent.change(screen.getByLabelText('PRECIO POR ENTRADA'), { target: { value: '1500' } });
+      fireEvent.change(screen.getByLabelText('Precio por entrada'), { target: { value: '1500' } });
 
       expect(screen.getByText(/conectar Mercado Pago/)).toBeInTheDocument();
     });
@@ -256,7 +256,7 @@ describe('PanelEntradas', () => {
       await montar({ cobros: { ...CONECTADO, modo: 'prueba' } });
       activar();
 
-      fireEvent.change(screen.getByLabelText('PRECIO POR ENTRADA'), { target: { value: '1500' } });
+      fireEvent.change(screen.getByLabelText('Precio por entrada'), { target: { value: '1500' } });
 
       expect(screen.getByText(/no son reales/)).toBeInTheDocument();
     });
@@ -298,11 +298,11 @@ describe('PanelEntradas', () => {
       await montar();
       activar();
 
-      fireEvent.change(screen.getByLabelText('CAPACIDAD MÁXIMA'), { target: { value: '250' } });
-      fireEvent.change(screen.getByLabelText('PRECIO POR ENTRADA'), { target: { value: '1500' } });
+      fireEvent.change(screen.getByLabelText('Capacidad máxima'), { target: { value: '250' } });
+      fireEvent.change(screen.getByLabelText('Precio por entrada'), { target: { value: '1500' } });
 
       global.fetch.mockReturnValueOnce(respuestaDe({ entradas: { activo: 1, capacidad: 250 } }));
-      fireEvent.click(screen.getByRole('button', { name: 'GUARDAR ENTRADAS' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar entradas' }));
 
       await waitFor(() => {
         const enviado = JSON.parse(global.fetch.mock.calls[1][1].body);
@@ -316,7 +316,7 @@ describe('PanelEntradas', () => {
       activar();
 
       global.fetch.mockReturnValueOnce(respuestaDe({ entradas: { activo: 1 } }));
-      fireEvent.click(screen.getByRole('button', { name: 'GUARDAR ENTRADAS' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar entradas' }));
 
       expect(await screen.findByText('Guardado')).toBeInTheDocument();
     });
@@ -328,7 +328,7 @@ describe('PanelEntradas', () => {
       global.fetch.mockReturnValueOnce(
         respuestaDe({ error: 'Ya hay 30 entradas tomadas: la capacidad no puede ser menor' }, false)
       );
-      fireEvent.click(screen.getByRole('button', { name: 'GUARDAR ENTRADAS' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar entradas' }));
 
       expect(await screen.findByText(/la capacidad no puede ser menor/)).toBeInTheDocument();
     });
@@ -342,7 +342,7 @@ describe('PanelEntradas', () => {
       activar();
 
       global.fetch.mockReturnValueOnce(respuestaDe({ entradas: { activo: 1, capacidad: 50 } }));
-      fireEvent.click(screen.getByRole('button', { name: 'GUARDAR ENTRADAS' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar entradas' }));
 
       await waitFor(() => expect(onCambio).toHaveBeenCalledWith({ activo: 1, capacidad: 50 }));
     });
@@ -354,7 +354,7 @@ describe('PanelEntradas', () => {
       await montar({ comision: 3 });
       activar();
 
-      fireEvent.change(screen.getByLabelText('PRECIO POR ENTRADA'), { target: { value: '10000' } });
+      fireEvent.change(screen.getByLabelText('Precio por entrada'), { target: { value: '10000' } });
 
       expect(screen.getByText(/comisión de Rezonar \(3%\)/)).toBeInTheDocument();
       expect(screen.getByText(/9\.700/)).toBeInTheDocument();
@@ -368,7 +368,7 @@ describe('PanelEntradas', () => {
       await montar({ comision: 1.5 });
       activar();
 
-      fireEvent.change(screen.getByLabelText('PRECIO POR ENTRADA'), { target: { value: '10000' } });
+      fireEvent.change(screen.getByLabelText('Precio por entrada'), { target: { value: '10000' } });
 
       expect(screen.getByText(/descuenta aparte 7,25%/)).toBeInTheDocument();
     });
@@ -378,7 +378,7 @@ describe('PanelEntradas', () => {
       await montar({ comision: 1.5 });
       activar();
 
-      fireEvent.change(screen.getByLabelText('PRECIO POR ENTRADA'), { target: { value: '10000' } });
+      fireEvent.change(screen.getByLabelText('Precio por entrada'), { target: { value: '10000' } });
 
       expect(screen.getByText(/a los 3 días\s+de la compra/)).toBeInTheDocument();
     });
@@ -388,7 +388,7 @@ describe('PanelEntradas', () => {
       await montar({ comision: 1.5, mercadopago: null });
       activar();
 
-      fireEvent.change(screen.getByLabelText('PRECIO POR ENTRADA'), { target: { value: '10000' } });
+      fireEvent.change(screen.getByLabelText('Precio por entrada'), { target: { value: '10000' } });
 
       expect(screen.getByText(/Menos la comisión de Rezonar/)).toBeInTheDocument();
       expect(screen.queryByText(/Mercado Pago/)).not.toBeInTheDocument();
@@ -398,7 +398,7 @@ describe('PanelEntradas', () => {
       await montar({ comision: 1.5 });
       activar();
 
-      fireEvent.change(screen.getByLabelText('PRECIO POR ENTRADA'), { target: { value: '10000' } });
+      fireEvent.change(screen.getByLabelText('Precio por entrada'), { target: { value: '10000' } });
 
       expect(screen.getByText(/comisión de Rezonar \(1,5%\)/)).toBeInTheDocument();
       expect(screen.getByText(/9\.850/)).toBeInTheDocument();
@@ -408,7 +408,7 @@ describe('PanelEntradas', () => {
       await montar({ comision: 3 });
       activar();
 
-      fireEvent.change(screen.getByLabelText('PRECIO POR ENTRADA'), { target: { value: '0' } });
+      fireEvent.change(screen.getByLabelText('Precio por entrada'), { target: { value: '0' } });
 
       expect(screen.queryByText(/comisión de Rezonar/)).not.toBeInTheDocument();
     });
@@ -418,7 +418,7 @@ describe('PanelEntradas', () => {
       await montar({ comision: 3, cobros: { ...CONECTADO, admite_split: false } });
       activar();
 
-      fireEvent.change(screen.getByLabelText('PRECIO POR ENTRADA'), { target: { value: '10000' } });
+      fireEvent.change(screen.getByLabelText('Precio por entrada'), { target: { value: '10000' } });
 
       expect(screen.queryByText(/comisión de Rezonar/)).not.toBeInTheDocument();
     });

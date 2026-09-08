@@ -76,7 +76,7 @@ describe('SeccionEntradas', () => {
     it('ofrece conectar, no pegar credenciales', async () => {
       await montar();
 
-      expect(screen.getByRole('button', { name: /CONECTAR CON MERCADO PAGO/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Conectar con Mercado Pago/ })).toBeInTheDocument();
       expect(screen.queryByLabelText(/ACCESS TOKEN/)).not.toBeInTheDocument();
       expect(screen.queryByLabelText(/PUBLIC KEY/)).not.toBeInTheDocument();
     });
@@ -91,7 +91,7 @@ describe('SeccionEntradas', () => {
       await montar();
 
       global.fetch.mockReturnValueOnce(respuestaDe({ url: 'https://auth.mercadopago.com.ar/authorization?x=1' }));
-      fireEvent.click(screen.getByRole('button', { name: /CONECTAR CON MERCADO PAGO/ }));
+      fireEvent.click(screen.getByRole('button', { name: /Conectar con Mercado Pago/ }));
 
       await waitFor(() => {
         expect(window.location.href).toBe('https://auth.mercadopago.com.ar/authorization?x=1');
@@ -102,7 +102,7 @@ describe('SeccionEntradas', () => {
       await montar();
 
       global.fetch.mockReturnValueOnce(respuestaDe({ error: 'No podés administrar esta página' }, false));
-      fireEvent.click(screen.getByRole('button', { name: /CONECTAR CON MERCADO PAGO/ }));
+      fireEvent.click(screen.getByRole('button', { name: /Conectar con Mercado Pago/ }));
 
       expect(await screen.findByText('No podés administrar esta página')).toBeInTheDocument();
     });
@@ -111,7 +111,7 @@ describe('SeccionEntradas', () => {
     it('deshabilita el botón si la plataforma no terminó su integración', async () => {
       await montar({ disponible: false });
 
-      expect(screen.getByRole('button', { name: /CONECTAR CON MERCADO PAGO/ })).toBeDisabled();
+      expect(screen.getByRole('button', { name: /Conectar con Mercado Pago/ })).toBeDisabled();
       expect(screen.getByText(/todavía no terminó de configurar/)).toBeInTheDocument();
     });
   });
@@ -278,7 +278,7 @@ describe('SeccionEntradas', () => {
         respuestaDe({ error: 'Hay 3 evento(s) cobrando entradas con esta cuenta.' }, false, 409)
       );
 
-      fireEvent.click(screen.getByRole('button', { name: 'DESCONECTAR' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Desconectar' }));
 
       await waitFor(() => expect(window.confirm).toHaveBeenCalled());
     });
@@ -287,7 +287,7 @@ describe('SeccionEntradas', () => {
       await montar({ cobros: CONECTADO });
 
       global.fetch.mockReturnValueOnce(respuestaDe({ error: 'Hay 3 evento(s)' }, false, 409));
-      fireEvent.click(screen.getByRole('button', { name: 'DESCONECTAR' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Desconectar' }));
 
       await waitFor(() => expect(window.confirm).toHaveBeenCalled());
       expect(global.fetch).toHaveBeenCalledTimes(2);
@@ -297,7 +297,7 @@ describe('SeccionEntradas', () => {
       await montar({ cobros: CONECTADO });
 
       global.fetch.mockReturnValueOnce(respuestaDe({ cobros: SIN_CONECTAR }));
-      fireEvent.click(screen.getByRole('button', { name: 'DESCONECTAR' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Desconectar' }));
 
       expect(await screen.findByText('Mercado Pago desconectado')).toBeInTheDocument();
       expect(window.confirm).not.toHaveBeenCalled();
@@ -306,12 +306,12 @@ describe('SeccionEntradas', () => {
 
   describe('email de contacto', () => {
     const escribir = (valor) =>
-      fireEvent.change(screen.getByLabelText('EMAIL DE CONTACTO'), { target: { value: valor } });
+      fireEvent.change(screen.getByLabelText('Email de contacto'), { target: { value: valor } });
 
     it('muestra el contacto ya cargado', async () => {
       await montar({ emailContacto: 'hola@lasala.com' });
 
-      expect(screen.getByLabelText('EMAIL DE CONTACTO')).toHaveValue('hola@lasala.com');
+      expect(screen.getByLabelText('Email de contacto')).toHaveValue('hola@lasala.com');
     });
 
     it('guarda al salir del campo', async () => {
@@ -319,7 +319,7 @@ describe('SeccionEntradas', () => {
       await montar({ onGuardarContacto });
 
       escribir('hola@lasala.com');
-      fireEvent.blur(screen.getByLabelText('EMAIL DE CONTACTO'));
+      fireEvent.blur(screen.getByLabelText('Email de contacto'));
 
       expect(onGuardarContacto).toHaveBeenCalledWith('hola@lasala.com');
     });
@@ -330,7 +330,7 @@ describe('SeccionEntradas', () => {
       await montar({ emailContacto: 'hola@lasala.com', onGuardarContacto });
 
       escribir('');
-      fireEvent.blur(screen.getByLabelText('EMAIL DE CONTACTO'));
+      fireEvent.blur(screen.getByLabelText('Email de contacto'));
 
       expect(onGuardarContacto).toHaveBeenCalledWith('');
     });
@@ -340,7 +340,7 @@ describe('SeccionEntradas', () => {
       await montar({ onGuardarContacto });
 
       escribir('esto no es un mail');
-      fireEvent.blur(screen.getByLabelText('EMAIL DE CONTACTO'));
+      fireEvent.blur(screen.getByLabelText('Email de contacto'));
 
       expect(onGuardarContacto).not.toHaveBeenCalled();
       expect(screen.getByText(/no parece una dirección válida/)).toBeInTheDocument();
@@ -351,7 +351,7 @@ describe('SeccionEntradas', () => {
       const onGuardarContacto = vi.fn();
       await montar({ emailContacto: 'hola@lasala.com', onGuardarContacto });
 
-      fireEvent.blur(screen.getByLabelText('EMAIL DE CONTACTO'));
+      fireEvent.blur(screen.getByLabelText('Email de contacto'));
 
       expect(onGuardarContacto).not.toHaveBeenCalled();
     });
@@ -372,7 +372,7 @@ describe('SeccionEntradas', () => {
       await montar();
 
       global.fetch.mockReturnValue(respuestaDe({ eventos: [] }));
-      fireEvent.click(screen.getByRole('button', { name: 'VENTAS' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Ventas' }));
 
       expect(await screen.findByLabelText('Buscar por nombre del evento')).toBeInTheDocument();
       expect(screen.queryByText(/Conectá tu cuenta de Mercado Pago/)).not.toBeInTheDocument();

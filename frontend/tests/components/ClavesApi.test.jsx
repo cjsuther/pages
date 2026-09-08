@@ -58,7 +58,7 @@ describe('ClavesApi', () => {
   it('no deja crear una clave sin nombre', async () => {
     await montar();
 
-    expect(screen.getByRole('button', { name: 'CREAR' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Crear' })).toBeDisabled();
   });
 
   /**
@@ -74,7 +74,7 @@ describe('ClavesApi', () => {
 
     global.fetch.mockReturnValueOnce(respuestaDe({ clave: 'rzn_secreta', id: 4 }));
     global.fetch.mockReturnValueOnce(respuestaDe({ claves: [CLAVE] }));
-    fireEvent.click(screen.getByRole('button', { name: 'CREAR' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Crear' }));
 
     expect(await screen.findByText('rzn_secreta')).toBeInTheDocument();
     expect(screen.getByText(/no la vas a poder volver a ver/)).toBeInTheDocument();
@@ -86,7 +86,7 @@ describe('ClavesApi', () => {
     fireEvent.change(screen.getByLabelText('Nombre de la clave'), { target: { value: 'X' } });
     global.fetch.mockReturnValueOnce(respuestaDe({ clave: 'rzn_secreta', id: 4 }));
     global.fetch.mockReturnValueOnce(respuestaDe({ claves: [] }));
-    fireEvent.click(screen.getByRole('button', { name: 'CREAR' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Crear' }));
 
     await screen.findByText('rzn_secreta');
     fireEvent.click(screen.getByLabelText('Copiar la clave'));
@@ -99,7 +99,7 @@ describe('ClavesApi', () => {
 
     fireEvent.change(screen.getByLabelText('Nombre de la clave'), { target: { value: 'X' } });
     global.fetch.mockReturnValueOnce(respuestaDe({ error: 'Llegaste al máximo de claves' }, false));
-    fireEvent.click(screen.getByRole('button', { name: 'CREAR' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Crear' }));
 
     expect(await screen.findByText('Llegaste al máximo de claves')).toBeInTheDocument();
   });
@@ -130,7 +130,7 @@ describe('ClavesApi', () => {
   it('aclara que casi nunca hace falta una clave', async () => {
     await montar();
 
-    expect(screen.getByText(/CUÁNDO HACE FALTA UNA CLAVE/)).toBeInTheDocument();
+    expect(screen.getByText(/Cuándo hace falta una clave/)).toBeInTheDocument();
     expect(screen.getByText(/se autoriza solo/)).toBeInTheDocument();
   });
 });
@@ -148,7 +148,7 @@ describe('Conexiones', () => {
   const montarConexiones = async (conexiones = []) => {
     global.fetch.mockReturnValueOnce(respuestaDe({ conexiones }));
     const vista = renderConProviders(<Conexiones />);
-    await screen.findByText('APLICACIONES CONECTADAS');
+    await screen.findByText('Aplicaciones conectadas');
 
     return vista;
   };

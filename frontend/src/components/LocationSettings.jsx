@@ -59,10 +59,14 @@ function LocationSettings({ alGuardar = () => {} }) {
       async (position) => {
         const lat = position.coords.latitude;
         const lng = position.coords.longitude;
-        const nombre = (await reverseGeocode(lat, lng)) || `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+        // Si el geocoder inverso no devuelve nada, el nombre queda vacío y la
+        // tarjeta muestra "Ubicación sin nombre" con las coordenadas debajo.
+        // Antes se guardaba la coordenada como nombre y la tarjeta repetía el
+        // mismo número dos veces.
+        const nombre = await reverseGeocode(lat, lng);
 
-        setLocation({ latitude: lat, longitude: lng, location_name: nombre });
-        setSearchValue(nombre);
+        setLocation({ latitude: lat, longitude: lng, location_name: nombre || '' });
+        if (nombre) setSearchValue(nombre);
         setMessage('Listo. Acordate de guardar.');
         setLoading(false);
       },

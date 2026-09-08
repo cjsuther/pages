@@ -31,7 +31,7 @@ describe('Settings', () => {
     it('no muestra las solapas', () => {
       renderConProviders(<Settings />);
 
-      expect(screen.queryByRole('button', { name: 'MI UBICACIÓN' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Mi ubicación' })).not.toBeInTheDocument();
     });
   });
 
@@ -41,7 +41,7 @@ describe('Settings', () => {
     it('muestra el título del perfil', () => {
       renderConProviders(<Settings />, { auth: auth() });
 
-      expect(screen.getByRole('heading', { name: 'PERFIL' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Perfil' })).toBeInTheDocument();
     });
 
     it('muestra el email del usuario', () => {
@@ -53,24 +53,24 @@ describe('Settings', () => {
     it('ofrece las tres solapas', () => {
       renderConProviders(<Settings />, { auth: auth() });
 
-      expect(screen.getByRole('button', { name: 'MI UBICACIÓN' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'BUSCAR PÁGINAS' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'PÁGINAS QUE SIGO' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Mi ubicación' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Buscar páginas' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Páginas que sigo' })).toBeInTheDocument();
     });
 
     it('arranca en la solapa de ubicación', () => {
       renderConProviders(<Settings />, { auth: auth() });
 
-      expect(screen.getByRole('button', { name: 'MI UBICACIÓN' }).className).toContain('bg-white');
+      expect(screen.getByRole('button', { name: 'Mi ubicación' }).className).toContain('bg-verde');
     });
 
     it('cambia de solapa', () => {
       renderConProviders(<Settings />, { auth: auth() });
 
-      fireEvent.click(screen.getByRole('button', { name: 'PÁGINAS QUE SIGO' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Páginas que sigo' }));
 
-      expect(screen.getByRole('button', { name: 'PÁGINAS QUE SIGO' }).className).toContain('bg-white');
-      expect(screen.getByRole('button', { name: 'MI UBICACIÓN' }).className).not.toContain('bg-white');
+      expect(screen.getByRole('button', { name: 'Páginas que sigo' }).className).toContain('bg-verde');
+      expect(screen.getByRole('button', { name: 'Mi ubicación' }).className).not.toContain('bg-verde');
     });
 
     it('cierra sesión desde el botón de salir', () => {
