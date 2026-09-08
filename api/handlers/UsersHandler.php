@@ -21,7 +21,12 @@ class UsersHandler
             $stmt = $db->prepare('SELECT id, email, name FROM users WHERE id = ?');
             $stmt->execute([$req->userId()]);
 
-            return Response::ok(['user' => $stmt->fetch(PDO::FETCH_ASSOC)]);
+            return Response::ok([
+                'user' => $stmt->fetch(PDO::FETCH_ASSOC),
+                // Para que la interfaz sepa qué ofrecer. El permiso no depende
+                // de esto: cada endpoint lo vuelve a verificar por su cuenta.
+                'es_plataforma' => Plataforma::esAdmin($db, $req->userId()),
+            ]);
         }
 
         if ($req->method === 'PUT') {

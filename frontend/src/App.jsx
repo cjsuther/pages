@@ -4,6 +4,7 @@ import { HelmetProvider } from 'react-helmet-async';
 import { usePageTracking } from './hooks/usePageTracking';
 import Home from './pages/Home';
 import ParaArtistas from './pages/ParaArtistas';
+import Comisiones from './pages/Comisiones';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Pages from './pages/Pages';
@@ -32,12 +33,30 @@ function AppRoutes() {
 function App() {
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [user, setUser] = useState(null);
+  // Si esta persona administra la plataforma. Sólo decide qué ofrece la
+  // interfaz: cada endpoint vuelve a verificarlo por su cuenta, así que
+  // ponerlo en true a mano desde la consola no habilita nada.
+  const [esPlataforma, setEsPlataforma] = useState(false);
 
   useEffect(() => {
-    if (token) {
-      const userData = JSON.parse(localStorage.getItem('user') || 'null');
-      setUser(userData);
+    if (!token) {
+      setEsPlataforma(false);
+      return undefined;
     }
+
+    const userData = JSON.parse(localStorage.getItem('user') || 'null');
+    setUser(userData);
+
+    let vigente = true;
+
+    fetch(`${API_URL}/users/profile.php`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (vigente && d) setEsPlataforma(Boolean(d.es_plataforma));
+      })
+      .catch(() => {});
+
+    return () => { vigente = false; };
   }, [token]);
 
   const login = (token, user) => {
@@ -61,7 +80,7 @@ function App() {
 
   return (
     <HelmetProvider>
-      <AuthContext.Provider value={{ token, user, login, logout, updateUser, apiUrl: API_URL }}>
+      <AuthContext.Provider value={{ token, user, esPlataforma, login, logout, updateUser, apiUrl: API_URL }}>
         <BrowserRouter>
           <AppRoutes />
           <Routes>
@@ -80,6 +99,9 @@ function App() {
             <Route path="/register" element={!token ? <Register /> : <Navigate to="/" />} />
             <Route path="/pages" element={token ? <Pages /> : <Navigate to="/login" />} />
             <Route path="/my-pages" element={token ? <MyPages /> : <Navigate to="/login" />} />
+            {/* El reporte de la plataforma. Quién puede verlo lo decide el
+                servidor: acá sólo se exige estar identificado. */}
+            <Route path="/comisiones" element={token ? <Comisiones /> : <Navigate to="/login" />} />
             <Route path="/page/:id" element={token ? <PageEditor /> : <Navigate to="/login" />} />
             <Route path="/page/:id/item/:linkId" element={token ? <ItemEditor /> : <Navigate to="/login" />} />
             <Route path="/evento/:id" element={<EventDetail />} />

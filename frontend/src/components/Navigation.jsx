@@ -12,6 +12,15 @@ const SECCIONES = [
   { a: '/my-pages', texto: 'Mis páginas' },
 ];
 
+/**
+ * Lo que sólo ve quien administra la plataforma. Esconder el enlace no es el
+ * control de acceso —eso lo decide el servidor en cada pedido— sino no
+ * ofrecerle a nadie una puerta que no le va a abrir.
+ */
+const SECCIONES_PLATAFORMA = [
+  { a: '/comisiones', texto: 'Comisiones' },
+];
+
 function MenuPerfil({ alNavegar = () => {} }) {
   const { user, token, logout, updateUser, apiUrl } = useContext(AuthContext);
   const [open, setOpen] = useState(false);
@@ -108,7 +117,7 @@ function MenuPerfil({ alNavegar = () => {} }) {
 }
 
 function Navigation() {
-  const { token } = useContext(AuthContext);
+  const { token, esPlataforma } = useContext(AuthContext);
   const location = useLocation();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
@@ -127,7 +136,7 @@ function Navigation() {
 
             {token && (
               <div className="hidden md:flex gap-1">
-                {SECCIONES.map(({ a, texto }) => (
+                {[...SECCIONES, ...(esPlataforma ? SECCIONES_PLATAFORMA : [])].map(({ a, texto }) => (
                   <Link
                     key={a}
                     to={a}
@@ -184,7 +193,7 @@ function Navigation() {
           <div className="md:hidden pb-6 pt-2 border-t border-borde space-y-1">
             {token ? (
               <>
-                {SECCIONES.map(({ a, texto }) => (
+                {[...SECCIONES, ...(esPlataforma ? SECCIONES_PLATAFORMA : [])].map(({ a, texto }) => (
                   <Link
                     key={a}
                     to={a}
