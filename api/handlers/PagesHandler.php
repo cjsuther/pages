@@ -365,8 +365,10 @@ class PagesHandler
             // rompe todo lo que apunte a la dirección anterior —el link en la bio
             // de Instagram, los QR ya impresos, lo que alguien haya compartido—,
             // así que sólo lo mueve quien administra la plataforma.
+            $usuarioSinCambios = false;
+
             if (array_key_exists('url_slug', $req->body)) {
-                $error = self::asignarSlug($db, $req->body['url_slug'], $pageId, $req, $fields, $values);
+                $error = self::asignarSlug($db, $req->body['url_slug'], $pageId, $req, $fields, $values, $usuarioSinCambios);
 
                 if ($error !== null) {
                     return $error;
@@ -394,7 +396,9 @@ class PagesHandler
             // Las redes se sincronizan aparte: no son columnas de `pages`.
             $tieneRedes = is_array($req->input('socials'));
 
-            if (empty($fields) && !$tieneRedes) {
+            // Mandar el usuario que ya está guardado es pedir que quede como
+            // está: se responde que sí, no "no mandaste nada".
+            if (empty($fields) && !$tieneRedes && !$usuarioSinCambios) {
                 return Response::error(400, 'No fields to update');
             }
 
@@ -461,7 +465,7 @@ class PagesHandler
      * y haga clic afuera manda su propio slug sin querer cambiarlo. Sin esto,
      * al dueño le aparecería un error por no haber hecho nada.
      */
-    private static function asignarSlug($db, $valor, $pageId, Request $req, array &$fields, array &$values)
+    private static function asignarSlug($db, $valor, $pageId, Request $req, array &$fields, array &$values, &$sinCambios)
     {
         $slug = self::normalizarSlug($valor);
 
@@ -470,6 +474,8 @@ class PagesHandler
         $actual = (string) $stmt->fetchColumn();
 
         if ($slug === $actual) {
+            $sinCambios = true;
+
             return null;
         }
 

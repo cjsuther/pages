@@ -587,6 +587,25 @@ class PagesHandlerTest extends HandlerTestCase
         $this->assertStringNotContainsString('url_slug = ?', $this->db->callsFor('UPDATE pages SET')[0]['sql']);
     }
 
+    /**
+     * Mandar sólo el usuario que ya está guardado es pedir que quede como
+     * está. Antes contestaba "no mandaste campos", que es confuso para
+     * cualquier cliente que no sea el editor.
+     */
+    public function testMandarSoloElMismoUsuarioNoEsUnError()
+    {
+        $this->autorizarPagina();
+        $this->usuarioActual('mi-pagina');
+        $this->db->onSelect('SELECT * FROM pages WHERE id = ?', [['id' => 5, 'url_slug' => 'mi-pagina']]);
+
+        $res = PagesHandler::detail($this->db,
+            $this->put(['url_slug' => 'mi-pagina'], $this->user(), ['id' => '5']));
+
+        $this->assertStatus(200, $res);
+        $this->assertSame('mi-pagina', $res->body['page']['url_slug']);
+        $this->assertNoWrites();
+    }
+
     public function testLaPlataformaCambiaElUsuario()
     {
         $this->esLaPlataforma();
