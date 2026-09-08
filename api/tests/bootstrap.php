@@ -27,7 +27,10 @@ define('JWT_EXPIRATION', 86400);
 define('SUPERADMIN_EMAILS', ['plataforma@test']);
 
 define('FRONTEND_URL', 'https://frontend.test');
-define('UPLOAD_URL', 'https://api.test');
+// Con la misma forma que en producción: UPLOAD_URL es la base de la API y la
+// API cuelga de /api. Con el valor de antes —sin sufijo— no había forma de que
+// un test notara que la URL del aviso de pago se armaba con un /api de más.
+define('UPLOAD_URL', 'https://rezonar.test/api');
 
 define('GOOGLE_CLIENT_ID', 'test-google-client-id.apps.googleusercontent.com');
 define('GOOGLE_CLIENT_SECRET', 'test-google-client-secret');

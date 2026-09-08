@@ -87,6 +87,47 @@ class CheckoutHandlerTest extends HandlerTestCase
         $this->assertSame('reservada', $r->body['estado']);
     }
 
+    /**
+     * La dirección del aviso tiene que existir. Estuvo mal desde el principio
+     * —con un /api de más— y no lo vio nadie: Mercado Pago avisaba a un 404,
+     * respondía a nadie, y las compras pagadas se quedaban en reservada hasta
+     * vencer. El comprador veía "vencida" con la plata ya cobrada.
+     *
+     * Se afirma la URL completa y no un fragmento: el bug era justamente un
+     * pedazo de más en el medio, y un assertStringContainsString('aviso-pago')
+     * lo habría dado por bueno.
+     */
+    public function testLaPreferenciaAvisaAUnaDireccionQueExiste()
+    {
+        $this->hayEventoQueVende();
+        $this->hayCredencialesDeCobro('oauth', 2);
+        $this->db->onWrite('UPDATE ticket_orders SET comision', 1);
+        $http = $this->httpQueCreaLaPreferencia();
+
+        CheckoutHandler::comprar($this->db, $this->pedido(), $http);
+        $enviado = $http->jsonDe('/checkout/preferences');
+
+        $this->assertStringStartsWith(
+            'https://rezonar.test/api/public/aviso-pago.php?orden=',
+            $enviado['notification_url']
+        );
+        $this->assertStringNotContainsString('/api/api/', $enviado['notification_url']);
+    }
+
+    /** El comprador vuelve al frente, no a la API. */
+    public function testElCompradorVuelveALaPantallaDeSuEntrada()
+    {
+        $this->hayEventoQueVende();
+        $this->hayCredencialesDeCobro('oauth', 2);
+        $this->db->onWrite('UPDATE ticket_orders SET comision', 1);
+        $http = $this->httpQueCreaLaPreferencia();
+
+        CheckoutHandler::comprar($this->db, $this->pedido(), $http);
+        $enviado = $http->jsonDe('/checkout/preferences');
+
+        $this->assertStringStartsWith(FRONTEND_URL . '/entrada/', $enviado['back_urls']['success']);
+    }
+
     /** Sin cobro no hay checkout: la reserva queda confirmada en el acto. */
     public function testUnaReservaSinPrecioNoPasaPorMercadoPago()
     {

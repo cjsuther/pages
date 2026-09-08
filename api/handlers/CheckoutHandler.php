@@ -287,8 +287,18 @@ class CheckoutHandler
         return rtrim(FRONTEND_URL, '/') . '/entrada/' . $codigo;
     }
 
+    /**
+     * A dónde avisa Mercado Pago cuando se paga.
+     *
+     * UPLOAD_URL es la base de la API —de ahí cuelgan también las imágenes, en
+     * UPLOAD_URL/uploads/—, así que la ruta va tal cual. Antes se le agregaba
+     * un '/api' de más: en producción, donde UPLOAD_URL vale
+     * https://rezon.ar/api, la dirección quedaba .../api/api/public/... y daba
+     * 404. Mercado Pago avisaba, nadie contestaba y las compras pagadas se
+     * quedaban en reservada hasta vencer, sin dejar rastro del intento.
+     */
     private static function urlDeAviso($codigo)
     {
-        return rtrim(UPLOAD_URL, '/') . '/api/public/aviso-pago.php?orden=' . $codigo;
+        return rtrim(UPLOAD_URL, '/') . '/public/aviso-pago.php?orden=' . $codigo;
     }
 }
