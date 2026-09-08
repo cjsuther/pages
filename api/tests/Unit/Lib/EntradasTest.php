@@ -583,6 +583,38 @@ class EntradasTest extends HandlerTestCase
         $this->assertSame(807.29, $r['resumen']['comision_mercadopago']);
     }
 
+    /**
+     * Los tres números tienen que cerrar: recaudado menos las dos comisiones da
+     * el neto. Si no cierran, la pantalla muestra una resta que no da y parece
+     * que faltara plata.
+     *
+     * Por eso la comisión de Mercado Pago sale de la resta y no de su campo:
+     * mp_comisiones incluye la comisión de plataforma cuando el pago se leyó
+     * por su id y no cuando se leyó por búsqueda, así que restarla de ahí deja
+     * un agujero del tamaño de nuestra comisión.
+     */
+    public function testLasDosComisionesYElNetoCierranContraLoRecaudado()
+    {
+        $this->hayVentas([
+            // Leída por id: mp_comisiones incluye los 300 nuestros.
+            $this->venta(['id' => 1, 'codigo' => 'A', 'total' => '20000.00', 'comision' => '300.00',
+                          'mp_neto' => '18892.71', 'mp_comisiones' => '1107.29', 'mp_comision_cobrada' => '300.00']),
+            // Leída por búsqueda: mp_comisiones NO los incluye.
+            $this->venta(['id' => 2, 'codigo' => 'B', 'total' => '30000.00', 'comision' => '450.00',
+                          'mp_neto' => '27889.06', 'mp_comisiones' => '1660.94', 'mp_comision_cobrada' => '450.00']),
+        ]);
+
+        $r = Entradas::ventasDelEvento($this->db, 100)['resumen'];
+
+        $this->assertSame(50000.0, $r['recaudado']);
+        $this->assertSame(46781.77, $r['neto']);
+        $this->assertSame(
+            $r['neto'],
+            round($r['recaudado'] - $r['comision'] - $r['comision_mercadopago'], 2),
+            'la resta que muestra la pantalla tiene que dar el neto'
+        );
+    }
+
     /** Sin el dato de Mercado Pago se estima, y se avisa que falta. */
     public function testSinNetoDeMercadoPagoSeEstimaYSeAvisa()
     {

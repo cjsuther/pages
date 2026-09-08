@@ -587,11 +587,14 @@ class Entradas
                     $comisionCobrada += (float) $cobrada;
                 }
 
-                // Lo que se lleva Mercado Pago es todo lo descontado menos lo
-                // nuestro. Es el pedazo que la pantalla nunca mostró y que
-                // explica por qué "te queda" prometía de más.
-                if (isset($orden['mp_comisiones']) && $cobrada !== null) {
-                    $comisionMercadoPago += (float) $orden['mp_comisiones'] - (float) $cobrada;
+                // Lo que se lleva Mercado Pago sale de la resta y no de su campo
+                // de comisiones: mp_comisiones no es consistente entre los dos
+                // endpoints —el detalle de un pago incluye la comisión de
+                // plataforma en el desglose y la búsqueda no—, así que restarla
+                // de ahí deja los números sin cerrar. Con total menos neto menos
+                // lo nuestro cierra siempre, porque el neto lo dice Mercado Pago.
+                if (isset($orden['mp_neto']) && $cobrada !== null) {
+                    $comisionMercadoPago += (float) $orden['total'] - (float) $orden['mp_neto'] - (float) $cobrada;
                 }
 
                 // Sin el dato de Mercado Pago no se suma nada: es preferible
