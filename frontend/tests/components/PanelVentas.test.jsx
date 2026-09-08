@@ -88,10 +88,30 @@ describe('PanelVentas', () => {
      */
     it('detalla las dos comisiones que se descontaron', async () => {
       await montar({
-        resumen: { recaudado: 10000, comision: 1000, comision_mercadopago: 400, neto: 8600 },
+        resumen: {
+          recaudado: 10000, comision: 1000, comision_cobrada: 1000,
+          comision_mercadopago: 400, neto: 8600,
+        },
       });
 
       expect(screen.getByText(/1\.000 de Rezonar y .*400 de Mercado Pago/)).toBeInTheDocument();
+    });
+
+    /**
+     * Si Mercado Pago ignoró el split, el desglose tiene que decir lo que pasó
+     * —Rezonar no se llevó nada— y no lo que pedimos que pasara.
+     */
+    it('muestra lo cobrado y no lo pedido', async () => {
+      await montar({
+        resumen: {
+          recaudado: 10000, comision: 1000, comision_cobrada: 0,
+          comision_mercadopago: 400, neto: 9600,
+        },
+      });
+
+      const detalle = screen.getByText(/^menos /);
+      expect(detalle).toHaveTextContent('menos $ 400 de Mercado Pago');
+      expect(detalle).not.toHaveTextContent('Rezonar');
     });
 
     it('sin comisiones no muestra el detalle', async () => {

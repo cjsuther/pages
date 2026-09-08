@@ -407,8 +407,15 @@ function Telefono({ numero, nombre }) {
 function detalleDeDescuentos(resumen) {
   const partes = [];
 
-  if (resumen.comision > 0) {
-    partes.push(`${formatearPrecio(resumen.comision)} de Rezonar`);
+  // Lo cobrado y no lo pedido: acá va lo que pasó. Si Mercado Pago ignoró el
+  // split, esta línea tiene que decir que Rezonar no se llevó nada, y el aviso
+  // de más abajo es el que explica la diferencia.
+  const nuestra = resumen.comision_cobrada !== undefined
+    ? resumen.comision_cobrada
+    : resumen.comision;
+
+  if (nuestra > 0) {
+    partes.push(`${formatearPrecio(nuestra)} de Rezonar`);
   }
 
   if (resumen.comision_mercadopago > 0) {

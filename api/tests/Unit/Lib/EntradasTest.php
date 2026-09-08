@@ -610,7 +610,7 @@ class EntradasTest extends HandlerTestCase
         $this->assertSame(46781.77, $r['neto']);
         $this->assertSame(
             $r['neto'],
-            round($r['recaudado'] - $r['comision'] - $r['comision_mercadopago'], 2),
+            round($r['recaudado'] - $r['comision_cobrada'] - $r['comision_mercadopago'], 2),
             'la resta que muestra la pantalla tiene que dar el neto'
         );
     }
@@ -624,6 +624,33 @@ class EntradasTest extends HandlerTestCase
 
         $this->assertSame(19700.0, $r['resumen']['neto']);
         $this->assertSame(1, $r['resumen']['ventas_sin_dato']);
+    }
+
+    /**
+     * El caso que importa: Mercado Pago ignoró el marketplace_fee.
+     *
+     * Pedimos 300 y cobró 0. El desglose tiene que decir 0 —es lo que pasó— y
+     * la resta tiene que seguir cerrando. Mostrar ahí los 300 que pedimos sería
+     * poner una intención donde va un hecho, y además dejaría la cuenta sin
+     * cerrar por esos mismos 300.
+     */
+    public function testSiElSplitNoSeCobroElDesgloseLoDiceYLaCuentaCierra()
+    {
+        $this->hayVentas([$this->venta([
+            'total' => '20000.00', 'comision' => '300.00',
+            'mp_neto' => '18892.71', 'mp_comisiones' => '1107.29',
+            'mp_comision_cobrada' => '0.00',
+        ])]);
+
+        $r = Entradas::ventasDelEvento($this->db, 100)['resumen'];
+
+        $this->assertSame(300.0, $r['comision'], 'lo que pedimos, para poder avisar');
+        $this->assertSame(0.0, $r['comision_cobrada'], 'lo que se cobró de verdad');
+        $this->assertSame(1107.29, $r['comision_mercadopago']);
+        $this->assertSame(
+            $r['neto'],
+            round($r['recaudado'] - $r['comision_cobrada'] - $r['comision_mercadopago'], 2)
+        );
     }
 
     public function testElResumenCuentaSoloLasPagadas()

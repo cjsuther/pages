@@ -557,7 +557,6 @@ class Entradas
         // tiene ese dato se usa la estimación vieja para no dejar un hueco, y
         // $sinDato avisa que el total no está cerrado.
         $netoReal = 0.0;
-        $comisionMercadoPago = 0.0;
         $reservadas = 0;
         $porAcreditar = 0.0;
         $acreditado = 0.0;
@@ -581,20 +580,15 @@ class Entradas
                 // respuesta: Mercado Pago no cobró nada.
                 $cobrada = isset($orden['mp_comision_cobrada']) ? $orden['mp_comision_cobrada'] : null;
 
+                // Lo cobrado sale de Mercado Pago. Cuando todavía no lo sabemos
+                // se usa lo que pedimos —no hay evidencia de que no se haya
+                // cobrado— y $comisionSinDato avisa que el número no está
+                // confirmado.
                 if ($cobrada === null) {
                     $comisionSinDato++;
+                    $comisionCobrada += (float) $orden['comision'];
                 } else {
                     $comisionCobrada += (float) $cobrada;
-                }
-
-                // Lo que se lleva Mercado Pago sale de la resta y no de su campo
-                // de comisiones: mp_comisiones no es consistente entre los dos
-                // endpoints —el detalle de un pago incluye la comisión de
-                // plataforma en el desglose y la búsqueda no—, así que restarla
-                // de ahí deja los números sin cerrar. Con total menos neto menos
-                // lo nuestro cierra siempre, porque el neto lo dice Mercado Pago.
-                if (isset($orden['mp_neto']) && $cobrada !== null) {
-                    $comisionMercadoPago += (float) $orden['total'] - (float) $orden['mp_neto'] - (float) $cobrada;
                 }
 
                 // Sin el dato de Mercado Pago no se suma nada: es preferible
@@ -633,14 +627,23 @@ class Entradas
                 'vendidas'   => $vendidas,
                 'reservadas' => $reservadas,
                 'recaudado'  => round($recaudado, 2),
+                // Lo que pedimos que se nos descuente. Sólo sirve para
+                // compararlo contra lo cobrado: si no coinciden, el
+                // marketplace_fee se está mandando y Mercado Pago lo ignora.
                 'comision'   => round($comisiones, 2),
-                // Pedido contra cobrado. Si no coinciden, el marketplace_fee se
-                // está mandando y Mercado Pago lo está ignorando.
+                // Lo que Mercado Pago efectivamente cobró. Es el que va en el
+                // desglose de la pantalla: mostrar lo pedido ahí sería mostrar
+                // una intención donde va un hecho.
                 'comision_cobrada'  => round($comisionCobrada, 2),
                 'comision_sin_dato' => $comisionSinDato,
-                // La de Mercado Pago, que también sale del total y no era
-                // nuestra para descontar ni para ocultar.
-                'comision_mercadopago' => round($comisionMercadoPago, 2),
+                // La de Mercado Pago es lo que falta para que la cuenta cierre:
+                // de lo recaudado salió lo nuestro, salió lo suyo, y lo que
+                // queda es el neto que él mismo informa. Se despeja en vez de
+                // leerse porque su campo de comisiones no es consistente entre
+                // endpoints —el detalle de un pago incluye la comisión de
+                // plataforma en el desglose y la búsqueda no—, y despejando la
+                // resta de la pantalla cierra siempre.
+                'comision_mercadopago' => round($recaudado - $netoReal - $comisionCobrada, 2),
                 // Lo que efectivamente entra a la cuenta. Antes era
                 // recaudado - nuestra comisión, que ignoraba la de Mercado
                 // Pago: prometía varios miles de más en una venta chica.
