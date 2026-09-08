@@ -61,9 +61,9 @@ const pagina = (overrides = {}) => ({
   ...overrides,
 });
 
-function mockearEditor({ page = pagina(), admins = [], pending = [], results = [] } = {}) {
+function mockearEditor({ page = pagina(), admins = [], pending = [], results = [], esPlataforma = false } = {}) {
   return mockFetch({
-    'pages/detail.php': { page },
+    'pages/detail.php': { page, es_plataforma: esPlataforma },
     'admins/index.php': { admins },
     'admins/detail.php': { message: 'ok' },
     'collaborations/index.php': { pending, collaborations: [] },
@@ -516,6 +516,81 @@ describe('PageEditor', () => {
       await render();
 
       expect(screen.getByText('Template de diseño')).toBeInTheDocument();
+    });
+
+    // ------------------------------------------------------------ usuario
+
+    /**
+     * Cambiar el usuario rompe todo lo que apunte a la dirección anterior —el
+     * link de la bio de Instagram, los QR ya impresos—, así que para el dueño
+     * el campo se ve pero no se toca.
+     */
+    it('el usuario está de sólo lectura para el dueño', async () => {
+      await render({ page: pagina({ url_slug: 'mi-pagina' }) });
+
+      const campo = screen.getByLabelText('Usuario');
+      expect(campo).toHaveValue('mi-pagina');
+      expect(campo).toBeDisabled();
+    });
+
+    it('la plataforma sí puede editar el usuario', async () => {
+      await render({ page: pagina({ url_slug: 'mi-pagina' }), esPlataforma: true });
+
+      expect(screen.getByLabelText('Usuario')).toBeEnabled();
+    });
+
+    it('guarda el usuario nuevo al salir del campo', async () => {
+      const { llamadas } = await render({
+        page: pagina({ url_slug: 'mi-pagina' }),
+        esPlataforma: true,
+      });
+
+      const campo = screen.getByLabelText('Usuario');
+      fireEvent.change(campo, { target: { value: 'otro-usuario' } });
+      fireEvent.blur(campo);
+
+      await waitFor(() => {
+        const put = llamadas.find((l) => l.options.method === 'PUT');
+        expect(cuerpoDe(put)).toEqual({ url_slug: 'otro-usuario' });
+      });
+    });
+
+    /** Guardar al salir del campo no puede mandar un cambio que no hubo. */
+    it('no guarda si el usuario no cambió', async () => {
+      const { llamadas } = await render({
+        page: pagina({ url_slug: 'mi-pagina' }),
+        esPlataforma: true,
+      });
+
+      fireEvent.blur(screen.getByLabelText('Usuario'));
+
+      await waitFor(() => {
+        expect(llamadas.find((l) => l.options.method === 'PUT')).toBeUndefined();
+      });
+    });
+
+    /**
+     * Si el servidor rechaza el usuario, dejarlo en pantalla haría creer que la
+     * dirección cambió cuando sigue siendo la de antes.
+     */
+    it('vuelve al usuario guardado si el servidor lo rechaza', async () => {
+      await render({ page: pagina({ url_slug: 'mi-pagina' }), esPlataforma: true });
+
+      // La página ya cargó: de acá en más el servidor rechaza el guardado.
+      global.fetch = vi.fn(() =>
+        Promise.resolve({
+          ok: false,
+          status: 400,
+          json: () => Promise.resolve({ error: 'Ese usuario ya está tomado por otra página' }),
+        })
+      );
+
+      const campo = screen.getByLabelText('Usuario');
+      fireEvent.change(campo, { target: { value: 'ocupado' } });
+      fireEvent.blur(campo);
+
+      expect(await screen.findByText('Ese usuario ya está tomado por otra página')).toBeInTheDocument();
+      expect(screen.getByLabelText('Usuario')).toHaveValue('mi-pagina');
     });
 
     it('enlaza a la página pública', async () => {

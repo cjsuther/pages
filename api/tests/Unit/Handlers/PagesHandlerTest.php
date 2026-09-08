@@ -541,6 +541,134 @@ class PagesHandlerTest extends HandlerTestCase
         $this->assertSame(['cards', 5], $this->db->paramsFor('UPDATE pages SET'));
     }
 
+    // ------------------------------------------------------------- usuario
+
+    /** El usuario actual de la página, que asignarSlug consulta para comparar. */
+    private function usuarioActual($slug)
+    {
+        $this->db->onSelect('SELECT url_slug FROM pages WHERE id = ?', [[$slug]]);
+    }
+
+    private function esLaPlataforma()
+    {
+        $this->db->onSelect('SELECT email FROM users', [['plataforma@test']]);
+    }
+
+    /**
+     * Cambiar el usuario rompe todo lo que apunte a la dirección anterior —el
+     * link de la bio, los QR impresos—, así que es una operación de soporte.
+     */
+    public function testElDuenoNoPuedeCambiarElUsuario()
+    {
+        $this->autorizarPagina();
+        $this->usuarioActual('mi-pagina');
+
+        $res = PagesHandler::detail($this->db,
+            $this->put(['url_slug' => 'otro'], $this->user(), ['id' => '5']));
+
+        $this->assertStatus(403, $res);
+        $this->assertNoWrites();
+    }
+
+    /**
+     * El editor guarda al salir del campo: cualquiera que abra la pantalla y
+     * haga clic afuera manda su propio slug. Eso no es un cambio y no puede
+     * devolverle un error a quien no hizo nada.
+     */
+    public function testMandarElMismoUsuarioNoEsUnCambio()
+    {
+        $this->autorizarPagina();
+        $this->usuarioActual('mi-pagina');
+
+        $res = PagesHandler::detail($this->db,
+            $this->put(['url_slug' => 'mi-pagina', 'title' => 'Nuevo'], $this->user(), ['id' => '5']));
+
+        $this->assertStatus(200, $res);
+        $this->assertStringNotContainsString('url_slug = ?', $this->db->callsFor('UPDATE pages SET')[0]['sql']);
+    }
+
+    public function testLaPlataformaCambiaElUsuario()
+    {
+        $this->esLaPlataforma();
+        $this->db->onSelect('SELECT 1 FROM pages WHERE id = ? LIMIT 1', [[1]]);
+        $this->usuarioActual('mi-pagina');
+        $this->db->onSelect('SELECT id FROM pages WHERE url_slug = ? AND id <> ?', []);
+        $this->db->onWrite('UPDATE pages SET', 1);
+
+        $res = PagesHandler::detail($this->db,
+            $this->put(['url_slug' => 'nuevo-usuario'], $this->user(9), ['id' => '5']));
+
+        $this->assertStatus(200, $res);
+        $this->assertStringContainsString('url_slug = ?', $this->db->callsFor('UPDATE pages SET')[0]['sql']);
+        $this->assertSame(['nuevo-usuario', 5], $this->db->paramsFor('UPDATE pages SET'));
+    }
+
+    public function testElUsuarioSeNormalizaAlGuardarlo()
+    {
+        $this->esLaPlataforma();
+        $this->db->onSelect('SELECT 1 FROM pages WHERE id = ? LIMIT 1', [[1]]);
+        $this->usuarioActual('mi-pagina');
+        $this->db->onSelect('SELECT id FROM pages WHERE url_slug = ? AND id <> ?', []);
+        $this->db->onWrite('UPDATE pages SET', 1);
+
+        PagesHandler::detail($this->db,
+            $this->put(['url_slug' => 'Nuevo Usuario!'], $this->user(9), ['id' => '5']));
+
+        $this->assertSame(['nuevousuario', 5], $this->db->paramsFor('UPDATE pages SET'));
+    }
+
+    public function testNoSePuedeDejarElUsuarioVacio()
+    {
+        $this->esLaPlataforma();
+        $this->db->onSelect('SELECT 1 FROM pages WHERE id = ? LIMIT 1', [[1]]);
+        $this->usuarioActual('mi-pagina');
+
+        $res = PagesHandler::detail($this->db,
+            $this->put(['url_slug' => '!!!'], $this->user(9), ['id' => '5']));
+
+        $this->assertStatus(400, $res);
+        $this->assertNoWrites();
+    }
+
+    public function testNoSePuedeUsarUnUsuarioReservado()
+    {
+        $this->esLaPlataforma();
+        $this->db->onSelect('SELECT 1 FROM pages WHERE id = ? LIMIT 1', [[1]]);
+        $this->usuarioActual('mi-pagina');
+
+        $res = PagesHandler::detail($this->db,
+            $this->put(['url_slug' => 'artistas'], $this->user(9), ['id' => '5']));
+
+        $this->assertStatus(400, $res);
+        $this->assertNoWrites();
+    }
+
+    public function testNoSePuedeUsarUnUsuarioTomado()
+    {
+        $this->esLaPlataforma();
+        $this->db->onSelect('SELECT 1 FROM pages WHERE id = ? LIMIT 1', [[1]]);
+        $this->usuarioActual('mi-pagina');
+        $this->db->onSelect('SELECT id FROM pages WHERE url_slug = ? AND id <> ?', [['id' => 9]]);
+
+        $res = PagesHandler::detail($this->db,
+            $this->put(['url_slug' => 'ocupado'], $this->user(9), ['id' => '5']));
+
+        $this->assertStatus(400, $res);
+        $this->assertNoWrites();
+    }
+
+    /** El editor lo necesita para saber si abre el campo o lo deja de sólo lectura. */
+    public function testVerDiceSiQuienMiraEsLaPlataforma()
+    {
+        $this->autorizarPagina();
+        $this->db->onSelect('SELECT * FROM pages WHERE id = ?', [['id' => 5, 'url_slug' => 'mi-pagina']]);
+
+        $res = PagesHandler::detail($this->db, $this->get(['id' => '5'], $this->user()));
+
+        $this->assertStatus(200, $res);
+        $this->assertFalse($res->body['es_plataforma']);
+    }
+
     // ------------------------------------------------------- dominio propio
 
     /**

@@ -100,6 +100,15 @@ function PageEditor() {
   // El dominio propio se guarda aparte: la API lo puede rechazar —mal escrito,
   // o ya tomado por otra página— y updatePage descarta los errores en silencio.
   const [dominioError, setDominioError] = useState('');
+  // Cambiar el usuario de una página rompe todo lo que apunte a la dirección
+  // anterior, así que es una operación de soporte: el servidor sólo la acepta
+  // de quien administra la plataforma y acá el campo se abre para esa persona.
+  const [esPlataforma, setEsPlataforma] = useState(false);
+  const [usuarioError, setUsuarioError] = useState('');
+  // El usuario tal como quedó guardado. Sirve para dos cosas: no mandar un
+  // cambio cuando no lo hubo —el campo guarda al salir— y volver a él si el
+  // servidor rechaza el nuevo.
+  const usuarioGuardado = useRef('');
 
   // ¿El usuario actual es el dueño de la página? (gestionar admins es solo del dueño)
   const isOwner = page && user && Number(page.user_id) === Number(user.id);
@@ -184,6 +193,8 @@ function PageEditor() {
       const data = await response.json();
       if (response.ok) {
         setPage(data.page);
+        setEsPlataforma(Boolean(data.es_plataforma));
+        usuarioGuardado.current = data.page.url_slug;
       }
     } catch (err) {
       console.error('Error fetching page:', err);
@@ -229,6 +240,37 @@ function PageEditor() {
   const guardarColor = (campo, valor) => {
     setPage({ ...page, [campo]: valor });
     updatePage({ [campo]: valor });
+  };
+
+  const guardarUsuario = async (valor) => {
+    setUsuarioError('');
+
+    if (valor === usuarioGuardado.current) return;
+
+    try {
+      setGlobalLoading(true);
+      const response = await fetch(`${apiUrl}/pages/detail.php?id=${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ url_slug: valor })
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        setUsuarioError(data.error || 'No pudimos guardar el usuario');
+        // Se vuelve al que está guardado: dejar en pantalla uno que no se
+        // aceptó haría creer que la dirección cambió.
+        setPage((actual) => ({ ...actual, url_slug: usuarioGuardado.current }));
+        return;
+      }
+
+      usuarioGuardado.current = data.page.url_slug;
+      setPage((actual) => ({ ...actual, url_slug: data.page.url_slug }));
+    } catch (err) {
+      setUsuarioError('No pudimos guardar el usuario');
+    } finally {
+      setGlobalLoading(false);
+    }
   };
 
   const guardarDominio = async (valor) => {
@@ -715,13 +757,39 @@ function PageEditor() {
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-tinta mb-1.5">URL</label>
-                <input
-                  type="text"
-                  value={page.url_slug}
-                  disabled
-                  className="w-full px-4 py-3 rounded-xl bg-papel-hueso border border-borde text-tinta-suave"
-                />
+                <label htmlFor="usuario-pagina" className="block text-sm font-semibold text-tinta mb-1.5">
+                  Usuario
+                </label>
+                <div className={`flex items-center rounded-xl border overflow-hidden transition-colors ${
+                  esPlataforma
+                    ? 'bg-white border-borde-fuerte focus-within:border-verde-oscuro'
+                    : 'bg-papel-hueso border-borde'
+                }`}>
+                  <span className="pl-4 text-sm text-tinta-suave select-none">rezon.ar/</span>
+                  <input
+                    id="usuario-pagina"
+                    type="text"
+                    value={page.url_slug}
+                    disabled={!esPlataforma}
+                    onChange={(e) => setPage({ ...page, url_slug: e.target.value.toLowerCase() })}
+                    onBlur={(e) => guardarUsuario(e.target.value)}
+                    className={`flex-1 min-w-0 px-1 py-3 bg-transparent border-0 focus:outline-none ${
+                      esPlataforma ? 'text-tinta' : 'text-tinta-suave'
+                    }`}
+                  />
+                </div>
+                {usuarioError ? (
+                  <p className="text-xs text-red-700 mt-2">{usuarioError}</p>
+                ) : esPlataforma ? (
+                  <p className="text-xs text-tinta-suave mt-2">
+                    Cambiarlo rompe los links que ya circulan: el de la bio de Instagram, los QR
+                    impresos, lo que se haya compartido. Avisale a quien maneja la página.
+                  </p>
+                ) : (
+                  <p className="text-xs text-tinta-suave mt-2">
+                    La dirección de tu página. No se puede cambiar desde acá: escribinos y la movemos.
+                  </p>
+                )}
               </div>
             </div>
 

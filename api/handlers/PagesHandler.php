@@ -283,7 +283,12 @@ class PagesHandler
                 $page['socials'] = Redes::deLaPagina($db, $pageId);
             }
 
-            return Response::ok(['page' => $page]);
+            // El editor necesita saberlo para habilitar el campo de usuario:
+            // cambiar la dirección es una operación de soporte, no del dueño.
+            return Response::ok([
+                'page' => $page,
+                'es_plataforma' => Plataforma::esAdmin($db, $req->userId()),
+            ]);
 
         } catch (Exception $e) {
             return Response::serverError($e->getMessage());
@@ -350,6 +355,18 @@ class PagesHandler
             // no puede estar tomado por otra página.
             if (array_key_exists('dominio', $req->body)) {
                 $error = self::asignarDominio($db, $req->body['dominio'], $pageId, $fields, $values);
+
+                if ($error !== null) {
+                    return $error;
+                }
+            }
+
+            // El usuario (url_slug) tampoco entra en la lista genérica: cambiarlo
+            // rompe todo lo que apunte a la dirección anterior —el link en la bio
+            // de Instagram, los QR ya impresos, lo que alguien haya compartido—,
+            // así que sólo lo mueve quien administra la plataforma.
+            if (array_key_exists('url_slug', $req->body)) {
+                $error = self::asignarSlug($db, $req->body['url_slug'], $pageId, $req, $fields, $values);
 
                 if ($error !== null) {
                     return $error;
@@ -436,6 +453,51 @@ class PagesHandler
      *
      * @return Response|null Un error para devolver, o null si está todo bien.
      */
+    /**
+     * Cambia la dirección pública de una página.
+     *
+     * Mandar el mismo valor que ya tiene no es un cambio y no se toca nada: el
+     * editor guarda al salir del campo, así que cualquiera que abra la pantalla
+     * y haga clic afuera manda su propio slug sin querer cambiarlo. Sin esto,
+     * al dueño le aparecería un error por no haber hecho nada.
+     */
+    private static function asignarSlug($db, $valor, $pageId, Request $req, array &$fields, array &$values)
+    {
+        $slug = self::normalizarSlug($valor);
+
+        $stmt = $db->prepare('SELECT url_slug FROM pages WHERE id = ?');
+        $stmt->execute([$pageId]);
+        $actual = (string) $stmt->fetchColumn();
+
+        if ($slug === $actual) {
+            return null;
+        }
+
+        if (!Plataforma::esAdmin($db, $req->userId())) {
+            return Response::error(403, 'La dirección de la página no se puede cambiar desde acá. Escribinos y la movemos nosotros.');
+        }
+
+        if ($slug === '') {
+            return Response::error(400, 'El usuario sólo puede tener letras, números y guiones');
+        }
+
+        if (self::esReservado($slug)) {
+            return Response::error(400, 'Ese usuario está reservado y no se puede usar');
+        }
+
+        $stmt = $db->prepare('SELECT id FROM pages WHERE url_slug = ? AND id <> ?');
+        $stmt->execute([$slug, $pageId]);
+
+        if ($stmt->fetch()) {
+            return Response::error(400, 'Ese usuario ya está tomado por otra página');
+        }
+
+        $fields[] = 'url_slug = ?';
+        $values[] = $slug;
+
+        return null;
+    }
+
     private static function asignarDominio($db, $valor, $pageId, array &$fields, array &$values)
     {
         // Vaciarlo es la forma de dejar de usar un dominio propio.

@@ -237,28 +237,28 @@ describe('MyPages', () => {
     function completar({ titulo = 'Nueva', descripcion = 'Desc', slug = 'nueva-pagina' } = {}) {
       fireEvent.change(screen.getByLabelText('Título'), { target: { value: titulo } });
       fireEvent.change(screen.getByLabelText('Descripción'), { target: { value: descripcion } });
-      fireEvent.change(screen.getByLabelText('Tu dirección'), { target: { value: slug } });
+      fireEvent.change(screen.getByLabelText('Usuario'), { target: { value: slug } });
     }
 
     it('abre el modal', async () => {
       await abrirModal();
 
       expect(screen.getByLabelText('Título')).toBeInTheDocument();
-      expect(screen.getByLabelText('Tu dirección')).toBeInTheDocument();
+      expect(screen.getByLabelText('Usuario')).toBeInTheDocument();
     });
 
     it('pasa el slug a minúsculas mientras se escribe', async () => {
       await abrirModal();
 
-      fireEvent.change(screen.getByLabelText('Tu dirección'), { target: { value: 'MiPagina' } });
+      fireEvent.change(screen.getByLabelText('Usuario'), { target: { value: 'MiPagina' } });
 
-      expect(screen.getByLabelText('Tu dirección')).toHaveValue('mipagina');
+      expect(screen.getByLabelText('Usuario')).toHaveValue('mipagina');
     });
 
     it('restringe el slug por patrón', async () => {
       await abrirModal();
 
-      expect(screen.getByLabelText('Tu dirección')).toHaveAttribute('pattern', '[a-z0-9-]+');
+      expect(screen.getByLabelText('Usuario')).toHaveAttribute('pattern', '[a-z0-9-]+');
     });
 
     it('rechaza los slugs reservados sin llamar a la API', async () => {

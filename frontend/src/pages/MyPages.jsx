@@ -422,7 +422,7 @@ function MyPages() {
           </div>
 
           <div>
-            <Etiqueta htmlFor="nueva-pagina-url">Tu dirección</Etiqueta>
+            <Etiqueta htmlFor="nueva-pagina-url">Usuario</Etiqueta>
             <div className="flex items-center gap-0 rounded-xl border border-borde-fuerte overflow-hidden focus-within:border-verde-oscuro transition-colors">
               <span className="pl-4 pr-0.5 text-tinta-suave text-sm select-none">rezon.ar/</span>
               <Campo
