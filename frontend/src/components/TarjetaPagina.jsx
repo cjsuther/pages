@@ -14,7 +14,10 @@ function TarjetaPagina({ pagina, mostrarSeguidores = true }) {
   const slug = pagina.url_slug || pagina.slug;
 
   return (
-    <div className="flex flex-col bg-white border border-borde rounded-2xl p-5 transition-colors hover:border-borde-fuerte">
+    // min-w-0: sin esto la tarjeta no puede achicarse por debajo del ancho de
+    // su contenido —un título o un slug largo, que en una celda de grilla se
+    // miden sin cortar— y estira la página entera a lo ancho en el teléfono.
+    <div className="flex flex-col min-w-0 bg-white border border-borde rounded-2xl p-5 transition-colors hover:border-borde-fuerte">
       <a
         href={`/${slug}`}
         target="_blank"
@@ -24,7 +27,7 @@ function TarjetaPagina({ pagina, mostrarSeguidores = true }) {
         <Avatar src={pagina.profile_image} nombre={pagina.title} tamano="lg" />
 
         <div className="min-w-0 flex-1">
-          <h3 className="text-lg font-bold text-tinta leading-tight group-hover:text-verde-oscuro transition-colors flex items-center gap-1.5">
+          <h3 className="text-lg font-bold text-tinta leading-tight group-hover:text-verde-oscuro transition-colors flex items-center gap-1.5 min-w-0">
             <span className="truncate">{pagina.title}</span>
             <ExternalLink className="w-3.5 h-3.5 flex-shrink-0 opacity-0 group-hover:opacity-60 transition-opacity" />
           </h3>

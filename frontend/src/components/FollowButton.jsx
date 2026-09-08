@@ -5,6 +5,7 @@ import { AuthContext } from '../App';
 import { textoSobre, conAlfa } from '../utils/colores';
 import { RADIOS_KM, RADIO_POR_DEFECTO, cuerpoDePreferencia, leerPreferencia } from '../utils/alertas';
 import { Boton, Modal } from './ui';
+import { useBloqueoDeScroll } from '../hooks/useBloqueoDeScroll';
 import EleccionDeAlerta from './EleccionDeAlerta';
 
 /**
@@ -28,6 +29,8 @@ function FollowButton({ pageId, colores = null }) {
   const [guardando, setGuardando] = useState(false);
   const [modo, setModo] = useState('todas');
   const [radio, setRadio] = useState(RADIO_POR_DEFECTO);
+
+  useBloqueoDeScroll(showModal);
 
   useEffect(() => {
     if (token && pageId) {

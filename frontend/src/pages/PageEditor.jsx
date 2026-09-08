@@ -763,7 +763,7 @@ function PageEditor() {
             <div className="grid md:grid-cols-2 gap-6 mb-6">
               <div>
                 <label className="block text-sm font-semibold text-tinta mb-1.5">Imagen de perfil</label>
-                <div className="flex items-center gap-4">
+                <div className="flex flex-wrap items-center gap-4">
                   {page.profile_image && (
                     <div className="relative">
                       <img src={page.profile_image} alt="Perfil" className="w-20 h-20 object-cover rounded-full" />
@@ -772,7 +772,7 @@ function PageEditor() {
                           setPage({ ...page, profile_image: null });
                           updatePage({ profile_image: null });
                         }}
-                        className="absolute -top-2 -right-2 bg-red-600 text-tinta rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-700"
+                        className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-700"
                       >
                         ×
                       </button>
@@ -782,7 +782,7 @@ function PageEditor() {
                     type="file"
                     accept="image/*"
                     onChange={handleProfileImageUpload}
-                    className="text-sm text-tinta-media"
+                    className="text-sm text-tinta-media max-w-full min-w-0"
                   />
                 </div>
                 <p className="text-xs text-tinta-suave mt-1">JPG, PNG, GIF o WebP. Máximo 5MB</p>
@@ -790,7 +790,7 @@ function PageEditor() {
 
               <div>
                 <label className="block text-sm font-semibold text-tinta mb-1.5">Imagen de fondo</label>
-                <div className="flex items-center gap-4">
+                <div className="flex flex-wrap items-center gap-4">
                   {page.background_image && (
                     <div className="relative">
                       <img src={page.background_image} alt="Fondo" className="w-20 h-20 object-cover rounded" />
@@ -799,7 +799,7 @@ function PageEditor() {
                           setPage({ ...page, background_image: null });
                           updatePage({ background_image: null });
                         }}
-                        className="absolute -top-2 -right-2 bg-red-600 text-tinta rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-700"
+                        className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-700"
                       >
                         ×
                       </button>
@@ -809,7 +809,7 @@ function PageEditor() {
                     type="file"
                     accept="image/*"
                     onChange={handleBackgroundImageUpload}
-                    className="text-sm text-tinta-media"
+                    className="text-sm text-tinta-media max-w-full min-w-0"
                   />
                 </div>
                 <p className="text-xs text-tinta-suave mt-1">JPG, PNG, GIF o WebP. Máximo 5MB</p>
@@ -1486,13 +1486,13 @@ function PageEditor() {
                     : tipoMedia === 'imagen' ? 'Imagen'
                     : 'PORTADA (OPCIONAL)'}
                 </label>
-                <div className="flex items-center gap-4">
+                <div className="flex flex-wrap items-center gap-4">
                   {newLink.image_url && (
                     <div className="relative">
                       <img src={newLink.image_url} alt="Vista previa" className="w-16 h-16 object-cover rounded" />
                       <button
                         onClick={() => setNewLink({ ...newLink, image_url: null })}
-                        className="absolute -top-2 -right-2 bg-red-600 text-tinta rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-700 text-lg font-bold"
+                        className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-700 text-lg font-bold"
                         type="button"
                       >
                         ×
@@ -1504,7 +1504,7 @@ function PageEditor() {
                     accept="image/*"
                     onChange={(e) => handleLinkImageUpload(e)}
                     disabled={uploadingLinkImage}
-                    className="text-sm text-tinta-media"
+                    className="text-sm text-tinta-media max-w-full min-w-0"
                     required={selectedGroup.type === 'galeria' && tipoMedia === 'imagen' && !newLink.image_url}
                   />
                   {uploadingLinkImage && <span className="text-sm text-tinta-suave">Subiendo...</span>}

@@ -257,7 +257,7 @@ function PanelVentas({ linkId, apiUrl, token }) {
                 type="button"
                 onClick={confirmarCancelacion}
                 disabled={cancelando}
-                className="px-4 py-2 text-sm font-bold bg-red-600 text-tinta rounded hover:bg-red-500 transition disabled:opacity-50"
+                className="px-4 py-2 text-sm font-bold bg-red-600 text-white rounded hover:bg-red-500 transition disabled:opacity-50"
               >
                 {cancelando ? 'Cancelando...' : 'Cancelar la compra'}
               </button>

@@ -2,6 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Nada debe poder desplazar la página a lo ancho.
+   `clip` y no `hidden`: hidden convierte al elemento en un contenedor de
+   scroll y rompe el `position: sticky` de la barra de navegación. */
+html,
+body {
+  overflow-x: clip;
+}
+
 body {
   margin: 0;
   /* La pila sale de tailwind.config.js: definirla acá otra vez es garantía de

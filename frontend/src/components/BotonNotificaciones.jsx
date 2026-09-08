@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { Bell, X } from 'lucide-react';
 import { AuthContext } from '../App';
+import { useBloqueoDeScroll } from '../hooks/useBloqueoDeScroll';
 import { estaSuscrito } from '../utils/pushNotifications';
 import { diagnosticar, PASOS } from '../utils/pwa';
 import ActivarNotificaciones from './ActivarNotificaciones';
@@ -24,6 +25,8 @@ function BotonNotificaciones() {
   const { token } = useContext(AuthContext);
   const [suscrito, setSuscrito] = useState(null);
   const [abierto, setAbierto] = useState(false);
+
+  useBloqueoDeScroll(abierto);
 
   useEffect(() => {
     let vigente = true;
@@ -49,7 +52,7 @@ function BotonNotificaciones() {
       <button
         type="button"
         onClick={() => setAbierto(true)}
-        className="inline-flex items-center gap-2 px-5 py-3 bg-verde text-verde-tinta font-bold hover:bg-verde-oscuro hover:text-tinta transition"
+        className="inline-flex items-center gap-2 rounded-full px-5 py-3 bg-verde text-verde-tinta font-semibold hover:bg-verde-oscuro hover:text-white transition-colors"
       >
         <Bell className="w-4 h-4" />
         Activá las notificaciones

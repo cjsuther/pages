@@ -23,7 +23,7 @@ function TarjetaEvento({ evento, distanciaKm = null, mostrarPagina = true }) {
   return (
     <Link
       to={`/evento/${evento.id}`}
-      className="group flex flex-col bg-white border border-borde rounded-2xl overflow-hidden transition-colors hover:border-verde focus-visible:border-verde"
+      className="group flex flex-col min-w-0 bg-white border border-borde rounded-2xl overflow-hidden transition-colors hover:border-verde focus-visible:border-verde"
     >
       {evento.image_url && (
         <div className="relative aspect-[16/10] overflow-hidden bg-papel-hueso">
@@ -56,7 +56,7 @@ function TarjetaEvento({ evento, distanciaKm = null, mostrarPagina = true }) {
         </h3>
 
         {mostrarPagina && evento.page_title && (
-          <div className="flex items-center gap-2 text-sm text-tinta-media">
+          <div className="flex items-center gap-2 text-sm text-tinta-media min-w-0">
             <Avatar src={evento.page_image} nombre={evento.page_title} tamano="sm" className="!w-5 !h-5 !text-[10px]" />
             <span className="truncate font-medium">{evento.page_title}</span>
           </div>

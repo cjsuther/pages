@@ -1,5 +1,6 @@
 import React, { useState, useContext } from 'react';
 import { AuthContext } from '../App';
+import { useBloqueoDeScroll } from '../hooks/useBloqueoDeScroll';
 import { Users, X } from 'lucide-react';
 
 function FollowersPopup({ pageId, followerCount, className = '' }) {
@@ -7,6 +8,8 @@ function FollowersPopup({ pageId, followerCount, className = '' }) {
   const [open, setOpen] = useState(false);
   const [followers, setFollowers] = useState([]);
   const [loading, setLoading] = useState(false);
+
+  useBloqueoDeScroll(open);
 
   const openPopup = async (e) => {
     e.preventDefault();
@@ -46,7 +49,7 @@ function FollowersPopup({ pageId, followerCount, className = '' }) {
           onClick={close}
         >
           <div
-            className="bg-white rounded-lg max-w-md w-full max-h-96 overflow-hidden flex flex-col shadow-xl"
+            className="bg-white rounded-2xl border border-borde w-full max-w-md max-h-[70vh] overflow-hidden flex flex-col shadow-xl"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-4 py-3 border-b border-borde">

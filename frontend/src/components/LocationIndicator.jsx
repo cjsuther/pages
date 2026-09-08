@@ -2,6 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MapPin, X, Loader } from 'lucide-react';
 import { AuthContext } from '../App';
+import { useBloqueoDeScroll } from '../hooks/useBloqueoDeScroll';
 import GooglePlacesAutocomplete from './GooglePlacesAutocomplete';
 import { handleApiResponse } from '../utils/apiHandler';
 
@@ -14,6 +15,8 @@ function LocationIndicator() {
   const [address, setAddress] = useState('');
   const [coordinates, setCoordinates] = useState(null);
   const [currentLocation, setCurrentLocation] = useState(null);
+
+  useBloqueoDeScroll(showPopup);
 
   useEffect(() => {
     checkUserLocation();
@@ -153,7 +156,7 @@ function LocationIndicator() {
 
       {showPopup && (
         <div className="fixed inset-0 bg-tinta/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white border border-borde max-w-lg w-full p-8">
+          <div className="bg-white border border-borde rounded-2xl w-full max-w-lg p-6 sm:p-8 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-2xl font-bold">Ubicación</h2>
               <button
@@ -172,7 +175,7 @@ function LocationIndicator() {
               <button
                 onClick={handleUseCurrentLocation}
                 disabled={loading}
-                className="w-full bg-verde text-verde-tinta px-6 py-4 font-bold hover:bg-verde-oscuro hover:text-tinta transition disabled:opacity-50 flex items-center justify-center gap-2"
+                className="w-full rounded-full bg-verde text-verde-tinta px-6 py-3.5 font-semibold hover:bg-verde-oscuro hover:text-white transition-colors disabled:opacity-40 flex items-center justify-center gap-2"
               >
                 {loading ? (
                   <>
@@ -218,7 +221,7 @@ function LocationIndicator() {
                 <button
                   onClick={handleSaveAddress}
                   disabled={loading || !coordinates}
-                  className="w-full bg-papel-hueso text-tinta px-6 py-3 font-bold hover:bg-papel-hueso transition disabled:opacity-50"
+                  className="w-full rounded-full border border-borde-fuerte text-tinta px-6 py-3 font-semibold hover:border-tinta transition-colors disabled:opacity-40"
                 >
                   Guardar dirección
                 </button>

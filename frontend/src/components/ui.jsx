@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { useBloqueoDeScroll } from '../hooks/useBloqueoDeScroll';
 
 /**
  * Las piezas visuales que se repiten en todo el sitio.
@@ -263,6 +264,8 @@ export function Avatar({ src, nombre = '?', tamano = 'md', className = '' }) {
  * modal del que sólo se sale con el botón correcto es una trampa.
  */
 export function Modal({ abierto, alCerrar, titulo = null, ancho = 'max-w-lg', children }) {
+  useBloqueoDeScroll(abierto);
+
   React.useEffect(() => {
     if (!abierto) return undefined;
 

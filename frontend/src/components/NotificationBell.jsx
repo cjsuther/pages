@@ -113,7 +113,7 @@ function NotificationBell() {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
         </svg>
         {unreadCount > 0 && (
-          <span className="absolute top-1 right-1 bg-red-500 text-tinta text-xs rounded-full w-5 h-5 flex items-center justify-center font-semibold">
+          <span className="absolute top-1 right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-semibold">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
@@ -121,7 +121,7 @@ function NotificationBell() {
 
       {showDropdown && (
         <div className="fixed inset-x-2 top-14 sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-96 bg-white rounded-lg shadow-xl border border-borde z-50 max-h-[80vh] sm:max-h-[600px] flex flex-col">
-          <div className="p-4 border-b border-borde flex items-center justify-between">
+          <div className="p-4 border-b border-borde flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-lg font-semibold text-tinta">Notificaciones</h3>
             {unreadCount > 0 && (
               <button
@@ -153,7 +153,7 @@ function NotificationBell() {
                 >
                   <div className="flex items-start gap-3">
                     {!notification.is_read && (
-                      <div className="w-2 h-2 bg-verde-claro0 rounded-full mt-2 flex-shrink-0"></div>
+                      <div className="w-2 h-2 bg-verde rounded-full mt-2 flex-shrink-0"></div>
                     )}
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-tinta text-sm mb-1">
@@ -165,8 +165,8 @@ function NotificationBell() {
                       <p className="text-sm text-tinta-suave mb-2">
                         {notification.message}
                       </p>
-                      <div className="flex items-center gap-2 text-xs text-tinta-suave">
-                        <span>{notification.page_title}</span>
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-tinta-suave min-w-0">
+                        <span className="truncate max-w-full">{notification.page_title}</span>
                         <span>•</span>
                         <span>{formatDate(notification.created_at)}</span>
                         {(notification.type === 'collaboration_request' || notification.type === 'collaboration_response') && (
