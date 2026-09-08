@@ -107,7 +107,8 @@ describe('BuscadorDeVentas', () => {
   it('avisa cuando la búsqueda no trae nada', async () => {
     await montar({ eventos: [] });
 
-    expect(screen.getByText(/Todavía no hay eventos con entradas/)).toBeInTheDocument();
+    // Arranca filtrando los que no vencieron, así que el cartel apunta ahí.
+    expect(screen.getByText(/No hay shows sin vencer con entradas/)).toBeInTheDocument();
   });
 
   it('distingue no tener eventos de que la búsqueda no encuentre', async () => {

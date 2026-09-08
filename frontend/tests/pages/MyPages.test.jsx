@@ -13,6 +13,7 @@ const pagina = (overrides = {}) => ({
   description: 'Una descripción',
   url_slug: 'mi-pagina',
   is_owner: 1,
+  is_admin: 0,
   ...overrides,
 });
 
@@ -97,14 +98,14 @@ describe('MyPages', () => {
     });
 
     it('la página administrada ofrece dejar de administrar', async () => {
-      await render({ pages: [pagina({ is_owner: 0 })] });
+      await render({ pages: [pagina({ is_owner: 0, is_admin: 1 })] });
 
       expect(await screen.findByRole('button', { name: 'Dejar de administrar' })).toBeInTheDocument();
       expect(screen.queryByText('Eliminar')).not.toBeInTheDocument();
     });
 
     it('marca las administradas con la etiqueta ADMIN', async () => {
-      await render({ pages: [pagina({ is_owner: 0 })] });
+      await render({ pages: [pagina({ is_owner: 0, is_admin: 1 })] });
 
       expect(await screen.findByText('Administrás esta página')).toBeInTheDocument();
     });
@@ -116,8 +117,21 @@ describe('MyPages', () => {
       expect(screen.queryByText('Administrás esta página')).not.toBeInTheDocument();
     });
 
+    /**
+     * Quien administra la plataforma ve páginas que no son suyas y que tampoco
+     * administra. No se le ofrece dejar de administrarlas: no hay nada que
+     * soltar, y el botón daría a entender que sí.
+     */
+    it('la página vista por acceso de plataforma no ofrece dejar de administrar', async () => {
+      await render({ pages: [pagina({ is_owner: 0, is_admin: 0 })] });
+
+      expect(await screen.findByText('Acceso de plataforma')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Dejar de administrar' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Eliminar' })).not.toBeInTheDocument();
+    });
+
     it('interpreta is_owner como texto (lo que devuelve MySQL)', async () => {
-      await render({ pages: [pagina({ is_owner: '1' })] });
+      await render({ pages: [pagina({ is_owner: '1', is_admin: 0 })] });
 
       await screen.findByText('Mi Página');
       expect(screen.queryByText('Administrás esta página')).not.toBeInTheDocument();
@@ -358,7 +372,7 @@ describe('MyPages', () => {
 
   describe('dejar de administrar', () => {
     it('pide confirmación', async () => {
-      await render({ pages: [pagina({ is_owner: 0 })] });
+      await render({ pages: [pagina({ is_owner: 0, is_admin: 1 })] });
 
       fireEvent.click(await screen.findByRole('button', { name: 'Dejar de administrar' }));
 
@@ -366,7 +380,7 @@ describe('MyPages', () => {
     });
 
     it('envía el DELETE al endpoint de administradores', async () => {
-      const { llamadas } = await render({ pages: [pagina({ id: 5, is_owner: 0 })] });
+      const { llamadas } = await render({ pages: [pagina({ id: 5, is_owner: 0, is_admin: 1 })] });
 
       fireEvent.click(await screen.findByRole('button', { name: 'Dejar de administrar' }));
 
@@ -378,7 +392,7 @@ describe('MyPages', () => {
 
     it('no hace nada si el usuario cancela', async () => {
       window.confirm = vi.fn(() => false);
-      const { llamadas } = await render({ pages: [pagina({ is_owner: 0 })] });
+      const { llamadas } = await render({ pages: [pagina({ is_owner: 0, is_admin: 1 })] });
 
       fireEvent.click(await screen.findByRole('button', { name: 'Dejar de administrar' }));
 

@@ -17,6 +17,13 @@ define('JWT_SECRET', 'CAMBIA_ESTO_POR_UNA_CLAVE_SEGURA_ALEATORIA');
 // cierra la sesión de todo el mundo. Por eso tiene un tope, aunque sea lejano.
 define('JWT_EXPIRATION', 31536000);
 
+// Quiénes administran la plataforma: pueden entrar a editar cualquier página
+// del sistema, para dar soporte sin pedirle la contraseña a nadie.
+//
+// Es "editar", no "es dueño": borrar una página y repartir sus administradores
+// siguen siendo del dueño real. Dejar la lista vacía apaga la función.
+define('SUPERADMIN_EMAILS', ['cjsuther@gmail.com']);
+
 define('FRONTEND_URL', 'http://localhost:5173');
 define('UPLOAD_URL', 'http://localhost:8000');
 

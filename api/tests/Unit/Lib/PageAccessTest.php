@@ -3,6 +3,7 @@
 namespace Tests\Unit\Lib;
 
 use PageAccess;
+use Plataforma;
 use Tests\Support\FakePdo;
 use PHPUnit\Framework\TestCase;
 
@@ -21,6 +22,19 @@ class PageAccessTest extends TestCase
     {
         parent::setUp();
         $this->db = new FakePdo();
+        Plataforma::olvidar();
+    }
+
+    protected function tearDown(): void
+    {
+        Plataforma::olvidar();
+        parent::tearDown();
+    }
+
+    /** El usuario de la petición administra la plataforma. */
+    private function esLaPlataforma()
+    {
+        $this->db->onSelect('SELECT email FROM users', [['plataforma@test']]);
     }
 
     // ------------------------------------------------------------- canManage
@@ -178,5 +192,58 @@ class PageAccessTest extends TestCase
             ['canManageGroup'],
             ['canManageLink'],
         ];
+    }
+
+    // ------------------------------------------------------------- plataforma
+
+    /**
+     * Quien administra la plataforma edita cualquier página: es el acceso de
+     * soporte. Sin esto habría que pedirle la contraseña al dueño o que lo
+     * invite como administrador de cada página, una por una.
+     */
+    public function testLaPlataformaPuedeAdministrarUnaPaginaAjena()
+    {
+        $this->esLaPlataforma();
+        $this->db->onSelect('SELECT 1 FROM pages WHERE id = ? LIMIT 1', [[1]]);
+
+        $this->assertTrue(PageAccess::canManage($this->db, 10, 5));
+    }
+
+    /** Ni siquiera la plataforma administra una página que no existe. */
+    public function testLaPlataformaNoAdministraUnaPaginaInexistente()
+    {
+        $this->esLaPlataforma();
+
+        $this->assertFalse(PageAccess::canManage($this->db, 999, 5));
+    }
+
+    public function testLaPlataformaPuedeAdministrarGruposYLinksAjenos()
+    {
+        $this->esLaPlataforma();
+        $this->db->onSelect('FROM link_groups WHERE id = ?', [[1]]);
+        $this->db->onSelect('FROM links WHERE id = ?', [[1]]);
+
+        $this->assertTrue(PageAccess::canManageGroup($this->db, 3, 5));
+        $this->assertTrue(PageAccess::canManageLink($this->db, 4, 5));
+    }
+
+    /**
+     * El límite del acceso de soporte: la plataforma edita, pero no es dueña.
+     * Borrar la página y repartir sus administradores siguen siendo del dueño
+     * real, así que nadie pierde el control de lo suyo.
+     */
+    public function testLaPlataformaNoEsDuena()
+    {
+        $this->esLaPlataforma();
+
+        $this->assertFalse(PageAccess::isOwner($this->db, 10, 5));
+    }
+
+    /** Un usuario cualquiera sigue necesitando ser dueño o administrador. */
+    public function testUnUsuarioComunNoHeredaElAccesoDeLaPlataforma()
+    {
+        $this->db->onSelect('SELECT email FROM users', [['alguien@test']]);
+
+        $this->assertFalse(PageAccess::canManage($this->db, 10, 5));
     }
 }

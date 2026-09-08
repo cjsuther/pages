@@ -78,13 +78,22 @@ class PagesHandler
             $porPagina = self::acotar((int) $req->param('por_pagina', self::POR_PAGINA), 1, self::MAX_POR_PAGINA);
             $pagina = max(1, (int) $req->param('pagina', 1));
 
-            // Quién ve qué: el dueño y los administradores aceptados.
-            $acceso = 'p.user_id = ?
-                       OR EXISTS (
-                           SELECT 1 FROM page_admins pa
-                           WHERE pa.page_id = p.id AND pa.user_id = ? AND pa.status = "accepted"
-                       )';
-            $params = [$usuario, $usuario];
+            // Quién ve qué: el dueño y los administradores aceptados. Quien
+            // administra la plataforma ve todas, porque si no las ve no puede
+            // entrar a arreglarlas: tendría el permiso pero no el camino.
+            $esPlataforma = Plataforma::esAdmin($db, $usuario);
+
+            if ($esPlataforma) {
+                $acceso = '1 = 1';
+                $params = [];
+            } else {
+                $acceso = 'p.user_id = ?
+                           OR EXISTS (
+                               SELECT 1 FROM page_admins pa
+                               WHERE pa.page_id = p.id AND pa.user_id = ? AND pa.status = "accepted"
+                           )';
+                $params = [$usuario, $usuario];
+            }
 
             $filtro = '';
 
@@ -111,17 +120,34 @@ class PagesHandler
 
             $offset = ($pagina - 1) * $porPagina;
 
+            // is_admin sale de la consulta y no se deduce de is_owner: para la
+            // plataforma las dos son falsas en una página ajena, y la interfaz
+            // necesita distinguir "sos admin de esto" de "entrás por soporte"
+            // para no ofrecerle dejar de administrar algo que nunca administró.
             $stmt = $db->prepare("
-                SELECT p.*, (p.user_id = ?) AS is_owner
+                SELECT p.*,
+                       (p.user_id = ?) AS is_owner,
+                       EXISTS (
+                           SELECT 1 FROM page_admins pa
+                           WHERE pa.page_id = p.id AND pa.user_id = ? AND pa.status = 'accepted'
+                       ) AS is_admin
                 FROM pages p
                 WHERE ($acceso)$filtro
                 ORDER BY p.created_at DESC
                 LIMIT $porPagina OFFSET $offset
             ");
-            $stmt->execute(array_merge([$usuario], $params));
+            $stmt->execute(array_merge([$usuario, $usuario], $params));
+
+            $paginasDeLaTanda = $stmt->fetchAll();
+
+            foreach ($paginasDeLaTanda as $i => $pagina_) {
+                $paginasDeLaTanda[$i]['is_owner'] = !empty($pagina_['is_owner']);
+                $paginasDeLaTanda[$i]['is_admin'] = !empty($pagina_['is_admin']);
+            }
 
             return Response::ok([
-                'pages' => $stmt->fetchAll(),
+                'pages' => $paginasDeLaTanda,
+                'es_plataforma' => $esPlataforma,
                 'paginacion' => [
                     'pagina'      => $pagina,
                     'por_pagina'  => $porPagina,

@@ -21,6 +21,11 @@ define('DB_PASS', 'rezonar_test');
 define('JWT_SECRET', 'test-secret-no-usar-en-produccion');
 define('JWT_EXPIRATION', 86400);
 
+// Un correo que ningún usuario de prueba tiene: así los tests que no hablan de
+// la plataforma siguen viendo exactamente los permisos de antes, y los que sí
+// pueden devolverlo desde `SELECT email FROM users` para activarla.
+define('SUPERADMIN_EMAILS', ['plataforma@test']);
+
 define('FRONTEND_URL', 'https://frontend.test');
 define('UPLOAD_URL', 'https://api.test');
 

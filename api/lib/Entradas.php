@@ -515,6 +515,10 @@ class Entradas
      *
      * @param array $filtros texto (nombre del evento), desde y hasta (fechas ISO)
      */
+    /** Estados del filtro de la lista de eventos con entradas. */
+    const ESTADOS_EVENTOS = ['vigentes', 'vencidos', 'todos'];
+    const ESTADO_POR_DEFECTO = 'vigentes';
+
     public static function eventosConEntradas($db, $pageId, array $filtros = [])
     {
         // Aparece si tiene entradas configuradas o si alguna vez tuvo una
@@ -543,6 +547,23 @@ class Entradas
                 $where[] = "l.event_date $comparador ?";
                 $params[] = $fecha;
             }
+        }
+
+        // Vencido o no. Por defecto se muestran los que todavía no pasaron:
+        // la lista se usa para mirar cómo va la venta de lo que viene, y con
+        // el histórico entero adelante hay que buscar el show de esta semana
+        // entre todos los del año pasado.
+        //
+        // Un evento sin fecha no está vencido: no hay contra qué compararlo, y
+        // esconderlo lo dejaría fuera de las dos listas.
+        $estado = isset($filtros['estado']) ? $filtros['estado'] : self::ESTADO_POR_DEFECTO;
+
+        if ($estado === 'vigentes') {
+            $where[] = '(l.event_date IS NULL OR l.event_date >= ?)';
+            $params[] = Fechas::hoy();
+        } elseif ($estado === 'vencidos') {
+            $where[] = 'l.event_date < ?';
+            $params[] = Fechas::hoy();
         }
 
         // Las ventas se resumen aparte y se pegan por link_id. Agrupar en la

@@ -3,6 +3,7 @@
 namespace Tests\Support;
 
 use PHPUnit\Framework\TestCase;
+use Plataforma;
 use Request;
 use Response;
 
@@ -19,6 +20,9 @@ abstract class HandlerTestCase extends TestCase
     {
         parent::setUp();
         $this->db = new FakePdo();
+        // El cache de Plataforma es estático y sobrevive al test: sin esto, uno
+        // que active el acceso de plataforma se lo deja puesto al siguiente.
+        Plataforma::olvidar();
     }
 
     // ------------------------------------------------------------ peticiones

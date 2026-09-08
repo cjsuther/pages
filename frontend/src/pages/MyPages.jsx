@@ -13,6 +13,10 @@ import {
   Tarjeta, Vacio,
 } from '../components/ui';
 
+/** El servidor manda booleanos; MySQL supo mandar 0/1 y no cuesta tolerarlo. */
+const esDuenia = (page) => page.is_owner === true || Number(page.is_owner) === 1;
+const esAdministradora = (page) => page.is_admin === true || Number(page.is_admin) === 1;
+
 function MyPages() {
   const { token, apiUrl } = useContext(AuthContext);
   const [pages, setPages] = useState([]);
@@ -305,8 +309,13 @@ function MyPages() {
                   )}
                 </div>
 
-                {Number(page.is_owner) !== 1 && (
-                  <Chip className="self-start mb-3">Administrás esta página</Chip>
+                {!esDuenia(page) && (
+                  <Chip
+                    tono={esAdministradora(page) ? 'neutro' : 'verde'}
+                    className="self-start mb-3"
+                  >
+                    {esAdministradora(page) ? 'Administrás esta página' : 'Acceso de plataforma'}
+                  </Chip>
                 )}
 
                 <h2 className="text-xl font-bold text-tinta leading-snug pr-16 text-balance">
@@ -333,11 +342,15 @@ function MyPages() {
                   <Boton a={`/page/${page.id}`} tamano="sm">
                     <Pencil className="w-3.5 h-3.5" /> Editar
                   </Boton>
-                  {Number(page.is_owner) === 1 ? (
+                  {esDuenia(page) && (
                     <Boton variante="fantasma" tamano="sm" onClick={() => deletePage(page.id)}>
                       Eliminar
                     </Boton>
-                  ) : (
+                  )}
+                  {/* A la página ajena que se ve por acceso de plataforma no se
+                      le ofrece "dejar de administrar": no se la administra, se
+                      entra a darle soporte, y el botón no tendría qué soltar. */}
+                  {!esDuenia(page) && esAdministradora(page) && (
                     <Boton variante="fantasma" tamano="sm" onClick={() => leavePage(page.id)}>
                       Dejar de administrar
                     </Boton>

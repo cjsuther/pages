@@ -482,13 +482,81 @@ class EntradasHandlerTest extends HandlerTestCase
     }
 
     /** Una fecha que no es una fecha se ignora en vez de romper la consulta. */
+    // ------------------------------------------------ vencidos y sin vencer
+
+    private function eventos(array $params)
+    {
+        $this->puedeAdministrar();
+        $this->hayEventosConEntradas();
+
+        $r = EntradasHandler::eventos($this->db,
+            new Request('GET', [], $params + ['page_id' => 5], $this->sesion()));
+
+        return [$r, $this->db->callsFor('FROM links l')[0]['sql']];
+    }
+
+    /**
+     * La lista se usa para mirar cómo va la venta de lo que viene. Con el
+     * histórico entero adelante hay que buscar el show de esta semana entre
+     * todos los del año pasado, así que por defecto se muestran los que
+     * todavía no pasaron.
+     */
+    public function testPorDefectoMuestraLosQueNoVencieron()
+    {
+        list($r, $sql) = $this->eventos([]);
+
+        $this->assertSame('vigentes', $r->body['estado']);
+        $this->assertStringContainsString('event_date >=', $sql);
+    }
+
+    /** Sin fecha no hay contra qué comparar: no está vencido. */
+    public function testUnEventoSinFechaCuentaComoVigente()
+    {
+        list(, $sql) = $this->eventos([]);
+
+        $this->assertStringContainsString('event_date IS NULL', $sql);
+    }
+
+    public function testPuedePedirSoloLosVencidos()
+    {
+        list($r, $sql) = $this->eventos(['estado' => 'vencidos']);
+
+        $this->assertSame('vencidos', $r->body['estado']);
+        $this->assertStringContainsString('event_date <', $sql);
+        $this->assertStringNotContainsString('event_date IS NULL', $sql);
+    }
+
+    public function testPuedePedirTodos()
+    {
+        list($r, $sql) = $this->eventos(['estado' => 'todos']);
+
+        $this->assertSame('todos', $r->body['estado']);
+        $this->assertStringNotContainsString('event_date >=', $sql);
+        $this->assertStringNotContainsString('event_date <', $sql);
+    }
+
+    /**
+     * Un estado que no existe cae en el de siempre: el filtro es una comodidad
+     * de la pantalla, y devolver 400 por un parámetro viejo sólo la rompería.
+     */
+    public function testUnEstadoDesconocidoCaeEnElPorDefecto()
+    {
+        list($r, $sql) = $this->eventos(['estado' => 'cualquiera']);
+
+        $this->assertSame('vigentes', $r->body['estado']);
+        $this->assertStringContainsString('event_date >=', $sql);
+    }
+
     public function testUnaFechaInvalidaNoLlegaALaConsulta()
     {
         $this->puedeAdministrar();
         $this->hayEventosConEntradas();
 
+        // estado=todos apaga el filtro de vencidos, que también compara por
+        // event_date: sin eso este test no puede distinguir su cláusula de la
+        // que agrega el filtro por defecto.
         EntradasHandler::eventos($this->db,
-            new Request('GET', [], ['page_id' => 5, 'desde' => 'ayer'], $this->sesion()));
+            new Request('GET', [], ['page_id' => 5, 'desde' => 'ayer', 'estado' => 'todos'], $this->sesion()));
 
         $sql = $this->db->callsFor('FROM links l')[0]['sql'];
         $this->assertStringNotContainsString('event_date >=', $sql);

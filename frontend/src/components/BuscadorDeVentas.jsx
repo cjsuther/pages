@@ -1,7 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Loader2, ArrowLeft, Ticket } from 'lucide-react';
 import PanelVentas from './PanelVentas';
+import { Campo } from './ui';
 import { formatearPrecio } from '../utils/entradas';
+
+/**
+ * Vencido o no. Arranca en los que todavía no pasaron: la pantalla se usa para
+ * mirar cómo va la venta de lo que viene, y con el histórico entero adelante
+ * hay que buscar el show de esta semana entre todos los del año pasado.
+ */
+const ESTADOS = [
+  { clave: 'vigentes', texto: 'Sin vencer' },
+  { clave: 'vencidos', texto: 'Vencidos' },
+  { clave: 'todos', texto: 'Todos' },
+];
 
 /**
  * Las ventas de todos los eventos de una página, sin pasar por el editor.
@@ -17,7 +29,7 @@ import { formatearPrecio } from '../utils/entradas';
  * distintas.
  */
 function BuscadorDeVentas({ pageId, apiUrl, token }) {
-  const [filtros, setFiltros] = useState({ q: '', desde: '', hasta: '' });
+  const [filtros, setFiltros] = useState({ q: '', desde: '', hasta: '', estado: 'vigentes' });
   const [eventos, setEventos] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
@@ -91,38 +103,56 @@ function BuscadorDeVentas({ pageId, apiUrl, token }) {
 
   return (
     <div>
+      <div className="flex flex-wrap items-center gap-2 mb-4" role="group" aria-label="Estado de los shows">
+        {ESTADOS.map(({ clave, texto }) => (
+          <button
+            key={clave}
+            type="button"
+            onClick={() => setFiltros({ ...filtros, estado: clave })}
+            aria-pressed={filtros.estado === clave}
+            className={`px-4 py-2 rounded-full text-sm font-semibold border transition-colors ${
+              filtros.estado === clave
+                ? 'bg-verde text-verde-tinta border-verde'
+                : 'bg-white text-tinta-media border-borde hover:border-borde-fuerte hover:text-tinta'
+            }`}
+          >
+            {texto}
+          </button>
+        ))}
+      </div>
+
       <div className="grid gap-3 md:grid-cols-[1fr_auto_auto] mb-6">
         <div className="relative">
-          <Search className="w-4 h-4 text-tinta-suave absolute left-4 top-1/2 -translate-y-1/2" />
-          <input
+          <Search className="w-4 h-4 text-tinta-suave absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <Campo
             type="search"
             value={filtros.q}
             onChange={cambiar('q')}
             placeholder="Buscar por nombre del evento"
             aria-label="Buscar por nombre del evento"
-            className="w-full pl-11 pr-4 py-3 bg-white border border-borde-fuerte text-tinta focus:border-verde-oscuro transition"
+            className="pl-11"
           />
         </div>
 
         <label className="flex items-center gap-2 text-xs text-tinta-suave">
           Desde
-          <input
+          <Campo
             type="date"
             value={filtros.desde}
             onChange={cambiar('desde')}
             aria-label="Desde"
-            className="px-3 py-3 bg-white border border-borde-fuerte text-tinta focus:border-verde-oscuro transition"
+            className="!w-auto !px-3"
           />
         </label>
 
         <label className="flex items-center gap-2 text-xs text-tinta-suave">
           Hasta
-          <input
+          <Campo
             type="date"
             value={filtros.hasta}
             onChange={cambiar('hasta')}
             aria-label="Hasta"
-            className="px-3 py-3 bg-white border border-borde-fuerte text-tinta focus:border-verde-oscuro transition"
+            className="!w-auto !px-3"
           />
         </label>
       </div>
@@ -142,7 +172,11 @@ function BuscadorDeVentas({ pageId, apiUrl, token }) {
         <p className="text-tinta-suave py-8">
           {filtros.q || filtros.desde || filtros.hasta
             ? 'Ningún evento con entradas coincide con la búsqueda.'
-            : 'Todavía no hay eventos con entradas en esta página.'}
+            : filtros.estado === 'vigentes'
+              ? 'No hay shows sin vencer con entradas. Probá con "Vencidos" o "Todos".'
+              : filtros.estado === 'vencidos'
+                ? 'Ningún show vencido tiene entradas cargadas.'
+                : 'Todavía no hay eventos con entradas en esta página.'}
         </p>
       )}
 

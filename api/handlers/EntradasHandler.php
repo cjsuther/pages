@@ -297,11 +297,22 @@ class EntradasHandler
             return Response::error(403, 'No podés ver las ventas de esta página');
         }
 
+        // Un estado que no existe se trata como el de siempre y no como error:
+        // el filtro es una comodidad de la pantalla, no un dato del que dependa
+        // nada, y devolver 400 por un parámetro viejo sólo rompería la vista.
+        $estado = (string) $req->param('estado', Entradas::ESTADO_POR_DEFECTO);
+
+        if (!in_array($estado, Entradas::ESTADOS_EVENTOS, true)) {
+            $estado = Entradas::ESTADO_POR_DEFECTO;
+        }
+
         return Response::ok([
+            'estado' => $estado,
             'eventos' => Entradas::eventosConEntradas($db, $pageId, [
-                'texto' => $req->param('q', ''),
-                'desde' => $req->param('desde', ''),
-                'hasta' => $req->param('hasta', ''),
+                'texto'  => $req->param('q', ''),
+                'desde'  => $req->param('desde', ''),
+                'hasta'  => $req->param('hasta', ''),
+                'estado' => $estado,
             ]),
         ]);
     }

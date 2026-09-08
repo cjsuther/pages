@@ -3,6 +3,7 @@
 namespace Tests\Unit\Handlers;
 
 use PagesHandler;
+use Plataforma;
 use Tests\Support\HandlerTestCase;
 
 class PagesHandlerTest extends HandlerTestCase
@@ -37,11 +38,55 @@ class PagesHandlerTest extends HandlerTestCase
         $this->assertStringContainsString('status = "accepted"', $sql);
     }
 
-    public function testListarPasaElUserIdTresVeces()
+    /** is_owner, is_admin y las dos veces de la condición de acceso. */
+    public function testListarPasaElUserIdCuatroVeces()
     {
         PagesHandler::index($this->db, $this->get([], $this->user(9)));
 
-        $this->assertSame([9, 9, 9], $this->db->paramsFor('AS is_owner'));
+        $this->assertSame([9, 9, 9, 9], $this->db->paramsFor('AS is_owner'));
+    }
+
+    // ------------------------------------------------------------- plataforma
+
+    /**
+     * Quien administra la plataforma tiene permiso para editar cualquier
+     * página, pero si el listado sigue mostrando sólo las suyas no tiene por
+     * dónde entrar: el permiso existiría y el camino no.
+     */
+    public function testLaPlataformaVeTodasLasPaginas()
+    {
+        $this->db->onSelect('SELECT email FROM users', [['plataforma@test']]);
+        $this->db->onSelect('AS is_owner', [['id' => 77, 'title' => 'De otro', 'is_owner' => 0, 'is_admin' => 0]]);
+
+        $res = PagesHandler::index($this->db, $this->get([], $this->user(9)));
+
+        $this->assertStatus(200, $res);
+        $this->assertTrue($res->body['es_plataforma']);
+        // Sin condición de pertenencia: el WHERE deja de filtrar por usuario.
+        $this->assertStringContainsString('WHERE (1 = 1)', $this->db->callsFor('AS is_owner')[0]['sql']);
+    }
+
+    /**
+     * is_admin va aparte de is_owner: para la plataforma las dos son falsas en
+     * una página ajena, y la pantalla necesita distinguir "sos administrador de
+     * esto" de "entrás por soporte" para no ofrecerle dejar de administrar algo
+     * que nunca administró.
+     */
+    public function testCadaPaginaDiceSiEsPropiaYSiEsAdministrada()
+    {
+        $this->db->onSelect('AS is_owner', [['id' => 1, 'is_owner' => 1, 'is_admin' => 0]]);
+
+        $res = PagesHandler::index($this->db, $this->get([], $this->user(9)));
+
+        $this->assertTrue($res->body['pages'][0]['is_owner']);
+        $this->assertFalse($res->body['pages'][0]['is_admin']);
+    }
+
+    public function testUnUsuarioComunNoEsPlataforma()
+    {
+        $res = PagesHandler::index($this->db, $this->get([], $this->user(9)));
+
+        $this->assertFalse($res->body['es_plataforma']);
     }
 
     public function testListarDevuelveArrayVacioSinPaginas()
