@@ -81,16 +81,25 @@ describe('PanelVentas', () => {
       expect(screen.getByText(/9\.000/)).toBeInTheDocument();
     });
 
-    it('detalla cuánto se llevó la comisión', async () => {
-      await montar({ resumen: { recaudado: 10000, comision: 1000, neto: 9000 } });
+    /**
+     * Las dos comisiones con su nombre. La de Mercado Pago sale del mismo total
+     * y es la más grande de las dos: sin nombrarla, la resta no cierra y parece
+     * que faltara plata.
+     */
+    it('detalla las dos comisiones que se descontaron', async () => {
+      await montar({
+        resumen: { recaudado: 10000, comision: 1000, comision_mercadopago: 400, neto: 8600 },
+      });
 
-      expect(screen.getByText(/comisión.*1\.000/)).toBeInTheDocument();
+      expect(screen.getByText(/1\.000 de Rezonar y .*400 de Mercado Pago/)).toBeInTheDocument();
     });
 
-    it('sin comisión no muestra el detalle', async () => {
-      await montar({ resumen: { recaudado: 10000, comision: 0, neto: 10000 } });
+    it('sin comisiones no muestra el detalle', async () => {
+      await montar({
+        resumen: { recaudado: 10000, comision: 0, comision_mercadopago: 0, neto: 10000 },
+      });
 
-      expect(screen.queryByText(/comisión/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/menos /)).not.toBeInTheDocument();
     });
 
   describe('listado', () => {

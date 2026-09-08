@@ -556,6 +556,44 @@ class EntradasTest extends HandlerTestCase
         ], $overrides);
     }
 
+    // -------------------------------------------------- lo que te queda
+
+    /**
+     * "Te queda" tiene que ser lo que entra a la cuenta, no una resta nuestra.
+     *
+     * Descontaba sólo nuestra comisión e ignoraba la de Mercado Pago, que sale
+     * del mismo total. En una venta de $70.000 prometía $68.950 cuando iban a
+     * entrar $65.674: más de tres mil pesos de diferencia, en el número que el
+     * dueño usa para poner precios.
+     */
+    public function testLoQueQuedaSaleDelNetoDeMercadoPagoYNoDeUnaResta()
+    {
+        $this->hayVentas([$this->venta([
+            'total' => '20000.00', 'comision' => '300.00',
+            'mp_neto' => '18892.71', 'mp_comisiones' => '1107.29',
+            'mp_comision_cobrada' => '300.00',
+        ])]);
+
+        $r = Entradas::ventasDelEvento($this->db, 100);
+
+        $this->assertSame(18892.71, $r['resumen']['neto']);
+        $this->assertSame(20000.0, $r['resumen']['recaudado']);
+        // Los dos descuentos, cada uno con su nombre.
+        $this->assertSame(300.0, $r['resumen']['comision']);
+        $this->assertSame(807.29, $r['resumen']['comision_mercadopago']);
+    }
+
+    /** Sin el dato de Mercado Pago se estima, y se avisa que falta. */
+    public function testSinNetoDeMercadoPagoSeEstimaYSeAvisa()
+    {
+        $this->hayVentas([$this->venta(['total' => '20000.00', 'comision' => '300.00', 'mp_neto' => null])]);
+
+        $r = Entradas::ventasDelEvento($this->db, 100);
+
+        $this->assertSame(19700.0, $r['resumen']['neto']);
+        $this->assertSame(1, $r['resumen']['ventas_sin_dato']);
+    }
+
     public function testElResumenCuentaSoloLasPagadas()
     {
         $this->hayVentas([

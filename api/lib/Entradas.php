@@ -552,6 +552,12 @@ class Entradas
         // split no está funcionando y la venta se hizo igual.
         $comisionCobrada = 0.0;
         $comisionSinDato = 0;
+        // Lo que de verdad entra a la cuenta: se acumula del neto que informa
+        // Mercado Pago, no de una resta nuestra. Cuando una venta todavía no
+        // tiene ese dato se usa la estimación vieja para no dejar un hueco, y
+        // $sinDato avisa que el total no está cerrado.
+        $netoReal = 0.0;
+        $comisionMercadoPago = 0.0;
         $reservadas = 0;
         $porAcreditar = 0.0;
         $acreditado = 0.0;
@@ -581,11 +587,25 @@ class Entradas
                     $comisionCobrada += (float) $cobrada;
                 }
 
+                // Lo que se lleva Mercado Pago es todo lo descontado menos lo
+                // nuestro. Es el pedazo que la pantalla nunca mostró y que
+                // explica por qué "te queda" prometía de más.
+                if (isset($orden['mp_comisiones']) && $cobrada !== null) {
+                    $comisionMercadoPago += (float) $orden['mp_comisiones'] - (float) $cobrada;
+                }
+
                 // Sin el dato de Mercado Pago no se suma nada: es preferible
                 // avisar que faltan ventas por contar a mostrar un total que
                 // parezca completo y no lo esté.
                 $neto = isset($orden['mp_neto']) ? $orden['mp_neto'] : null;
                 $cuando = isset($orden['acreditacion_en']) ? $orden['acreditacion_en'] : null;
+
+                // Sin dato de Mercado Pago se cae a la estimación de antes
+                // —total menos nuestra comisión—, que se queda corta en la de
+                // Mercado Pago pero es mejor que no contar la venta.
+                $netoReal += $neto === null
+                    ? (float) $orden['total'] - (float) $orden['comision']
+                    : (float) $neto;
 
                 if ($neto === null) {
                     $sinDato++;
@@ -615,8 +635,13 @@ class Entradas
                 // está mandando y Mercado Pago lo está ignorando.
                 'comision_cobrada'  => round($comisionCobrada, 2),
                 'comision_sin_dato' => $comisionSinDato,
-                // Lo que realmente le queda al dueño después del split.
-                'neto'       => round($recaudado - $comisiones, 2),
+                // La de Mercado Pago, que también sale del total y no era
+                // nuestra para descontar ni para ocultar.
+                'comision_mercadopago' => round($comisionMercadoPago, 2),
+                // Lo que efectivamente entra a la cuenta. Antes era
+                // recaudado - nuestra comisión, que ignoraba la de Mercado
+                // Pago: prometía varios miles de más en una venta chica.
+                'neto'       => round($netoReal, 2),
                 // Y lo que dice Mercado Pago, que además descuenta su propia
                 // comisión: es la plata que efectivamente entra a la cuenta.
                 'acreditado'    => round($acreditado, 2),

@@ -129,12 +129,14 @@ function PanelVentas({ linkId, apiUrl, token }) {
         <Dato etiqueta="VENDIDAS" valor={capacidad ? `${resumen.vendidas}/${capacidad}` : resumen.vendidas} />
         <Dato etiqueta="RESERVANDO" valor={resumen.reservadas} />
         <Dato etiqueta="RECAUDADO" valor={formatearPrecio(resumen.recaudado)} />
-        {/* Lo que efectivamente entra a la cuenta, ya descontada la comisión:
-            es el número con el que el dueño hace sus cuentas. */}
+        {/* Lo que efectivamente entra a la cuenta. Es el número con el que el
+            dueño pone precios, así que tiene que estar descontado todo: antes
+            restaba sólo la comisión de Rezonar e ignoraba la de Mercado Pago,
+            que sale del mismo total y es la más grande de las dos. */}
         <Dato
           etiqueta="TE QUEDA"
           valor={formatearPrecio(resumen.neto !== undefined ? resumen.neto : resumen.recaudado)}
-          detalle={resumen.comision > 0 ? `comisión ${formatearPrecio(resumen.comision)}` : null}
+          detalle={detalleDeDescuentos(resumen)}
         />
       </div>
 
@@ -394,6 +396,26 @@ function Telefono({ numero, nombre }) {
       {numero}
     </a>
   );
+}
+
+/**
+ * Qué se descontó del recaudado, con cada comisión por su nombre.
+ *
+ * Las dos juntas explican la diferencia entre lo que entró y lo que queda. Sin
+ * nombrarlas, la resta no cierra y parece que faltara plata.
+ */
+function detalleDeDescuentos(resumen) {
+  const partes = [];
+
+  if (resumen.comision > 0) {
+    partes.push(`${formatearPrecio(resumen.comision)} de Rezonar`);
+  }
+
+  if (resumen.comision_mercadopago > 0) {
+    partes.push(`${formatearPrecio(resumen.comision_mercadopago)} de Mercado Pago`);
+  }
+
+  return partes.length ? `menos ${partes.join(' y ')}` : null;
 }
 
 function Dato({ etiqueta, valor, detalle }) {
