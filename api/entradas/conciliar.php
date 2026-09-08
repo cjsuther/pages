@@ -49,17 +49,29 @@ foreach ($codigos as $codigo) {
     }
 }
 
+// Segunda pasada: ventas ya acreditadas a las que les falta el desglose de
+// comisiones. No mueve estados, sólo completa números que no teníamos.
+$completadas = 0;
+
+foreach (Entradas::pagadasSinDesglose($db) as $venta) {
+    if (CheckoutHandler::completarDesglose($db, $venta['codigo'], $venta['mp_payment_id'])) {
+        $completadas++;
+    }
+}
+
 $resumen = [
     'candidatas'  => count($codigos),
     'revisadas'   => $revisadas,
     'acreditadas' => $acreditadas,
+    'desgloses'   => $completadas,
 ];
 
 if ($esCli) {
     echo date('Y-m-d H:i:s') . ' conciliar: '
         . $resumen['candidatas'] . ' candidatas, '
         . $resumen['revisadas'] . ' revisadas, '
-        . count($acreditadas) . ' acreditadas'
+        . count($acreditadas) . ' acreditadas, '
+        . $completadas . ' desgloses'
         . ($acreditadas ? ' (' . implode(', ', $acreditadas) . ')' : '')
         . PHP_EOL;
     exit(0);

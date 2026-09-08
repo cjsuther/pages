@@ -309,6 +309,77 @@ class Entradas
         return array_map('strval', $stmt->fetchAll(PDO::FETCH_COLUMN));
     }
 
+    /**
+     * Ventas ya pagadas a las que les falta el desglose de comisiones.
+     *
+     * Son las anteriores a que se guardara la comisión de plataforma por
+     * separado. Sin esto quedarían sin el dato para siempre, que es justo el
+     * que dice si el split se aplicó o si Mercado Pago lo ignoró en silencio.
+     *
+     * @return array<array{codigo: string, mp_payment_id: string}>
+     */
+    public static function pagadasSinDesglose($db, $limite = self::LIMITE_A_CONCILIAR)
+    {
+        $stmt = $db->prepare("
+            SELECT codigo, mp_payment_id
+            FROM ticket_orders
+            WHERE estado = 'pagada'
+              AND mp_payment_id IS NOT NULL
+              AND mp_comision_cobrada IS NULL
+              AND total > 0
+            ORDER BY created_at DESC
+            LIMIT " . (int) $limite . "
+        ");
+        $stmt->execute();
+
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Completa los números de una venta ya pagada, sin tocar su estado.
+     *
+     * Existe para las ventas anteriores a una columna nueva: acreditarPago sólo
+     * escribe cuando la orden pasa de reservada a pagada, así que una venta vieja
+     * se queda sin el dato para siempre. Acá sólo se rellenan los campos
+     * informativos que estén vacíos —nunca se pisa lo que ya se sabía— y el
+     * estado no se mira: esto no acredita ni desacredita nada.
+     *
+     * @return bool Si escribió algo.
+     */
+    public static function completarDetalleDePago($db, $codigo, array $detalle)
+    {
+        $campos = [
+            'mp_neto'             => isset($detalle['neto']) ? $detalle['neto'] : null,
+            'mp_comisiones'       => isset($detalle['comisiones']) ? $detalle['comisiones'] : null,
+            'mp_comision_cobrada' => isset($detalle['comision_plataforma']) ? $detalle['comision_plataforma'] : null,
+            'acreditacion_en'     => self::fechaDeAcreditacion($detalle),
+        ];
+
+        $sets = [];
+        $valores = [];
+
+        foreach ($campos as $campo => $valor) {
+            if ($valor === null) {
+                continue;
+            }
+
+            // Sólo si está vacío: lo que Mercado Pago dijo el día de la venta
+            // manda sobre lo que diga hoy.
+            $sets[] = "$campo = COALESCE($campo, ?)";
+            $valores[] = $valor;
+        }
+
+        if ($sets === []) {
+            return false;
+        }
+
+        $valores[] = $codigo;
+        $stmt = $db->prepare('UPDATE ticket_orders SET ' . implode(', ', $sets) . " WHERE codigo = ? AND estado = 'pagada'");
+        $stmt->execute($valores);
+
+        return $stmt->rowCount() > 0;
+    }
+
     public static function acreditarPago($db, $codigo, $pagoId, $estadoMp, array $detalle = [])
     {
         $stmt = $db->prepare('SELECT * FROM ticket_orders WHERE codigo = ?');
@@ -336,6 +407,7 @@ class Entradas
                 SET estado = 'pagada', mp_payment_id = ?, pagada_en = NOW(),
                     mp_neto = COALESCE(?, mp_neto),
                     mp_comisiones = COALESCE(?, mp_comisiones),
+                    mp_comision_cobrada = COALESCE(?, mp_comision_cobrada),
                     acreditacion_en = COALESCE(?, acreditacion_en)
                 WHERE codigo = ? AND estado IN ('reservada', 'vencida')
             ");
@@ -343,6 +415,7 @@ class Entradas
                 $pagoId,
                 isset($detalle['neto']) ? $detalle['neto'] : null,
                 isset($detalle['comisiones']) ? $detalle['comisiones'] : null,
+                isset($detalle['comision_plataforma']) ? $detalle['comision_plataforma'] : null,
                 self::fechaDeAcreditacion($detalle),
                 $codigo,
             ]);
@@ -461,7 +534,7 @@ class Entradas
                    precio_unitario, total, comision, comision_porcentaje,
                    moneda, estado, reserva_vence_en,
                    mp_payment_id, pagada_en, created_at,
-                   mp_neto, mp_comisiones, acreditacion_en,
+                   mp_neto, mp_comisiones, mp_comision_cobrada, acreditacion_en,
                    (estado = 'reservada' AND reserva_vence_en <= NOW()) AS vencida
             FROM ticket_orders
             WHERE link_id = ?
@@ -473,6 +546,12 @@ class Entradas
         $vendidas = 0;
         $recaudado = 0.0;
         $comisiones = 0.0;
+        // Lo que Mercado Pago dice que cobró de comisión de plataforma. Se
+        // acumula aparte de $comisiones —que es lo que pedimos— porque la
+        // diferencia entre las dos es el dato: si pedimos y no se cobró, el
+        // split no está funcionando y la venta se hizo igual.
+        $comisionCobrada = 0.0;
+        $comisionSinDato = 0;
         $reservadas = 0;
         $porAcreditar = 0.0;
         $acreditado = 0.0;
@@ -490,6 +569,17 @@ class Entradas
                 $vendidas += (int) $orden['cantidad'];
                 $recaudado += (float) $orden['total'];
                 $comisiones += (float) $orden['comision'];
+
+                // null es "no lo sabemos" —una venta anterior a que se guardara
+                // el desglose— y no es lo mismo que un cero, que sí sería una
+                // respuesta: Mercado Pago no cobró nada.
+                $cobrada = isset($orden['mp_comision_cobrada']) ? $orden['mp_comision_cobrada'] : null;
+
+                if ($cobrada === null) {
+                    $comisionSinDato++;
+                } else {
+                    $comisionCobrada += (float) $cobrada;
+                }
 
                 // Sin el dato de Mercado Pago no se suma nada: es preferible
                 // avisar que faltan ventas por contar a mostrar un total que
@@ -521,6 +611,10 @@ class Entradas
                 'reservadas' => $reservadas,
                 'recaudado'  => round($recaudado, 2),
                 'comision'   => round($comisiones, 2),
+                // Pedido contra cobrado. Si no coinciden, el marketplace_fee se
+                // está mandando y Mercado Pago lo está ignorando.
+                'comision_cobrada'  => round($comisionCobrada, 2),
+                'comision_sin_dato' => $comisionSinDato,
                 // Lo que realmente le queda al dueño después del split.
                 'neto'       => round($recaudado - $comisiones, 2),
                 // Y lo que dice Mercado Pago, que además descuenta su propia

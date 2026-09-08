@@ -138,6 +138,8 @@ function PanelVentas({ linkId, apiUrl, token }) {
         />
       </div>
 
+      <ComisionDeLaPlataforma resumen={resumen} />
+
       <Acreditacion resumen={resumen} />
 
       <div className="flex items-center gap-3">
@@ -287,7 +289,49 @@ export function fechaCorta(momento) {
  * vendedor en su cuenta de Mercado Pago, no Rezonar: con tarjeta de crédito
  * puede ser un mes, con dinero en cuenta el mismo día.
  */
-export function Acreditacion({ resumen }) {
+export /**
+ * Lo que la plataforma pidió de comisión contra lo que Mercado Pago cobró.
+ *
+ * Mandar el marketplace_fee es pedir; que se cobre depende de que la cuenta
+ * esté conectada por OAuth desde nuestra aplicación. Cuando no lo está, Mercado
+ * Pago ignora el pedido sin devolver ningún error: la venta se cobra igual y la
+ * comisión no entra. Sin esto, esa diferencia no se ve en ninguna parte.
+ *
+ * Sólo aparece cuando hay algo raro que decir: si lo pedido y lo cobrado
+ * coinciden, no hace falta ocupar la pantalla para confirmarlo.
+ */
+function ComisionDeLaPlataforma({ resumen }) {
+  const pedida = resumen.comision || 0;
+  const cobrada = resumen.comision_cobrada;
+  const sinDato = resumen.comision_sin_dato || 0;
+
+  if (pedida <= 0 || cobrada === undefined || cobrada === null) return null;
+
+  const falta = Math.round((pedida - cobrada) * 100) / 100;
+
+  // Menos de un peso es redondeo, no un problema.
+  if (falta < 1) return null;
+
+  return (
+    <div className="px-4 py-3 rounded-xl border border-amber-200 bg-amber-50 text-sm text-amber-900">
+      <p>
+        <strong className="font-semibold">
+          De {formatearPrecio(pedida)} de comisión, Mercado Pago cobró {formatearPrecio(cobrada)}.
+        </strong>{' '}
+        Suele pasar cuando la cuenta de cobro no quedó conectada desde Rezonar: la venta se
+        hace igual, pero el reparto no.
+      </p>
+      {sinDato > 0 && (
+        <p className="mt-1 text-amber-800">
+          Hay {sinDato} {sinDato === 1 ? 'venta' : 'ventas'} de las que todavía no tenemos el
+          desglose; el número puede cambiar.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function Acreditacion({ resumen }) {
   const porAcreditar = resumen.por_acreditar || 0;
   const acreditado = resumen.acreditado || 0;
   const sinDato = resumen.ventas_sin_dato || 0;

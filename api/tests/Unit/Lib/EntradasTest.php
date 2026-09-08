@@ -840,4 +840,57 @@ class EntradasTest extends HandlerTestCase
         $this->assertStringContainsString('INTERVAL ? DAY', $llamada['sql']);
         $this->assertSame([30], $llamada['params']);
     }
+
+    // --------------------------------------------- completar el desglose
+
+    /**
+     * acreditarPago sólo escribe cuando la orden pasa de reservada a pagada, así
+     * que una venta anterior a una columna nueva se quedaría sin el dato para
+     * siempre. Esto lo rellena sin tocar el estado.
+     */
+    public function testCompletaElDesgloseDeUnaVentaYaPagada()
+    {
+        $this->db->onWrite('UPDATE ticket_orders SET', 1);
+
+        $escribio = Entradas::completarDetalleDePago($this->db, 'ABC123', [
+            'neto' => 18892.71,
+            'comisiones' => 1107.29,
+            'comision_plataforma' => 300.0,
+        ]);
+
+        $sql = $this->db->callsFor('UPDATE ticket_orders SET')[0]['sql'];
+        $this->assertTrue($escribio);
+        $this->assertStringContainsString('mp_comision_cobrada = COALESCE(mp_comision_cobrada, ?)', $sql);
+        $this->assertStringContainsString("estado = 'pagada'", $sql);
+        // El estado se usa para elegir la fila, nunca para cambiarla.
+        $asignaciones = substr($sql, 0, strpos($sql, 'WHERE'));
+        $this->assertStringNotContainsString('estado', $asignaciones);
+    }
+
+    /** Lo que Mercado Pago dijo el día de la venta manda sobre lo que diga hoy. */
+    public function testNoPisaLosNumerosQueYaEstaban()
+    {
+        Entradas::completarDetalleDePago($this->db, 'ABC123', ['neto' => 1.0]);
+
+        $this->assertStringContainsString(
+            'mp_neto = COALESCE(mp_neto, ?)',
+            $this->db->callsFor('UPDATE ticket_orders SET')[0]['sql']
+        );
+    }
+
+    public function testSinDatosNuevosNoConsulta()
+    {
+        $this->assertFalse(Entradas::completarDetalleDePago($this->db, 'ABC123', []));
+        $this->assertNoWrites();
+    }
+
+    public function testBuscaLasPagadasSinDesglose()
+    {
+        Entradas::pagadasSinDesglose($this->db);
+
+        $sql = $this->db->callsFor('FROM ticket_orders')[0]['sql'];
+        $this->assertStringContainsString("estado = 'pagada'", $sql);
+        $this->assertStringContainsString('mp_comision_cobrada IS NULL', $sql);
+        $this->assertStringContainsString('mp_payment_id IS NOT NULL', $sql);
+    }
 }

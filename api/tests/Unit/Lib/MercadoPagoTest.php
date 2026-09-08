@@ -373,4 +373,37 @@ class MercadoPagoTest extends TestCase
 
         $this->assertFalse($r['ok']);
     }
+
+    // ------------------------------------------- comisión de plataforma
+
+    /**
+     * Mandar marketplace_fee es pedir; esto es lo que pasó. Cuando la cuenta no
+     * está conectada por OAuth desde nuestra aplicación, Mercado Pago ignora el
+     * pedido sin devolver ningún error: la venta se cobra igual y la comisión
+     * no entra. Separar la línea del desglose es lo único que lo delata.
+     */
+    public function testLeeLaComisionDePlataformaDelDesglose()
+    {
+        $pago = ['fee_details' => [
+            ['type' => 'mercadopago_fee', 'amount' => 807.29],
+            ['type' => 'application_fee', 'amount' => 300.0],
+        ]];
+
+        $this->assertSame(300.0, MercadoPago::comisionDePlataforma($pago));
+        $this->assertSame(1107.29, MercadoPago::comisiones($pago));
+    }
+
+    /** Cero es una respuesta: Mercado Pago no cobró comisión de plataforma. */
+    public function testSinLineaDePlataformaLaComisionEsCero()
+    {
+        $pago = ['fee_details' => [['type' => 'mercadopago_fee', 'amount' => 1107.29]]];
+
+        $this->assertSame(0.0, MercadoPago::comisionDePlataforma($pago));
+    }
+
+    /** Sin desglose no sabemos nada, que no es lo mismo que saber que fue cero. */
+    public function testSinDesgloseNoSeAfirmaNada()
+    {
+        $this->assertNull(MercadoPago::comisionDePlataforma(['status' => 'approved']));
+    }
 }

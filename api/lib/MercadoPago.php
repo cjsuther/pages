@@ -263,10 +263,42 @@ class MercadoPago
                 ? (float) $datos['transaction_details']['net_received_amount']
                 : null,
             'comisiones' => self::comisiones($datos),
+            // Aparte de la suma: es la única forma de saber si el split se
+            // aplicó o si Mercado Pago ignoró el marketplace_fee.
+            'comision_plataforma' => self::comisionDePlataforma($datos),
             // Cuándo queda disponible la plata. Con tarjeta de crédito puede
             // ser un mes después; con dinero en cuenta, el mismo día.
             'acreditacion' => isset($datos['money_release_date']) ? $datos['money_release_date'] : null,
         ];
+    }
+
+    /**
+     * Lo que Mercado Pago efectivamente cobró como comisión de plataforma.
+     *
+     * Es la línea `application_fee` del desglose. Mandar marketplace_fee es
+     * pedir; esto es lo que pasó. Cuando la cuenta no está conectada por OAuth
+     * desde nuestra aplicación, Mercado Pago ignora el pedido sin avisar y esta
+     * línea no aparece: ahí devuelve 0.0, que es una respuesta, no una duda.
+     *
+     * null sólo si el pago no trajo desglose, que es cuando no sabemos nada.
+     */
+    public static function comisionDePlataforma(array $pago)
+    {
+        if (!isset($pago['fee_details']) || !is_array($pago['fee_details'])) {
+            return null;
+        }
+
+        $total = 0.0;
+
+        foreach ($pago['fee_details'] as $detalle) {
+            $tipo = isset($detalle['type']) ? $detalle['type'] : null;
+
+            if ($tipo === 'application_fee' && isset($detalle['amount']) && is_numeric($detalle['amount'])) {
+                $total += (float) $detalle['amount'];
+            }
+        }
+
+        return round($total, 2);
     }
 
     /**

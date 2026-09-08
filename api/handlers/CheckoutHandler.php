@@ -236,6 +236,36 @@ class CheckoutHandler
         ];
     }
 
+    /**
+     * Completa el desglose de comisiones de una venta ya acreditada.
+     *
+     * No mueve estados ni acredita nada: le vuelve a preguntar a Mercado Pago
+     * por un pago que ya conocemos y guarda lo que falte. Es para las ventas
+     * anteriores a que se guardara la comisión de plataforma por separado.
+     */
+    public static function completarDesglose($db, $codigo, $pagoId, $http = null)
+    {
+        $orden = Entradas::orden($db, $codigo);
+
+        if ($orden === null || $orden['estado'] !== 'pagada') {
+            return false;
+        }
+
+        $token = Cobros::tokenDelEvento($db, $orden['link_id'], $http);
+
+        if ($token === null) {
+            return false;
+        }
+
+        $pago = (new MercadoPago($token, $http))->consultarPago($pagoId);
+
+        if (!$pago['ok'] || $pago['referencia'] !== $codigo) {
+            return false;
+        }
+
+        return Entradas::completarDetalleDePago($db, $codigo, $pago);
+    }
+
     // ----------------------------------------------------------------- orden
 
     /** Estado de una orden, para la pantalla a la que vuelve el comprador. */
