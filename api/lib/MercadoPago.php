@@ -183,6 +183,73 @@ class MercadoPago
             return ['ok' => false, 'estado' => null, 'referencia' => null, 'monto' => null];
         }
 
+        return self::leerPago($datos);
+    }
+
+    /**
+     * Busca el pago de una orden sin conocer su id, por la referencia que le
+     * pusimos al crear la preferencia.
+     *
+     * Hace falta para recuperar una compra cuyo aviso nunca llegó: ahí lo único
+     * que tenemos es el código de la orden. Si hay más de un intento —alguien
+     * que reintenta con otra tarjeta— gana el aprobado; entre varios aprobados,
+     * el más nuevo. Un rechazado no puede tapar a un aprobado.
+     *
+     * @return array Igual que consultarPago, más 'id'. Sin resultados, ok=false.
+     */
+    public function buscarPagoPorReferencia($referencia)
+    {
+        $vacio = ['ok' => false, 'id' => null, 'estado' => null, 'referencia' => null, 'monto' => null];
+
+        $referencia = trim((string) $referencia);
+
+        if ($referencia === '') {
+            return $vacio;
+        }
+
+        $r = $this->http->get(
+            self::BASE . '/v1/payments/search?sort=date_created&criteria=desc&external_reference='
+                . urlencode($referencia),
+            $this->cabeceras()
+        );
+
+        if ($r['status'] !== 200) {
+            return $vacio;
+        }
+
+        $datos = json_decode($r['body'], true);
+
+        if (!is_array($datos) || !isset($datos['results']) || !is_array($datos['results'])) {
+            return $vacio;
+        }
+
+        $elegido = null;
+
+        foreach ($datos['results'] as $pago) {
+            if (!is_array($pago) || !isset($pago['status'])) {
+                continue;
+            }
+
+            if ($pago['status'] === 'approved') {
+                $elegido = $pago;
+                break;
+            }
+
+            if ($elegido === null) {
+                $elegido = $pago;
+            }
+        }
+
+        if ($elegido === null) {
+            return $vacio;
+        }
+
+        return ['id' => isset($elegido['id']) ? (string) $elegido['id'] : null] + self::leerPago($elegido);
+    }
+
+    /** Los campos de un pago que nos interesan, vengan de donde vengan. */
+    private static function leerPago(array $datos)
+    {
         return [
             'ok'         => true,
             'estado'     => $datos['status'],

@@ -800,4 +800,44 @@ class EntradasTest extends HandlerTestCase
 
         $this->assertStringContainsString('COALESCE(?, mp_neto)', $sql);
     }
+
+    // ------------------------------------------------------- sin conciliar
+
+    /**
+     * Las candidatas a que se les haya perdido el aviso: reservadas y sin
+     * ningún pago registrado. El mp_payment_id se escribe recién cuando se
+     * procesa un aviso, así que su ausencia es exactamente la señal.
+     */
+    public function testBuscaLasReservasSinNingunPagoRegistrado()
+    {
+        $this->db->onSelect('FROM ticket_orders', [['AAA111'], ['BBB222']]);
+
+        $codigos = Entradas::sinConciliar($this->db);
+
+        $sql = $this->db->callsFor('FROM ticket_orders')[0]['sql'];
+        $this->assertStringContainsString("estado = 'reservada'", $sql);
+        $this->assertStringContainsString('mp_payment_id IS NULL', $sql);
+        $this->assertSame(['AAA111', 'BBB222'], $codigos);
+    }
+
+    /** Las gratis nacen pagadas y nunca pasan por Mercado Pago. */
+    public function testNoRevisaLasReservasSinCosto()
+    {
+        Entradas::sinConciliar($this->db);
+
+        $this->assertStringContainsString('total > 0', $this->db->callsFor('FROM ticket_orders')[0]['sql']);
+    }
+
+    /**
+     * Una reserva de hace medio año que nunca se pagó no se va a pagar:
+     * preguntarle a Mercado Pago por ella para siempre es gastar llamadas.
+     */
+    public function testMiraSoloUnaVentanaDeDiasHaciaAtras()
+    {
+        Entradas::sinConciliar($this->db, 30);
+
+        $llamada = $this->db->callsFor('FROM ticket_orders')[0];
+        $this->assertStringContainsString('INTERVAL ? DAY', $llamada['sql']);
+        $this->assertSame([30], $llamada['params']);
+    }
 }

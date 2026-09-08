@@ -178,10 +178,68 @@ class CheckoutHandler
         return Response::ok(['recibido' => true, 'motivo' => $resultado['motivo']]);
     }
 
+    // ----------------------------------------------------------- conciliación
+
+    /**
+     * Le pregunta a Mercado Pago si una orden se pagó, sin conocer el id del pago.
+     *
+     * Es la red debajo del aviso. El aviso es un mensaje que puede no llegar
+     * —se perdió tres semanas de ventas por una URL mal armada, y nadie se
+     * enteró porque un aviso que no llega no deja rastro—; esto va y pregunta,
+     * usando como llave la referencia que le pusimos a la preferencia.
+     *
+     * Sólo mira las que están en `reservada`: una pagada no tiene nada que
+     * revisar, y una rechazada o cancelada ya tuvo su respuesta.
+     *
+     * @return array{revisada: bool, acreditada: bool, motivo: string}
+     */
+    public static function conciliar($db, $codigo, $http = null, $mailer = null)
+    {
+        $orden = Entradas::orden($db, $codigo);
+
+        if ($orden === null) {
+            return ['revisada' => false, 'acreditada' => false, 'motivo' => 'orden inexistente'];
+        }
+
+        if ($orden['estado'] !== 'reservada') {
+            return ['revisada' => false, 'acreditada' => false, 'motivo' => 'no hay nada que revisar'];
+        }
+
+        $token = Cobros::tokenDelEvento($db, $orden['link_id'], $http);
+
+        if ($token === null) {
+            return ['revisada' => false, 'acreditada' => false, 'motivo' => 'la página no tiene credenciales'];
+        }
+
+        $pago = (new MercadoPago($token, $http))->buscarPagoPorReferencia($codigo);
+
+        if (!$pago['ok']) {
+            return ['revisada' => true, 'acreditada' => false, 'motivo' => 'sin pagos para esta orden'];
+        }
+
+        // El mismo control que en el aviso: el monto lo dice Mercado Pago, y si
+        // no coincide con lo que la orden debía, no se acredita.
+        if ($pago['monto'] !== null && abs($pago['monto'] - (float) $orden['total']) > 0.01) {
+            return ['revisada' => true, 'acreditada' => false, 'motivo' => 'el monto no coincide con la orden'];
+        }
+
+        $resultado = Entradas::acreditarPago($db, $codigo, $pago['id'], $pago['estado'], $pago);
+
+        if ($resultado['acreditada']) {
+            self::mandarEntrada($db, $codigo, $mailer);
+        }
+
+        return [
+            'revisada'   => true,
+            'acreditada' => $resultado['acreditada'],
+            'motivo'     => $resultado['motivo'],
+        ];
+    }
+
     // ----------------------------------------------------------------- orden
 
     /** Estado de una orden, para la pantalla a la que vuelve el comprador. */
-    public static function orden($db, Request $req)
+    public static function orden($db, Request $req, $http = null, $mailer = null)
     {
         if ($req->method !== 'GET') {
             return Response::methodNotAllowed();
@@ -197,6 +255,18 @@ class CheckoutHandler
 
         if ($orden === null) {
             return Response::notFound('No encontramos esa orden');
+        }
+
+        // Antes de decirle a alguien que su compra no salió, se verifica contra
+        // Mercado Pago. Esta pantalla es a la que vuelve el comprador después de
+        // pagar: si el aviso todavía no llegó —o no va a llegar nunca— acá se
+        // nota, y es el peor momento posible para mentirle.
+        if ($orden['estado'] === 'reservada') {
+            $resultado = self::conciliar($db, $codigo, $http, $mailer);
+
+            if ($resultado['acreditada']) {
+                $orden = Entradas::orden($db, $codigo);
+            }
         }
 
         $vencida = $orden['estado'] === 'reservada'

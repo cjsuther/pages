@@ -292,16 +292,143 @@ class CheckoutHandlerTest extends HandlerTestCase
 
     // ---------------------------------------------------------------- aviso
 
-    private function hayOrdenPendiente(array $overrides = [])
+    private function ordenBase(array $overrides = [])
     {
-        $this->db->onSelect('FROM ticket_orders o', [array_merge([
+        return array_merge([
             'id' => 1, 'codigo' => self::CODIGO, 'link_id' => 100,
             'cantidad' => 2, 'total' => '3000.00', 'estado' => 'reservada',
             'reserva_vence_en' => null, 'evento' => 'Fiesta', 'event_date' => '2026-12-01',
             'event_time' => '21:00:00', 'event_address' => 'Corrientes 1234',
             'pagina' => 'Mi Página', 'url_slug' => 'mi-pagina', 'moneda' => 'ARS',
             'nombre' => 'Ana Gómez',
-        ], $overrides)]);
+        ], $overrides);
+    }
+
+    private function hayOrdenPendiente(array $overrides = [])
+    {
+        $this->db->onSelect('FROM ticket_orders o', [$this->ordenBase($overrides)]);
+    }
+
+    /** Respuesta de la búsqueda de pagos por referencia. */
+    private function httpConBusqueda(array $resultados)
+    {
+        return (new FakeHttpClient())->responde('/v1/payments/search', 200, ['results' => $resultados]);
+    }
+
+    private function pagoDe(array $overrides = [])
+    {
+        return array_merge([
+            'id' => 555,
+            'status' => 'approved',
+            'external_reference' => self::CODIGO,
+            'transaction_amount' => 3000.0,
+        ], $overrides);
+    }
+
+    // ------------------------------------------------------------ conciliar
+
+    /**
+     * La red debajo del aviso. Un aviso es un mensaje y puede no llegar; acá se
+     * va y se pregunta, con la referencia como única llave. Sin esto, una
+     * compra pagada cuyo aviso se perdió queda vencida para siempre y nadie se
+     * entera.
+     */
+    public function testConciliarAcreditaUnaOrdenCuyoAvisoNuncaLlego()
+    {
+        $this->hayOrdenPendiente();
+        $this->hayCredencialesDeCobro();
+        $this->db->onSelect('FROM ticket_orders WHERE codigo', [['codigo' => self::CODIGO, 'estado' => 'reservada']]);
+        $this->db->onWrite('UPDATE ticket_orders', 1);
+
+        $r = CheckoutHandler::conciliar($this->db, self::CODIGO, $this->httpConBusqueda([$this->pagoDe()]));
+
+        $this->assertTrue($r['acreditada']);
+        $this->assertSame('pago acreditado', $r['motivo']);
+    }
+
+    public function testConciliarNoHaceNadaSiNoHayPagos()
+    {
+        $this->hayOrdenPendiente();
+        $this->hayCredencialesDeCobro();
+
+        $r = CheckoutHandler::conciliar($this->db, self::CODIGO, $this->httpConBusqueda([]));
+
+        $this->assertFalse($r['acreditada']);
+        $this->assertSame('sin pagos para esta orden', $r['motivo']);
+        $this->assertNoWrites();
+    }
+
+    /** Una orden ya pagada no se vuelve a tocar ni gasta una llamada. */
+    public function testConciliarNoRevisaLoQueYaEstaResuelto()
+    {
+        $this->hayOrdenPendiente(['estado' => 'pagada']);
+        $http = $this->httpConBusqueda([$this->pagoDe()]);
+
+        $r = CheckoutHandler::conciliar($this->db, self::CODIGO, $http);
+
+        $this->assertFalse($r['revisada']);
+        $this->assertFalse($http->llamoA('/v1/payments/search'));
+    }
+
+    /** El mismo control que en el aviso: el monto lo dice Mercado Pago. */
+    public function testConciliarNoAcreditaSiElMontoNoCoincide()
+    {
+        $this->hayOrdenPendiente();
+        $this->hayCredencialesDeCobro();
+
+        $r = CheckoutHandler::conciliar(
+            $this->db, self::CODIGO,
+            $this->httpConBusqueda([$this->pagoDe(['transaction_amount' => 10.0])])
+        );
+
+        $this->assertFalse($r['acreditada']);
+        $this->assertSame('el monto no coincide con la orden', $r['motivo']);
+        $this->assertNoWrites();
+    }
+
+    /** Quien reintentó con otra tarjeta tiene un rechazado y un aprobado. */
+    public function testEntreVariosIntentosGanaElAprobado()
+    {
+        $this->hayOrdenPendiente();
+        $this->hayCredencialesDeCobro();
+        $this->db->onSelect('FROM ticket_orders WHERE codigo', [['codigo' => self::CODIGO, 'estado' => 'reservada']]);
+        $this->db->onWrite('UPDATE ticket_orders', 1);
+
+        $r = CheckoutHandler::conciliar($this->db, self::CODIGO, $this->httpConBusqueda([
+            $this->pagoDe(['id' => 1, 'status' => 'rejected']),
+            $this->pagoDe(['id' => 2, 'status' => 'approved']),
+        ]));
+
+        $this->assertTrue($r['acreditada']);
+    }
+
+    /**
+     * Es la pantalla a la que vuelve el comprador después de pagar: si el aviso
+     * todavía no llegó, decirle "vencida" es el peor momento para mentirle.
+     */
+    public function testLaPantallaDelCompradorConsultaAntesDeDecirQueVencio()
+    {
+        // La orden se lee tres veces: la pantalla, la conciliación, y de nuevo
+        // la pantalla una vez acreditada. Las reglas se consumen en orden.
+        $vencida = ['reserva_vence_en' => '2020-01-01 00:00:00'];
+        $this->hayOrdenPendiente($vencida);
+        $this->hayOrdenPendiente($vencida);
+        // Varias: después de acreditar, el envío del mail también lee la orden.
+        foreach ([1, 2, 3] as $ignorado) {
+            $this->db->onSelect('FROM ticket_orders o', [$this->ordenBase(['estado' => 'pagada'])]);
+        }
+
+        $this->hayCredencialesDeCobro();
+        $this->db->onSelect('FROM ticket_orders WHERE codigo', [['codigo' => self::CODIGO, 'estado' => 'reservada']]);
+        $this->db->onWrite('UPDATE ticket_orders', 1);
+
+        $r = CheckoutHandler::orden(
+            $this->db,
+            new Request('GET', [], ['codigo' => self::CODIGO]),
+            $this->httpConBusqueda([$this->pagoDe()])
+        );
+
+        $this->assertSame('pagada', $r->body['orden']['estado']);
     }
 
     private function avisoDe($pagoId)

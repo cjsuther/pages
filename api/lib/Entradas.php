@@ -25,6 +25,12 @@ class Entradas
     /** Minutos que se sostiene el cupo mientras la persona paga. */
     const MINUTOS_DE_RESERVA = 15;
 
+    /** Hasta cuántos días atrás se revisa una reserva sin pago registrado. */
+    const DIAS_A_CONCILIAR = 60;
+
+    /** Tope por corrida, para que una acumulación no estire el cron sin fin. */
+    const LIMITE_A_CONCILIAR = 200;
+
     const MAX_POR_COMPRA = 50;
 
     /** Configuración de venta de un evento, o null si no tiene. */
@@ -274,6 +280,35 @@ class Entradas
      *
      * @return array{acreditada: bool, motivo: string}
      */
+    /**
+     * Órdenes que quedaron reservadas y sin pago registrado.
+     *
+     * Son las candidatas a que se les haya perdido el aviso. Se miran desde las
+     * más nuevas y con una ventana de días: una reserva de hace medio año que
+     * nunca se pagó no se va a pagar, y preguntarle a Mercado Pago por cada una
+     * para siempre sería gastar llamadas en nada.
+     *
+     * Las gratis quedan afuera: nacen pagadas y nunca pasan por Mercado Pago.
+     *
+     * @return string[] Códigos de orden.
+     */
+    public static function sinConciliar($db, $dias = self::DIAS_A_CONCILIAR, $limite = self::LIMITE_A_CONCILIAR)
+    {
+        $stmt = $db->prepare("
+            SELECT codigo
+            FROM ticket_orders
+            WHERE estado = 'reservada'
+              AND mp_payment_id IS NULL
+              AND total > 0
+              AND created_at >= (NOW() - INTERVAL ? DAY)
+            ORDER BY created_at DESC
+            LIMIT " . (int) $limite . "
+        ");
+        $stmt->execute([(int) $dias]);
+
+        return array_map('strval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+    }
+
     public static function acreditarPago($db, $codigo, $pagoId, $estadoMp, array $detalle = [])
     {
         $stmt = $db->prepare('SELECT * FROM ticket_orders WHERE codigo = ?');

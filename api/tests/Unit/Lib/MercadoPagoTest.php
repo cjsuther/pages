@@ -297,4 +297,80 @@ class MercadoPagoTest extends TestCase
         $this->assertNull($r['neto']);
         $this->assertNull($r['acreditacion']);
     }
+
+    // ------------------------------------------- búsqueda por referencia
+
+    private function httpBuscando(array $resultados, $status = 200)
+    {
+        return (new FakeHttpClient())->responde('/v1/payments/search', $status, ['results' => $resultados]);
+    }
+
+    /**
+     * Buscar por referencia es lo único que queda cuando el aviso nunca llegó:
+     * ahí no se conoce el id del pago, sólo el código de la orden.
+     */
+    public function testBuscaElPagoPorLaReferenciaDeLaOrden()
+    {
+        $http = $this->httpBuscando([[
+            'id' => 555, 'status' => 'approved',
+            'external_reference' => 'ABC123', 'transaction_amount' => 3000.0,
+        ]]);
+
+        $r = (new MercadoPago('APP_USR-token', $http))->buscarPagoPorReferencia('ABC123');
+
+        $this->assertTrue($r['ok']);
+        $this->assertSame('555', $r['id']);
+        $this->assertSame('approved', $r['estado']);
+        $this->assertStringContainsString('external_reference=ABC123', $http->llamadas[0]['url']);
+    }
+
+    /** Quien reintentó con otra tarjeta deja un rechazado y un aprobado. */
+    public function testEntreVariosPagosGanaElAprobado()
+    {
+        $http = $this->httpBuscando([
+            ['id' => 1, 'status' => 'rejected', 'external_reference' => 'ABC123'],
+            ['id' => 2, 'status' => 'approved', 'external_reference' => 'ABC123'],
+        ]);
+
+        $r = (new MercadoPago('APP_USR-token', $http))->buscarPagoPorReferencia('ABC123');
+
+        $this->assertSame('2', $r['id']);
+        $this->assertSame('approved', $r['estado']);
+    }
+
+    /** Sin aprobados, se informa el que haya: un rechazado también es respuesta. */
+    public function testSinAprobadosDevuelveElQueHaya()
+    {
+        $http = $this->httpBuscando([['id' => 7, 'status' => 'rejected', 'external_reference' => 'ABC123']]);
+
+        $r = (new MercadoPago('APP_USR-token', $http))->buscarPagoPorReferencia('ABC123');
+
+        $this->assertTrue($r['ok']);
+        $this->assertSame('rejected', $r['estado']);
+    }
+
+    public function testSinResultadosNoInventaNada()
+    {
+        $r = (new MercadoPago('APP_USR-token', $this->httpBuscando([])))->buscarPagoPorReferencia('ABC123');
+
+        $this->assertFalse($r['ok']);
+        $this->assertNull($r['id']);
+    }
+
+    public function testUnaReferenciaVaciaNiSiquieraConsulta()
+    {
+        $http = $this->httpBuscando([]);
+
+        $r = (new MercadoPago('APP_USR-token', $http))->buscarPagoPorReferencia('  ');
+
+        $this->assertFalse($r['ok']);
+        $this->assertSame([], $http->llamadas);
+    }
+
+    public function testSiLaConsultaFallaNoAcreditaNada()
+    {
+        $r = (new MercadoPago('APP_USR-token', $this->httpBuscando([], 500)))->buscarPagoPorReferencia('ABC123');
+
+        $this->assertFalse($r['ok']);
+    }
 }
