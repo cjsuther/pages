@@ -51,7 +51,7 @@ class CollaborationsHandlerTest extends HandlerTestCase
 
     public function testListarPendientesDeMisPaginas()
     {
-        $this->db->onSelect('WHERE cp.user_id = ? AND ec.status = "pending"', [
+        $this->db->onSelect('FROM event_collaborations ec JOIN links l', [
             ['id' => 1, 'event_title' => 'Un evento'],
         ]);
 
@@ -59,7 +59,24 @@ class CollaborationsHandlerTest extends HandlerTestCase
 
         $this->assertStatus(200, $res);
         $this->assertCount(1, $res->body['pending']);
-        $this->assertSame([9], $this->db->paramsFor('WHERE cp.user_id = ?'));
+        // El id va dos veces: una por dueño y otra por administrador aceptado.
+        $this->assertSame([9, 9], $this->db->paramsFor('FROM event_collaborations ec JOIN links l'));
+    }
+
+    /**
+     * Quien administra una página también tiene que ver sus invitaciones
+     * pendientes. Si no, puede responderlas pero nunca se entera de que
+     * existen.
+     */
+    public function testLasPendientesIncluyenLasPaginasQueSeAdministran()
+    {
+        $this->db->onSelect('FROM event_collaborations ec JOIN links l', []);
+
+        CollaborationsHandler::index($this->db, $this->get(['type' => 'pending'], $this->user(9)));
+
+        $sql = $this->db->callsFor('FROM event_collaborations ec JOIN links l')[0]['sql'];
+        $this->assertStringContainsString('page_admins', $sql);
+        $this->assertStringContainsString('status = "accepted"', $sql);
     }
 
     public function testLinkIdTienePrioridadSobreTypePending()
@@ -93,8 +110,16 @@ class CollaborationsHandlerTest extends HandlerTestCase
         $this->assertNoWrites();
     }
 
+    /**
+     * A un link común no se lo puede colaborar. El permiso ya no se resuelve
+     * acá —lo hace PageAccess, que también contempla a los administradores de
+     * la página y al acceso de plataforma—, pero el tipo de grupo sigue siendo
+     * cosa de esta consulta.
+     */
     public function testInvitarSoloAceptaEventosDeGruposDeEventos()
     {
+        $this->esDuenoDelEvento();
+
         CollaborationsHandler::index($this->db, $this->post([
             'link_id' => 100, 'collaborator_page_id' => 7,
         ], $this->user(9)));
@@ -102,7 +127,7 @@ class CollaborationsHandlerTest extends HandlerTestCase
         $sql = $this->db->callsFor('SELECT l.id, l.text as event_title')[0]['sql'];
 
         $this->assertStringContainsString('lg.type = "eventos"', $sql);
-        $this->assertStringContainsString('p.user_id = ?', $sql);
+        $this->assertStringNotContainsString('p.user_id = ?', $sql);
     }
 
     public function testInvitarRechazaPaginaColaboradoraInexistente()
@@ -253,7 +278,7 @@ class CollaborationsHandlerTest extends HandlerTestCase
 
     public function testSoloElInvitadoPuedeResponder()
     {
-        $this->colaboracionPendienteDe(11);
+        $this->colaboracionSinPermiso(11);
 
         $res = CollaborationsHandler::detail($this->db, $this->put(
             ['status' => 'rejected'],
@@ -400,15 +425,81 @@ class CollaborationsHandlerTest extends HandlerTestCase
         $this->assertSame(0, $this->db->countCalls('DELETE FROM event_collaborations'));
     }
 
+    // --------------------------------------- acceso más allá del dueño
+
+    /**
+     * El caso que apareció en producción: la plataforma podía editar el evento
+     * de una página ajena pero no invitarle colaboradores, porque este módulo
+     * resolvía el permiso con su propia consulta —"la página es tuya"— en vez
+     * de pasar por PageAccess.
+     */
+    public function testLaPlataformaPuedeInvitarEnUnaPaginaAjena()
+    {
+        $this->db->onSelect('SELECT email FROM users', [['plataforma@test']]);
+        $this->db->onSelect('FROM links WHERE id = ?', [[1]]);
+        $this->db->onSelect('SELECT l.id, l.text as event_title', [[
+            'id' => 100, 'event_title' => 'Mi evento', 'page_id' => 5, 'page_title' => 'Ajena',
+        ]]);
+        $this->db->onSelect('SELECT id, user_id FROM pages WHERE id = ?', [['id' => 7, 'user_id' => 11]]);
+        $this->db->onInsert('INSERT INTO event_collaborations', 40);
+
+        $res = CollaborationsHandler::index($this->db, $this->post([
+            'link_id' => 100, 'collaborator_page_id' => 7,
+        ], $this->user(9)));
+
+        $this->assertStatus(201, $res);
+    }
+
+    /**
+     * Y el mismo agujero, más viejo: quien administra una página tampoco podía
+     * invitar colaboradores a sus eventos, aunque puede editar todo lo demás.
+     */
+    public function testUnAdministradorDeLaPaginaPuedeInvitar()
+    {
+        // canManageLink encuentra la fila por page_admins, no por user_id.
+        $this->esDuenoDelEvento();
+        $this->db->onSelect('SELECT l.id, l.text as event_title', [[
+            'id' => 100, 'event_title' => 'Mi evento', 'page_id' => 5, 'page_title' => 'Que administro',
+        ]]);
+        $this->db->onSelect('SELECT id, user_id FROM pages WHERE id = ?', [['id' => 7, 'user_id' => 11]]);
+        $this->db->onInsert('INSERT INTO event_collaborations', 40);
+
+        $res = CollaborationsHandler::index($this->db, $this->post([
+            'link_id' => 100, 'collaborator_page_id' => 7,
+        ], $this->user(9)));
+
+        $this->assertStatus(201, $res);
+        $this->assertStringContainsString(
+            'page_admins',
+            $this->db->callsFor('FROM links l')[0]['sql'],
+            'el permiso lo tiene que resolver PageAccess'
+        );
+    }
+
+    /** Un extraño sigue sin poder invitar. */
+    public function testUnExtranoNoPuedeInvitar()
+    {
+        $res = CollaborationsHandler::index($this->db, $this->post([
+            'link_id' => 100, 'collaborator_page_id' => 7,
+        ], $this->user(99)));
+
+        $this->assertError(404, $res, 'Event not found or not authorized');
+        $this->assertNoWrites();
+    }
+
     // ------------------------------------------------------------- ayudantes
 
+    /** El permiso sobre el evento, que ahora resuelve PageAccess::canManageLink. */
     private function esDuenoDelEvento()
     {
-        $this->db->onSelect('SELECT l.id FROM links l', [['id' => 100]]);
+        $this->db->onSelect('FROM links l', [[1]]);
     }
 
     private function eventoPropio()
     {
+        // Primero el permiso y después los datos: las dos consultas empiezan
+        // igual y las reglas se consumen en orden.
+        $this->esDuenoDelEvento();
         $this->db->onSelect('SELECT l.id, l.text as event_title', [[
             'id' => 100,
             'event_title' => 'Mi evento',
@@ -424,13 +515,23 @@ class CollaborationsHandlerTest extends HandlerTestCase
         $this->db->onInsert('INSERT INTO event_collaborations', 40);
     }
 
+    /** La colaboración existe y quien responde puede administrar la página invitada. */
     private function colaboracionPendienteDe($collaboratorOwnerId, $status = 'pending')
+    {
+        $this->colaboracionSinPermiso($collaboratorOwnerId, $status);
+        // PageAccess::canManage sobre la página invitada.
+        $this->db->onSelect('FROM pages p', [[1]]);
+    }
+
+    /** La colaboración existe pero quien responde no administra esa página. */
+    private function colaboracionSinPermiso($collaboratorOwnerId, $status = 'pending')
     {
         $this->db->onSelect('SELECT ec.*, ec.requester_page_id', [[
             'id' => 3,
             'link_id' => 100,
             'status' => $status,
             'requester_page_id' => 5,
+            'collaborator_page_id' => 7,
             'collaborator_owner_id' => $collaboratorOwnerId,
             'collaborator_page_title' => 'Página Invitada',
             'requester_owner_id' => 9,

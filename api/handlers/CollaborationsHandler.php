@@ -53,16 +53,11 @@ class CollaborationsHandler
 
     private static function deUnEvento($db, Request $req, $linkId)
     {
-        // Sólo el dueño de la página del evento ve sus colaboraciones.
-        $stmt = $db->prepare('
-            SELECT l.id FROM links l
-            JOIN link_groups lg ON l.group_id = lg.id
-            JOIN pages p ON lg.page_id = p.id
-            WHERE l.id = ? AND p.user_id = ?
-        ');
-        $stmt->execute([$linkId, $req->userId()]);
-
-        if (!$stmt->fetch()) {
+        // Quien puede administrar el evento ve sus colaboraciones. Va por
+        // PageAccess y no por una consulta propia: si no, este módulo queda
+        // fuera de cualquier forma de acceso que no sea ser el dueño —los
+        // administradores de la página y el acceso de plataforma incluidos—.
+        if (!PageAccess::canManageLink($db, $linkId, $req->userId())) {
             return Response::error(403, 'Forbidden');
         }
 
@@ -90,10 +85,20 @@ class CollaborationsHandler
             JOIN links l ON ec.link_id = l.id
             JOIN pages rp ON ec.requester_page_id = rp.id
             JOIN pages cp ON ec.collaborator_page_id = cp.id
-            WHERE cp.user_id = ? AND ec.status = "pending"
+            WHERE ec.status = "pending" AND (
+                cp.user_id = ?
+                OR EXISTS (
+                    SELECT 1 FROM page_admins pa
+                    WHERE pa.page_id = cp.id AND pa.user_id = ? AND pa.status = "accepted"
+                )
+            )
             ORDER BY ec.created_at DESC
         ');
-        $stmt->execute([$req->userId()]);
+        // Sin el acceso de plataforma a propósito: esta lista es "qué tengo que
+        // responder yo", y quien administra la plataforma no tiene que ver en
+        // su bandeja las invitaciones de todo el mundo. Sobre una página
+        // concreta sí puede actuar, entrando a esa página.
+        $stmt->execute([$req->userId(), $req->userId()]);
 
         return Response::ok(['pending' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
     }
@@ -108,14 +113,20 @@ class CollaborationsHandler
         }
 
         try {
+            if (!PageAccess::canManageLink($db, $linkId, $req->userId())) {
+                return Response::notFound('Event not found or not authorized');
+            }
+
+            // El permiso ya está resuelto; esto sólo trae los datos y comprueba
+            // que sea un evento: a un link común no se lo puede colaborar.
             $stmt = $db->prepare('
                 SELECT l.id, l.text as event_title, p.id as page_id, p.title as page_title
                 FROM links l
                 JOIN link_groups lg ON l.group_id = lg.id
                 JOIN pages p ON lg.page_id = p.id
-                WHERE l.id = ? AND p.user_id = ? AND lg.type = "eventos"
+                WHERE l.id = ? AND lg.type = "eventos"
             ');
-            $stmt->execute([$linkId, $req->userId()]);
+            $stmt->execute([$linkId]);
             $evento = $stmt->fetch(PDO::FETCH_ASSOC);
 
             if (!$evento) {
@@ -224,8 +235,9 @@ class CollaborationsHandler
             $stmt->execute([$collabId]);
             $collab = $stmt->fetch(PDO::FETCH_ASSOC);
 
-            // Sólo el invitado responde.
-            if (!$collab || $collab['collaborator_owner_id'] != $req->userId()) {
+            // Responde el invitado: quien pueda administrar la página invitada,
+            // no sólo su dueño.
+            if (!$collab || !PageAccess::canManage($db, $collab['collaborator_page_id'], $req->userId())) {
                 return Response::error(403, 'Forbidden');
             }
 
@@ -234,12 +246,14 @@ class CollaborationsHandler
             }
 
             if ($status === 'accepted') {
+                // Tiene que ser un grupo de eventos de la página invitada, y no
+                // de cualquier otra que la persona administre: el evento se
+                // publica ahí.
                 $stmt = $db->prepare('
                     SELECT lg.id FROM link_groups lg
-                    JOIN pages p ON lg.page_id = p.id
-                    WHERE lg.id = ? AND p.user_id = ? AND lg.type = "eventos"
+                    WHERE lg.id = ? AND lg.page_id = ? AND lg.type = "eventos"
                 ');
-                $stmt->execute([$groupId, $req->userId()]);
+                $stmt->execute([$groupId, $collab['collaborator_page_id']]);
 
                 if (!$stmt->fetch()) {
                     return Response::error(400, 'Grupo inválido: debe ser un grupo de eventos de tu página');
