@@ -74,7 +74,40 @@ class CollaborationsHandler
         return Response::ok(['collaborations' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
     }
 
+    /**
+     * Invitaciones pendientes de responder.
+     *
+     * Con page_id contesta "qué tiene pendiente esta página", y ahí el permiso
+     * lo resuelve PageAccess: sirve para el editor, donde se está trabajando
+     * sobre una página concreta y no necesariamente propia.
+     *
+     * Sin page_id contesta "qué tengo que responder yo": las páginas propias y
+     * las que se administran. Ese es el uso de la bandeja, y a propósito no
+     * contempla el acceso de plataforma —quien lo tiene no necesita ver en su
+     * lista las invitaciones de todo el mundo—.
+     */
     private static function pendientesDeMisPaginas($db, Request $req)
+    {
+        $pageId = (int) $req->param('page_id', 0);
+
+        if ($pageId) {
+            if (!PageAccess::canManage($db, $pageId, $req->userId())) {
+                return Response::error(403, 'Forbidden');
+            }
+
+            return self::pendientesConFiltro($db, 'cp.id = ?', [$pageId]);
+        }
+
+        return self::pendientesConFiltro($db, '(
+                cp.user_id = ?
+                OR EXISTS (
+                    SELECT 1 FROM page_admins pa
+                    WHERE pa.page_id = cp.id AND pa.user_id = ? AND pa.status = "accepted"
+                )
+            )', [$req->userId(), $req->userId()]);
+    }
+
+    private static function pendientesConFiltro($db, $filtro, array $params)
     {
         $stmt = $db->prepare('
             SELECT ec.id, ec.status, ec.link_id, ec.requester_page_id, ec.collaborator_page_id,
@@ -85,20 +118,10 @@ class CollaborationsHandler
             JOIN links l ON ec.link_id = l.id
             JOIN pages rp ON ec.requester_page_id = rp.id
             JOIN pages cp ON ec.collaborator_page_id = cp.id
-            WHERE ec.status = "pending" AND (
-                cp.user_id = ?
-                OR EXISTS (
-                    SELECT 1 FROM page_admins pa
-                    WHERE pa.page_id = cp.id AND pa.user_id = ? AND pa.status = "accepted"
-                )
-            )
+            WHERE ec.status = "pending" AND ' . $filtro . '
             ORDER BY ec.created_at DESC
         ');
-        // Sin el acceso de plataforma a propósito: esta lista es "qué tengo que
-        // responder yo", y quien administra la plataforma no tiene que ver en
-        // su bandeja las invitaciones de todo el mundo. Sobre una página
-        // concreta sí puede actuar, entrando a esa página.
-        $stmt->execute([$req->userId(), $req->userId()]);
+        $stmt->execute($params);
 
         return Response::ok(['pending' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
     }

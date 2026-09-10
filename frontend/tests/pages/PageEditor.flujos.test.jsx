@@ -724,6 +724,20 @@ describe('PageEditor — flujos de edición', () => {
       ],
     });
 
+    /**
+     * Se pregunta por esta página y no por "las mías". El editor puede estar
+     * trabajando sobre una página ajena —administrada, o por acceso de
+     * plataforma— y ahí la bandeja personal vuelve vacía: la invitación
+     * existía y no aparecía en ninguna parte.
+     */
+    it('pide las pendientes de la página que se está editando', async () => {
+      const { llamadas } = await render(conPendiente(), 'Contenido');
+
+      const pedido = llamadas.find((l) => l.url.includes('collaborations/index.php'));
+      expect(pedido.url).toContain('type=pending');
+      expect(pedido.url).toContain('page_id=5');
+    });
+
     /** Con un único grupo de eventos el modal lo asigna solo, sin preguntar. */
     it('con un solo grupo de eventos no pregunta y lo asigna', async () => {
       const { llamadas } = await render(conPendiente(), 'Contenido');

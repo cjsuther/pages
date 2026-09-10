@@ -425,6 +425,58 @@ class CollaborationsHandlerTest extends HandlerTestCase
         $this->assertSame(0, $this->db->countCalls('DELETE FROM event_collaborations'));
     }
 
+    // ----------------------------------- pendientes de una página concreta
+
+    /**
+     * El editor trabaja sobre una página concreta, que no siempre es propia.
+     * Preguntando por "mis pendientes" y filtrando después, una invitación a
+     * una página ajena que se administra por soporte no aparecía nunca: la
+     * lista volvía vacía antes de que hubiera nada que filtrar.
+     */
+    public function testPendientesDeUnaPaginaConcreta()
+    {
+        $this->db->onSelect('FROM pages p', [[1]]);
+        $this->db->onSelect('FROM event_collaborations ec JOIN links l', [
+            ['id' => 1, 'event_title' => 'Un evento'],
+        ]);
+
+        $res = CollaborationsHandler::index($this->db,
+            $this->get(['type' => 'pending', 'page_id' => '16'], $this->user(9)));
+
+        $this->assertStatus(200, $res);
+        $this->assertCount(1, $res->body['pending']);
+
+        $llamada = $this->db->callsFor('FROM event_collaborations ec JOIN links l')[0];
+        $this->assertStringContainsString('cp.id = ?', $llamada['sql']);
+        $this->assertSame([16], $llamada['params']);
+    }
+
+    /** El permiso sobre esa página se verifica antes de leer nada. */
+    public function testPendientesDeUnaPaginaAjenaSinPermiso()
+    {
+        $res = CollaborationsHandler::index($this->db,
+            $this->get(['type' => 'pending', 'page_id' => '16'], $this->user(99)));
+
+        $this->assertError(403, $res, 'Forbidden');
+        $this->assertSame(0, $this->db->countCalls('FROM event_collaborations ec JOIN links l'));
+    }
+
+    /**
+     * Sin page_id sigue siendo la bandeja personal, que a propósito no
+     * contempla el acceso de plataforma: quien lo tiene no necesita ver ahí las
+     * invitaciones de todo el mundo.
+     */
+    public function testSinPageIdSigueSiendoLaBandejaPersonal()
+    {
+        $this->db->onSelect('FROM event_collaborations ec JOIN links l', []);
+
+        CollaborationsHandler::index($this->db, $this->get(['type' => 'pending'], $this->user(9)));
+
+        $sql = $this->db->callsFor('FROM event_collaborations ec JOIN links l')[0]['sql'];
+        $this->assertStringContainsString('cp.user_id = ?', $sql);
+        $this->assertStringNotContainsString('cp.id = ?', $sql);
+    }
+
     // --------------------------------------- acceso más allá del dueño
 
     /**

@@ -118,8 +118,9 @@ function PageEditor() {
   const colores = paleta(page);
 
   // Se muestra en el submenú para que las colaboraciones pendientes no queden
-  // escondidas dentro de una solapa que el usuario no abrió.
-  const pendientesDeColaborar = pendingCollaborations.filter(c => c.collaborator_page_id == id).length;
+  // escondidas dentro de una solapa que el usuario no abrió. Ya vienen sólo
+  // las de esta página: el servidor filtra y de paso comprueba el permiso.
+  const pendientesDeColaborar = pendingCollaborations.length;
 
   useEffect(() => {
     fetchPage();
@@ -578,7 +579,10 @@ function PageEditor() {
 
   const loadPendingCollaborations = async () => {
     try {
-      const response = await fetch(`${apiUrl}/collaborations/index.php?type=pending`, {
+      // Se pregunta por esta página y no por "las mías": el editor puede estar
+      // trabajando sobre una página ajena —de las que se administran, o por
+      // acceso de plataforma— y ahí la bandeja personal vuelve vacía.
+      const response = await fetch(`${apiUrl}/collaborations/index.php?type=pending&page_id=${id}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
@@ -1041,11 +1045,11 @@ function PageEditor() {
 
         {seccion === 'contenido' && (
           <>
-            {pendingCollaborations.filter(c => c.collaborator_page_id == id).length > 0 && (
+            {pendingCollaborations.length > 0 && (
               <div className="bg-white border border-amber-200 p-8 mb-8">
                 <h2 className="text-2xl font-bold tracking-tight mb-6 text-amber-700">Colaboraciones pendientes</h2>
                 <div className="space-y-4">
-                  {pendingCollaborations.filter(c => c.collaborator_page_id == id).map((collab) => (
+                  {pendingCollaborations.map((collab) => (
                     <div key={collab.id} className="bg-white border border-borde rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-4">
                       <div className="flex items-center gap-3 flex-1">
                         {collab.requester_page_image && (
