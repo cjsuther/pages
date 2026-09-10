@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import DescripcionDePagina from '../DescripcionDePagina';
 import FollowButton from '../FollowButton';
 import EventCollaborators from '../EventCollaborators';
 import FollowersPopup from '../FollowersPopup';
@@ -72,9 +73,11 @@ function CondensedTemplate({ page }) {
             />
           )}
           <h1 className="text-3xl md:text-4xl font-bold mb-3 md:mb-4" style={{ color: colores.titulo }}>{page.title}</h1>
-          {page.description && (
-            <p className="text-sm md:text-base opacity-70 max-w-xl mx-auto px-4">{page.description}</p>
-          )}
+          <DescripcionDePagina
+            texto={page.description}
+            className="text-sm md:text-base opacity-70 max-w-xl mx-auto px-4"
+            color={colores.acento}
+          />
           <div className="flex flex-col items-center gap-3 mt-4 md:mt-6">
             <RedesSociales socials={page.socials} className="mb-1" />
             <FollowersPopup pageId={page.id} followerCount={page.follower_count || 0} />

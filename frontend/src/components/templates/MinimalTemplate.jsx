@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { trackEvent } from '../../utils/analytics';
+import DescripcionDePagina from '../DescripcionDePagina';
 import FollowButton from '../FollowButton';
 import EventCollaborators from '../EventCollaborators';
 import FollowersPopup from '../FollowersPopup';
@@ -57,9 +58,11 @@ function MinimalTemplate({ page }) {
 
         <div className="text-center space-y-4">
           <h1 className="text-4xl font-bold" style={{ color: colores.titulo }}>{page.title}</h1>
-          {page.description && (
-            <p className="text-lg opacity-70">{page.description}</p>
-          )}
+          <DescripcionDePagina
+            texto={page.description}
+            className="text-lg opacity-70"
+            color={colores.acento}
+          />
           <div className="flex flex-col items-center gap-3 mt-4">
             <RedesSociales socials={page.socials} className="mb-1" />
             <FollowersPopup pageId={page.id} followerCount={page.follower_count || 0} />

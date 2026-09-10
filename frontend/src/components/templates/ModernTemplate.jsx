@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import DescripcionDePagina from '../DescripcionDePagina';
 import FollowButton from '../FollowButton';
 import EventCollaborators from '../EventCollaborators';
 import FollowersPopup from '../FollowersPopup';
@@ -59,9 +60,13 @@ function ModernTemplate({ page }) {
             )}
             <div>
               <h1 className="text-4xl font-black tracking-tight mb-4" style={{ color: colores.titulo }}>{page.title}</h1>
-              {page.description && (
-                <p className="text-lg opacity-70 leading-relaxed">{page.description}</p>
-              )}
+              {/* Sin centrar: esta plantilla alinea todo a la izquierda. */}
+              <DescripcionDePagina
+                texto={page.description}
+                className="text-lg opacity-70 leading-relaxed"
+                color={colores.acento}
+                centrado={false}
+              />
               <div className="flex flex-col gap-3 mt-6">
                 <RedesSociales socials={page.socials} className="mb-1" />
                 <FollowersPopup pageId={page.id} followerCount={page.follower_count || 0} />
