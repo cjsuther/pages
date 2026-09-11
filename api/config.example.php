@@ -99,6 +99,23 @@ define('MAIL_FROM_NAME', 'Rezonar');
 // Vacío desactiva la consulta a la API: el importador sigue funcionando.
 define('EVENTBRITE_TOKEN', '');
 
+// ------------------------------------------------- Métricas de cada página
+// Los informes por página salen de Google Analytics, filtrados por su ruta.
+// Hacen falta dos cosas, y las dos se hacen una sola vez:
+//
+// 1. El número de la propiedad. Está en Google Analytics, en Administrar →
+//    Configuración de la propiedad. Es un número: el G-XXXXXXXX que va en el
+//    sitio es otra cosa y acá no sirve.
+// 2. Una cuenta de servicio de Google Cloud con la API "Google Analytics
+//    Data" habilitada. Se descarga su JSON, se deja fuera del directorio
+//    público, y a esa dirección de correo se le da permiso de Lector sobre la
+//    propiedad, en Administrar → Accesos a la propiedad.
+//
+// Vacíos, el panel de métricas explica que falta configurarlo. No se rompe
+// nada más.
+define('GA_PROPERTY_ID', '');
+define('GA_SERVICE_ACCOUNT', '');
+
 // En CLI (el cron) no hay request HTTP: ni las cabeceras ni el preflight
 // tienen sentido, y tocar REQUEST_METHOD ahí sólo genera warnings.
 if (php_sapi_name() !== 'cli') {

@@ -5,6 +5,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import GooglePlacesAutocomplete from '../components/GooglePlacesAutocomplete';
 import SeccionRedes from '../components/SeccionRedes';
 import SeccionEntradas from '../components/SeccionEntradas';
+import PanelMetricas from '../components/PanelMetricas';
 import { analizarEmbed, portadaDe } from '../utils/embeds';
 import { paleta } from '../utils/colores';
 import MiniaturaPlantilla from '../components/MiniaturaPlantilla';
@@ -43,6 +44,7 @@ const SECCIONES = [
   { clave: 'contenido', etiqueta: 'Contenido' },
   { clave: 'redes',     etiqueta: 'Redes sociales' },
   { clave: 'entradas',  etiqueta: 'Entradas' },
+  { clave: 'metricas',  etiqueta: 'Métricas' },
   { clave: 'admins',    etiqueta: 'Administradores', soloDueno: true },
 ];
 
@@ -987,6 +989,10 @@ function PageEditor() {
               updatePage({ email_contacto: email });
             }}
           />
+        )}
+
+        {seccion === 'metricas' && (
+          <PanelMetricas pageId={id} slug={page.url_slug} />
         )}
 
         {seccion === 'admins' && isOwner && (

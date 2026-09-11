@@ -29,8 +29,8 @@ describe('usePageTracking', () => {
     );
 
     expect(window.gtag).toHaveBeenCalledWith(
-      'config',
-      expect.any(String),
+      'event',
+      'page_view',
       expect.objectContaining({ page_path: '/mi-ruta', page_title: 'Título de prueba' })
     );
   });
@@ -43,8 +43,8 @@ describe('usePageTracking', () => {
     );
 
     expect(window.gtag).toHaveBeenCalledWith(
-      'config',
-      expect.any(String),
+      'event',
+      'page_view',
       expect.objectContaining({ page_path: '/buscar?q=rock' })
     );
   });
@@ -67,8 +67,8 @@ describe('usePageTracking', () => {
     });
 
     expect(window.gtag).toHaveBeenLastCalledWith(
-      'config',
-      expect.any(String),
+      'event',
+      'page_view',
       expect.objectContaining({ page_path: '/otra?x=1' })
     );
   });

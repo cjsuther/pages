@@ -52,6 +52,26 @@ openssl_pkey_export($clavePrueba, $clavePruebaPem);
 define('APPLE_PRIVATE_KEY', $clavePruebaPem);
 unset($clavePrueba, $clavePruebaPem);
 
+// Los informes por página se piden a Google firmando un JWT con la clave de
+// una cuenta de servicio, así que hace falta una clave RSA de verdad. Se genera
+// al vuelo y el JSON va a un archivo temporal: la suite no depende de la cuenta
+// real ni de ningún archivo del repositorio.
+define('GA_PROPERTY_ID', '123456789');
+
+$claveGa = openssl_pkey_new([
+    'private_key_type' => OPENSSL_KEYTYPE_RSA,
+    'private_key_bits' => 2048,
+]);
+openssl_pkey_export($claveGa, $claveGaPem);
+
+$rutaGa = sys_get_temp_dir() . '/rezonar-ga-test.json';
+file_put_contents($rutaGa, json_encode([
+    'client_email' => 'informes@test.iam.gserviceaccount.com',
+    'private_key' => $claveGaPem,
+]));
+define('GA_SERVICE_ACCOUNT', $rutaGa);
+unset($claveGa, $claveGaPem, $rutaGa);
+
 define('VAPID_PUBLIC_KEY', 'test-vapid-public');
 define('VAPID_PRIVATE_KEY', 'test-vapid-private');
 define('VAPID_SUBJECT', 'mailto:test@test.local');
