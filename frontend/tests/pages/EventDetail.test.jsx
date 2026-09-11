@@ -113,10 +113,17 @@ describe('EventDetail', () => {
       expect(screen.getByAltText('Recital de Rock')).toHaveAttribute('src', 'https://img/evento.jpg');
     });
 
-    it('usa una imagen por defecto si el evento no tiene', async () => {
+    /**
+     * Sin afiche no se pone nada.
+     *
+     * Antes se rellenaba con una foto de stock de un banco de imágenes
+     * ajeno: en la página de un artista eso se lee como si fuera suya, y no
+     * tiene nada que ver con su fecha.
+     */
+    it('sin afiche no inventa una imagen', async () => {
       await renderEvento({ image_url: null });
 
-      expect(screen.getByAltText('Recital de Rock').getAttribute('src')).toContain('pexels.com');
+      expect(screen.queryByAltText('Recital de Rock')).not.toBeInTheDocument();
     });
 
     it('muestra la fecha en castellano', async () => {
@@ -152,6 +159,67 @@ describe('EventDetail', () => {
       await renderEvento({ event_address: null });
 
       expect(screen.queryByText('Av. Corrientes 1234')).not.toBeInTheDocument();
+    });
+  });
+
+  /**
+   * Esta pantalla es a la que se llega desde un enlace directo —el que se
+   * comparte por WhatsApp o se pega en una historia—, así que muchas veces es
+   * lo primero que alguien ve de esa página. Estaba blanca con el verde de
+   * Rezonar: quien llegaba por ahí no tenía cómo reconocer de quién era.
+   */
+  describe('los colores son los de la página', () => {
+    const conPaleta = (overrides = {}) => evento({
+      background_color: '#070708',
+      text_color: '#ffffff',
+      primary_color: '#ff0055',
+      secondary_color: '#00d4ff',
+      title_color: '#ffcc00',
+      ...overrides,
+    });
+
+    async function renderPintado(overrides = {}) {
+      mockFetch({ 'public/event.php': { event: conPaleta(overrides) } });
+      render();
+      return screen.findByRole('heading', { name: 'Recital de Rock' });
+    }
+
+    it('el fondo es el de la página, no blanco', async () => {
+      await renderPintado();
+
+      // La misma caja que usan las plantillas: se reconoce por su ancho.
+      const caja = document.querySelector('[class*="max-w-[580px]"]');
+      expect(caja).toHaveStyle({ backgroundColor: '#070708' });
+    });
+
+    it('el título usa el color de títulos', async () => {
+      await renderPintado();
+
+      expect(screen.getByRole('heading', { name: 'Recital de Rock' }))
+        .toHaveStyle({ color: '#ffcc00' });
+    });
+
+    /** El botón sale del color de botones de la página, no de uno nuestro. */
+    it('el botón usa el color de la página', async () => {
+      await renderPintado();
+
+      expect(screen.getByRole('link', { name: /Más información/ }))
+        .toHaveStyle({ backgroundColor: '#00d4ff' });
+    });
+
+    it('la imagen de fondo de la página también se respeta', async () => {
+      await renderPintado({ background_image: 'https://img/fondo.png' });
+
+      const capa = document.querySelector('[style*="background-image"]');
+      expect(capa.style.backgroundImage).toBe('url("https://img/fondo.png")');
+    });
+
+    /** Una página que nunca tocó los colores se sigue viendo como antes. */
+    it('sin colores propios no rompe', async () => {
+      mockFetch({ 'public/event.php': { event: evento() } });
+      render();
+
+      expect(await screen.findByRole('heading', { name: 'Recital de Rock' })).toBeInTheDocument();
     });
   });
 

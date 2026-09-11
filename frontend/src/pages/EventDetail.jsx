@@ -1,9 +1,25 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { Calendar, MapPin, ExternalLink, ArrowLeft } from 'lucide-react';
 import { AuthContext } from '../App';
 import BotonEntradas, { vendeEntradas } from '../components/BotonEntradas';
-import { Calendar, MapPin, ExternalLink, ArrowLeft } from 'lucide-react';
+import FondoDeLaCaja from '../components/FondoDeLaCaja';
+import RezonarBadge from '../components/RezonarBadge';
+import { paleta, conAlfa, textoSobre } from '../utils/colores';
+import { CLASES_ALREDEDOR, CLASES_CAJA, estiloDeAlrededor, estiloDeCaja } from '../utils/plantillas';
 
+/**
+ * El detalle de un evento, en su propia pantalla.
+ *
+ * Es la pantalla a la que se llega desde un enlace directo —el que se comparte
+ * por WhatsApp o se pega en una historia—, así que muchas veces es lo primero
+ * que alguien ve de esa página. Por eso se pinta con los colores de la página
+ * y no con los de Rezonar: estaba blanca con nuestro verde, y quien llegaba por
+ * ahí no tenía cómo reconocer de quién era la fecha.
+ *
+ * Es la misma caja que usan las plantillas: misma columna, mismo fondo, mismo
+ * recorte. Lo que cambia es el contenido.
+ */
 function EventDetail() {
   const { id } = useParams();
   const { apiUrl } = useContext(AuthContext);
@@ -22,6 +38,9 @@ function EventDetail() {
       .finally(() => setLoading(false));
   }, [id]);
 
+  // Mientras no se sabe de qué página es, no hay colores que usar: se muestra
+  // neutro. Pintar con la paleta por defecto y cambiarla un segundo después es
+  // peor que esperar.
   if (loading) return (
     <div className="min-h-screen bg-white flex items-center justify-center">
       <p className="text-tinta-media">Cargando...</p>
@@ -35,7 +54,120 @@ function EventDetail() {
     </div>
   );
 
-  const formatDate = (date, time) => new Date(date + ' ' + (time || '00:00')).toLocaleDateString('es-AR', {
+  // El evento viaja con los colores de su página; paleta() deriva los que
+  // estén vacíos igual que en las plantillas.
+  const colores = paleta(event);
+  const { background_color: backgroundColor, text_color: textColor } = event;
+
+  return (
+    <div className={CLASES_ALREDEDOR} style={estiloDeAlrededor({ backgroundColor, textColor })}>
+      <RezonarBadge />
+
+      <div
+        className={`${CLASES_CAJA} px-6 py-12`}
+        style={estiloDeCaja({ backgroundColor, textColor })}
+      >
+        <FondoDeLaCaja imagen={event.background_image} />
+
+        <Link
+          to={`/${event.page_slug}`}
+          className="inline-flex items-center gap-2 text-sm font-semibold opacity-70 transition-opacity hover:opacity-100"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Ver la página
+        </Link>
+
+        {event.image_url && (
+          <img
+            src={event.image_url}
+            alt={event.text}
+            className="mt-6 w-full h-auto rounded-2xl"
+          />
+        )}
+
+        {event.page_title && (
+          <Link
+            to={`/${event.page_slug}`}
+            className="mt-8 flex items-center gap-3 transition-opacity hover:opacity-80"
+          >
+            {event.page_image && (
+              <img
+                src={event.page_image}
+                alt={event.page_title}
+                className="w-10 h-10 rounded-full object-cover"
+              />
+            )}
+            <span className="text-sm opacity-70">{event.page_title}</span>
+          </Link>
+        )}
+
+        <h1 className="mt-6 text-4xl font-bold" style={{ color: colores.titulo }}>
+          {event.text}
+        </h1>
+
+        {(event.event_date || event.event_time) && (
+          <Dato icono={Calendar} color={colores.acento}>
+            <span className="capitalize">{formatearFecha(event.event_date, event.event_time)}</span>
+          </Dato>
+        )}
+
+        {event.event_address && (
+          <Dato icono={MapPin} color={colores.acento}>
+            {event.event_maps_url ? (
+              <a
+                href={event.event_maps_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline underline-offset-2 hover:opacity-80"
+              >
+                {event.event_address}
+              </a>
+            ) : (
+              <span>{event.event_address}</span>
+            )}
+          </Dato>
+        )}
+
+        {event.description && (
+          <p
+            className="mt-6 pt-6 border-t text-lg leading-relaxed opacity-80 whitespace-pre-line"
+            style={{ borderColor: conAlfa(colores.texto, 0.15) }}
+          >
+            {event.description}
+          </p>
+        )}
+
+        <BotonEntradas evento={event} color={colores.boton} />
+
+        {event.url && !vendeEntradas(event) && (
+          <a
+            href={event.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-8 inline-flex items-center gap-2 rounded-full px-6 py-3 font-semibold transition-opacity hover:opacity-85"
+            style={{ backgroundColor: colores.boton, color: textoSobre(colores.boton, colores.texto) }}
+          >
+            <ExternalLink className="w-4 h-4" />
+            {event.url_text || 'Más información'}
+          </a>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Una línea de dato con su ícono, en el acento de la página. */
+function Dato({ icono: Icono, color, children }) {
+  return (
+    <div className="mt-4 flex items-start gap-3 text-lg opacity-90">
+      <Icono className="w-5 h-5 flex-shrink-0 mt-1" style={{ color }} />
+      <span>{children}</span>
+    </div>
+  );
+}
+
+export function formatearFecha(fecha, hora) {
+  return new Date(fecha + ' ' + (hora || '00:00')).toLocaleDateString('es-AR', {
     timeZone: 'America/Argentina/Buenos_Aires',
     weekday: 'long',
     day: '2-digit',
@@ -45,94 +177,6 @@ function EventDetail() {
     minute: '2-digit',
     hour12: false,
   });
-
-  return (
-    <div className="min-h-screen bg-white text-tinta">
-      <nav className="flex items-center justify-between px-6 py-4 border-b border-borde">
-        <a href="/">
-          <img src="/logo-negro.png" alt="Rezonar" className="h-8" />
-        </a>
-        <Link
-          to={`/${event.page_slug}`}
-          className="text-sm text-tinta-media hover:text-tinta transition flex items-center gap-1"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Ver página
-        </Link>
-      </nav>
-
-      <main className="max-w-2xl mx-auto px-6 py-12">
-        <img
-          src={event.image_url || 'https://images.pexels.com/photos/1190298/pexels-photo-1190298.jpeg?auto=compress&cs=tinysrgb&w=800'}
-          alt={event.text}
-          className="w-full h-auto rounded-lg mb-8"
-        />
-
-        {event.page_title && (
-          <Link
-            to={`/${event.page_slug}`}
-            className="flex items-center gap-3 mb-6 hover:opacity-80 transition"
-          >
-            {event.page_image && (
-              <img
-                src={event.page_image}
-                alt={event.page_title}
-                className="w-10 h-10 rounded-full object-cover"
-              />
-            )}
-            <span className="text-tinta-media text-sm">{event.page_title}</span>
-          </Link>
-        )}
-
-        <h1 className="text-4xl font-bold mb-6">{event.text}</h1>
-
-        {(event.event_date || event.event_time) && (
-          <div className="flex items-center gap-3 text-lg text-tinta-media mb-4">
-            <Calendar className="w-5 h-5 text-verde-oscuro flex-shrink-0" />
-            <span className="capitalize">{formatDate(event.event_date, event.event_time)}</span>
-          </div>
-        )}
-
-        {event.event_address && (
-          <div className="flex items-start gap-3 text-tinta-media mb-4">
-            <MapPin className="w-5 h-5 text-verde-oscuro flex-shrink-0 mt-0.5" />
-            {event.event_maps_url ? (
-              <a
-                href={event.event_maps_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hover:text-tinta underline"
-              >
-                {event.event_address}
-              </a>
-            ) : (
-              <span>{event.event_address}</span>
-            )}
-          </div>
-        )}
-
-        {event.description && (
-          <p className="text-tinta-media text-lg leading-relaxed mt-6 border-t border-borde pt-6">
-            {event.description}
-          </p>
-        )}
-
-        <BotonEntradas evento={event} color="#059669" />
-
-        {event.url && !vendeEntradas(event) && (
-          <a
-            href={event.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 mt-8 px-6 py-3 rounded-full bg-verde text-verde-tinta hover:bg-verde-oscuro hover:text-white font-semibold transition-colors"
-          >
-            <ExternalLink className="w-4 h-4" />
-            {event.url_text || 'Más información'}
-          </a>
-        )}
-      </main>
-    </div>
-  );
 }
 
 export default EventDetail;

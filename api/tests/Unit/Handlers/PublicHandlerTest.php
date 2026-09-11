@@ -237,6 +237,25 @@ class PublicHandlerTest extends HandlerTestCase
         $this->assertStringContainsString('l.url_text', $sql);
     }
 
+    /**
+     * El detalle de un evento se ve en una pantalla aparte, pero es de esa
+     * página y no de Rezonar: sin los colores se dibujaba blanco con el verde
+     * nuestro, y quien llegaba por un enlace directo no reconocía de quién era
+     * la fecha.
+     */
+    public function testEventTraeLosColoresDeLaPagina()
+    {
+        PublicHandler::event($this->db, $this->get(['id' => '100']));
+
+        $sql = $this->db->callsFor('FROM links l JOIN link_groups lg')[0]['sql'];
+
+        foreach (['p.primary_color', 'p.secondary_color', 'p.card_color',
+                  'p.title_color', 'p.background_color', 'p.text_color', 'p.template',
+                  'p.background_image'] as $campo) {
+            $this->assertStringContainsString($campo, $sql, "Falta $campo");
+        }
+    }
+
     // ================================================================= events
 
     public function testEventsUsaElRangoPorDefectoDeTreintaDias()

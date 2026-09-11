@@ -190,7 +190,19 @@ class PublicHandler
                 p.id as page_id,
                 p.title as page_title,
                 p.url_slug as page_slug,
-                p.profile_image as page_image
+                p.profile_image as page_image,
+                -- Los colores de la página: el detalle de un evento se ve
+                -- aparte pero es de esa página, no de Rezonar. Sin esto se
+                -- dibujaba blanco con el verde nuestro, y quien llegaba por un
+                -- enlace directo no reconocía de quién era la fecha.
+                p.primary_color,
+                p.secondary_color,
+                p.card_color,
+                p.title_color,
+                p.background_color,
+                p.text_color,
+                p.template,
+                p.background_image
             FROM links l
             JOIN link_groups lg ON l.group_id = lg.id
             JOIN pages p ON lg.page_id = p.id
