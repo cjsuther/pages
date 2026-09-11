@@ -30,6 +30,25 @@ class Analytics
     /** Cuántas filas de cada listado. Más que esto no se lee, se estorba. */
     const FILAS = 8;
 
+    /** Cuántos informes acepta Google en un pedido. */
+    const INFORMES_POR_PEDIDO = 5;
+
+    /**
+     * Los tramos de edad, en orden.
+     *
+     * La edad se lee en orden y no por tamaño: ordenada por volumen se pierde
+     * la forma, que es justo lo que se mira para saber a quién le estás
+     * hablando. "unknown" va al final porque no es un tramo.
+     */
+    const EDADES = ['18-24', '25-34', '35-44', '45-54', '55-64', '65+'];
+
+    /** Google contesta en inglés y en minúsculas. */
+    const GENEROS = [
+        'male' => 'Varones',
+        'female' => 'Mujeres',
+        'unknown' => 'Sin datos',
+    ];
+
     /** @var HttpClient */
     private $http;
 
@@ -123,6 +142,30 @@ class Analytics
                 'dimensionFilter' => $filtro,
                 'limit' => self::FILAS,
             ],
+            // Quién te mira. Los tres informes de abajo sólo traen algo si la
+            // propiedad tiene activadas las señales de Google: son datos que
+            // Google infiere, no que nosotros midamos.
+            [
+                'dateRanges' => [['startDate' => $desde, 'endDate' => $hoy]],
+                'dimensions' => [['name' => 'userAgeBracket']],
+                'metrics' => self::metricas(),
+                'dimensionFilter' => $filtro,
+            ],
+            [
+                'dateRanges' => [['startDate' => $desde, 'endDate' => $hoy]],
+                'dimensions' => [['name' => 'userGender']],
+                'metrics' => self::metricas(),
+                'dimensionFilter' => $filtro,
+            ],
+            // El cruce de los dos, que es lo que de verdad describe a un
+            // público: no "gente de 25 a 34" ni "mujeres", sino las dos cosas
+            // a la vez.
+            [
+                'dateRanges' => [['startDate' => $desde, 'endDate' => $hoy]],
+                'dimensions' => [['name' => 'userAgeBracket'], ['name' => 'userGender']],
+                'metrics' => self::metricas(),
+                'dimensionFilter' => $filtro,
+            ],
         ]);
 
         if (isset($informes['error'])) {
@@ -139,12 +182,18 @@ class Analytics
             'origen'      => self::listado($informes[2]),
             'dispositivo' => self::listado($informes[3]),
             'ciudad'      => self::listado($informes[4]),
+            'quien'       => self::demografia($informes[5], $informes[6], $informes[7]),
         ];
     }
 
     // ------------------------------------------------------- hablar con Google
 
-    /** Los cinco informes en una sola llamada. Es el máximo que acepta Google. */
+    /**
+     * Los informes, en la menor cantidad de llamadas posible.
+     *
+     * Google acepta cinco por pedido, así que se mandan de a cinco. El token se
+     * pide una sola vez para todos.
+     */
     private function pedir(array $informes)
     {
         $token = $this->token();
@@ -153,19 +202,25 @@ class Analytics
             return ['error' => 'No pudimos autorizarnos contra Google Analytics'];
         }
 
-        $respuesta = $this->http->postJson(
-            self::URL_DATOS . self::propiedad() . ':batchRunReports',
-            ['requests' => $informes],
-            ['Authorization: Bearer ' . $token]
-        );
+        $salida = [];
 
-        $cuerpo = json_decode($respuesta['body'], true);
+        foreach (array_chunk($informes, self::INFORMES_POR_PEDIDO) as $lote) {
+            $respuesta = $this->http->postJson(
+                self::URL_DATOS . self::propiedad() . ':batchRunReports',
+                ['requests' => $lote],
+                ['Authorization: Bearer ' . $token]
+            );
 
-        if ($respuesta['status'] !== 200 || !isset($cuerpo['reports'])) {
-            return ['error' => self::motivo($cuerpo)];
+            $cuerpo = json_decode($respuesta['body'], true);
+
+            if ($respuesta['status'] !== 200 || !isset($cuerpo['reports'])) {
+                return ['error' => self::motivo($cuerpo)];
+            }
+
+            $salida = array_merge($salida, $cuerpo['reports']);
         }
 
-        return $cuerpo['reports'];
+        return $salida;
     }
 
     /**
@@ -326,14 +381,22 @@ class Analytics
      */
     private static function listado(array $informe)
     {
+        return self::listadoCon($informe, function ($valor) {
+            // Google marca así lo que no pudo determinar.
+            return $valor === '' || $valor === '(not set)' || $valor === '(other)'
+                ? 'Sin datos'
+                : $valor;
+        });
+    }
+
+    /** Lo mismo, con un traductor propio para la dimensión. */
+    private static function listadoCon(array $informe, $traducir)
+    {
         $filas = [];
 
         foreach (self::filas($informe) as $fila) {
-            $nombre = isset($fila['dimensionValues'][0]['value']) ? $fila['dimensionValues'][0]['value'] : '';
-
-            if ($nombre === '' || $nombre === '(not set)' || $nombre === '(other)') {
-                $nombre = 'Sin datos';
-            }
+            $crudo = isset($fila['dimensionValues'][0]['value']) ? $fila['dimensionValues'][0]['value'] : '';
+            $nombre = $traducir($crudo);
 
             $numeros = self::numeros($fila);
 
@@ -350,6 +413,101 @@ class Analytics
         // estaba más arriba, así que se vuelve a ordenar.
         usort($filas, function ($a, $b) {
             return $b['visitas'] - $a['visitas'];
+        });
+
+        return $filas;
+    }
+
+    /**
+     * Quién te mira: edad, género y el cruce de los dos.
+     *
+     * Esto no lo medimos nosotros, lo infiere Google, y hay dos motivos por los
+     * que puede venir vacío. Los dos se informan para arriba, porque una tabla
+     * vacía sin explicación se lee como "no te mira nadie":
+     *
+     * - Sin las señales de Google activadas en la propiedad, el dato no existe
+     *   y todo vuelve como "unknown".
+     * - Aunque existan, Google retiene las filas cuando son pocas personas,
+     *   para que no se pueda reconocer a nadie. Le pasa a cualquier página
+     *   chica, y lo avisa con una marca en la respuesta.
+     */
+    private static function demografia(array $edad, array $genero, array $cruce)
+    {
+        $porEdad = self::ordenarPorEdad(self::listadoCon($edad, function ($v) {
+            return $v === '' || $v === 'unknown' ? 'Sin datos' : $v;
+        }));
+
+        $porGenero = self::listadoCon($genero, function ($v) {
+            return isset(self::GENEROS[$v]) ? self::GENEROS[$v] : 'Sin datos';
+        });
+
+        return [
+            'edad'   => $porEdad,
+            'genero' => $porGenero,
+            'cruce'  => self::cruce($cruce),
+            // Con todo en "Sin datos" no hay nada que mirar, y el motivo no es
+            // que no haya público sino que Google no lo clasifica.
+            'hay_datos' => self::hayAlgunoClasificado($porEdad) || self::hayAlgunoClasificado($porGenero),
+            'retenido'  => self::retenido($edad) || self::retenido($genero) || self::retenido($cruce),
+        ];
+    }
+
+    /** Edad por género, para leer las dos cosas a la vez. */
+    private static function cruce(array $informe)
+    {
+        $filas = [];
+
+        foreach (self::filas($informe) as $fila) {
+            $edad = isset($fila['dimensionValues'][0]['value']) ? $fila['dimensionValues'][0]['value'] : '';
+            $genero = isset($fila['dimensionValues'][1]['value']) ? $fila['dimensionValues'][1]['value'] : '';
+
+            $numeros = self::numeros($fila);
+
+            $filas[] = [
+                'edad'     => $edad === '' || $edad === 'unknown' ? 'Sin datos' : $edad,
+                'genero'   => isset(self::GENEROS[$genero]) ? self::GENEROS[$genero] : 'Sin datos',
+                'visitas'  => $numeros['visitas'],
+                'personas' => $numeros['personas'],
+            ];
+        }
+
+        return $filas;
+    }
+
+    /**
+     * Google retiene filas cuando son pocas personas, para que no se pueda
+     * reconocer a nadie. Lo avisa acá, y hay que decirlo: si no, una tabla
+     * incompleta se lee como si fueran todos los datos.
+     */
+    private static function retenido(array $informe)
+    {
+        return isset($informe['metadata']['subjectToThresholding'])
+            && $informe['metadata']['subjectToThresholding'] === true;
+    }
+
+    private static function hayAlgunoClasificado(array $filas)
+    {
+        foreach ($filas as $fila) {
+            if ($fila['nombre'] !== 'Sin datos' && $fila['personas'] > 0) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** La edad se lee en orden, no por tamaño. */
+    private static function ordenarPorEdad(array $filas)
+    {
+        usort($filas, function ($a, $b) {
+            $i = array_search($a['nombre'], self::EDADES, true);
+            $j = array_search($b['nombre'], self::EDADES, true);
+
+            // Lo que no es un tramo —"Sin datos"— va al final.
+            $i = $i === false ? count(self::EDADES) : $i;
+            $j = $j === false ? count(self::EDADES) : $j;
+
+            return $i - $j;
         });
 
         return $filas;

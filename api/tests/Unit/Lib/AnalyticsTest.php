@@ -34,9 +34,18 @@ class AnalyticsTest extends TestCase
         return $this;
     }
 
+    /**
+     * Encola lo que contesta Google.
+     *
+     * Son ocho informes y Google acepta cinco por pedido, así que van en dos
+     * llamadas y hay que encolar una respuesta por cada una. Los que el test no
+     * declara vuelven vacíos.
+     */
     private function conInformes(array $informes)
     {
-        $this->http->responde('analyticsdata.googleapis.com', 200, ['reports' => $informes]);
+        foreach (array_chunk(array_pad($informes, 8, $this->informe([])), 5) as $lote) {
+            $this->http->responde('analyticsdata.googleapis.com', 200, ['reports' => $lote]);
+        }
 
         return $this;
     }
@@ -62,9 +71,9 @@ class AnalyticsTest extends TestCase
         return $analytics->dePagina($slug, $dominio, $dias, $hoy);
     }
 
-    private function cincoInformesVacios()
+    private function sinDatos()
     {
-        return $this->conInformes(array_fill(0, 5, $this->informe([])));
+        return $this->conInformes([]);
     }
 
     // ----------------------------------------------------------- autorización
@@ -76,7 +85,7 @@ class AnalyticsTest extends TestCase
      */
     public function testPideElTokenFirmandoUnJwt()
     {
-        $this->conToken()->cincoInformesVacios()->pedir();
+        $this->conToken()->sinDatos()->pedir();
 
         $campos = $this->http->camposDe('oauth2.googleapis.com/token');
 
@@ -86,7 +95,7 @@ class AnalyticsTest extends TestCase
 
     public function testElJwtPideSoloLectura()
     {
-        $this->conToken()->cincoInformesVacios()->pedir();
+        $this->conToken()->sinDatos()->pedir();
 
         $campos = $this->http->camposDe('oauth2.googleapis.com/token');
         $partes = explode('.', $campos['assertion']);
@@ -98,7 +107,7 @@ class AnalyticsTest extends TestCase
 
     public function testElInformeVaConElTokenPuesto()
     {
-        $this->conToken()->cincoInformesVacios()->pedir();
+        $this->conToken()->sinDatos()->pedir();
 
         $this->assertContains(
             'Authorization: Bearer token-de-prueba',
@@ -125,7 +134,7 @@ class AnalyticsTest extends TestCase
      */
     public function testFiltraPorLaRutaDeLaPagina()
     {
-        $this->conToken()->cincoInformesVacios()->pedir('la-banda');
+        $this->conToken()->sinDatos()->pedir('la-banda');
 
         $pedido = $this->http->jsonDe('analyticsdata.googleapis.com');
 
@@ -143,7 +152,7 @@ class AnalyticsTest extends TestCase
      */
     public function testConDominioPropioTambienMiraElDominio()
     {
-        $this->conToken()->cincoInformesVacios()->pedir('la-banda', 'labanda.com.ar');
+        $this->conToken()->sinDatos()->pedir('la-banda', 'labanda.com.ar');
 
         $pedido = $this->http->jsonDe('analyticsdata.googleapis.com');
         $condiciones = $pedido['requests'][0]['dimensionFilter']['orGroup']['expressions'];
@@ -155,7 +164,7 @@ class AnalyticsTest extends TestCase
 
     public function testSinDominioPropioNoFiltraPorDominio()
     {
-        $this->conToken()->cincoInformesVacios()->pedir('la-banda', null);
+        $this->conToken()->sinDatos()->pedir('la-banda', null);
 
         $pedido = $this->http->jsonDe('analyticsdata.googleapis.com');
 
@@ -164,15 +173,34 @@ class AnalyticsTest extends TestCase
 
     // ---------------------------------------------------------------- pedido
 
-    /** Los cinco informes en una llamada: es el máximo que acepta Google. */
-    public function testPideTodoDeUnaVez()
+    /**
+     * De a cinco, que es el máximo que acepta Google por pedido. Ocho informes
+     * en dos llamadas, y no ocho llamadas.
+     */
+    public function testAgrupaLosInformesEnLaMenorCantidadDeLlamadas()
     {
-        $this->conToken()->cincoInformesVacios()->pedir();
+        $this->conToken()->sinDatos()->pedir();
 
-        $pedido = $this->http->jsonDe('analyticsdata.googleapis.com');
+        $aGoogle = array_values(array_filter($this->http->llamadas, function ($l) {
+            return strpos($l['url'], 'analyticsdata') !== false;
+        }));
 
-        $this->assertCount(5, $pedido['requests']);
-        $this->assertStringContainsString('properties/123456789:batchRunReports', $this->http->llamadas[1]['url']);
+        $this->assertCount(2, $aGoogle);
+        $this->assertCount(5, $aGoogle[0]['json']['requests']);
+        $this->assertCount(3, $aGoogle[1]['json']['requests']);
+        $this->assertStringContainsString('properties/123456789:batchRunReports', $aGoogle[0]['url']);
+    }
+
+    /** Y un solo token para las dos llamadas. */
+    public function testPideElTokenUnaSolaVez()
+    {
+        $this->conToken()->sinDatos()->pedir();
+
+        $deToken = array_filter($this->http->llamadas, function ($l) {
+            return strpos($l['url'], 'oauth2.googleapis.com') !== false;
+        });
+
+        $this->assertCount(1, $deToken);
     }
 
     /**
@@ -181,7 +209,7 @@ class AnalyticsTest extends TestCase
      */
     public function testPideTambienElPeriodoAnterior()
     {
-        $this->conToken()->cincoInformesVacios()->pedir('la-banda', null, 7, '2026-09-10');
+        $this->conToken()->sinDatos()->pedir('la-banda', null, 7, '2026-09-10');
 
         $rangos = $this->http->jsonDe('analyticsdata.googleapis.com')['requests'][0]['dateRanges'];
 
@@ -310,6 +338,133 @@ class AnalyticsTest extends TestCase
         $resultado = $this->pedir();
 
         $this->assertStringContainsString('sufficient permissions', $resultado['error']);
+    }
+
+    // ------------------------------------------------------------ quién te mira
+
+    /** Un informe con dos dimensiones por fila, que es el cruce. */
+    private function filaCruce($edad, $genero, $visitas, $personas)
+    {
+        return [
+            'dimensionValues' => [['value' => $edad], ['value' => $genero]],
+            'metricValues' => [['value' => (string) $visitas], ['value' => (string) $personas]],
+        ];
+    }
+
+    private function conDemografia(array $edad, array $genero, array $cruce = [], array $metadata = [])
+    {
+        $informe = function ($filas) use ($metadata) {
+            return array_merge(['rows' => $filas], $metadata ? ['metadata' => $metadata] : []);
+        };
+
+        return $this->conInformes([
+            $this->informe([]), $this->informe([]), $this->informe([]),
+            $this->informe([]), $this->informe([]),
+            $informe($edad), $informe($genero), $informe($cruce),
+        ]);
+    }
+
+    public function testTraduceElGenero()
+    {
+        $this->conToken()->conDemografia([], [
+            $this->fila('male', 90, 60),
+            $this->fila('female', 120, 80),
+            $this->fila('unknown', 30, 20),
+        ]);
+
+        $generos = array_column($this->pedir()['quien']['genero'], 'nombre');
+
+        $this->assertSame(['Mujeres', 'Varones', 'Sin datos'], $generos);
+    }
+
+    /**
+     * La edad se lee en orden y no por tamaño: ordenada por volumen se pierde
+     * la forma, que es justo lo que se mira para saber a quién le hablás.
+     */
+    public function testLaEdadVaEnOrdenDeEdad()
+    {
+        $this->conToken()->conDemografia([
+            $this->fila('45-54', 10, 8),
+            $this->fila('18-24', 90, 70),
+            $this->fila('unknown', 200, 150),
+            $this->fila('25-34', 50, 40),
+        ], []);
+
+        $edades = array_column($this->pedir()['quien']['edad'], 'nombre');
+
+        $this->assertSame(['18-24', '25-34', '45-54', 'Sin datos'], $edades);
+    }
+
+    /**
+     * El cruce es lo que describe a un público: no "gente de 25 a 34" ni
+     * "mujeres", sino las dos cosas a la vez.
+     */
+    public function testCruzaEdadConGenero()
+    {
+        $this->conToken()->conDemografia([], [], [
+            $this->filaCruce('25-34', 'female', 80, 60),
+            $this->filaCruce('25-34', 'male', 40, 30),
+        ]);
+
+        $cruce = $this->pedir()['quien']['cruce'];
+
+        $this->assertSame(['edad' => '25-34', 'genero' => 'Mujeres', 'visitas' => 80, 'personas' => 60], $cruce[0]);
+        $this->assertSame('Varones', $cruce[1]['genero']);
+    }
+
+    /**
+     * Sin las señales de Google activadas, el dato no existe y todo vuelve
+     * como "unknown". Una tabla así se lee como "no te mira nadie", que es
+     * falso: lo que pasa es que Google no lo clasifica.
+     */
+    public function testAvisaCuandoNoHayNadaClasificado()
+    {
+        $this->conToken()->conDemografia(
+            [$this->fila('unknown', 200, 150)],
+            [$this->fila('unknown', 200, 150)]
+        );
+
+        $this->assertFalse($this->pedir()['quien']['hay_datos']);
+    }
+
+    public function testConDatosClasificadosLoDice()
+    {
+        $this->conToken()->conDemografia([$this->fila('25-34', 50, 40)], []);
+
+        $this->assertTrue($this->pedir()['quien']['hay_datos']);
+    }
+
+    /**
+     * Google retiene filas cuando son pocas personas, para que no se pueda
+     * reconocer a nadie. Le pasa a cualquier página chica, y hay que decirlo:
+     * si no, una tabla incompleta se lee como si fueran todos los datos.
+     */
+    public function testAvisaCuandoGoogleRetuvoFilas()
+    {
+        $this->conToken()->conDemografia([], [], [], ['subjectToThresholding' => true]);
+
+        $this->assertTrue($this->pedir()['quien']['retenido']);
+    }
+
+    public function testSinRetencionNoAvisaNada()
+    {
+        $this->conToken()->conDemografia([$this->fila('25-34', 50, 40)], []);
+
+        $this->assertFalse($this->pedir()['quien']['retenido']);
+    }
+
+    public function testPideEdadGeneroYElCruce()
+    {
+        $this->conToken()->sinDatos()->pedir();
+
+        $aGoogle = array_values(array_filter($this->http->llamadas, function ($l) {
+            return strpos($l['url'], 'analyticsdata') !== false;
+        }));
+        $dimensiones = array_map(function ($informe) {
+            return array_column($informe['dimensions'], 'name');
+        }, $aGoogle[1]['json']['requests']);
+
+        $this->assertSame([['userAgeBracket'], ['userGender'], ['userAgeBracket', 'userGender']], $dimensiones);
     }
 
     // ----------------------------------------------------------------- ventana

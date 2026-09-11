@@ -1,7 +1,7 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, fireEvent, waitFor } from '@testing-library/react';
-import PanelMetricas, { variacion, fechaCorta } from '../../src/components/PanelMetricas';
+import PanelMetricas, { variacion, fechaCorta, matriz } from '../../src/components/PanelMetricas';
 import { renderConProviders, crearAuth, usuarioDePrueba } from '../helpers/render';
 import { mockFetch } from '../helpers/api';
 
@@ -27,7 +27,29 @@ const informe = (overrides = {}) => ({
   ],
   dispositivo: [{ nombre: 'mobile', visitas: 240, personas: 180 }],
   ciudad: [{ nombre: 'Buenos Aires', visitas: 150, personas: 110 }],
+  quien: {
+    edad: [
+      { nombre: '18-24', visitas: 60, personas: 40 },
+      { nombre: '25-34', visitas: 90, personas: 60 },
+    ],
+    genero: [
+      { nombre: 'Mujeres', visitas: 120, personas: 70 },
+      { nombre: 'Varones', visitas: 30, personas: 30 },
+    ],
+    cruce: [
+      { edad: '18-24', genero: 'Mujeres', visitas: 40, personas: 25 },
+      { edad: '18-24', genero: 'Varones', visitas: 20, personas: 15 },
+      { edad: '25-34', genero: 'Mujeres', visitas: 80, personas: 45 },
+      { edad: '25-34', genero: 'Varones', visitas: 10, personas: 15 },
+    ],
+    hay_datos: true,
+    retenido: false,
+  },
   ...overrides,
+});
+
+const sinPublico = (overrides = {}) => ({
+  edad: [], genero: [], cruce: [], hay_datos: false, retenido: true, ...overrides,
 });
 
 function montar({ datos = informe(), status = 200 } = {}) {
@@ -169,6 +191,81 @@ describe('PanelMetricas', () => {
 
     expect(await screen.findByRole('link', { name: /rezon\.ar\/la-banda/ }))
       .toHaveAttribute('href', '/la-banda');
+  });
+
+  describe('quién te mira', () => {
+    it('muestra edad y género', async () => {
+      montar();
+
+      expect(await screen.findByText('Por edad')).toBeInTheDocument();
+      expect(screen.getByText('Por género')).toBeInTheDocument();
+      // Dos veces: en la lista por edad y como fila del cruce.
+      expect(screen.getAllByText('25-34')).toHaveLength(2);
+      expect(screen.getAllByText('Mujeres').length).toBeGreaterThan(0);
+    });
+
+    /**
+     * El cruce es lo que de verdad describe a un público: "25 a 34" y
+     * "mujeres" por separado pueden ser dos grupos que casi no se tocan.
+     */
+    it('cruza las dos cosas', async () => {
+      montar();
+
+      expect(await screen.findByText('Edad y género juntos')).toBeInTheDocument();
+      // 45 es el grupo más grande: mujeres de 25 a 34.
+      expect(screen.getByText('45')).toBeInTheDocument();
+    });
+
+    /**
+     * Una tabla vacía sin explicación se lee como "no te mira nadie", y lo que
+     * pasa es que Google no lo clasifica.
+     */
+    it('sin datos explica por qué en vez de mostrar tablas vacías', async () => {
+      montar({ datos: informe({ quien: sinPublico() }) });
+
+      expect(await screen.findByText('Todavía no hay público clasificado')).toBeInTheDocument();
+      expect(screen.queryByText('Edad y género juntos')).not.toBeInTheDocument();
+    });
+
+    /** Si Google escondió filas, lo que se ve es una parte y hay que decirlo. */
+    it('avisa cuando Google escondió parte de las filas', async () => {
+      montar({ datos: informe({ quien: { ...informe().quien, retenido: true } }) });
+
+      expect(await screen.findByText(/Google escondió parte de las filas/)).toBeInTheDocument();
+    });
+
+    /** Un informe viejo, sin la sección, no tiene que romper la pantalla. */
+    it('sin la sección no rompe', async () => {
+      montar({ datos: informe({ quien: undefined }) });
+
+      await screen.findByText('300');
+      expect(screen.queryByText('Quién te mira')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('matriz', () => {
+    it('arma las filas y las columnas de lo que vino', () => {
+      const m = matriz([
+        { edad: '18-24', genero: 'Mujeres', personas: 25 },
+        { edad: '25-34', genero: 'Varones', personas: 15 },
+      ]);
+
+      expect(m.edades).toEqual(['18-24', '25-34']);
+      expect(m.generos).toEqual(['Mujeres', 'Varones']);
+      expect(m.valor('18-24', 'Mujeres')).toBe(25);
+    });
+
+    /** Un cruce que Google no devolvió es cero, no un hueco. */
+    it('lo que no vino es cero', () => {
+      const m = matriz([{ edad: '18-24', genero: 'Mujeres', personas: 25 }]);
+
+      expect(m.valor('18-24', 'Varones')).toBe(0);
+    });
+
+    it('sin filas no hay matriz', () => {
+      expect(matriz([]).edades).toEqual([]);
+      expect(matriz().edades).toEqual([]);
+    });
   });
 
   describe('variacion', () => {

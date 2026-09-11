@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext, useCallback } from 'react';
-import { Eye, Users, TrendingUp, TrendingDown, Minus, ExternalLink } from 'lucide-react';
+import { Eye, Users, TrendingUp, TrendingDown, Minus, ExternalLink, UserSearch } from 'lucide-react';
 import { AuthContext } from '../App';
 import { Aviso, Boton, Cargando, Rotulo, Tarjeta } from './ui';
 
@@ -80,7 +80,7 @@ function PanelMetricas({ pageId, slug }) {
 
   if (!datos) return null;
 
-  const { resumen, por_dia: porDia, origen, dispositivo, ciudad } = datos;
+  const { resumen, por_dia: porDia, origen, dispositivo, ciudad, quien } = datos;
 
   return (
     <div className="space-y-8">
@@ -155,6 +155,8 @@ function PanelMetricas({ pageId, slug }) {
         />
       </div>
 
+      {quien && <QuienTeMira quien={quien} />}
+
       <Aviso>
         Los datos son de Google Analytics y tardan hasta dos días en procesarse,
         así que los últimos días se ven más flacos de lo que fueron. Quien navega
@@ -176,6 +178,163 @@ function PanelMetricas({ pageId, slug }) {
           </>
         )}
       </Aviso>
+    </div>
+  );
+}
+
+/**
+ * Quién te mira: edad, género y las dos cosas cruzadas.
+ *
+ * Es lo que sirve para saber a quién le estás hablando, y por eso el cruce no
+ * es un adorno: "gente de 25 a 34" y "mujeres" por separado pueden describir a
+ * dos públicos distintos que no se tocan.
+ *
+ * Esto no lo medimos nosotros, lo infiere Google, y puede venir vacío por dos
+ * motivos que hay que decir: sin las señales de Google activadas el dato no
+ * existe, y aunque exista Google retiene las filas cuando son pocas personas.
+ * Una tabla vacía sin explicación se lee como "no te mira nadie".
+ */
+function QuienTeMira({ quien }) {
+  const { edad, genero, cruce, hay_datos: hayDatos, retenido } = quien;
+
+  return (
+    <section>
+      <div className="flex items-center gap-2">
+        <UserSearch className="h-5 w-5 text-tinta-suave" />
+        <h3 className="text-lg font-bold text-tinta">Quién te mira</h3>
+      </div>
+      <p className="mt-1 text-sm text-tinta-media">
+        Edad y género de tu público, según Google.
+      </p>
+
+      {!hayDatos ? (
+        <Tarjeta className="mt-4 p-6">
+          <p className="font-semibold text-tinta">Todavía no hay público clasificado</p>
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-tinta-media">
+            Google clasifica la edad y el género solo cuando la propiedad tiene activadas
+            sus señales, y aun así retiene el dato si son pocas personas, para que no se
+            pueda reconocer a nadie. Las dos cosas se resuelven con el tiempo: más público
+            y las señales prendidas.
+          </p>
+        </Tarjeta>
+      ) : (
+        <div className="mt-4 space-y-6">
+          {retenido && (
+            <Aviso tipo="atencion">
+              Google escondió parte de las filas porque eran pocas personas. Lo que se ve
+              es una parte de tu público, no todo.
+            </Aviso>
+          )}
+
+          <div className="grid gap-6 lg:grid-cols-2">
+            <Barras titulo="Por edad" filas={edad} />
+            <Barras titulo="Por género" filas={genero} />
+          </div>
+
+          <Cruce filas={cruce} />
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** Una lista con barras: se compara de un vistazo, sin leer los números. */
+function Barras({ titulo, filas }) {
+  const total = filas.reduce((suma, f) => suma + f.personas, 0);
+
+  if (filas.length === 0) {
+    return (
+      <Tarjeta className="p-5">
+        <p className="font-semibold text-tinta">{titulo}</p>
+        <p className="mt-2 text-sm text-tinta-media">Sin datos suficientes.</p>
+      </Tarjeta>
+    );
+  }
+
+  return (
+    <Tarjeta className="p-5">
+      <p className="font-semibold text-tinta">{titulo}</p>
+
+      <ul className="mt-4 space-y-3">
+        {filas.map((f) => {
+          const parte = total === 0 ? 0 : Math.round((f.personas / total) * 100);
+
+          return (
+            <li key={f.nombre}>
+              <div className="flex items-baseline justify-between gap-3 text-sm">
+                <span className="font-medium text-tinta">{f.nombre}</span>
+                <span className="tabular-nums text-tinta-suave">
+                  {f.personas.toLocaleString('es-AR')} · {parte}%
+                </span>
+              </div>
+              <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-papel-hueso">
+                <div
+                  className="h-full rounded-full bg-verde-medio"
+                  style={{ width: `${parte}%` }}
+                />
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </Tarjeta>
+  );
+}
+
+/**
+ * Las dos cosas a la vez, en una matriz.
+ *
+ * Por separado, "25 a 34" y "mujeres" pueden ser dos públicos distintos que
+ * casi no se tocan. Cruzados se ve cuál es de verdad el grupo más grande.
+ */
+function Cruce({ filas }) {
+  const { edades, generos, valor, mayor } = matriz(filas);
+
+  if (edades.length === 0 || generos.length === 0) {
+    return null;
+  }
+
+  return (
+    <div>
+      <p className="font-semibold text-tinta">Edad y género juntos</p>
+      <p className="mt-1 text-sm text-tinta-media">
+        Personas en cada cruce. El grupo más grande va resaltado.
+      </p>
+
+      <div className="mt-3 overflow-x-auto rounded-2xl border border-borde">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-papel-hueso text-left text-tinta-suave">
+              <th className="px-4 py-3 font-semibold">Edad</th>
+              {generos.map((g) => (
+                <th key={g} className="whitespace-nowrap px-4 py-3 text-right font-semibold">{g}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-borde">
+            {edades.map((e) => (
+              <tr key={e} className="transition-colors hover:bg-papel-hueso">
+                <td className="px-4 py-3 font-medium text-tinta">{e}</td>
+                {generos.map((g) => {
+                  const personas = valor(e, g);
+                  const esElMasGrande = personas > 0 && personas === mayor;
+
+                  return (
+                    <td
+                      key={g}
+                      className={`px-4 py-3 text-right tabular-nums ${
+                        esElMasGrande ? 'bg-verde-claro font-bold text-verde-oscuro' : 'text-tinta'
+                      }`}
+                    >
+                      {personas === 0 ? '—' : personas.toLocaleString('es-AR')}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -371,6 +530,35 @@ export function variacion(actual, previo) {
   if (!previo) return null;
 
   return Math.round(((actual - previo) / previo) * 100);
+}
+
+/**
+ * Arma la matriz del cruce a partir de las filas planas de Google.
+ *
+ * Las columnas salen de lo que vino, no de una lista fija: si en un período no
+ * hay nadie sin clasificar, esa columna no tiene por qué ocupar lugar.
+ */
+export function matriz(filas = []) {
+  const edades = [];
+  const generos = [];
+  const celdas = {};
+  // El grupo más grande, para resaltarlo: es lo que se busca en esta tabla.
+  let mayor = 0;
+
+  filas.forEach((f) => {
+    if (!edades.includes(f.edad)) edades.push(f.edad);
+    if (!generos.includes(f.genero)) generos.push(f.genero);
+
+    celdas[`${f.edad}|${f.genero}`] = f.personas;
+    mayor = Math.max(mayor, f.personas);
+  });
+
+  return {
+    edades,
+    generos,
+    mayor,
+    valor: (edad, genero) => celdas[`${edad}|${genero}`] || 0,
+  };
 }
 
 /** "2026-09-10" → "10/09". El año es siempre el mismo en estas ventanas. */
