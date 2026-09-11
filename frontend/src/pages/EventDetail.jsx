@@ -71,7 +71,8 @@ function EventDetail() {
 
         <Link
           to={`/${event.page_slug}`}
-          className="inline-flex items-center gap-2 text-sm font-semibold opacity-70 transition-opacity hover:opacity-100"
+          className="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition-opacity hover:opacity-80"
+          style={{ backgroundColor: colores.tarjeta, borderColor: colores.bordeTarjeta }}
         >
           <ArrowLeft className="w-4 h-4" />
           Ver la página
@@ -85,10 +86,18 @@ function EventDetail() {
           />
         )}
 
+        {/* Todo el texto va sobre una superficie y no directo sobre el fondo:
+            la imagen de fondo de una página suele ser una foto, y una
+            descripción larga encima no se lee. Es la misma tarjeta que usan
+            las plantillas para mostrar este mismo evento. */}
+        <div
+          className="mt-6 rounded-3xl border p-6 sm:p-8"
+          style={{ backgroundColor: colores.tarjeta, borderColor: colores.bordeTarjeta }}
+        >
         {event.page_title && (
           <Link
             to={`/${event.page_slug}`}
-            className="mt-8 flex items-center gap-3 transition-opacity hover:opacity-80"
+            className="flex items-center gap-3 transition-opacity hover:opacity-80"
           >
             {event.page_image && (
               <img
@@ -151,6 +160,7 @@ function EventDetail() {
             {event.url_text || 'Más información'}
           </a>
         )}
+        </div>
       </div>
     </div>
   );
