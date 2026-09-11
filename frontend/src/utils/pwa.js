@@ -72,6 +72,31 @@ export function guiaDeBateria(marca) {
   return GUIAS_BATERIA[marca] || null;
 }
 
+/**
+ * ¿Hay una computadora del otro lado?
+ *
+ * El User-Agent no alcanza. Un Android con «sitio de escritorio» activado
+ * manda el de una computadora, y un iPad manda el de una Mac desde iPadOS 13:
+ * en los dos casos hay un teléfono o una tablet, y las notificaciones se
+ * pueden activar. Darlos por computadora es esconderles la única forma de
+ * activarlas, y sin decir por qué.
+ *
+ * Por eso se pregunta además por el puntero: uno fino —un mouse— lo tiene una
+ * computadora y no un dedo. Si el navegador no sabe contestar, se cree lo que
+ * dice el User-Agent, que es lo que había antes.
+ */
+function pareceEscritorio(esIOS, esAndroid) {
+  if (esIOS || esAndroid) {
+    return false;
+  }
+
+  if (typeof window.matchMedia !== 'function') {
+    return true;
+  }
+
+  return window.matchMedia('(pointer: fine)').matches;
+}
+
 /** Fotografía del entorno. No decide nada: sólo describe. */
 export function detectarEntorno() {
   const ua = navigator.userAgent || '';
@@ -90,9 +115,7 @@ export function detectarEntorno() {
   return {
     esIOS,
     esAndroid,
-    // Ni teléfono ni tablet: una computadora. Los tablets caen en esIOS o
-    // esAndroid según su sistema, así que no hacen falta más categorías.
-    esEscritorio: !esIOS && !esAndroid,
+    esEscritorio: pareceEscritorio(esIOS, esAndroid),
     esSafariIOS,
     instalada: estaInstalada(),
     soportaPush,

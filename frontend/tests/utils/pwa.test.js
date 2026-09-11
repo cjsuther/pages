@@ -18,6 +18,13 @@ const UA = {
     'Mozilla/5.0 (Linux; Android 14; SM-A546E) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Mobile Safari/537.36',
   escritorio:
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36',
+  // Un Android con «sitio de escritorio» activado: manda el User-Agent de una
+  // computadora aunque haya un teléfono del otro lado.
+  androidComoEscritorio:
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36',
+  // Un iPad desde iPadOS 13: se presenta como una Mac.
+  ipad:
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15',
 };
 
 /** Sustituye el User-Agent y devuelve la función para restaurarlo. */
@@ -29,8 +36,17 @@ function conUA(ua) {
   };
 }
 
-function simularInstalada({ displayMode = false, iosStandalone = false } = {}) {
-  window.matchMedia = vi.fn(() => ({ matches: displayMode, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+/**
+ * El doble de matchMedia contesta según la consulta y no siempre lo mismo: se
+ * le preguntan dos cosas distintas —si está instalada y si el puntero es
+ * fino— y un doble ciego hace que una respuesta conteste por la otra.
+ */
+function simularInstalada({ displayMode = false, iosStandalone = false, punteroFino = true } = {}) {
+  window.matchMedia = vi.fn((consulta) => ({
+    matches: String(consulta).includes('pointer') ? punteroFino : displayMode,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  }));
   window.navigator.standalone = iosStandalone;
 }
 
@@ -173,6 +189,53 @@ describe('pwa', () => {
   });
 
   // ============================================================ diagnóstico
+
+  describe('qué cuenta como computadora', () => {
+    /**
+     * El User-Agent no alcanza y creerle escondía las notificaciones.
+     *
+     * Un Android con «sitio de escritorio» manda el de una computadora, y un
+     * iPad manda el de una Mac desde iPadOS 13. En los dos casos hay un
+     * teléfono o una tablet donde las notificaciones se pueden activar, y se
+     * les dejaba de ofrecer sin decir por qué.
+     */
+    it('un Android con sitio de escritorio sigue siendo un teléfono', () => {
+      restaurarUA = conUA(UA.androidComoEscritorio);
+      simularInstalada({ punteroFino: false });
+
+      expect(detectarEntorno().esEscritorio).toBe(false);
+    });
+
+    it('un iPad tampoco es una computadora', () => {
+      restaurarUA = conUA(UA.ipad);
+      simularInstalada({ punteroFino: false });
+
+      expect(detectarEntorno().esEscritorio).toBe(false);
+    });
+
+    it('una computadora, con su mouse, sí lo es', () => {
+      restaurarUA = conUA(UA.escritorio);
+      simularInstalada({ punteroFino: true });
+
+      expect(detectarEntorno().esEscritorio).toBe(true);
+    });
+
+    /** Un teléfono de verdad no depende del puntero para nada. */
+    it('el User-Agent de un teléfono manda igual', () => {
+      restaurarUA = conUA(UA.androidSamsung);
+      simularInstalada({ punteroFino: true });
+
+      expect(detectarEntorno().esEscritorio).toBe(false);
+    });
+
+    /** Si el navegador no sabe contestar, se cree lo que dice el User-Agent. */
+    it('sin matchMedia vale el User-Agent', () => {
+      restaurarUA = conUA(UA.escritorio);
+      delete window.matchMedia;
+
+      expect(detectarEntorno().esEscritorio).toBe(true);
+    });
+  });
 
   describe('diagnosticar — el orden es el contrato', () => {
     /**

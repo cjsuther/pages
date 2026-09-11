@@ -17,6 +17,22 @@ const UA = {
 const conUA = (ua) =>
   Object.defineProperty(navigator, 'userAgent', { value: ua, configurable: true });
 
+/**
+ * Una computadora es su User-Agent más su mouse.
+ *
+ * El puntero hace falta porque el User-Agent solo no alcanza: un Android con
+ * «sitio de escritorio» manda el de una computadora, y ahí sí hay que ofrecer
+ * las notificaciones.
+ */
+function enUnaComputadora() {
+  conUA(UA.escritorio);
+  window.matchMedia = vi.fn((consulta) => ({
+    matches: String(consulta).includes('pointer'),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  }));
+}
+
 describe('AvisoNotificaciones', () => {
   beforeEach(() => {
     global.fetch = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
@@ -44,7 +60,7 @@ describe('AvisoNotificaciones', () => {
    * dos pasos y no tiene ningún botón debajo.
    */
   it('no aparece en una computadora', async () => {
-    conUA(UA.escritorio);
+    enUnaComputadora();
 
     const { container } = await montar();
 
@@ -114,12 +130,48 @@ describe('AvisoNotificaciones', () => {
     });
   });
 
-  it('no aparece sin sesión', async () => {
-    vi.spyOn(push, 'estaSuscrito').mockResolvedValue(false);
+  /**
+   * Sin sesión desaparecía, y era la forma más fácil de no ver nunca las
+   * notificaciones: alcanza con entrar desde otro navegador, donde no hay
+   * sesión, para que la única manera de activarlas no esté en ninguna parte.
+   */
+  describe('sin sesión', () => {
+    const montarSinSesion = () => {
+      vi.spyOn(push, 'estaSuscrito').mockResolvedValue(false);
+      return renderConProviders(<AvisoNotificaciones />, { auth: sinSesion() });
+    };
 
-    renderConProviders(<AvisoNotificaciones />, { auth: sinSesion() });
+    it('igual dice que las notificaciones existen', () => {
+      montarSinSesion();
 
-    expect(screen.queryByRole('button', { name: /ACTIVÁ/ })).not.toBeInTheDocument();
+      expect(screen.getByText('Que te avisemos al teléfono')).toBeInTheDocument();
+    });
+
+    it('dice qué falta y por dónde se empieza', () => {
+      montarSinSesion();
+
+      expect(screen.getByText(/Hace falta una cuenta/)).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Crear mi cuenta' }))
+        .toHaveAttribute('href', '/register');
+      expect(screen.getByRole('link', { name: 'Ya tengo cuenta' }))
+        .toHaveAttribute('href', '/login');
+    });
+
+    /** Los pasos del teléfono no tienen sentido todavía: primero la cuenta. */
+    it('no muestra los pasos de activación', () => {
+      montarSinSesion();
+
+      expect(screen.queryByRole('button', { name: /Activar notificaciones/ }))
+        .not.toBeInTheDocument();
+    });
+
+    it('en una computadora tampoco aparece', () => {
+      enUnaComputadora();
+
+      const { container } = montarSinSesion();
+
+      expect(container).toBeEmptyDOMElement();
+    });
   });
 
   /**

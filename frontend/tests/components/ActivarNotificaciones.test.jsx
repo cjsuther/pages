@@ -37,7 +37,16 @@ function prepararEntorno({
 } = {}) {
   conUA(ua);
 
-  window.matchMedia = vi.fn(() => ({ matches: instalada, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+  // El doble contesta según la consulta: se le preguntan dos cosas distintas
+  // —si está instalada y si el puntero es fino— y un doble ciego hace que una
+  // respuesta conteste por la otra. El puntero fino es el mouse de una
+  // computadora, así que sigue al User-Agent de escritorio.
+  const conMouse = ua === UA.escritorio;
+  window.matchMedia = vi.fn((consulta) => ({
+    matches: String(consulta).includes('pointer') ? conMouse : instalada,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  }));
   window.navigator.standalone = instalada;
 
   if (soporta) {
