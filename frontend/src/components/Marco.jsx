@@ -32,6 +32,9 @@ export function PieDePagina() {
             <Link to="/pages" className="text-tinta-media hover:text-verde-oscuro font-medium transition-colors">
               Descubrir páginas
             </Link>
+            <Link to="/asistentes" className="text-tinta-media hover:text-verde-oscuro font-medium transition-colors">
+              Conectar un asistente
+            </Link>
             <a href="mailto:hola@rezon.ar" className="text-tinta-media hover:text-verde-oscuro font-medium transition-colors">
               Soporte
             </a>

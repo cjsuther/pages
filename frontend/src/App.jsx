@@ -4,6 +4,7 @@ import { HelmetProvider } from 'react-helmet-async';
 import { usePageTracking } from './hooks/usePageTracking';
 import Home from './pages/Home';
 import ParaArtistas from './pages/ParaArtistas';
+import ParaAsistentes from './pages/ParaAsistentes';
 import Comisiones from './pages/Comisiones';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -95,6 +96,7 @@ function App() {
             />
             {/* Antes de /:slug, como el resto de las rutas del sitio. */}
             <Route path="/artistas" element={<ParaArtistas />} />
+            <Route path="/asistentes" element={<ParaAsistentes />} />
             <Route path="/login" element={!token ? <Login /> : <Navigate to="/" />} />
             <Route path="/register" element={!token ? <Register /> : <Navigate to="/" />} />
             <Route path="/pages" element={token ? <Pages /> : <Navigate to="/login" />} />

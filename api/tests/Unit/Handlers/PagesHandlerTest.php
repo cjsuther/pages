@@ -902,6 +902,20 @@ class PagesHandlerTest extends HandlerTestCase
         $this->assertFalse(PagesHandler::esReservado('logins'));
     }
 
+    /**
+     * Toda ruta del sitio tiene que estar reservada.
+     *
+     * /:slug es lo último que matchea en el router, así que una página que se
+     * llame igual que una ruta queda inalcanzable: se abre la ruta y no la
+     * página. No da error en ningún lado, simplemente nunca se ve.
+     */
+    public function testLasRutasDelSitioNoSePuedenTomarComoUsuario()
+    {
+        foreach (['artistas', 'asistentes'] as $ruta) {
+            $this->assertTrue(PagesHandler::esReservado($ruta), "Falta reservar /$ruta");
+        }
+    }
+
     // ------------------------------------------------------------- ayudantes
 
     private function autorizarPagina()

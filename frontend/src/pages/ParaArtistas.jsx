@@ -2,7 +2,7 @@ import React, { useContext } from 'react';
 import { Helmet } from 'react-helmet-async';
 import {
   CalendarDays, Bell, Ticket, Palette, QrCode, Users, Link2, MapPin,
-  ArrowRight, Check, Instagram, Globe,
+  ArrowRight, Check, Instagram, Globe, Sparkles,
 } from 'lucide-react';
 import { AuthContext } from '../App';
 import Navigation from '../components/Navigation';
@@ -54,6 +54,11 @@ const LO_QUE_TIENE = [
     detalle: 'Te lo bajás listo para imprimir. El mismo código lleva siempre a tus fechas de ahora, no a las del mes pasado.',
   },
   {
+    icono: Sparkles,
+    titulo: 'Cargala hablando',
+    detalle: 'Podés conectar ChatGPT o Claude a tu página y cargar una fecha dictándola, con afiche y entradas incluidas.',
+  },
+  {
     icono: Users,
     titulo: 'Entre varios',
     detalle: 'Sumás a quien maneja tus redes, o armás una fecha en conjunto con otra página y aparece en las dos.',
@@ -87,6 +92,10 @@ const PREGUNTAS = [
   {
     q: '¿Puedo tener más de una página?',
     a: 'Sí. Una para vos, una para tu banda, una para el ciclo que organizás. Se manejan todas desde la misma cuenta.',
+  },
+  {
+    q: '¿Puedo cargar las fechas con ChatGPT o Claude?',
+    a: 'Sí. Se conecta tu asistente a tus páginas una vez y después le dictás el show: día, hora, dirección, afiche y entradas. Está explicado paso por paso en la página de asistentes.',
   },
   {
     q: '¿Y si tengo dominio propio?',
@@ -288,6 +297,48 @@ function ParaArtistas() {
                 </li>
               ))}
             </ol>
+          </div>
+        </section>
+
+        {/* ------------------------------------------------ con un asistente */}
+
+        <section className="border-b border-borde">
+          <div className="max-w-5xl mx-auto px-5 sm:px-6 py-14">
+            <div className="grid md:grid-cols-[1fr_auto] gap-10 items-center">
+              <div>
+                <Rotulo>Si ya usás ChatGPT o Claude</Rotulo>
+                <h2 className="mt-4 text-3xl sm:text-4xl font-bold tracking-tight text-balance leading-tight">
+                  Dictale la fecha y que la cargue él.
+                </h2>
+                <p className="mt-4 text-tinta-media leading-relaxed max-w-xl">
+                  Se puede conectar tu asistente a tus páginas: le decís día, hora y
+                  dirección y te deja el show publicado, con el afiche y la venta de
+                  entradas abierta. Se conecta una vez, no se instala nada y no hay
+                  comandos que aprender.
+                </p>
+                <div className="mt-7">
+                  <Boton a="/asistentes" tamano="lg">
+                    Cómo se conecta, paso por paso <ArrowRight className="w-4 h-4" />
+                  </Boton>
+                </div>
+              </div>
+
+              <div className="md:w-72">
+                <Tarjeta className="p-5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Sparkles className="w-4 h-4 text-verde-oscuro" />
+                    <Rotulo>Vos le escribís</Rotulo>
+                  </div>
+                  <p className="text-tinta leading-snug">
+                    «Cargá un show el viernes 20 a las 21 en Niceto, entradas a 12.000.»
+                  </p>
+                  <div className="mt-4 pt-4 border-t border-borde flex items-center gap-2">
+                    <Check className="w-4 h-4 text-verde-oscuro flex-shrink-0" />
+                    <p className="text-sm text-tinta-media">Listo, ya está en tu página.</p>
+                  </div>
+                </Tarjeta>
+              </div>
+            </div>
           </div>
         </section>
 
