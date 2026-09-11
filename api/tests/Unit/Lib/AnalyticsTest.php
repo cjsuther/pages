@@ -255,6 +255,48 @@ class AnalyticsTest extends TestCase
     }
 
     /**
+     * Google usa varias marcas para lo que no pudo determinar y las tres se
+     * traducen igual, así que volvían dos filas "Sin datos" con números
+     * distintos. Pasó de verdad en la lista de ciudades.
+     */
+    public function testJuntaLasFilasQueQuedanConElMismoNombre()
+    {
+        $this->conToken()->conInformes([
+            $this->informe([]), $this->informe([]), $this->informe([]), $this->informe([]),
+            $this->informe([
+                $this->fila('Buenos Aires', 72, 26),
+                $this->fila('(not set)', 46, 32),
+                $this->fila('(other)', 4, 4),
+            ]),
+        ]);
+
+        $ciudades = $this->pedir()['ciudad'];
+
+        $this->assertCount(2, $ciudades);
+        $this->assertSame('Sin datos', $ciudades[1]['nombre']);
+        $this->assertSame(50, $ciudades[1]['visitas']);
+    }
+
+    /** Y al juntarlas, el orden por visitas se mantiene. */
+    public function testDespuesDeJuntarlasSiguenOrdenadas()
+    {
+        $this->conToken()->conInformes([
+            $this->informe([]), $this->informe([]), $this->informe([]), $this->informe([]),
+            $this->informe([
+                $this->fila('(not set)', 40, 30),
+                $this->fila('Rosario', 50, 40),
+                $this->fila('(other)', 30, 20),
+            ]),
+        ]);
+
+        $ciudades = $this->pedir()['ciudad'];
+
+        $this->assertSame('Sin datos', $ciudades[0]['nombre']);
+        $this->assertSame(70, $ciudades[0]['visitas']);
+        $this->assertSame('Rosario', $ciudades[1]['nombre']);
+    }
+
+    /**
      * El motivo que da Google suele decir exactamente qué falta —la cuenta sin
      * permiso, la API sin habilitar— y esconderlo deja a alguien adivinando.
      */

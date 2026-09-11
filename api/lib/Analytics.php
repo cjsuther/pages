@@ -315,6 +315,15 @@ class Analytics
         return $serie;
     }
 
+    /**
+     * Un listado con su dimensión traducida.
+     *
+     * Las filas que quedan con el mismo nombre se juntan en una. Google usa
+     * varias marcas para lo que no pudo determinar —"(not set)", "(other)"— y
+     * las tres se leen igual de mal en pantalla, así que se muestran como una
+     * sola "Sin datos". Sin juntarlas aparecían dos filas idénticas con
+     * números distintos, que es peor que no mostrarlas.
+     */
     private static function listado(array $informe)
     {
         $filas = [];
@@ -322,14 +331,26 @@ class Analytics
         foreach (self::filas($informe) as $fila) {
             $nombre = isset($fila['dimensionValues'][0]['value']) ? $fila['dimensionValues'][0]['value'] : '';
 
-            // Google marca así lo que no pudo determinar. "(not set)" en
-            // pantalla no le dice nada a nadie.
             if ($nombre === '' || $nombre === '(not set)' || $nombre === '(other)') {
                 $nombre = 'Sin datos';
             }
 
-            $filas[] = array_merge(['nombre' => $nombre], self::numeros($fila));
+            $numeros = self::numeros($fila);
+
+            if (isset($filas[$nombre])) {
+                $filas[$nombre]['visitas'] += $numeros['visitas'];
+                $filas[$nombre]['personas'] += $numeros['personas'];
+                continue;
+            }
+
+            $filas[$nombre] = array_merge(['nombre' => $nombre], $numeros);
         }
+
+        // Juntar dos filas puede dejar a "Sin datos" por encima de algo que
+        // estaba más arriba, así que se vuelve a ordenar.
+        usort($filas, function ($a, $b) {
+            return $b['visitas'] - $a['visitas'];
+        });
 
         return $filas;
     }
