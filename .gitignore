@@ -34,3 +34,6 @@ Thumbs.db
 api/coverage/
 api/.phpunit.cache/
 frontend/coverage/
+
+# Caché de Python del generador de posteos
+__pycache__/
