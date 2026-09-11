@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { pageview, trackEvent, iniciarAnalytics, GA_MEASUREMENT_ID } from '../../src/utils/analytics';
 
 describe('analytics', () => {
@@ -170,5 +172,25 @@ describe('analytics', () => {
   /** La propiedad sale de la variable de entorno y de ningún otro lado. */
   it('la propiedad viene del entorno', () => {
     expect(GA_MEASUREMENT_ID).toBe('G-TEST00000');
+  });
+
+  /**
+   * Que no vuelva a haber dos copias de la propiedad.
+   *
+   * Este error ya pasó dos veces. Estaba en duro en los dos puntos de entrada
+   * —index.html y public/index.php, que es el que sirve producción— y además
+   * por variable acá. La variable no estaba definida en producción, así que
+   * todo lo que mandaba la aplicación iba a un identificador de relleno y
+   * nadie se enteraba: no falla nada, los datos simplemente no llegan.
+   */
+  it('ningún punto de entrada lleva la propiedad en duro', () => {
+    ['index.html', 'public/index.php'].forEach((archivo) => {
+      const contenido = readFileSync(resolve(__dirname, '../../', archivo), 'utf8');
+
+      expect(contenido, `${archivo} tiene una propiedad de Google en duro`)
+        .not.toMatch(/G-[A-Z0-9]{8,}/);
+      expect(contenido, `${archivo} carga el tag por su cuenta`)
+        .not.toContain('googletagmanager.com');
+    });
   });
 });

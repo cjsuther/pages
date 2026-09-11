@@ -175,15 +175,10 @@ if (file_exists($manifestPath)) {
   <meta name="author" content="Rezonar">
   <link rel="canonical" href="<?php echo htmlspecialchars($currentUrl); ?>">
 
-  <!-- Google tag (gtag.js) -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-3W7JFPFSBL"></script>
-  <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-  
-    gtag('config', 'G-3W7JFPFSBL');
-  </script>
+  <!-- Google Analytics lo carga la aplicación, en utils/analytics.js: la
+       propiedad se declara una sola vez, en VITE_GA_MEASUREMENT_ID. Acá estaba
+       en duro, y como esto es una SPA el tag mandaba una sola vista por visita
+       —la primera— y la navegación interna no se medía. -->
 
   <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBSRKfHBJK9KscPl89DGBYUMNlDXKJMXOg&libraries=places,marker" async defer></script>
   <script src="https://unpkg.com/@googlemaps/markerclusterer/dist/index.min.js" defer></script>
