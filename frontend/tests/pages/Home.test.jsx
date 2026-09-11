@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { screen, fireEvent, waitFor } from '@testing-library/react';
+import { screen, fireEvent, waitFor, within } from '@testing-library/react';
 import Home from '../../src/pages/Home';
 import { renderConProviders, crearAuth, usuarioDePrueba } from '../helpers/render';
 import { mockFetch, llamadaA } from '../helpers/api';
@@ -208,6 +208,45 @@ describe('Home', () => {
       await waitFor(() => {
         expect(llamadaA(llamadas, 'feed-events.php')).not.toBeNull();
       });
+    });
+  });
+
+  describe('la entrada a la página para artistas', () => {
+    /**
+     * En la barra de arriba el enlace vive adentro del menú en un teléfono, y
+     * con la sesión abierta ni siquiera aparece. Acá está siempre, arriba.
+     */
+    /** En el contenido de la home, no en la barra de arriba ni en el pie. */
+    const enLaHome = () =>
+      within(screen.getByRole('main')).getByRole('link', { name: /Para artistas/ });
+
+    it('está en la home aunque no haya sesión', async () => {
+      await render();
+
+      expect(enLaHome()).toHaveAttribute('href', '/artistas');
+    });
+
+    it('sigue estando con la sesión abierta', async () => {
+      await render({ auth: autenticado() });
+
+      expect(enLaHome()).toHaveAttribute('href', '/artistas');
+    });
+
+    /** Arriba: si hay que scrollear para encontrarlo, no está. */
+    it('está antes de la primera sección de contenido', async () => {
+      await render();
+
+      const main = screen.getByRole('main');
+      const posicion = [...main.querySelectorAll('a, h2')].indexOf(enLaHome());
+
+      expect(posicion).toBeGreaterThanOrEqual(0);
+      expect(main.querySelector('section').contains(enLaHome())).toBe(true);
+    });
+
+    it('dice para qué sirve entrar ahí', async () => {
+      await render();
+
+      expect(screen.getByText(/Armá tu página gratis, cargá tus fechas/)).toBeInTheDocument();
     });
   });
 

@@ -3,6 +3,7 @@ import { Bell, BellOff, Share, PlusSquare, Smartphone, BatteryWarning, Check } f
 import { AuthContext } from '../App';
 import { detectarEntorno, diagnosticar, guiaDeBateria, PASOS } from '../utils/pwa';
 import { activarNotificaciones, desactivarNotificaciones, estaSuscrito } from '../utils/pushNotifications';
+import { Aviso as AvisoUi, Boton } from './ui';
 
 /**
  * Activación de notificaciones push, con la guía de instalación que
@@ -167,7 +168,7 @@ function ActivarNotificaciones({ compacto = false }) {
   // -------------------------------------------------------- falta algún paso
 
   return (
-    <div className={`bg-white border border-borde ${compacto ? 'p-4' : 'p-6'} space-y-4`}>
+    <div className={`bg-white border border-borde rounded-2xl ${compacto ? 'p-4' : 'p-6'} space-y-4`}>
       <div className="flex items-start gap-3">
         <IconoDelPaso paso={diagnostico.paso} />
         <div className="flex-1">
@@ -209,24 +210,17 @@ function ActivarNotificaciones({ compacto = false }) {
 
       <div className="flex flex-wrap gap-3">
         {promptInstalar && (
-          <button
-            onClick={instalar}
-            className="bg-verde text-verde-tinta px-5 py-2.5 font-bold hover:bg-verde-oscuro hover:text-tinta transition flex items-center gap-2"
-          >
+          <Boton onClick={instalar}>
             <Smartphone className="w-4 h-4" />
             Instalar aplicación
-          </button>
+          </Boton>
         )}
 
         {diagnostico.puedeSuscribirse && (
-          <button
-            onClick={activar}
-            disabled={cargando}
-            className="bg-verde text-tinta px-5 py-2.5 font-bold hover:bg-verde-oscuro transition disabled:opacity-50 flex items-center gap-2"
-          >
+          <Boton onClick={activar} disabled={cargando}>
             <Bell className="w-4 h-4" />
             {cargando ? 'Activando...' : 'Activar notificaciones'}
-          </button>
+          </Boton>
         )}
       </div>
     </div>
@@ -249,16 +243,12 @@ function Aviso({ mensaje }) {
   const esOk = mensaje.tipo === 'ok';
 
   return (
-    <div
-      className={`flex items-start gap-2 px-4 py-3 text-sm border ${
-        esOk
-          ? 'bg-verde-claro border-verde-medio text-verde-oscuro'
-          : 'bg-red-50 border-red-200 text-red-800'
-      }`}
-    >
-      {esOk && <Check className="w-4 h-4 flex-shrink-0 mt-0.5" />}
-      <span>{mensaje.texto}</span>
-    </div>
+    <AvisoUi tipo={esOk ? 'ok' : 'error'}>
+      <span className="flex items-start gap-2">
+        {esOk && <Check className="w-4 h-4 flex-shrink-0 mt-0.5" />}
+        <span>{mensaje.texto}</span>
+      </span>
+    </AvisoUi>
   );
 }
 

@@ -8,7 +8,7 @@ import {
 import { AuthContext } from '../App';
 import Navigation from '../components/Navigation';
 import { PieDePagina } from '../components/Marco';
-import BotonNotificaciones from '../components/BotonNotificaciones';
+import AvisoNotificaciones from '../components/AvisoNotificaciones';
 import EventsMap from '../components/EventsMap';
 import TarjetaEvento from '../components/TarjetaEvento';
 import TarjetaPagina from '../components/TarjetaPagina';
@@ -297,14 +297,24 @@ function Home() {
               </Boton>
             </form>
 
-            {!token && (
-              <p className="mt-4 text-sm text-tinta-suave">
-                ¿Sos artista?{' '}
-                <Link to="/artistas" className="text-verde-oscuro font-semibold hover:underline underline-offset-4">
-                  Armá tu página gratis
-                </Link>
+            {/* La landing de artistas se entra desde acá y no sólo desde la
+                barra de arriba, donde en un teléfono vive adentro del menú y
+                con la sesión abierta ni siquiera aparece. */}
+            <div className="mt-6 flex flex-wrap items-center gap-x-3 gap-y-2">
+              <Boton a="/artistas" variante="secundario">
+                <Sparkles className="w-4 h-4" /> Para artistas
+              </Boton>
+              <p className="text-sm text-tinta-suave">
+                Armá tu página gratis, cargá tus fechas y que te sigan.
               </p>
-            )}
+            </div>
+
+            {/* Las notificaciones son lo que diferencia a Rezonar de una lista
+                de links, y se ofrecían a mitad de la página: en un teléfono,
+                varias pantallas de scroll más abajo. */}
+            <div className="mt-8">
+              <AvisoNotificaciones />
+            </div>
           </div>
         </section>
 
@@ -403,12 +413,6 @@ function Home() {
 
         <section className="border-b border-borde">
           <div className="max-w-7xl mx-auto px-5 sm:px-6 py-14">
-
-            {token && (
-              <div className="mb-8">
-                <BotonNotificaciones />
-              </div>
-            )}
 
             <TituloSeccion
               titulo="Qué se viene"
