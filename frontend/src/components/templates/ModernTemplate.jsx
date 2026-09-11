@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import DescripcionDePagina from '../DescripcionDePagina';
+import FondoDeLaCaja from '../FondoDeLaCaja';
 import FollowButton from '../FollowButton';
 import EventCollaborators from '../EventCollaborators';
 import FollowersPopup from '../FollowersPopup';
@@ -39,12 +40,13 @@ function ModernTemplate({ page }) {
   };
 
   const estiloAlrededor = estiloDeAlrededor({ backgroundColor, textColor });
-  const estiloCaja = estiloDeCaja({ backgroundColor, backgroundImage, textColor });
+  const estiloCaja = estiloDeCaja({ backgroundColor, textColor });
 
   return (
     <div className={CLASES_ALREDEDOR} style={estiloAlrededor}>
       <RezonarBadge />
       <div className={`${CLASES_CAJA} px-6 py-20`} style={estiloCaja}>
+        <FondoDeLaCaja imagen={backgroundImage} />
         <div className="space-y-16">
           {/* Antes esto era una barra lateral de 4 columnas con el contenido
               al lado. En una columna angosta no hay costado: la portada pasa a

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import DescripcionDePagina from '../DescripcionDePagina';
+import FondoDeLaCaja from '../FondoDeLaCaja';
 import FollowButton from '../FollowButton';
 import EventCollaborators from '../EventCollaborators';
 import FollowersPopup from '../FollowersPopup';
@@ -43,7 +44,7 @@ function CondensedTemplate({ page }) {
     'relative flex items-center min-h-[64px] rounded-full px-16 py-3 shadow-md transition hover:shadow-lg hover:-translate-y-px';
 
   const estiloAlrededor = estiloDeAlrededor({ backgroundColor, textColor });
-  const estiloCaja = estiloDeCaja({ backgroundColor, backgroundImage, textColor });
+  const estiloCaja = estiloDeCaja({ backgroundColor, textColor });
 
   // El detalle del evento sale de la misma paleta que la página. Estaba fijo
   // en blanco con texto negro: sobre una página oscura era un recuadro ajeno,
@@ -63,6 +64,7 @@ function CondensedTemplate({ page }) {
     <div className={CLASES_ALREDEDOR} style={estiloAlrededor}>
       <RezonarBadge />
       <div className={`${CLASES_CAJA} px-4 py-8 md:py-12`} style={estiloCaja}>
+        <FondoDeLaCaja imagen={backgroundImage} />
         <header className="text-center mb-8 md:mb-12">
           {page.profile_image && (
             <img

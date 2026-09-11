@@ -15,9 +15,6 @@ import { borde, alrededor } from './colores';
  */
 export const ANCHO_COLUMNA = 'max-w-[580px]';
 
-/** Los mismos 580, en número, para lo que no se puede expresar con clases. */
-const ANCHO_CAJA_PX = 580;
-
 /**
  * Clases de la caja donde vive el contenido.
  *
@@ -29,8 +26,15 @@ const ANCHO_CAJA_PX = 580;
  * El corte es `sm:` y no `md:` a propósito: 640 es el primer breakpoint por
  * encima de los 580 de la caja, o sea el ancho a partir del cual realmente
  * sobra espacio.
+ *
+ * Los otros tres son para la imagen de fondo, que vive en una capa aparte
+ * —FondoDeLaCaja—: `relative` la ancla a la caja, `isolate` evita que se vaya
+ * atrás del color de alrededor, y el recorte es `clip` y no `hidden` porque
+ * `hidden` convierte a la caja en un contenedor de scroll y ahí el `sticky` de
+ * la capa se pegaría a una caja que no scrollea, o sea a nada.
  */
-export const CLASES_CAJA = `${ANCHO_COLUMNA} mx-auto overflow-hidden sm:rounded-3xl sm:border`;
+export const CLASES_CAJA =
+  `${ANCHO_COLUMNA} mx-auto relative isolate overflow-clip sm:rounded-3xl sm:border`;
 
 /**
  * Clases de lo que rodea al recuadro.
@@ -43,32 +47,20 @@ export const CLASES_CAJA = `${ANCHO_COLUMNA} mx-auto overflow-hidden sm:rounded-
 export const CLASES_ALREDEDOR = 'min-h-screen sm:py-8';
 
 /**
- * El fondo —color e imagen— es de la caja, no de la pantalla.
+ * El fondo de la caja: el color y el borde.
  *
- * Antes se pintaba la pantalla entera: en una computadora la imagen de fondo
- * se derramaba por todos lados y el contenido flotaba encima sin forma. Ahora
- * queda contenido en el recuadro.
+ * La imagen no: va en FondoDeLaCaja, en una capa propia. Acá era una línea de
+ * CSS y quedaba más corto, pero el `fixed` que la dejaba quieta no existe en
+ * iOS.
  *
- * La imagen ocupa el ancho de la caja, se apoya arriba y queda quieta mientras
- * se scrollea, para que no se pierda de vista en una página larga.
- *
- * Quedarse quieta es `fixed`, y ahí hay una trampa: con `fixed` el fondo se
- * dimensiona contra la ventana, no contra la caja. Por eso el ancho va en
- * píxeles y no en porcentaje —un 100% serían 1920 en una computadora y se
- * vería apenas una franja central—, y el `min` con 100vw es para el teléfono,
- * donde la caja es más angosta que 580.
+ * El color sí es de la caja y no de la pantalla. Antes se pintaba la pantalla
+ * entera y en una computadora el fondo se derramaba por todos lados, con el
+ * contenido flotando encima sin forma.
  */
-export function estiloDeCaja({ backgroundColor, backgroundImage, textColor }) {
+export function estiloDeCaja({ backgroundColor, textColor }) {
   return {
     backgroundColor,
     borderColor: borde(textColor) || 'transparent',
-    ...(backgroundImage && {
-      backgroundImage: `url(${backgroundImage})`,
-      backgroundSize: `min(${ANCHO_CAJA_PX}px, 100vw) auto`,
-      backgroundPosition: 'top center',
-      backgroundRepeat: 'no-repeat',
-      backgroundAttachment: 'fixed',
-    }),
   };
 }
 

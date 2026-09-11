@@ -57,6 +57,12 @@ const link = (overrides = {}) => ({
 /** La caja donde vive el contenido: es la que lleva el fondo de la página. */
 const caja = (container) => container.querySelector(`[class*="${ANCHO_COLUMNA}"]`);
 
+/**
+ * La capa que pinta la imagen de fondo. Se reconoce por ser la única que lleva
+ * la imagen en su style: el color y el borde van en la caja.
+ */
+const fondo = (container) => container.querySelector('[style*="background-image"]');
+
 /** Busca un enlace por su destino, sin depender de cómo se maquete el texto. */
 const porHref = (href) =>
   screen.getAllByRole('link').find((a) => a.getAttribute('href') === href);
@@ -127,7 +133,61 @@ describe.each(PLANTILLAS)('%s', (nombre, Plantilla) => {
     it('muestra la imagen de fondo sin velo encima', () => {
       const { container } = renderConProviders(<Plantilla page={oscura()} />);
 
-      expect(caja(container).style.backgroundImage).toBe('url("https://img/fondo.png")');
+      expect(fondo(container).style.backgroundImage).toBe('url("https://img/fondo.png")');
+    });
+
+    it('sin imagen no hay capa de fondo', () => {
+      const { container } = renderConProviders(
+        <Plantilla page={pagina({ background_image: null })} />
+      );
+
+      expect(fondo(container)).toBeNull();
+    });
+
+    /**
+     * Acá está el bug del iPhone.
+     *
+     * `background-attachment: fixed` no existe en iOS: WebKit lo pinta como si
+     * fuera `scroll` y la imagen se va con el contenido. Y en iOS todos los
+     * navegadores son WebKit, también Chrome, así que se veía igual de mal en
+     * los dos. Quedarse quieto se pide con `sticky`, que sí anda.
+     */
+    it('la imagen se queda quieta sin usar background-attachment', () => {
+      const { container } = renderConProviders(<Plantilla page={oscura()} />);
+
+      const capa = fondo(container);
+      expect(capa.style.backgroundAttachment).toBe('');
+      expect(capa.className).toContain('sticky');
+    });
+
+    /** Detrás del contenido: es un fondo, no una tapa. */
+    it('la capa del fondo queda detrás del contenido', () => {
+      const { container } = renderConProviders(<Plantilla page={oscura()} />);
+
+      expect(fondo(container).parentElement.style.zIndex).toBe('-1');
+    });
+
+    /**
+     * La capa vive dentro de la caja, que es la que la recorta: si se colgara
+     * del contenedor de afuera, la imagen se derramaría por la pantalla entera
+     * en una computadora, que es justo lo que se había arreglado.
+     */
+    it('la capa del fondo vive dentro del recuadro', () => {
+      const { container } = renderConProviders(<Plantilla page={oscura()} />);
+
+      expect(caja(container).contains(fondo(container))).toBe(true);
+    });
+
+    /**
+     * Y la caja la recorta con `clip`, no con `hidden`: `hidden` la convierte
+     * en un contenedor de scroll y entonces el `sticky` de la capa se pega a
+     * una caja que no scrollea, o sea que no se pega a nada.
+     */
+    it('el recuadro recorta con clip para no romper el sticky', () => {
+      const { container } = renderConProviders(<Plantilla page={oscura()} />);
+
+      expect(caja(container).className).toContain('overflow-clip');
+      expect(caja(container).className).not.toContain('overflow-hidden');
     });
 
     // El fondo es de la caja, no de la pantalla: en una computadora, si no,
@@ -716,7 +776,7 @@ describe.each(PLANTILLAS)('%s', (nombre, Plantilla) => {
         <Plantilla page={pagina({ background_image: 'https://img/fondo.jpg' })} />
       );
 
-      expect(caja(container).getAttribute('style')).toContain('https://img/fondo.jpg');
+      expect(fondo(container).getAttribute('style')).toContain('https://img/fondo.jpg');
     });
 
     it('funciona sin colores definidos', () => {

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import DescripcionDePagina from '../DescripcionDePagina';
+import FondoDeLaCaja from '../FondoDeLaCaja';
 import FollowButton from '../FollowButton';
 import EventCollaborators from '../EventCollaborators';
 import FollowersPopup from '../FollowersPopup';
@@ -68,12 +69,13 @@ function AfichesTemplate({ page }) {
   const estiloMarco = { backgroundColor: marco, color: textoSobre(marco, textColor) };
 
   const estiloAlrededor = estiloDeAlrededor({ backgroundColor, textColor });
-  const estiloCaja = estiloDeCaja({ backgroundColor, backgroundImage, textColor });
+  const estiloCaja = estiloDeCaja({ backgroundColor, textColor });
 
   return (
     <div className={CLASES_ALREDEDOR} style={estiloAlrededor}>
       <RezonarBadge />
       <div className={`${CLASES_CAJA} px-6 py-16`} style={estiloCaja}>
+        <FondoDeLaCaja imagen={backgroundImage} />
         <div className="text-center mb-16">
           {page.profile_image && (
             <img

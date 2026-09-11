@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { trackEvent } from '../../utils/analytics';
 import DescripcionDePagina from '../DescripcionDePagina';
+import FondoDeLaCaja from '../FondoDeLaCaja';
 import FollowButton from '../FollowButton';
 import EventCollaborators from '../EventCollaborators';
 import FollowersPopup from '../FollowersPopup';
@@ -40,12 +41,18 @@ function MinimalTemplate({ page }) {
   };
 
   const estiloAlrededor = estiloDeAlrededor({ backgroundColor, textColor });
-  const estiloCaja = estiloDeCaja({ backgroundColor, backgroundImage, textColor });
+  const estiloCaja = estiloDeCaja({ backgroundColor, textColor });
 
   return (
     <div className={CLASES_ALREDEDOR} style={estiloAlrededor}>
       <RezonarBadge />
-      <div className={`${CLASES_CAJA} px-6 py-16 space-y-16`} style={estiloCaja}>
+      {/* El aire entre bloques es `gap` y no `space-y`: `space-y` le pone margen
+          a todo hijo que tenga un hermano antes, y la capa del fondo cuenta
+          como hermano aunque esté posicionada en absoluto —le habría regalado
+          4rem al primer bloque—. En un flex, lo absoluto no es un ítem y el
+          `gap` no lo ve. */}
+      <div className={`${CLASES_CAJA} px-6 py-16 flex flex-col gap-16`} style={estiloCaja}>
+        <FondoDeLaCaja imagen={backgroundImage} />
         {page.profile_image && (
           <div className="flex justify-center">
             <img
