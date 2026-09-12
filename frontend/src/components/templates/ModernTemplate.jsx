@@ -176,7 +176,7 @@ function ModernTemplate({ page }) {
                               {link.text} →
                             </div>
                             {link.description && (
-                              <div className="opacity-70 mt-1">{link.description}</div>
+                              <div className="opacity-70 mt-1 whitespace-pre-line">{link.description}</div>
                             )}
                           </div>
                         </div>
@@ -280,7 +280,7 @@ function ModernTemplate({ page }) {
 
               {modalEvent.description && (
                 <div className="mb-4">
-                  <p className="text-lg leading-relaxed">{modalEvent.description}</p>
+                  <p className="text-lg leading-relaxed whitespace-pre-line">{modalEvent.description}</p>
                 </div>
               )}
 

@@ -58,10 +58,11 @@ function DescripcionDePagina({ texto, className = '', color, centrado = true }) 
     <div className={centrado ? 'text-center' : ''}>
       <p
         ref={parrafo}
-        className={`${className} ${abierta ? '' : 'line-clamp-2'}`}
-        // whitespace-pre-line no: el recorte de dos renglones necesita que el
-        // texto fluya, y una descripción con saltos propios ocuparía los dos
-        // antes de decir nada.
+        // Los saltos de línea que escribió la persona se respetan: los tipeó
+        // en una caja de texto y esperaba verlos. El recorte a dos renglones
+        // sigue andando igual, y el "ver más" también: el alto del contenido
+        // se mide contra el visible y `pre-line` no lo altera.
+        className={`${className} whitespace-pre-line ${abierta ? '' : 'line-clamp-2'}`}
       >
         {texto}
       </p>

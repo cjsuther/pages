@@ -169,7 +169,7 @@ function MinimalTemplate({ page }) {
                     <div className="px-6 py-4">
                       <div className="font-medium">{link.text}</div>
                       {link.description && (
-                        <div className="text-sm opacity-60 mt-1">{link.description}</div>
+                        <div className="text-sm opacity-60 mt-1 whitespace-pre-line">{link.description}</div>
                       )}
                     </div>
                   </a>
@@ -269,7 +269,7 @@ function MinimalTemplate({ page }) {
 
               {modalEvent.description && (
                 <div className="mb-4">
-                  <p className="text-lg leading-relaxed">{modalEvent.description}</p>
+                  <p className="text-lg leading-relaxed whitespace-pre-line">{modalEvent.description}</p>
                 </div>
               )}
 

@@ -182,7 +182,7 @@ function CardsTemplate({ page }) {
                       <div className="flex-1">
                         <div className="font-bold text-lg">{link.text}</div>
                         {link.description && (
-                          <div className="text-sm opacity-70 mt-1">{link.description}</div>
+                          <div className="text-sm opacity-70 mt-1 whitespace-pre-line">{link.description}</div>
                         )}
                       </div>
                     </a>
@@ -284,7 +284,7 @@ function CardsTemplate({ page }) {
 
               {modalEvent.description && (
                 <div className="mb-4">
-                  <p className="text-lg leading-relaxed">{modalEvent.description}</p>
+                  <p className="text-lg leading-relaxed whitespace-pre-line">{modalEvent.description}</p>
                 </div>
               )}
 

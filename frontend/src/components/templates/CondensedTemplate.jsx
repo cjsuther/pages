@@ -305,7 +305,7 @@ function CondensedTemplate({ page }) {
 
               {modalEvent.description && (
                 <div className="mb-4">
-                  <p className="text-base md:text-lg leading-relaxed">{modalEvent.description}</p>
+                  <p className="text-base md:text-lg leading-relaxed whitespace-pre-line">{modalEvent.description}</p>
                 </div>
               )}
 

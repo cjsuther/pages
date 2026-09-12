@@ -75,6 +75,22 @@ describe.each(PLANTILLAS)('%s — modales', (nombre, Plantilla) => {
       expect(screen.getByText('🗓️ Fecha y hora:')).toBeInTheDocument();
     });
 
+    /**
+     * Los saltos de línea se escriben en una caja de texto, así que la persona
+     * espera verlos. Se perdían: el navegador los colapsa salvo que se le pida
+     * lo contrario, y la descripción salía toda de corrido. Acá es donde se
+     * lee entera, así que acá es donde más se notaba.
+     */
+    it('respeta los saltos de línea de la descripción', () => {
+      const conSaltos = 'Primera línea\nSegunda línea\nTercera';
+      abrir({ description: conSaltos });
+
+      const texto = [...document.querySelectorAll('p')]
+        .find((e) => e.textContent === conSaltos);
+
+      expect(texto.className).toContain('whitespace-pre-line');
+    });
+
     it('muestra la descripción', () => {
       abrir();
 

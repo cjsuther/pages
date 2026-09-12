@@ -131,7 +131,7 @@ function Dashboard() {
             {pages.map((page) => (
               <div key={page.id} className="bg-white border border-borde rounded-2xl p-6 sm:p-8 hover:border-borde-fuerte transition group">
                 <h3 className="text-2xl font-bold mb-4">{page.title}</h3>
-                <p className="text-tinta-media mb-8 leading-relaxed">{page.description}</p>
+                <p className="text-tinta-media mb-8 leading-relaxed whitespace-pre-line">{page.description}</p>
                 <div className="mb-8">
                   <span className="text-tinta-suave text-sm font-medium">URL</span>
                   <a

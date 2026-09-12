@@ -201,7 +201,7 @@ function AfichesTemplate({ page }) {
                       <div className={`text-center px-2 ${link.image_url ? 'pt-3 pb-1' : 'py-3'}`}>
                         <div className="font-black uppercase tracking-wide">{link.text}</div>
                         {link.description && (
-                          <div className="text-sm opacity-80 mt-1 normal-case font-normal">{link.description}</div>
+                          <div className="text-sm opacity-80 mt-1 normal-case font-normal whitespace-pre-line">{link.description}</div>
                         )}
                       </div>
                     </a>
@@ -303,7 +303,7 @@ function AfichesTemplate({ page }) {
 
               {modalEvent.description && (
                 <div className="mb-4">
-                  <p className="text-lg leading-relaxed">{modalEvent.description}</p>
+                  <p className="text-lg leading-relaxed whitespace-pre-line">{modalEvent.description}</p>
                 </div>
               )}
 

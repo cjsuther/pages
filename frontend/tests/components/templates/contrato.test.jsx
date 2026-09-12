@@ -119,6 +119,51 @@ describe.each(PLANTILLAS)('%s', (nombre, Plantilla) => {
   // fondo y la tipografía que eligió la página. Un blanco clavado en el código
   // dejó una página oscura ilegible —texto blanco sobre un velo blanco—, así
   // que esto se comprueba en las cuatro.
+  /**
+   * Los saltos de línea se escriben en una caja de texto, así que la persona
+   * espera verlos. Se perdían: el navegador colapsa los saltos salvo que se le
+   * pida lo contrario, y el texto salía todo de corrido.
+   *
+   * Sólo donde se lee entera. En una grilla de tarjetas la descripción es un
+   * adelanto recortado, y respetar saltos arbitrarios ahí deja la grilla
+   * despareja.
+   */
+  describe('los saltos de línea de las descripciones', () => {
+    const conSaltos = 'Primera línea\nSegunda línea\nTercera';
+
+    it('la descripción de la página los respeta', () => {
+      const { container } = renderConProviders(
+        <Plantilla page={pagina({ description: conSaltos })} />
+      );
+
+      const parrafo = [...container.querySelectorAll('p')]
+        .find((p) => p.textContent === conSaltos);
+      expect(parrafo.className).toContain('whitespace-pre-line');
+    });
+
+    /**
+     * Condensado queda afuera a propósito: ahí la bajada de un link es una
+     * línea recortada, no una lectura.
+     */
+    it('la bajada de un link también, donde se muestra entera', () => {
+      const { container } = renderConProviders(
+        <Plantilla page={pagina({
+          groups: [grupoDeLinks([link({ description: conSaltos })])],
+        })} />
+      );
+
+      const texto = [...container.querySelectorAll('div, p')]
+        .filter((e) => e.textContent === conSaltos);
+
+      if (nombre === 'CondensedTemplate') {
+        expect(texto.every((e) => e.className.includes('truncate'))).toBe(true);
+        return;
+      }
+
+      expect(texto.some((e) => e.className.includes('whitespace-pre-line'))).toBe(true);
+    });
+  });
+
   describe('imagen de fondo', () => {
     const oscura = () => pagina({
       background_image: 'https://img/fondo.png',
