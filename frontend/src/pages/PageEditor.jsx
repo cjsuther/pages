@@ -15,18 +15,27 @@ import { ChevronLeft, ExternalLink } from 'lucide-react';
 /**
  * Los colores que se manejan desde el administrador, y qué pinta cada uno.
  *
- * Los tres primeros siempre tienen valor. Los tres últimos son opcionales:
- * vacíos se derivan de los anteriores, que es como se comportaba la página
- * antes de que se pudieran elegir. `rol` es la clave con la que paleta() los
- * resuelve, y sirve para mostrar en el selector el color que está rigiendo.
+ * Los seis son independientes: tocar uno no mueve a ningún otro. No siempre
+ * fue así. Tres se derivaban de los otros mientras estuvieran vacíos —los
+ * botones seguían al acento, las tarjetas al fondo—, y entonces cambiar el
+ * acento movía también los botones sin que nadie los hubiera tocado. Quien
+ * mira no tiene cómo saber por qué se movió algo que no eligió.
+ *
+ * `rol` sigue estando por las páginas que nunca tocaron esos tres: en la base
+ * quedaron vacíos y hay que mostrar el color que efectivamente rige. La
+ * primera vez que se toca cualquier color, los que sigan vacíos se fijan con
+ * lo que ya se estaba viendo, y de ahí en más son independientes de verdad.
  */
 const COLORES = [
   { campo: 'text_color',       etiqueta: 'Texto',    ayuda: 'Toda la tipografía' },
   { campo: 'background_color', etiqueta: 'Fondo',    ayuda: 'El fondo de la página' },
   { campo: 'primary_color',    etiqueta: 'Acento',   ayuda: 'La barra debajo de cada grupo y los detalles' },
-  { campo: 'title_color',      etiqueta: 'Títulos',  rol: 'titulo',  automatico: 'igual al texto' },
-  { campo: 'secondary_color',  etiqueta: 'Botones',  rol: 'boton',   automatico: 'igual al acento' },
-  { campo: 'card_color',       etiqueta: 'Tarjetas', rol: 'tarjeta', automatico: 'se calcula con el fondo' },
+  { campo: 'title_color',      etiqueta: 'Títulos',  rol: 'titulo',
+    ayuda: 'El título de la página y el de cada grupo' },
+  { campo: 'secondary_color',  etiqueta: 'Botones',  rol: 'boton',
+    ayuda: 'Seguir, comprar entradas y demás acciones' },
+  { campo: 'card_color',       etiqueta: 'Tarjetas', rol: 'tarjeta',
+    ayuda: 'El fondo de las fichas y las píldoras' },
 ];
 
 /** Plantillas disponibles, en el orden en que se ofrecen. */
@@ -239,10 +248,25 @@ function PageEditor() {
    * lo que se escribió —con https:// o con www— parecería que se guardó otra
    * cosa de la que efectivamente se va a comparar contra cada visita.
    */
-  /** Guarda un color. null vuelve al valor derivado. */
+  /**
+   * Guarda un color, y de paso fija los que todavía se estaban derivando.
+   *
+   * Los que se derivan se fijan con el valor que tenían en ese momento, o sea
+   * con lo que ya se estaba viendo: el cambio no altera nada más que el color
+   * que se tocó. Sin esto, cambiar el acento movía también los botones, que es
+   * justo lo confuso.
+   */
   const guardarColor = (campo, valor) => {
-    setPage({ ...page, [campo]: valor });
-    updatePage({ [campo]: valor });
+    const cambios = { [campo]: valor };
+
+    COLORES.forEach((otro) => {
+      if (otro.rol && otro.campo !== campo && !page[otro.campo]) {
+        cambios[otro.campo] = colores[otro.rol];
+      }
+    });
+
+    setPage({ ...page, ...cambios });
+    updatePage(cambios);
   };
 
   const guardarUsuario = async (valor) => {
@@ -892,15 +916,11 @@ function PageEditor() {
 
             <div className="grid grid-cols-2 md:grid-cols-3 gap-6 mb-6">
               {COLORES.map((c) => {
-                const elegido = page[c.campo];
-                // El selector muestra el color que rige: si no se eligió, el
-                // derivado. Un selector en negro cuando la página se ve azul
-                // sería mentir sobre lo que está pasando.
-                const vigente = elegido || (c.rol ? colores[c.rol] : '#000000');
-                // En automático el selector queda deshabilitado: si se pudiera
-                // arrastrar, moverlo y mover el acento se verían igual y no
-                // habría forma de saber si están atados.
-                const enAutomatico = Boolean(c.rol) && !elegido;
+                // El selector muestra el color que rige. En una página que
+                // nunca tocó este campo eso es el derivado: mostrar negro
+                // mientras la página se ve azul sería mentir sobre lo que
+                // está pasando.
+                const vigente = page[c.campo] || (c.rol ? colores[c.rol] : '#000000');
 
                 return (
                   <div key={c.campo}>
@@ -908,35 +928,16 @@ function PageEditor() {
                       Color de {c.etiqueta.toLowerCase()}
                     </label>
                     {/* Nunca deshabilitado: un input de color deshabilitado no
-                        abre el selector del sistema, y el control queda muerto.
-                        Que esté en automático se dice con el borde punteado y
-                        el texto de abajo; elegir un color lo separa. */}
+                        abre el selector del sistema, y el control queda
+                        muerto. */}
                     <input
                       id={`color-${c.campo}`}
                       type="color"
                       value={vigente}
                       onChange={(e) => guardarColor(c.campo, e.target.value)}
-                      className={`w-full h-10 rounded-lg cursor-pointer ${
-                        enAutomatico ? 'ring-2 ring-borde-fuerte' : ''
-                      }`}
+                      className="w-full h-10 rounded-lg cursor-pointer"
                     />
-                    {c.rol ? (
-                      enAutomatico ? (
-                        <p className="text-xs text-tinta-suave mt-2">
-                          Automático: {c.automatico}. Elegí uno para separarlo.
-                        </p>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => guardarColor(c.campo, null)}
-                          className="text-xs text-tinta-suave hover:text-tinta transition mt-2"
-                        >
-                          Volver al automático
-                        </button>
-                      )
-                    ) : (
-                      <p className="text-xs text-tinta-suave mt-2">{c.ayuda}</p>
-                    )}
+                    <p className="text-xs text-tinta-suave mt-2">{c.ayuda}</p>
                   </div>
                 );
               })}

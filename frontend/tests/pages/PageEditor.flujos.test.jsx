@@ -178,7 +178,7 @@ describe('PageEditor — flujos de edición', () => {
      * input deshabilitado.
      */
     it.each(['títulos', 'botones', 'tarjetas'])(
-      'el selector de %s se puede abrir aunque esté en automático',
+      'el selector de %s se puede abrir',
       async (etiqueta) => {
         await render({ page: pagina({ secondary_color: null, title_color: null, card_color: null }) });
 
@@ -186,32 +186,59 @@ describe('PageEditor — flujos de edición', () => {
       }
     );
 
-    it('elegir un color en automático lo separa', async () => {
+    it('guarda el color que se elige', async () => {
+      const { llamadas } = await render({
+        page: pagina({ secondary_color: '#123456', title_color: '#111111', card_color: '#222222' }),
+      });
+
+      fireEvent.change(screen.getByLabelText('Color de botones'), { target: { value: '#00ff00' } });
+
+      await waitFor(() => {
+        expect(cuerpoDe(put(llamadas, 'pages/detail.php'))).toEqual({ secondary_color: '#00ff00' });
+      });
+    });
+
+    /**
+     * Lo reportado: cambiabas uno y se movía otro.
+     *
+     * Pasaba porque tres colores se derivaban de los demás mientras estuvieran
+     * vacíos. Al tocar cualquiera, los que sigan vacíos se fijan con lo que ya
+     * se estaba viendo, así el cambio no arrastra nada.
+     */
+    it('cambiar el acento no mueve los botones', async () => {
       const { llamadas } = await render({
         page: pagina({ primary_color: '#abcdef', secondary_color: null }),
       });
 
-      fireEvent.change(screen.getByLabelText('Color de botones'), { target: { value: '#00ff00' } });
+      fireEvent.change(screen.getByLabelText('Color de acento'), { target: { value: '#222222' } });
 
       await waitFor(() => {
-        expect(cuerpoDe(put(llamadas, 'pages/detail.php'))).toEqual({ secondary_color: '#00ff00' });
+        const enviado = cuerpoDe(put(llamadas, 'pages/detail.php'));
+        expect(enviado.primary_color).toBe('#222222');
+        // El que se estaba viendo en los botones, no el nuevo acento.
+        expect(enviado.secondary_color).toBe('#abcdef');
       });
     });
 
-    it('guarda un color opcional cuando se elige', async () => {
-      const { llamadas } = await render({ page: pagina({ secondary_color: '#123456' }) });
-
-      fireEvent.change(screen.getByLabelText('Color de botones'), { target: { value: '#00ff00' } });
-
-      await waitFor(() => {
-        expect(cuerpoDe(put(llamadas, 'pages/detail.php'))).toEqual({ secondary_color: '#00ff00' });
-      });
-    });
-
-    /** El síntoma reportado: parecía que cambiar uno cambiaba los dos. */
-    it('cambiar el acento no toca el color de los botones', async () => {
+    it('cambiar el fondo no mueve las tarjetas', async () => {
       const { llamadas } = await render({
-        page: pagina({ primary_color: '#111111', secondary_color: null }),
+        page: pagina({ background_color: '#ffffff', text_color: '#000000', card_color: null }),
+      });
+      const tarjetaAntes = screen.getByLabelText('Color de tarjetas').value;
+
+      fireEvent.change(screen.getByLabelText('Color de fondo'), { target: { value: '#101010' } });
+
+      await waitFor(() => {
+        const enviado = cuerpoDe(put(llamadas, 'pages/detail.php'));
+        expect(enviado.background_color).toBe('#101010');
+        expect(enviado.card_color).toBe(tarjetaAntes);
+      });
+    });
+
+    /** Los que ya tenían valor propio no se vuelven a mandar. */
+    it('no toca los que ya estaban elegidos', async () => {
+      const { llamadas } = await render({
+        page: pagina({ secondary_color: '#00ff00', title_color: '#0000ff', card_color: '#ff00ff' }),
       });
 
       fireEvent.change(screen.getByLabelText('Color de acento'), { target: { value: '#222222' } });
@@ -221,30 +248,30 @@ describe('PageEditor — flujos de edición', () => {
       });
     });
 
-    /** Vaciarlo es como se vuelve al valor derivado. */
-    it('permite volver al automático', async () => {
-      const { llamadas } = await render({ page: pagina({ secondary_color: '#00ff00' }) });
+    /**
+     * Ya no hay modo automático: era el que ataba unos colores a otros. Dejar
+     * la puerta de vuelta sería volver a ofrecer justo lo confuso.
+     */
+    it('no ofrece volver a atar un color a otro', async () => {
+      await render({ page: pagina({ secondary_color: '#00ff00' }) });
 
-      fireEvent.click(screen.getByRole('button', { name: 'Volver al automático' }));
-
-      await waitFor(() => {
-        expect(cuerpoDe(put(llamadas, 'pages/detail.php'))).toEqual({ secondary_color: null });
-      });
+      expect(screen.queryByRole('button', { name: 'Volver al automático' })).not.toBeInTheDocument();
+      expect(screen.queryByText(/Automático:/)).not.toBeInTheDocument();
     });
 
     // Un selector en negro mientras la página se ve azul mentiría sobre lo que
     // está pasando.
-    it('en automático el selector muestra el color que rige', async () => {
+    it('una página que nunca los tocó muestra el color que rige', async () => {
       await render({ page: pagina({ primary_color: '#abcdef', secondary_color: null }) });
 
       expect(screen.getByLabelText('Color de botones')).toHaveValue('#abcdef');
     });
 
-    it('elegido, muestra el elegido y ofrece volver atrás', async () => {
-      await render({ page: pagina({ primary_color: '#abcdef', secondary_color: '#00ff00' }) });
+    it('cada color dice qué pinta', async () => {
+      await render();
 
-      expect(screen.getByLabelText('Color de botones')).toHaveValue('#00ff00');
-      expect(screen.getByRole('button', { name: 'Volver al automático' })).toBeInTheDocument();
+      expect(screen.getByText('Seguir, comprar entradas y demás acciones')).toBeInTheDocument();
+      expect(screen.getByText('El fondo de las fichas y las píldoras')).toBeInTheDocument();
     });
 
     // ------------------------------------------------------ dominio propio
