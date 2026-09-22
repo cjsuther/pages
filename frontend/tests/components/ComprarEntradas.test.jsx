@@ -403,4 +403,92 @@ describe('ComprarEntradas', () => {
       expect(props.onCerrar).not.toHaveBeenCalled();
     });
   });
+
+  describe('con plano', () => {
+    const PLANO = {
+      ancho: 10,
+      alto: 6,
+      elementos: [{ tipo: 'fila', nombre: 'A', desde: 1, butacas: 4, x: 0, y: 0 }],
+    };
+
+    const conPlano = (overrides = {}) => montar({
+      entradas: { ...ENTRADAS, plano: PLANO, ocupados: ['f:A:2'], max_por_compra: 2, ...overrides },
+    });
+
+    it('se eligen lugares en vez de cantidad', () => {
+      conPlano();
+
+      expect(screen.queryByLabelText('Cantidad')).not.toBeInTheDocument();
+      expect(screen.getByRole('checkbox', { name: 'Fila A, butaca 1' })).toBeInTheDocument();
+    });
+
+    it('un lugar ocupado no se puede elegir', () => {
+      conPlano();
+
+      const ocupado = screen.getByRole('checkbox', { name: 'Fila A, butaca 2, ocupado' });
+      fireEvent.click(ocupado);
+
+      expect(ocupado).toHaveAttribute('aria-checked', 'false');
+    });
+
+    it('no deja elegir más que el máximo por compra', () => {
+      conPlano();
+
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Fila A, butaca 1' }));
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Fila A, butaca 3' }));
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Fila A, butaca 4' }));
+
+      expect(screen.getByRole('checkbox', { name: 'Fila A, butaca 4' })).toHaveAttribute('aria-checked', 'false');
+      expect(screen.getByText('Fila A: 1, 3')).toBeInTheDocument();
+    });
+
+    it('el total sale de los lugares elegidos', () => {
+      conPlano();
+
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Fila A, butaca 1' }));
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Fila A, butaca 3' }));
+
+      expect(screen.getByText(/3\.000/)).toBeInTheDocument();
+    });
+
+    it('sin lugares elegidos no se puede confirmar', () => {
+      conPlano();
+
+      expect(screen.getByRole('button', { name: 'IR A PAGAR' })).toBeDisabled();
+    });
+
+    it('manda los lugares elegidos', async () => {
+      global.fetch.mockReturnValueOnce(respuesta({ codigo: 'X', url: 'https://mp.test/pagar' }));
+      conPlano();
+      completarFormulario();
+
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Fila A, butaca 3' }));
+      fireEvent.click(screen.getByRole('button', { name: 'IR A PAGAR' }));
+
+      await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+      const cuerpo = JSON.parse(global.fetch.mock.calls[0][1].body);
+
+      expect(cuerpo.lugares).toEqual(['f:A:3']);
+      expect(cuerpo.cantidad).toBe(1);
+    });
+
+    /**
+     * Si alguien se adelantó, el lugar se marca ocupado y se saca de lo
+     * elegido: la persona elige otro sobre el plano de ahora.
+     */
+    it('si alguien se adelantó, el lugar pasa a ocupado', async () => {
+      global.fetch.mockReturnValueOnce(respuesta(
+        { error: 'Alguien acaba de tomar Fila A: 3. Elegí otro.', ocupados: ['f:A:2', 'f:A:3'] },
+        false,
+      ));
+      conPlano();
+      completarFormulario();
+
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Fila A, butaca 3' }));
+      fireEvent.click(screen.getByRole('button', { name: 'IR A PAGAR' }));
+
+      expect(await screen.findByText(/Alguien acaba de tomar/)).toBeInTheDocument();
+      expect(screen.getByRole('checkbox', { name: 'Fila A, butaca 3, ocupado' })).toHaveAttribute('aria-checked', 'false');
+    });
+  });
 });

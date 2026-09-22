@@ -50,3 +50,18 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
     scroll-behavior: auto !important;
   }
 }
+
+/* Butacas del plano de lugares.
+ *
+ * El contorno de foco del navegador, dentro de un SVG escalado, se mide en
+ * unidades del plano y no en píxeles: sus 5px de ancho se vuelven 5 casilleros
+ * y aparece un círculo azul que tapa la mesa entera. Se reemplaza por un borde
+ * más grueso en la propia butaca, y sólo al navegar con teclado. */
+.plano-butaca {
+  outline: none;
+}
+
+.plano-butaca:focus-visible > circle {
+  stroke: #111311;
+  stroke-width: 0.14;
+}

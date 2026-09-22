@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Loader2, AlertTriangle, Check } from 'lucide-react';
 import { formatearPrecio, esGratis } from '../utils/entradas';
 import { formatearPorcentaje } from '../utils/comisiones';
+import { lugaresDelPlano, lugaresRepetidos, planoInicial } from '../utils/plano';
+import EditorDePlano from './EditorDePlano';
+import CopiarPlano from './CopiarPlano';
 
 /**
  * Cómo se consiguen las entradas de un evento.
@@ -28,6 +31,9 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio, enlace = null, onGuard
   const [modo, setModo] = useState('externo');
   const [form, setForm] = useState({ capacidad: 100, precio: 0, max_por_compra: 10 });
   const [link, setLink] = useState({ url: '', url_text: '' });
+  // null es sin lugares asignados: se vende por cupo, como siempre.
+  const [plano, setPlano] = useState(null);
+  const [lugaresOcupados, setLugaresOcupados] = useState([]);
 
   const cabeceras = {
     'Content-Type': 'application/json',
@@ -58,8 +64,11 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio, enlace = null, onGuard
         setComision(cuerpo.comision || 0);
         setMercadoPago(cuerpo.mercadopago || null);
         setConfig(cuerpo.entradas);
+        setLugaresOcupados(cuerpo.lugares_ocupados || []);
 
         if (cuerpo.entradas) {
+          setPlano(cuerpo.entradas.plano || null);
+
           setForm({
             capacidad: Number(cuerpo.entradas.capacidad),
             precio: Number(cuerpo.entradas.precio),
@@ -95,6 +104,12 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio, enlace = null, onGuard
     setError(null);
   };
 
+  const cambiarPlano = (nuevo) => {
+    setPlano(nuevo);
+    setGuardado(false);
+    setError(null);
+  };
+
   const elegirModo = (cual) => {
     setModo(cual);
     setGuardado(false);
@@ -106,7 +121,9 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio, enlace = null, onGuard
     const r = await fetch(`${apiUrl}/entradas/evento.php?link_id=${linkId}`, {
       method: 'POST',
       headers: cabeceras,
-      body: JSON.stringify({ ...form, activo }),
+      // El plano va siempre, también en null: es lo que le dice al servidor
+      // que se saca. Con plano la capacidad la calcula él.
+      body: JSON.stringify({ ...form, activo, plano }),
     });
     const cuerpo = await r.json();
 
@@ -115,6 +132,9 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio, enlace = null, onGuard
     }
 
     setConfig(cuerpo.entradas);
+    if (cuerpo.entradas && cuerpo.entradas.plano) {
+      setForm((previo) => ({ ...previo, capacidad: Number(cuerpo.entradas.capacidad) }));
+    }
     if (onCambio) onCambio(cuerpo.entradas);
   };
 
@@ -153,7 +173,18 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio, enlace = null, onGuard
 
   const sinMercadoPago = !cobros || !cobros.configurado;
   const quiereCobrar = !esGratis(form.precio);
-  const disponibles = Math.max(0, Number(form.capacidad) - ocupadas);
+  const capacidad = plano ? lugaresDelPlano(plano).length : Number(form.capacidad);
+  const disponibles = Math.max(0, capacidad - ocupadas);
+  // Hay entradas vendidas sin lugar: pasar a plano dejaría a esa gente sin
+  // dónde sentarse, y el servidor no lo acepta.
+  const vendidasSinLugar = ocupadas - lugaresOcupados.length;
+  // Un plano copiado de otro evento puede no tener los lugares que este ya
+  // vendió: el servidor lo rechazaría, así que no se deja guardar.
+  const lugaresPerdidos = plano === null
+    ? []
+    : lugaresOcupados.filter((id) => !lugaresDelPlano(plano).includes(id));
+  const planoConProblemas = plano !== null
+    && (lugaresRepetidos(plano).length > 0 || lugaresPerdidos.length > 0);
 
   return (
     <div className="space-y-6">
@@ -218,20 +249,82 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio, enlace = null, onGuard
 
       {modo === 'interno' && (
         <>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="entradas-capacidad" className="block text-sm font-semibold text-tinta mb-1.5 tracking-wide">
-                Capacidad máxima
-              </label>
-              <input
-                id="entradas-capacidad"
-                type="number"
-                min="1"
-                value={form.capacidad}
-                onChange={(e) => cambiar('capacidad', Number(e.target.value))}
-                className="w-full px-4 py-3 rounded-xl bg-white border border-borde-fuerte text-tinta placeholder-tinta-suave focus:border-verde-oscuro focus:outline-none transition-colors"
+          <fieldset>
+            <legend className="text-sm font-bold text-tinta-media mb-3 tracking-wide">
+              ¿CÓMO SE UBICA LA GENTE?
+            </legend>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <OpcionDeModo
+                nombre="ubicacion"
+                valor="libre"
+                elegido={plano ? 'plano' : 'libre'}
+                onElegir={() => cambiarPlano(null)}
+                titulo="Sin lugares asignados"
+                detalle="Se vende por cupo: cada uno se ubica donde quiere."
+                deshabilitado={lugaresOcupados.length > 0}
+              />
+              <OpcionDeModo
+                nombre="ubicacion"
+                valor="plano"
+                elegido={plano ? 'plano' : 'libre'}
+                onElegir={() => cambiarPlano(
+                  config && config.plano ? config.plano : planoInicial()
+                )}
+                titulo="Con plano de butacas y mesas"
+                detalle="Cada uno elige su butaca o su mesa al comprar."
+                deshabilitado={vendidasSinLugar > 0}
               />
             </div>
+
+            {vendidasSinLugar > 0 && !plano && (
+              <p className="text-xs text-tinta-suave mt-2">
+                Ya hay entradas vendidas sin lugar asignado: este evento no puede pasar a un plano.
+              </p>
+            )}
+            {lugaresOcupados.length > 0 && plano && (
+              <p className="text-xs text-tinta-suave mt-2">
+                Ya hay lugares vendidos: el plano no se puede sacar.
+              </p>
+            )}
+
+            <div className="mt-3">
+              <CopiarPlano
+                linkId={linkId}
+                apiUrl={apiUrl}
+                token={token}
+                onCopiar={cambiarPlano}
+                deshabilitado={vendidasSinLugar > 0}
+              />
+            </div>
+          </fieldset>
+
+          {plano && (
+            <EditorDePlano plano={plano} onCambiar={cambiarPlano} ocupados={lugaresOcupados} />
+          )}
+
+          <div className="grid grid-cols-2 gap-4">
+            {plano ? (
+              <div>
+                <p className="block text-sm font-semibold text-tinta mb-1.5 tracking-wide">Capacidad máxima</p>
+                <p className="px-4 py-3 bg-papel-hueso border border-borde text-tinta">{capacidad}</p>
+                <p className="text-xs text-tinta-suave mt-1">Sale de los lugares del plano</p>
+              </div>
+            ) : (
+              <div>
+                <label htmlFor="entradas-capacidad" className="block text-sm font-semibold text-tinta mb-1.5 tracking-wide">
+                  Capacidad máxima
+                </label>
+                <input
+                  id="entradas-capacidad"
+                  type="number"
+                  min="1"
+                  value={form.capacidad}
+                  onChange={(e) => cambiar('capacidad', Number(e.target.value))}
+                  className="w-full px-4 py-3 rounded-xl bg-white border border-borde-fuerte text-tinta placeholder-tinta-suave focus:border-verde-oscuro focus:outline-none transition-colors"
+                />
+              </div>
+            )}
 
             <div>
               <label htmlFor="entradas-precio" className="block text-sm font-semibold text-tinta mb-1.5 tracking-wide">
@@ -302,7 +395,10 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio, enlace = null, onGuard
                 (vendidas o reservándose ahora).
               </p>
               <p className="text-tinta-suave mt-1">
-                Quedan {disponibles} disponibles. No podés bajar la capacidad por debajo de {ocupadas}.
+                Quedan {disponibles} disponibles.
+                {plano
+                  ? ' Los lugares vendidos no se pueden sacar del plano.'
+                  : ` No podés bajar la capacidad por debajo de ${ocupadas}.`}
               </p>
             </div>
           )}
@@ -342,7 +438,7 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio, enlace = null, onGuard
         <button
           type="button"
           onClick={guardar}
-          disabled={guardando}
+          disabled={guardando || (modo === 'interno' && planoConProblemas)}
           className="inline-flex items-center justify-center gap-2 rounded-full bg-verde text-verde-tinta px-6 py-3 font-semibold hover:bg-verde-oscuro hover:text-white transition-colors disabled:opacity-50 flex items-center gap-2"
         >
           {guardando && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -367,21 +463,24 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio, enlace = null, onGuard
  * pregunta, y así se puede elegir con el teclado y un lector de pantalla lo
  * lee como lo que es.
  */
-function OpcionDeModo({ valor, elegido, onElegir, titulo, detalle }) {
+function OpcionDeModo({
+  valor, elegido, onElegir, titulo, detalle, nombre = 'modo-de-entradas', deshabilitado = false,
+}) {
   const activo = elegido === valor;
 
   return (
     <label
-      className={`flex items-start gap-3 border p-4 cursor-pointer transition ${
+      className={`flex items-start gap-3 border p-4 transition ${
         activo ? 'border-verde bg-verde-claro' : 'border-borde hover:border-borde-fuerte'
-      }`}
+      } ${deshabilitado && !activo ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
     >
       <input
         type="radio"
-        name="modo-de-entradas"
+        name={nombre}
         value={valor}
         checked={activo}
         onChange={() => onElegir(valor)}
+        disabled={deshabilitado && !activo}
         className="mt-1"
       />
       <span>

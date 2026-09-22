@@ -213,6 +213,7 @@ class CorreoEntradas
       ' . $bloqueFecha . $bloqueLugar . '
       <p style="margin:0 0 8px;color:#444444;font-size:15px">🎟 '
         . $cantidad . ($cantidad === 1 ? ' entrada' : ' entradas') . ' a nombre de ' . $e($orden['nombre']) . '</p>
+      ' . self::bloqueLugares($orden, $e) . '
     </div>
 
     <a href="' . $e($url) . '"
@@ -227,6 +228,17 @@ class CorreoEntradas
   </td></tr>
 </table>
 </body></html>';
+    }
+
+    /** Los lugares elegidos, si el evento tiene plano. */
+    private static function bloqueLugares(array $orden, $e)
+    {
+        if (empty($orden['lugares'])) {
+            return '';
+        }
+
+        return '<p style="margin:0 0 8px;color:#000000;font-size:15px;font-weight:700">💺 '
+            . $e(Plano::resumir($orden['lugares'])) . '</p>';
     }
 
     /**
@@ -278,6 +290,11 @@ class CorreoEntradas
         }
 
         $lineas[] = $cantidad . ($cantidad === 1 ? ' entrada' : ' entradas') . ' a nombre de ' . $orden['nombre'];
+
+        if (!empty($orden['lugares'])) {
+            $lineas[] = 'Lugares: ' . Plano::resumir($orden['lugares']);
+        }
+
         $lineas[] = '';
         $lineas[] = 'Ver tu entrada: ' . CodigoQR::urlDeLaOrden($orden['codigo']);
         $lineas[] = '';

@@ -38,10 +38,15 @@ class CheckoutHandler
             'email'    => $req->input('email'),
             'telefono' => $req->input('telefono'),
             'cantidad' => $req->input('cantidad'),
+            'lugares'  => $req->input('lugares'),
         ]);
 
         if (!$resultado['ok']) {
-            return Response::error(400, $resultado['error']);
+            // Si el problema es que alguien se adelantó con un lugar, van los
+            // ocupados de ahora para que el plano del comprador se actualice.
+            return isset($resultado['ocupados'])
+                ? Response::json(409, ['error' => $resultado['error'], 'ocupados' => $resultado['ocupados']])
+                : Response::error(400, $resultado['error']);
         }
 
         $orden = $resultado['orden'];
@@ -318,6 +323,7 @@ class CheckoutHandler
             'event_address' => $orden['event_address'],
             'pagina'        => $orden['pagina'],
             'url_slug'      => $orden['url_slug'],
+            'lugares'       => array_map(['Plano', 'describir'], $orden['lugares']),
         ]]);
     }
 

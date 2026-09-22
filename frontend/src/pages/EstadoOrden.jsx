@@ -154,6 +154,14 @@ function EstadoOrden({ apiUrl }) {
             <span className="text-tinta font-bold">{formatearPrecio(orden.total, orden.moneda)}</span>
           )}
         </div>
+
+        {/* Llegan ya escritos para leer ("Fila A, butaca 7"): la pantalla no
+            necesita saber cómo se arma el identificador de un lugar. */}
+        {orden.lugares && orden.lugares.length > 0 && (
+          <ul className="mt-3 text-sm text-tinta font-bold space-y-0.5">
+            {orden.lugares.map((lugar) => <li key={lugar}>{lugar}</li>)}
+          </ul>
+        )}
       </div>
 
       {orden.url_slug && (

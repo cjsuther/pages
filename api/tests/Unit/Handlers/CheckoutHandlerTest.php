@@ -74,6 +74,25 @@ class CheckoutHandlerTest extends HandlerTestCase
 
     // -------------------------------------------------------------- comprar
 
+    /**
+     * Si alguien se adelantó con una butaca, el comprador recibe lo ocupado
+     * de ahora: su plano se actualiza y no vuelve a elegir sobre una foto vieja.
+     */
+    public function testUnLugarTomadoDevuelveLoOcupadoParaActualizarElPlano()
+    {
+        $this->hayEventoQueVende(['plano' => json_encode([
+            'ancho' => 10, 'alto' => 4,
+            'elementos' => [['tipo' => 'fila', 'nombre' => 'A', 'butacas' => 4, 'desde' => 1, 'x' => 0, 'y' => 0]],
+        ])]);
+        $this->db->onSelect('FROM ticket_order_lugares tl', [['lugar' => 'f:A:2']]);
+
+        $r = CheckoutHandler::comprar($this->db, $this->pedido(['lugares' => ['f:A:2']]));
+
+        $this->assertError(409, $r, 'Fila A: 2');
+        $this->assertSame(['f:A:2'], $r->body['ocupados']);
+    }
+
+
     public function testComprarDevuelveElLinkDePago()
     {
         $this->hayEventoQueVende();

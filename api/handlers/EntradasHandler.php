@@ -175,6 +175,9 @@ class EntradasHandler
             return Response::ok([
                 'entradas' => Entradas::configDelEvento($db, $linkId),
                 'ocupadas' => Entradas::ocupadas($db, $linkId),
+                // El editor del plano los marca: son los lugares que no se
+                // pueden sacar.
+                'lugares_ocupados' => Entradas::lugaresOcupados($db, $linkId),
                 'cobros'   => Cobros::estado($db, self::pageIdDelLink($db, $linkId)),
                 // El dueño define el precio acá: necesita ver qué se le
                 // descuenta en la misma pantalla, no en otra sección. Y los
@@ -194,13 +197,21 @@ class EntradasHandler
                     'Para cobrar entradas primero tenés que conectar Mercado Pago en la sección Entradas de la página');
             }
 
-            $resultado = Entradas::guardarConfig($db, $linkId, [
+            $datos = [
                 'activo'         => $req->input('activo', 1),
                 'capacidad'      => $req->input('capacidad'),
                 'precio'         => $precio,
                 'moneda'         => $req->input('moneda', 'ARS'),
                 'max_por_compra' => $req->input('max_por_compra', 10),
-            ]);
+            ];
+
+            // Sólo si vino: un pedido sin plano —el del asistente, por
+            // ejemplo— deja el que haya como está. Uno con plano null lo saca.
+            if (array_key_exists('plano', $req->body)) {
+                $datos['plano'] = $req->body['plano'];
+            }
+
+            $resultado = Entradas::guardarConfig($db, $linkId, $datos);
 
             if (!$resultado['ok']) {
                 return Response::error(400, $resultado['error']);
@@ -317,6 +328,39 @@ class EntradasHandler
         ]);
     }
 
+    // ---------------------------------------------------------------- planos
+
+    /**
+     * Planos de los otros eventos de la misma página, para copiar uno.
+     *
+     * Se pide por el evento que se está editando y no por la página: es lo
+     * que tiene a mano la pantalla, y el permiso se chequea sobre él.
+     */
+    public static function planos($db, Request $req)
+    {
+        if (!$req->user) {
+            return Response::unauthorized();
+        }
+
+        if ($req->method !== 'GET') {
+            return Response::methodNotAllowed();
+        }
+
+        $linkId = (int) $req->param('link_id');
+
+        if (!$linkId) {
+            return Response::error(400, 'link_id requerido');
+        }
+
+        if (!PageAccess::canManageLink($db, $linkId, $req->userId())) {
+            return Response::error(403, 'No podés administrar este evento');
+        }
+
+        return Response::ok([
+            'planos' => Entradas::planosDeLaPagina($db, self::pageIdDelLink($db, $linkId), $linkId),
+        ]);
+    }
+
     // -------------------------------------------------------------- cancelar
 
     /**
@@ -370,12 +414,13 @@ class EntradasHandler
 
     private static function csv(array $ordenes)
     {
-        $filas = ['Codigo,Nombre,Email,Telefono,Cantidad,Total,Moneda,Estado,Fecha'];
+        $filas = ['Codigo,Nombre,Email,Telefono,Cantidad,Lugares,Total,Moneda,Estado,Fecha'];
 
         foreach ($ordenes as $o) {
             $filas[] = implode(',', array_map(['EntradasHandler', 'campoCsv'], [
                 $o['codigo'], $o['nombre'], $o['email'], $o['telefono'],
-                $o['cantidad'], $o['total'], $o['moneda'], $o['estado'], $o['created_at'],
+                $o['cantidad'], Plano::resumir(isset($o['lugares']) ? $o['lugares'] : []),
+                $o['total'], $o['moneda'], $o['estado'], $o['created_at'],
             ]));
         }
 

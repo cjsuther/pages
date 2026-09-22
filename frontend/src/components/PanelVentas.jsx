@@ -3,6 +3,7 @@ import { Download, RefreshCw } from 'lucide-react';
 import { formatearPrecio, etiquetaDeEstado, colorDeEstado } from '../utils/entradas';
 import { urlDeWhatsApp } from '../utils/telefono';
 import { IconoDeMarca } from './IconosRedes';
+import { resumirLugares } from '../utils/plano';
 
 /**
  * Estados desde los que una compra se puede dar de baja.
@@ -140,6 +141,17 @@ function PanelVentas({ linkId, apiUrl, token }) {
         />
       </div>
 
+      {/* Sólo pasa si alguien pagó después de que venciera su reserva y otro
+          ya había tomado el lugar: el pago se acredita igual, y hay que
+          reubicar a uno de los dos antes del día del evento. */}
+      {resumen.lugares_en_conflicto && resumen.lugares_en_conflicto.length > 0 && (
+        <p role="alert" className="text-sm text-red-700 bg-red-50 border border-red-200 px-4 py-3">
+          Hay lugares vendidos dos veces: {resumirLugares(resumen.lugares_en_conflicto)}.
+          Pasó porque alguien pagó con la reserva vencida. Escribile a uno de los dos
+          para ofrecerle otro lugar.
+        </p>
+      )}
+
       <ComisionDeLaPlataforma resumen={resumen} />
 
       <Acreditacion resumen={resumen} />
@@ -194,6 +206,17 @@ function PanelVentas({ linkId, apiUrl, token }) {
                   <td className="px-3 py-2 text-tinta">
                     {o.nombre}
                     <span className="block text-xs text-tinta-suave font-mono">{o.codigo}</span>
+                    {o.lugares && o.lugares.length > 0 && (
+                      <span
+                        className={`block text-xs ${
+                          o.lugares_en_conflicto && o.lugares_en_conflicto.length > 0
+                            ? 'text-red-700 font-bold'
+                            : 'text-tinta-media'
+                        }`}
+                      >
+                        {resumirLugares(o.lugares)}
+                      </span>
+                    )}
                   </td>
                   <td className="px-3 py-2 text-tinta-media">
                     <a href={`mailto:${o.email}`} className="hover:text-tinta block">{o.email}</a>

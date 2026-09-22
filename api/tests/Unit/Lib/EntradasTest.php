@@ -3,6 +3,7 @@
 namespace Tests\Unit\Lib;
 
 use Entradas;
+use Plano;
 use Tests\Support\HandlerTestCase;
 
 class EntradasTest extends HandlerTestCase
@@ -989,5 +990,274 @@ class EntradasTest extends HandlerTestCase
         $this->assertStringContainsString("estado = 'pagada'", $sql);
         $this->assertStringContainsString('mp_comision_cobrada IS NULL', $sql);
         $this->assertStringContainsString('mp_payment_id IS NOT NULL', $sql);
+    }
+
+    // ----------------------------------------------------------------- plano
+
+    private function planoDeDosFilas()
+    {
+        return [
+            'ancho' => 10,
+            'alto' => 6,
+            'elementos' => [
+                ['tipo' => 'fila', 'nombre' => 'A', 'butacas' => 3, 'desde' => 1, 'x' => 0, 'y' => 0],
+                ['tipo' => 'mesa', 'nombre' => '1', 'lugares' => 2, 'x' => 4, 'y' => 2],
+            ],
+        ];
+    }
+
+    private function hayEventoConPlano(array $overrides = [])
+    {
+        return $this->hayEvento(['capacidad' => 5, 'plano' => json_encode($this->planoDeDosFilas())] + $overrides);
+    }
+
+    private function hayLugaresOcupados(array $lugares)
+    {
+        $this->db->onSelect('FROM ticket_order_lugares tl', array_map(function ($l) {
+            return ['lugar' => $l];
+        }, $lugares));
+    }
+
+    public function testConPlanoLaCapacidadEsLaCantidadDeLugares()
+    {
+        $this->hayOcupadas(0);
+        $this->db->onWrite('INSERT INTO event_ticketing', 1);
+
+        $r = Entradas::guardarConfig($this->db, 100, [
+            'capacidad' => 999, 'precio' => 0, 'plano' => $this->planoDeDosFilas(),
+        ]);
+
+        $params = $this->db->paramsFor('INSERT INTO event_ticketing');
+
+        $this->assertTrue($r['ok']);
+        $this->assertSame(5, $params[2]);
+        $this->assertNotNull($params[6]);
+    }
+
+    /**
+     * El asistente configura precio y cupo sin saber del plano: si guardar
+     * sin plano lo borrara, cambiar el precio por ahí se llevaría el plano.
+     */
+    public function testGuardarSinMandarElPlanoConservaElQueHabia()
+    {
+        $this->hayEventoConPlano();
+        $this->hayOcupadas(0);
+        $this->db->onWrite('INSERT INTO event_ticketing', 1);
+
+        Entradas::guardarConfig($this->db, 100, ['capacidad' => 999, 'precio' => 100]);
+
+        $params = $this->db->paramsFor('INSERT INTO event_ticketing');
+
+        $this->assertSame(5, $params[2]);
+        $this->assertSame(Plano::normalizar($this->planoDeDosFilas())['plano'], json_decode($params[6], true));
+    }
+
+    public function testMandarElPlanoEnNullLoSaca()
+    {
+        $this->hayOcupadas(0);
+        $this->db->onWrite('INSERT INTO event_ticketing', 1);
+
+        Entradas::guardarConfig($this->db, 100, ['capacidad' => 50, 'precio' => 100, 'plano' => null]);
+
+        $params = $this->db->paramsFor('INSERT INTO event_ticketing');
+
+        $this->assertSame(50, $params[2]);
+        $this->assertNull($params[6]);
+    }
+
+    public function testNoSePuedeSacarElPlanoConLugaresVendidos()
+    {
+        $this->hayOcupadas(2);
+        $this->hayLugaresOcupados(['f:A:1', 'f:A:2']);
+
+        $r = Entradas::guardarConfig($this->db, 100, ['capacidad' => 50, 'precio' => 0, 'plano' => null]);
+
+        $this->assertFalse($r['ok']);
+        $this->assertStringContainsString('no se puede sacar', $r['error']);
+        $this->assertSame(0, $this->db->countCalls('INSERT INTO event_ticketing'));
+    }
+
+    public function testUnPlanoInvalidoNoSeGuarda()
+    {
+        $r = Entradas::guardarConfig($this->db, 100, ['precio' => 0, 'plano' => ['elementos' => 'x']]);
+
+        $this->assertFalse($r['ok']);
+        $this->assertSame(0, $this->db->countCalls('INSERT INTO event_ticketing'));
+    }
+
+    /** La persona llega con "Fila A, butaca 3": esa butaca tiene que existir. */
+    public function testNoSePuedeSacarDelPlanoUnLugarVendido()
+    {
+        $plano = $this->planoDeDosFilas();
+        $plano['elementos'][0]['butacas'] = 2;
+
+        $this->hayOcupadas(1);
+        $this->hayLugaresOcupados(['f:A:3']);
+
+        $r = Entradas::guardarConfig($this->db, 100, ['precio' => 0, 'plano' => $plano]);
+
+        $this->assertFalse($r['ok']);
+        $this->assertStringContainsString('Fila A: 3', $r['error']);
+    }
+
+    public function testNoSePuedePasarAPlanoConEntradasVendidasSinLugar()
+    {
+        $this->hayOcupadas(2);
+        $this->hayLugaresOcupados([]);
+
+        $r = Entradas::guardarConfig($this->db, 100, ['precio' => 0, 'plano' => $this->planoDeDosFilas()]);
+
+        $this->assertFalse($r['ok']);
+        $this->assertStringContainsString('sin lugar asignado', $r['error']);
+    }
+
+    public function testLaDisponibilidadIncluyeElPlanoYLoOcupado()
+    {
+        $this->hayEventoConPlano();
+        $this->hayOcupadas(1);
+        $this->hayLugaresOcupados(['m:1:2']);
+
+        $d = Entradas::disponibilidad($this->db, 100);
+
+        $this->assertSame($this->planoDeDosFilas(), $d['plano']);
+        $this->assertSame(['m:1:2'], $d['ocupados']);
+        $this->assertSame(4, $d['disponibles']);
+    }
+
+    public function testSinPlanoLaDisponibilidadNoTraeLugares()
+    {
+        $this->hayEvento();
+        $this->hayOcupadas(0);
+
+        $d = Entradas::disponibilidad($this->db, 100);
+
+        $this->assertNull($d['plano']);
+        $this->assertSame([], $d['ocupados']);
+    }
+
+    public function testConPlanoSeCompranLugaresYLaCantidadSaleDeEllos()
+    {
+        $this->hayEventoConPlano();
+        $this->hayOcupadas(0);
+        $this->hayLugaresOcupados([]);
+        $this->db->onInsert('INSERT INTO ticket_orders', 77);
+
+        $r = Entradas::crearOrden($this->db, 100, $this->comprador([
+            'cantidad' => 9, 'lugares' => ['f:A:1', 'f:A:2', 'f:A:2'],
+        ]));
+
+        $this->assertTrue($r['ok']);
+        $this->assertSame(2, $r['orden']['cantidad']);
+        $this->assertSame(['f:A:1', 'f:A:2'], $r['orden']['lugares']);
+
+        $insertados = $this->db->callsFor('INSERT INTO ticket_order_lugares');
+        $this->assertCount(2, $insertados);
+        $this->assertSame([77, 100, 'f:A:1'], $insertados[0]['params']);
+        $this->assertTrue($this->db->committed);
+    }
+
+    public function testConPlanoHayQueElegirLugares()
+    {
+        $this->hayEventoConPlano();
+
+        $r = Entradas::crearOrden($this->db, 100, $this->comprador(['cantidad' => 2]));
+
+        $this->assertFalse($r['ok']);
+        $this->assertStringContainsString('Elegí tus lugares', $r['error']);
+        $this->assertTrue($this->db->rolledBack);
+    }
+
+    /**
+     * Dos personas eligen la misma butaca en su pantalla: la segunda tiene
+     * que enterarse, y recibir lo ocupado para no volver a elegir a ciegas.
+     */
+    public function testUnLugarYaTomadoNoSeVendeDosVeces()
+    {
+        $this->hayEventoConPlano();
+        $this->hayOcupadas(1);
+        $this->hayLugaresOcupados(['f:A:2']);
+
+        $r = Entradas::crearOrden($this->db, 100, $this->comprador(['lugares' => ['f:A:1', 'f:A:2']]));
+
+        $this->assertFalse($r['ok']);
+        $this->assertStringContainsString('Fila A: 2', $r['error']);
+        $this->assertSame(['f:A:2'], $r['ocupados']);
+        $this->assertSame(0, $this->db->countCalls('INSERT INTO ticket_orders'));
+    }
+
+    /** Lo ocupado se lee con la fila del evento bloqueada, igual que el cupo. */
+    public function testLosLugaresSeVerificanDentroDeLaTransaccion()
+    {
+        $this->hayEventoConPlano();
+        $this->hayOcupadas(0);
+        $this->hayLugaresOcupados([]);
+        $this->db->onInsert('INSERT INTO ticket_orders', 1);
+
+        Entradas::crearOrden($this->db, 100, $this->comprador(['lugares' => ['m:1:1']]));
+
+        $orden = array_map(function ($c) { return $c['sql']; }, $this->db->log());
+        $bloqueo = $this->posicion($orden, 'FOR UPDATE');
+        $lugares = $this->posicion($orden, 'FROM ticket_order_lugares tl');
+
+        $this->assertNotNull($lugares);
+        $this->assertGreaterThan($bloqueo, $lugares);
+    }
+
+    public function testUnLugarQueNoEstaEnElPlanoNoSeVende()
+    {
+        $this->hayEventoConPlano();
+
+        $r = Entradas::crearOrden($this->db, 100, $this->comprador(['lugares' => ['f:Z:1']]));
+
+        $this->assertFalse($r['ok']);
+        $this->assertStringContainsString('no existe', $r['error']);
+    }
+
+    public function testSinPlanoNoSeAceptanLugares()
+    {
+        $this->hayEvento();
+
+        $r = Entradas::crearOrden($this->db, 100, $this->comprador(['lugares' => ['f:A:1']]));
+
+        $this->assertFalse($r['ok']);
+        $this->assertStringContainsString('no tiene lugares numerados', $r['error']);
+    }
+
+    /**
+     * Un pago que llega después de vencida la reserva se acredita igual, y
+     * para entonces otro pudo haber tomado el lugar. Quien organiza tiene que
+     * verlo para reubicar a uno de los dos.
+     */
+    public function testLasVentasMarcanUnLugarPagadoDosVeces()
+    {
+        $this->db->onSelect('FROM ticket_orders WHERE link_id', [
+            $this->venta(['id' => 1, 'codigo' => 'A1', 'estado' => 'pagada']),
+            $this->venta(['id' => 2, 'codigo' => 'B2', 'estado' => 'pagada']),
+            $this->venta(['id' => 3, 'codigo' => 'C3', 'estado' => 'cancelada']),
+        ]);
+        $this->db->onSelect('SELECT order_id, lugar FROM ticket_order_lugares', [
+            ['order_id' => 1, 'lugar' => 'f:A:1'],
+            ['order_id' => 1, 'lugar' => 'f:A:2'],
+            ['order_id' => 2, 'lugar' => 'f:A:2'],
+            ['order_id' => 3, 'lugar' => 'f:A:1'],
+        ]);
+
+        $r = Entradas::ventasDelEvento($this->db, 100);
+
+        $this->assertSame(['f:A:2'], $r['resumen']['lugares_en_conflicto']);
+        $this->assertSame(['f:A:1', 'f:A:2'], $r['ordenes'][0]['lugares']);
+        $this->assertSame(['f:A:2'], $r['ordenes'][0]['lugares_en_conflicto']);
+        $this->assertSame([], $r['ordenes'][2]['lugares_en_conflicto']);
+    }
+
+    private function posicion(array $consultas, $fragmento)
+    {
+        foreach ($consultas as $i => $sql) {
+            if (strpos($sql, $fragmento) !== false) {
+                return $i;
+            }
+        }
+
+        return null;
     }
 }

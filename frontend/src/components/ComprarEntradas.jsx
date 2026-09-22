@@ -2,12 +2,17 @@ import React, { useState } from 'react';
 import { X, Loader2, Check } from 'lucide-react';
 import { formatearPrecio, opcionesDeCantidad } from '../utils/entradas';
 import { esEmailValido, sugerenciaDeEmail } from '../utils/email';
+import { resumirLugares } from '../utils/plano';
+import PlanoDeLugares from './PlanoDeLugares';
 
 /**
  * Formulario de compra o reserva de entradas de un evento.
  *
  * Con precio manda a Mercado Pago; sin precio la reserva queda confirmada en el
  * acto y no hay checkout de por medio.
+ *
+ * Si el evento tiene plano, en lugar de la cantidad se eligen los lugares:
+ * la cantidad es cuántos se tocaron.
  */
 function ComprarEntradas({ evento, entradas, apiUrl, color = '#3B82F6', onCerrar }) {
   const [datos, setDatos] = useState({ nombre: '', email: '', telefono: '', cantidad: 1 });
@@ -18,9 +23,21 @@ function ComprarEntradas({ evento, entradas, apiUrl, color = '#3B82F6', onCerrar
   // es molesto, porque todo email está incompleto hasta que se termina.
   const [avisoEmail, setAvisoEmail] = useState(null);
   const [sugerencia, setSugerencia] = useState(null);
+  const [elegidos, setElegidos] = useState([]);
+  // Empieza con lo que dijo la página, y se actualiza si al confirmar alguien
+  // se adelantó con un lugar: elegir de nuevo sobre la foto vieja no sirve.
+  const [ocupados, setOcupados] = useState(entradas.ocupados || []);
 
+  const conPlano = Boolean(entradas.plano);
   const cantidades = opcionesDeCantidad(entradas);
-  const total = (Number(entradas.precio) || 0) * Number(datos.cantidad);
+  const cantidad = conPlano ? elegidos.length : Number(datos.cantidad);
+  const total = (Number(entradas.precio) || 0) * cantidad;
+  const maximo = Number(entradas.max_por_compra) || 1;
+
+  const elegir = (nuevos) => {
+    setElegidos(nuevos);
+    setError(null);
+  };
 
   const cambiar = (campo, valor) => {
     setDatos((previos) => ({ ...previos, [campo]: valor }));
@@ -58,19 +75,35 @@ function ComprarEntradas({ evento, entradas, apiUrl, color = '#3B82F6', onCerrar
       return;
     }
 
+    if (conPlano && elegidos.length === 0) {
+      setError('Elegí tus lugares en el plano.');
+      return;
+    }
+
     setEnviando(true);
     setError(null);
+
+    const pedido = conPlano
+      ? { ...datos, cantidad: elegidos.length, lugares: elegidos }
+      : datos;
 
     try {
       const respuesta = await fetch(`${apiUrl}/public/comprar.php`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ link_id: evento.id, ...datos }),
+        body: JSON.stringify({ link_id: evento.id, ...pedido }),
       });
 
       const cuerpo = await respuesta.json();
 
       if (!respuesta.ok) {
+        // Alguien tomó un lugar mientras tanto: se marca ocupado y se saca de
+        // lo elegido, así lo que queda elegido sigue siendo comprable.
+        if (Array.isArray(cuerpo.ocupados)) {
+          setOcupados(cuerpo.ocupados);
+          setElegidos((previos) => previos.filter((id) => !cuerpo.ocupados.includes(id)));
+        }
+
         setError(cuerpo.error || 'No se pudo completar la operación');
         setEnviando(false);
         return;
@@ -106,6 +139,10 @@ function ComprarEntradas({ evento, entradas, apiUrl, color = '#3B82F6', onCerrar
             Te esperamos en {evento.text}.
           </p>
 
+          {conPlano && elegidos.length > 0 && (
+            <p className="text-tinta font-bold mb-6">{resumirLugares(elegidos)}</p>
+          )}
+
           <p className="text-sm text-tinta-suave mb-1">Tu código de reserva</p>
           <p className="text-xl font-mono font-bold text-tinta tracking-wider mb-6">{reservado}</p>
 
@@ -122,13 +159,37 @@ function ComprarEntradas({ evento, entradas, apiUrl, color = '#3B82F6', onCerrar
   }
 
   return (
-    <Marco onCerrar={onCerrar}>
+    <Marco onCerrar={onCerrar} ancho={conPlano ? 'max-w-3xl' : 'max-w-md'}>
       <h3 className="text-2xl font-bold text-tinta mb-1">
         {entradas.es_gratis ? 'Reservar lugar' : 'Comprar entradas'}
       </h3>
       <p className="text-tinta-suave text-sm mb-6">{evento.text}</p>
 
       <form onSubmit={enviar} className="space-y-4">
+        {conPlano && (
+          <div>
+            <p className="block text-sm font-semibold text-tinta mb-1.5 tracking-wide">
+              ELEGÍ TUS LUGARES
+            </p>
+            <PlanoDeLugares
+              plano={entradas.plano}
+              ocupados={ocupados}
+              elegidos={elegidos}
+              onCambiar={elegir}
+              maximo={maximo}
+              color={color}
+            />
+            <p className="text-sm text-tinta mt-2" aria-live="polite">
+              {elegidos.length === 0
+                ? `Tocá las butacas o una mesa. Hasta ${maximo} por compra.`
+                : resumirLugares(elegidos)}
+            </p>
+            {elegidos.length >= maximo && (
+              <p className="text-xs text-amber-400 mt-1">Llegaste al máximo de {maximo} por compra.</p>
+            )}
+          </div>
+        )}
+
         <Campo
           id="entrada-nombre"
           etiqueta="NOMBRE Y APELLIDO"
@@ -189,27 +250,29 @@ function ComprarEntradas({ evento, entradas, apiUrl, color = '#3B82F6', onCerrar
           ayuda="Por si hay que avisarte de un cambio"
         />
 
-        <div>
-          <label htmlFor="entrada-cantidad" className="block text-sm font-semibold text-tinta mb-1.5 tracking-wide">
-            Cantidad
-          </label>
-          <select
-            id="entrada-cantidad"
-            value={datos.cantidad}
-            onChange={(e) => cambiar('cantidad', Number(e.target.value))}
-            className="w-full px-4 py-3 rounded-xl bg-white border border-borde-fuerte text-tinta placeholder-tinta-suave focus:border-verde-oscuro focus:outline-none transition-colors"
-          >
-            {cantidades.map((n) => (
-              <option key={n} value={n}>{n}</option>
-            ))}
-          </select>
+        {!conPlano && (
+          <div>
+            <label htmlFor="entrada-cantidad" className="block text-sm font-semibold text-tinta mb-1.5 tracking-wide">
+              Cantidad
+            </label>
+            <select
+              id="entrada-cantidad"
+              value={datos.cantidad}
+              onChange={(e) => cambiar('cantidad', Number(e.target.value))}
+              className="w-full px-4 py-3 rounded-xl bg-white border border-borde-fuerte text-tinta placeholder-tinta-suave focus:border-verde-oscuro focus:outline-none transition-colors"
+            >
+              {cantidades.map((n) => (
+                <option key={n} value={n}>{n}</option>
+              ))}
+            </select>
 
-          {entradas.disponibles <= 10 && (
-            <p className="text-xs text-amber-400 mt-1">
-              Quedan {entradas.disponibles} {entradas.disponibles === 1 ? 'entrada' : 'entradas'}
-            </p>
-          )}
-        </div>
+            {entradas.disponibles <= 10 && (
+              <p className="text-xs text-amber-400 mt-1">
+                Quedan {entradas.disponibles} {entradas.disponibles === 1 ? 'entrada' : 'entradas'}
+              </p>
+            )}
+          </div>
+        )}
 
         {!entradas.es_gratis && (
           <div className="flex items-baseline justify-between border-t border-borde pt-4">
@@ -226,7 +289,7 @@ function ComprarEntradas({ evento, entradas, apiUrl, color = '#3B82F6', onCerrar
 
         <button
           type="submit"
-          disabled={enviando}
+          disabled={enviando || (conPlano && elegidos.length === 0)}
           className="w-full py-4 font-bold text-tinta flex items-center justify-center gap-2 disabled:opacity-60"
           style={{ backgroundColor: color }}
         >
@@ -249,14 +312,14 @@ function ComprarEntradas({ evento, entradas, apiUrl, color = '#3B82F6', onCerrar
   );
 }
 
-function Marco({ children, onCerrar }) {
+function Marco({ children, onCerrar, ancho = 'max-w-md' }) {
   return (
     <div
       className="fixed inset-0 bg-tinta/40 backdrop-blur-sm flex items-start justify-center p-4 z-[60] overflow-y-auto"
       onClick={onCerrar}
     >
       <div
-        className="bg-white border border-borde max-w-md w-full p-8 my-8 relative"
+        className={`bg-white border border-borde ${ancho} w-full p-5 sm:p-8 my-8 relative`}
         onClick={(e) => e.stopPropagation()}
       >
         <button

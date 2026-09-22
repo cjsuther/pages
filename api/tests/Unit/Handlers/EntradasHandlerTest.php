@@ -334,6 +334,53 @@ class EntradasHandlerTest extends HandlerTestCase
         $this->assertSame(0, $this->db->countCalls('DELETE FROM event_ticketing'));
     }
 
+    // ---------------------------------------------------------------- planos
+
+    private function planoValido()
+    {
+        return [
+            'ancho' => 10, 'alto' => 4,
+            'elementos' => [['tipo' => 'fila', 'nombre' => 'A', 'butacas' => 4, 'desde' => 1, 'x' => 0, 'y' => 0]],
+        ];
+    }
+
+    public function testLosPlanosExigenSesion()
+    {
+        $r = EntradasHandler::planos($this->db, new Request('GET', [], ['link_id' => 100]));
+
+        $this->assertSame(401, $r->status);
+    }
+
+    /** Los planos son de otra gente: un extraño no puede verlos ni copiarlos. */
+    public function testUnExtranoNoVeLosPlanosDeLaPagina()
+    {
+        $this->db->onSelect('FROM links l', []);
+
+        $r = EntradasHandler::planos($this->db, new Request('GET', [], ['link_id' => 100], $this->sesion()));
+
+        $this->assertSame(403, $r->status);
+        $this->assertFalse($this->db->ran('et.plano IS NOT NULL'));
+    }
+
+    public function testDevuelveLosPlanosDeLosOtrosEventosDeLaPagina()
+    {
+        $this->puedeAdministrarElEvento();
+        $this->db->onSelect('lg.page_id', [[5]]);
+        $this->db->onSelect('et.plano IS NOT NULL', [
+            ['id' => 90, 'text' => 'Show de agosto', 'event_date' => '2026-08-01', 'plano' => json_encode($this->planoValido())],
+            // Uno roto no se ofrece: copiarlo fallaría recién al guardar.
+            ['id' => 91, 'text' => 'Roto', 'event_date' => '2026-07-01', 'plano' => '{"ancho": 2}'],
+        ]);
+
+        $r = EntradasHandler::planos($this->db, new Request('GET', [], ['link_id' => 100], $this->sesion()));
+
+        $this->assertSame(200, $r->status);
+        $this->assertCount(1, $r->body['planos']);
+        $this->assertSame(90, $r->body['planos'][0]['id']);
+        $this->assertSame(4, $r->body['planos'][0]['lugares']);
+        $this->assertSame([5, 100], $this->db->paramsFor('et.plano IS NOT NULL'));
+    }
+
     // ---------------------------------------------------------------- ventas
 
     private function hayVentas()

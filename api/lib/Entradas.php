@@ -33,24 +33,52 @@ class Entradas
 
     const MAX_POR_COMPRA = 50;
 
-    /** Configuración de venta de un evento, o null si no tiene. */
+    /**
+     * Configuración de venta de un evento, o null si no tiene.
+     *
+     * El plano vuelve ya decodificado: null si el evento vende sin lugares
+     * asignados.
+     */
     public static function configDelEvento($db, $linkId)
     {
         $stmt = $db->prepare('SELECT * FROM event_ticketing WHERE link_id = ?');
         $stmt->execute([(int) $linkId]);
         $fila = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        return $fila === false ? null : $fila;
+        return $fila === false ? null : self::conPlanoDecodificado($fila);
     }
 
     /**
      * Guarda la configuración de venta de un evento.
      *
-     * @param array $datos ['activo', 'capacidad', 'precio', 'moneda', 'max_por_compra']
+     * El plano es opcional y se distingue "no vino" de "vino vacío": quien no
+     * lo manda —el asistente, que sólo sabe de precio y cupo— no lo toca, y
+     * quien manda null lo saca. Si no, cambiar el precio por otro camino
+     * borraría el plano sin que nadie lo pidiera.
+     *
+     * Con plano, la capacidad es la cantidad de lugares del plano, y lo que
+     * venga en 'capacidad' no se usa.
+     *
+     * @param array $datos ['activo', 'capacidad', 'precio', 'moneda', 'max_por_compra', 'plano'?]
      * @return array{ok: bool, error: string|null}
      */
     public static function guardarConfig($db, $linkId, array $datos)
     {
+        $plano = array_key_exists('plano', $datos)
+            ? $datos['plano']
+            : self::planoGuardado($db, $linkId);
+
+        if ($plano !== null) {
+            $normalizado = Plano::normalizar($plano);
+
+            if (!$normalizado['ok']) {
+                return ['ok' => false, 'error' => $normalizado['error']];
+            }
+
+            $plano = $normalizado['plano'];
+            $datos['capacidad'] = count(Plano::lugares($plano));
+        }
+
         $capacidad = isset($datos['capacidad']) ? (int) $datos['capacidad'] : 0;
         $precio = isset($datos['precio']) ? round((float) $datos['precio'], 2) : 0.0;
         $maxPorCompra = isset($datos['max_por_compra']) ? (int) $datos['max_por_compra'] : 10;
@@ -77,17 +105,36 @@ class Entradas
             return ['ok' => false, 'error' => "Ya hay $ocupadas entradas tomadas: la capacidad no puede ser menor"];
         }
 
+        if ($plano !== null && $ocupadas > 0) {
+            $problema = self::problemaConLoVendido($db, $linkId, $plano, $ocupadas);
+
+            if ($problema !== null) {
+                return ['ok' => false, 'error' => $problema];
+            }
+        }
+
+        // Sacar el plano con lugares vendidos dejaría esas entradas con un
+        // lugar que ya nadie más respeta: el siguiente compraría sin elegir y
+        // podría terminar en la misma butaca.
+        if ($plano === null && $ocupadas > 0 && self::lugaresOcupados($db, $linkId) !== []) {
+            return ['ok' => false, 'error' => 'Ya hay lugares vendidos o reservados: el plano no se puede sacar'];
+        }
+
         $stmt = $db->prepare('
-            INSERT INTO event_ticketing (link_id, activo, capacidad, precio, moneda, max_por_compra)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO event_ticketing (link_id, activo, capacidad, precio, moneda, max_por_compra, plano)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 activo = VALUES(activo),
                 capacidad = VALUES(capacidad),
                 precio = VALUES(precio),
                 moneda = VALUES(moneda),
-                max_por_compra = VALUES(max_por_compra)
+                max_por_compra = VALUES(max_por_compra),
+                plano = VALUES(plano)
         ');
-        $stmt->execute([(int) $linkId, $activo, $capacidad, $precio, $moneda, $maxPorCompra]);
+        $stmt->execute([
+            (int) $linkId, $activo, $capacidad, $precio, $moneda, $maxPorCompra,
+            $plano === null ? null : json_encode($plano, JSON_UNESCAPED_UNICODE),
+        ]);
 
         return ['ok' => true, 'error' => null];
     }
@@ -119,6 +166,41 @@ class Entradas
     }
 
     /**
+     * Lugares del plano que ya no están disponibles.
+     *
+     * Misma regla que ocupadas(): cuentan las pagadas y las reservas vigentes.
+     * No hay un índice único que impida vender dos veces el mismo lugar —el
+     * lugar se libera por vencimiento, que ningún índice puede ver—; lo que
+     * lo impide es que las compras de un evento se hacen de a una, con la fila
+     * de su configuración bloqueada.
+     *
+     * @return string[]
+     */
+    public static function lugaresOcupados($db, $linkId)
+    {
+        $stmt = $db->prepare("
+            SELECT tl.lugar
+            FROM ticket_order_lugares tl
+            INNER JOIN ticket_orders o ON o.id = tl.order_id
+            WHERE tl.link_id = ?
+              AND (o.estado = 'pagada'
+                   OR (o.estado = 'reservada' AND o.reserva_vence_en > NOW()))
+        ");
+        $stmt->execute([(int) $linkId]);
+
+        return array_values(array_unique(array_map('strval', $stmt->fetchAll(PDO::FETCH_COLUMN))));
+    }
+
+    /** Los lugares de una orden, en el orden en que se eligieron. */
+    public static function lugaresDeLaOrden($db, $ordenId)
+    {
+        $stmt = $db->prepare('SELECT lugar FROM ticket_order_lugares WHERE order_id = ? ORDER BY id');
+        $stmt->execute([(int) $ordenId]);
+
+        return array_map('strval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+    }
+
+    /**
      * Estado de venta de un evento, tal como lo ve el público.
      *
      * @return array|null null si el evento no vende entradas
@@ -135,6 +217,7 @@ class Entradas
         $capacidad = (int) $config['capacidad'];
         $disponibles = max(0, $capacidad - $ocupadas);
         $precio = (float) $config['precio'];
+        $plano = $config['plano'];
 
         return [
             'activo'         => true,
@@ -146,6 +229,10 @@ class Entradas
             'disponibles'    => $disponibles,
             'agotado'        => $disponibles < 1,
             'max_por_compra' => min((int) $config['max_por_compra'], $disponibles),
+            // Con plano, el comprador elige dónde sentarse: necesita ver el
+            // plano y qué lugares ya no están. Nunca quién los tiene.
+            'plano'          => $plano,
+            'ocupados'       => $plano === null ? [] : self::lugaresOcupados($db, $linkId),
         ];
     }
 
@@ -157,11 +244,26 @@ class Entradas
      * puede colar nadie. Sin eso, dos pedidos simultáneos leen ambos "queda 1"
      * y ambos venden.
      *
-     * @param array $datos ['nombre', 'email', 'telefono', 'cantidad']
-     * @return array{ok: bool, error: string|null, orden: array|null}
+     * En un evento con plano no se pide una cantidad sino lugares: la cantidad
+     * es cuántos se eligieron, y cada uno se verifica libre dentro del mismo
+     * bloqueo que el cupo.
+     *
+     * @param array $datos ['nombre', 'email', 'telefono', 'cantidad', 'lugares'?]
+     * @return array{ok: bool, error: string|null, orden: array|null, ocupados?: string[]}
      */
     public static function crearOrden($db, $linkId, array $datos)
     {
+        $lugares = null;
+
+        if (isset($datos['lugares'])) {
+            if (!is_array($datos['lugares'])) {
+                return ['ok' => false, 'error' => 'Los lugares no tienen el formato esperado', 'orden' => null];
+            }
+
+            $lugares = array_values(array_unique(array_map('strval', $datos['lugares'])));
+            $datos['cantidad'] = count($lugares);
+        }
+
         $problema = self::validarComprador($datos);
 
         if ($problema !== null) {
@@ -181,6 +283,14 @@ class Entradas
             if ($config === false || !$config['activo']) {
                 $db->rollBack();
                 return ['ok' => false, 'error' => 'Este evento no vende entradas', 'orden' => null];
+            }
+
+            $config = self::conPlanoDecodificado($config);
+            $problemaDeLugares = self::problemaConLosLugares($db, $linkId, $config['plano'], $lugares);
+
+            if ($problemaDeLugares !== null) {
+                $db->rollBack();
+                return ['ok' => false, 'orden' => null] + $problemaDeLugares;
             }
 
             if ($cantidad > (int) $config['max_por_compra']) {
@@ -231,6 +341,15 @@ class Entradas
             ]);
 
             $ordenId = (int) $db->lastInsertId();
+
+            if ($config['plano'] !== null) {
+                $conLugar = $db->prepare('INSERT INTO ticket_order_lugares (order_id, link_id, lugar) VALUES (?, ?, ?)');
+
+                foreach ($lugares as $lugar) {
+                    $conLugar->execute([$ordenId, (int) $linkId, $lugar]);
+                }
+            }
+
             $db->commit();
 
             return [
@@ -245,6 +364,7 @@ class Entradas
                     'moneda'    => $config['moneda'],
                     'estado'    => $esGratis ? 'pagada' : 'reservada',
                     'es_gratis' => $esGratis,
+                    'lugares'   => $config['plano'] === null ? [] : $lugares,
                 ],
             ];
         } catch (Throwable $e) {
@@ -517,7 +637,13 @@ class Entradas
         $stmt->execute([$codigo]);
         $fila = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        return $fila === false ? null : $fila;
+        if ($fila === false) {
+            return null;
+        }
+
+        $fila['lugares'] = self::lugaresDeLaOrden($db, $fila['id']);
+
+        return $fila;
     }
 
     /**
@@ -542,6 +668,9 @@ class Entradas
         ");
         $stmt->execute([(int) $linkId]);
         $ordenes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $lugaresPorOrden = self::lugaresPorOrden($db, $linkId);
+        $conflictos = self::lugaresVendidosDosVeces($ordenes, $lugaresPorOrden);
 
         $vendidas = 0;
         $recaudado = 0.0;
@@ -569,6 +698,11 @@ class Entradas
                 $orden['estado'] = 'vencida';
             }
             unset($orden['vencida']);
+
+            $orden['lugares'] = isset($lugaresPorOrden[$orden['id']]) ? $lugaresPorOrden[$orden['id']] : [];
+            $orden['lugares_en_conflicto'] = $orden['estado'] === 'pagada'
+                ? array_values(array_intersect($orden['lugares'], $conflictos))
+                : [];
 
             if ($orden['estado'] === 'pagada') {
                 $vendidas += (int) $orden['cantidad'];
@@ -654,6 +788,11 @@ class Entradas
                 'por_acreditar' => round($porAcreditar, 2),
                 'proxima_acreditacion' => $proxima,
                 'ventas_sin_dato' => $sinDato,
+                // Lugares con más de una compra pagada. Pasa sólo si alguien
+                // pagó después de que su reserva venciera y otro ya había
+                // tomado el lugar: el pago se acredita igual, y quien organiza
+                // tiene que enterarse para reubicar a uno de los dos.
+                'lugares_en_conflicto' => $conflictos,
             ],
         ];
     }
@@ -771,6 +910,59 @@ class Entradas
         return $eventos;
     }
 
+    /** Tope de planos para copiar: los de los shows más recientes alcanzan. */
+    const LIMITE_PLANOS = 50;
+
+    /**
+     * Planos de los otros eventos de una página, para copiar uno.
+     *
+     * Un lugar arma su plano una vez y lo usa en cada show: volver a dibujarlo
+     * fila por fila en cada evento es tedioso y termina en planos que no
+     * coinciden entre sí. Se copia sólo la forma, nunca lo vendido.
+     *
+     * Van primero los más recientes, que son los que más probablemente
+     * tengan el plano vigente del lugar.
+     *
+     * @return array<array{id: int, text: string, event_date: string|null, lugares: int, plano: array}>
+     */
+    public static function planosDeLaPagina($db, $pageId, $exceptoLinkId = 0)
+    {
+        $stmt = $db->prepare('
+            SELECT l.id, l.text, l.event_date, et.plano
+            FROM links l
+            JOIN link_groups lg ON l.group_id = lg.id
+            JOIN event_ticketing et ON et.link_id = l.id
+            WHERE lg.page_id = ?
+              AND l.id <> ?
+              AND et.plano IS NOT NULL
+            ORDER BY l.event_date DESC, l.id DESC
+            LIMIT ' . self::LIMITE_PLANOS . '
+        ');
+        $stmt->execute([(int) $pageId, (int) $exceptoLinkId]);
+
+        $planos = [];
+
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $fila) {
+            $plano = json_decode((string) $fila['plano'], true);
+
+            // Un plano que no se puede leer no se ofrece: copiarlo daría un
+            // plano roto que recién falla al guardar.
+            if (!is_array($plano) || !Plano::normalizar($plano)['ok']) {
+                continue;
+            }
+
+            $planos[] = [
+                'id'         => (int) $fila['id'],
+                'text'       => $fila['text'],
+                'event_date' => $fila['event_date'],
+                'lugares'    => count(Plano::lugares($plano)),
+                'plano'      => $plano,
+            ];
+        }
+
+        return $planos;
+    }
+
     /** Una fecha del filtro sirve sólo si es una fecha. */
     private static function esFechaIso($fecha)
     {
@@ -778,6 +970,121 @@ class Entradas
     }
 
     // ------------------------------------------------------------ internos
+
+    private static function conPlanoDecodificado(array $config)
+    {
+        $plano = isset($config['plano']) && $config['plano'] !== '' ? json_decode($config['plano'], true) : null;
+        $config['plano'] = is_array($plano) ? $plano : null;
+
+        return $config;
+    }
+
+    /** El plano que ya tiene guardado el evento, o null. */
+    private static function planoGuardado($db, $linkId)
+    {
+        $config = self::configDelEvento($db, $linkId);
+
+        return $config === null ? null : $config['plano'];
+    }
+
+    /**
+     * Por qué el plano nuevo no puede reemplazar al anterior, o null.
+     *
+     * Un lugar vendido no puede desaparecer del plano: la persona llega con
+     * "Fila C, butaca 4" y esa butaca tiene que existir. Y un evento que ya
+     * vendió entradas sin lugar no puede pasar a un plano, porque esa gente
+     * no tiene dónde sentarse.
+     */
+    private static function problemaConLoVendido($db, $linkId, array $plano, $ocupadas)
+    {
+        $tomados = self::lugaresOcupados($db, $linkId);
+        $sinLugar = $ocupadas - count($tomados);
+
+        if ($sinLugar > 0) {
+            return "Ya hay $sinLugar entradas vendidas sin lugar asignado: el evento no puede pasar a un plano";
+        }
+
+        $perdidos = array_values(array_diff($tomados, Plano::lugares($plano)));
+
+        if ($perdidos !== []) {
+            return 'Estos lugares ya están vendidos o reservados y no se pueden sacar del plano: '
+                . Plano::resumir(array_slice($perdidos, 0, 10));
+        }
+
+        return null;
+    }
+
+    /**
+     * Por qué no se pueden tomar estos lugares, o null.
+     *
+     * @return array{error: string, ocupados?: string[]}|null
+     */
+    private static function problemaConLosLugares($db, $linkId, $plano, $lugares)
+    {
+        if ($plano === null) {
+            return $lugares === null || $lugares === []
+                ? null
+                : ['error' => 'Este evento no tiene lugares numerados'];
+        }
+
+        if ($lugares === null || $lugares === []) {
+            return ['error' => 'Elegí tus lugares en el plano'];
+        }
+
+        $inexistentes = array_diff($lugares, Plano::lugares($plano));
+
+        if ($inexistentes !== []) {
+            return ['error' => 'Ese lugar no existe en el plano. Volvé a cargar la página.'];
+        }
+
+        $ocupados = self::lugaresOcupados($db, $linkId);
+        $tomados = array_values(array_intersect($lugares, $ocupados));
+
+        if ($tomados !== []) {
+            // Se devuelven los ocupados para que el plano del comprador se
+            // actualice sin recargar: si no, vuelve a elegir sobre una foto vieja.
+            return [
+                'error' => (count($tomados) === 1 ? 'Alguien acaba de tomar ' : 'Alguien acaba de tomar estos lugares: ')
+                    . Plano::resumir($tomados) . '. Elegí otro.',
+                'ocupados' => $ocupados,
+            ];
+        }
+
+        return null;
+    }
+
+    /** @return array<int, string[]> Lugares de cada orden del evento, por id de orden. */
+    private static function lugaresPorOrden($db, $linkId)
+    {
+        $stmt = $db->prepare('SELECT order_id, lugar FROM ticket_order_lugares WHERE link_id = ? ORDER BY id');
+        $stmt->execute([(int) $linkId]);
+
+        $porOrden = [];
+
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $fila) {
+            $porOrden[(int) $fila['order_id']][] = (string) $fila['lugar'];
+        }
+
+        return $porOrden;
+    }
+
+    /** @return string[] Lugares que figuran en más de una orden pagada. */
+    private static function lugaresVendidosDosVeces(array $ordenes, array $lugaresPorOrden)
+    {
+        $veces = [];
+
+        foreach ($ordenes as $orden) {
+            if ($orden['estado'] !== 'pagada' || !isset($lugaresPorOrden[$orden['id']])) {
+                continue;
+            }
+
+            foreach ($lugaresPorOrden[$orden['id']] as $lugar) {
+                $veces[$lugar] = isset($veces[$lugar]) ? $veces[$lugar] + 1 : 1;
+            }
+        }
+
+        return array_keys(array_filter($veces, function ($n) { return $n > 1; }));
+    }
 
     private static function validarComprador(array $datos)
     {

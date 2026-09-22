@@ -424,4 +424,163 @@ describe('PanelEntradas', () => {
     });
   });
 
+
+  describe('plano de lugares', () => {
+    const PLANO = {
+      ancho: 12,
+      alto: 6,
+      elementos: [{ tipo: 'fila', nombre: 'A', desde: 1, butacas: 4, x: 0, y: 0 }],
+    };
+
+    const conPlano = () => fireEvent.click(screen.getByRole('radio', { name: /Con plano de butacas y mesas/ }));
+
+    it('al elegir plano arranca con una platea armada y la capacidad sale de ahí', async () => {
+      await montar();
+      activar();
+      conPlano();
+
+      expect(screen.getByLabelText('Plano del evento')).toBeInTheDocument();
+      expect(screen.queryByLabelText('Capacidad máxima')).not.toBeInTheDocument();
+      expect(screen.getByText('Sale de los lugares del plano')).toBeInTheDocument();
+    });
+
+    it('guarda el plano junto con la configuración', async () => {
+      await montar({ entradas: { activo: 1, capacidad: 4, precio: 0, max_por_compra: 10, plano: PLANO } });
+      global.fetch.mockReturnValueOnce(respuestaDe({ entradas: { activo: 1, capacidad: 4, plano: PLANO } }));
+
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar entradas' }));
+
+      await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
+      const cuerpo = JSON.parse(global.fetch.mock.calls[1][1].body);
+
+      expect(cuerpo.plano).toEqual(PLANO);
+    });
+
+    /** Mandar null es lo que le dice al servidor que se saca el plano. */
+    it('volver a "sin lugares asignados" manda el plano en null', async () => {
+      await montar({ entradas: { activo: 1, capacidad: 4, precio: 0, max_por_compra: 10, plano: PLANO } });
+      global.fetch.mockReturnValueOnce(respuestaDe({ entradas: { activo: 1, capacidad: 50 } }));
+
+      fireEvent.click(screen.getByRole('radio', { name: /Sin lugares asignados/ }));
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar entradas' }));
+
+      await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
+
+      expect(JSON.parse(global.fetch.mock.calls[1][1].body).plano).toBeNull();
+    });
+
+    it('con lugares vendidos no se puede sacar el plano', async () => {
+      global.fetch.mockReturnValueOnce(respuestaDe({
+        entradas: { activo: 1, capacidad: 4, precio: 0, max_por_compra: 10, plano: PLANO },
+        cobros: CONECTADO,
+        ocupadas: 1,
+        lugares_ocupados: ['f:A:1'],
+        comision: 3,
+        mercadopago: MERCADO_PAGO,
+      }));
+      render(<PanelEntradas linkId={100} apiUrl="https://api.test/api" token="tok" />);
+      await waitFor(() => expect(screen.queryByText('Cargando...')).not.toBeInTheDocument());
+
+      expect(screen.getByRole('radio', { name: /Sin lugares asignados/ })).toBeDisabled();
+    });
+
+    it('agregar una fila suma sus butacas a la capacidad', async () => {
+      await montar({ entradas: { activo: 1, capacidad: 4, precio: 0, max_por_compra: 10, plano: PLANO } });
+
+      fireEvent.click(screen.getByRole('button', { name: /Fila$/ }));
+
+      expect(screen.getByText(/lugares en el plano/).textContent).toMatch(/^14 lugares/);
+      expect(screen.getByText('Fila B')).toBeInTheDocument();
+    });
+  });
+
+  describe('copiar el plano de otro evento', () => {
+    const PLANO_AJENO = {
+      ancho: 12,
+      alto: 6,
+      elementos: [{ tipo: 'mesa', nombre: '1', lugares: 6, forma: 'redonda', x: 0, y: 0 }],
+    };
+
+    const PLANOS = {
+      planos: [{ id: 90, text: 'Show de agosto', event_date: '2026-08-01', lugares: 6, plano: PLANO_AJENO }],
+    };
+
+    const abrirCopia = () => fireEvent.click(screen.getByRole('button', { name: /Usar el plano de otro evento/ }));
+
+    /** La lista se pide recién cuando alguien la quiere, no cada vez que se abre el panel. */
+    it('no pide los planos hasta que se lo piden', async () => {
+      await montar();
+      activar();
+
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('copia el plano elegido y pasa a "con plano"', async () => {
+      await montar();
+      activar();
+      global.fetch.mockReturnValueOnce(respuestaDe(PLANOS));
+
+      abrirCopia();
+
+      expect(await screen.findByRole('option', { name: /Show de agosto · 01\/08\/2026 \(6 lugares\)/ })).toBeInTheDocument();
+      expect(global.fetch.mock.calls[1][0]).toBe('https://api.test/api/entradas/planos.php?link_id=100');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Copiar plano' }));
+
+      expect(screen.getByRole('radio', { name: /Con plano de butacas y mesas/ })).toBeChecked();
+      expect(screen.getByText(/lugares en el plano/).textContent).toMatch(/^6 lugares/);
+    });
+
+    it('guarda el plano copiado', async () => {
+      await montar();
+      activar();
+      global.fetch.mockReturnValueOnce(respuestaDe(PLANOS));
+
+      abrirCopia();
+      fireEvent.click(await screen.findByRole('button', { name: 'Copiar plano' }));
+
+      global.fetch.mockReturnValueOnce(respuestaDe({ entradas: { activo: 1, capacidad: 6, plano: PLANO_AJENO } }));
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar entradas' }));
+
+      await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(3));
+      expect(JSON.parse(global.fetch.mock.calls[2][1].body).plano).toEqual(PLANO_AJENO);
+    });
+
+    it('avisa si ningún otro evento tiene plano', async () => {
+      await montar();
+      activar();
+      global.fetch.mockReturnValueOnce(respuestaDe({ planos: [] }));
+
+      abrirCopia();
+
+      expect(await screen.findByText(/Ningún otro evento de esta página tiene plano/)).toBeInTheDocument();
+    });
+
+    /**
+     * Si este evento ya vendió butacas y el plano copiado no las tiene, el
+     * servidor lo rechazaría: se avisa y no se deja guardar.
+     */
+    it('no deja guardar un plano copiado que pierde lugares vendidos', async () => {
+      global.fetch.mockReturnValueOnce(respuestaDe({
+        entradas: {
+          activo: 1, capacidad: 4, precio: 0, max_por_compra: 10,
+          plano: { ancho: 12, alto: 6, elementos: [{ tipo: 'fila', nombre: 'A', desde: 1, butacas: 4, x: 0, y: 0 }] },
+        },
+        cobros: CONECTADO,
+        ocupadas: 1,
+        lugares_ocupados: ['f:A:1'],
+        comision: 3,
+        mercadopago: MERCADO_PAGO,
+      }));
+      render(<PanelEntradas linkId={100} apiUrl="https://api.test/api" token="tok" />);
+      await waitFor(() => expect(screen.queryByText('Cargando...')).not.toBeInTheDocument());
+      global.fetch.mockReturnValueOnce(respuestaDe(PLANOS));
+
+      abrirCopia();
+      fireEvent.click(await screen.findByRole('button', { name: 'Copiar plano' }));
+
+      expect(screen.getByText(/ya están vendidos y no pueden salir del plano/)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Guardar entradas' })).toBeDisabled();
+    });
+  });
 });
