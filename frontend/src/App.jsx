@@ -12,6 +12,7 @@ import Pages from './pages/Pages';
 import MyPages from './pages/MyPages';
 import PageEditor from './pages/PageEditor';
 import ItemEditor from './pages/ItemEditor';
+import Puerta from './pages/Puerta';
 import PublicPage from './pages/PublicPage';
 import EventDetail from './pages/EventDetail';
 import EstadoOrden from './pages/EstadoOrden';
@@ -108,6 +109,7 @@ function App() {
             <Route path="/page/:id/item/:linkId" element={token ? <ItemEditor /> : <Navigate to="/login" />} />
             <Route path="/evento/:id" element={<EventDetail />} />
             <Route path="/entrada/:codigo" element={<EstadoOrden apiUrl={API_URL} />} />
+            <Route path="/puerta" element={<Puerta apiUrl={API_URL} />} />
             {/* Antes de /:slug: es una ruta del sitio, no una página pública. */}
             <Route path="/oauth/authorize" element={<Autorizar />} />
             <Route path="/subir/:token" element={<SubirImagen />} />

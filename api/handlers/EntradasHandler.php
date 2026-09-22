@@ -414,12 +414,12 @@ class EntradasHandler
 
     private static function csv(array $ordenes)
     {
-        $filas = ['Codigo,Nombre,Email,Telefono,Cantidad,Lugares,Total,Moneda,Estado,Fecha'];
+        $filas = ['Codigo,Nombre,Email,Telefono,Cantidad,Ingresaron,Lugares,Total,Moneda,Estado,Fecha'];
 
         foreach ($ordenes as $o) {
             $filas[] = implode(',', array_map(['EntradasHandler', 'campoCsv'], [
                 $o['codigo'], $o['nombre'], $o['email'], $o['telefono'],
-                $o['cantidad'], Plano::resumir(isset($o['lugares']) ? $o['lugares'] : []),
+                $o['cantidad'], isset($o['ingresadas']) ? $o['ingresadas'] : 0, Plano::resumir(isset($o['lugares']) ? $o['lugares'] : []),
                 $o['total'], $o['moneda'], $o['estado'], $o['created_at'],
             ]));
         }

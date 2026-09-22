@@ -4,6 +4,7 @@ import { AuthContext } from '../App';
 import LoadingSpinner from '../components/LoadingSpinner';
 import GooglePlacesAutocomplete from '../components/GooglePlacesAutocomplete';
 import PanelEntradas from '../components/PanelEntradas';
+import LinkDePuerta from '../components/LinkDePuerta';
 import PanelVentas from '../components/PanelVentas';
 import { analizarEmbed, EJEMPLOS_EMBED } from '../utils/embeds';
 
@@ -27,7 +28,7 @@ function ItemEditor() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
-  // Tab activo cuando el item es un evento: datos | entradas | ventas.
+  // Tab activo cuando el item es un evento: datos | entradas | ventas | puerta.
   const [tab, setTab] = useState('datos');
   // Qué es este item de galería: imagen, youtube o instagram. Se deduce de la
   // URL guardada; el formulario lo usa para mostrar el campo que corresponde.
@@ -315,6 +316,7 @@ function ItemEditor() {
               { clave: 'datos', etiqueta: 'Datos' },
               { clave: 'entradas', etiqueta: 'Entradas' },
               { clave: 'ventas', etiqueta: 'Ventas' },
+              { clave: 'puerta', etiqueta: 'Puerta' },
             ].map((t) => (
               <button
                 key={t.clave}
@@ -344,6 +346,10 @@ function ItemEditor() {
 
         {tab === 'ventas' && group.type === 'eventos' && (
           <PanelVentas linkId={item.id} apiUrl={apiUrl} token={token} />
+        )}
+
+        {tab === 'puerta' && group.type === 'eventos' && (
+          <LinkDePuerta linkId={item.id} apiUrl={apiUrl} token={token} />
         )}
 
         {(tab === 'datos' || group.type !== 'eventos') && (

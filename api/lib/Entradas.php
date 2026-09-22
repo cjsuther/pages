@@ -656,7 +656,7 @@ class Entradas
     public static function ventasDelEvento($db, $linkId)
     {
         $stmt = $db->prepare("
-            SELECT id, codigo, nombre, email, telefono, cantidad,
+            SELECT id, codigo, nombre, email, telefono, cantidad, ingresadas, ingreso_en,
                    precio_unitario, total, comision, comision_porcentaje,
                    moneda, estado, reserva_vence_en,
                    mp_payment_id, pagada_en, created_at,
@@ -673,6 +673,7 @@ class Entradas
         $conflictos = self::lugaresVendidosDosVeces($ordenes, $lugaresPorOrden);
 
         $vendidas = 0;
+        $ingresadas = 0;
         $recaudado = 0.0;
         $comisiones = 0.0;
         // Lo que Mercado Pago dice que cobró de comisión de plataforma. Se
@@ -706,6 +707,7 @@ class Entradas
 
             if ($orden['estado'] === 'pagada') {
                 $vendidas += (int) $orden['cantidad'];
+                $ingresadas += isset($orden['ingresadas']) ? (int) $orden['ingresadas'] : 0;
                 $recaudado += (float) $orden['total'];
                 $comisiones += (float) $orden['comision'];
 
@@ -759,6 +761,8 @@ class Entradas
             'ordenes' => $ordenes,
             'resumen' => [
                 'vendidas'   => $vendidas,
+                // Cuántas de las vendidas ya pasaron por la puerta.
+                'ingresadas' => $ingresadas,
                 'reservadas' => $reservadas,
                 'recaudado'  => round($recaudado, 2),
                 // Lo que pedimos que se nos descuente. Sólo sirve para

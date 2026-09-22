@@ -129,6 +129,9 @@ function PanelVentas({ linkId, apiUrl, token }) {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Dato etiqueta="VENDIDAS" valor={capacidad ? `${resumen.vendidas}/${capacidad}` : resumen.vendidas} />
         <Dato etiqueta="RESERVANDO" valor={resumen.reservadas} />
+        {resumen.ingresadas > 0 && (
+          <Dato etiqueta="ENTRARON" valor={`${resumen.ingresadas}/${resumen.vendidas}`} />
+        )}
         <Dato etiqueta="RECAUDADO" valor={formatearPrecio(resumen.recaudado)} />
         {/* Lo que efectivamente entra a la cuenta. Es el número con el que el
             dueño pone precios, así que tiene que estar descontado todo: antes
@@ -222,7 +225,14 @@ function PanelVentas({ linkId, apiUrl, token }) {
                     <a href={`mailto:${o.email}`} className="hover:text-tinta block">{o.email}</a>
                     <Telefono numero={o.telefono} nombre={o.nombre} />
                   </td>
-                  <td className="px-3 py-2 text-tinta text-right">{o.cantidad}</td>
+                  <td className="px-3 py-2 text-tinta text-right">
+                    {o.cantidad}
+                    {o.estado === 'pagada' && o.ingresadas > 0 && (
+                      <span className="block text-xs text-verde-oscuro whitespace-nowrap">
+                        {o.ingresadas >= o.cantidad ? 'entró' : `entraron ${o.ingresadas}`}
+                      </span>
+                    )}
+                  </td>
                   <td className="px-3 py-2 text-tinta text-right whitespace-nowrap">
                     {formatearPrecio(o.total, o.moneda)}
                     {o.mp_neto !== null && o.mp_neto !== undefined && (
