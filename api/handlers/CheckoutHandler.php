@@ -324,6 +324,9 @@ class CheckoutHandler
             'pagina'        => $orden['pagina'],
             'url_slug'      => $orden['url_slug'],
             'lugares'       => array_map(['Plano', 'describir'], $orden['lugares']),
+            // Para que la compra se registre en el pixel de quien vendió, no
+            // en el nuestro: es su venta y su publicidad.
+            'meta_pixel_id' => isset($orden['meta_pixel_id']) ? $orden['meta_pixel_id'] : null,
         ]]);
     }
 

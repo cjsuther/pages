@@ -627,7 +627,7 @@ class Entradas
         $stmt = $db->prepare('
             SELECT o.*, l.text AS evento, l.event_date, l.event_time, l.event_address,
                    l.image_url AS evento_imagen,
-                   p.title AS pagina, p.url_slug, p.email_contacto
+                   p.title AS pagina, p.url_slug, p.email_contacto, p.meta_pixel_id
             FROM ticket_orders o
             INNER JOIN links l ON l.id = o.link_id
             INNER JOIN link_groups lg ON lg.id = l.group_id

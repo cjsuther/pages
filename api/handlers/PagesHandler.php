@@ -394,6 +394,17 @@ class PagesHandler
                 $values[] = $req->body[$campo];
             }
 
+            // El pixel no entra en la lista genérica: un identificador mal
+            // copiado no mide nada y no hay forma de darse cuenta mirando la
+            // página, así que se revisa la forma al guardarlo.
+            if (array_key_exists('meta_pixel_id', $req->body)) {
+                $error = self::asignarPixel($req->body['meta_pixel_id'], $fields, $values);
+
+                if ($error !== null) {
+                    return $error;
+                }
+            }
+
             // Las redes se sincronizan aparte: no son columnas de `pages`.
             $tieneRedes = is_array($req->input('socials'));
 
@@ -453,6 +464,35 @@ class PagesHandler
     // ------------------------------------------------------------- utilidades
 
     /** Deja sólo minúsculas, dígitos y guiones. */
+    /**
+     * Valida el pixel de Meta y lo suma a la actualización.
+     *
+     * Es el identificador del pixel, no el fragmento de código: quien lo copia
+     * de Meta a veces trae el script entero, así que se aceptan sólo dígitos y
+     * se explica qué se espera.
+     */
+    private static function asignarPixel($valor, array &$fields, array &$values)
+    {
+        $pixel = trim((string) $valor);
+
+        // Vaciarlo es la forma de dejar de medir con Meta.
+        if ($pixel === '') {
+            $fields[] = 'meta_pixel_id = ?';
+            $values[] = null;
+
+            return null;
+        }
+
+        if (!preg_match('/^[0-9]{10,20}$/', $pixel)) {
+            return Response::error(400, 'El pixel de Meta es un número de 15 o 16 dígitos. Copialo del administrador de eventos de Meta.');
+        }
+
+        $fields[] = 'meta_pixel_id = ?';
+        $values[] = $pixel;
+
+        return null;
+    }
+
     /**
      * Valida el dominio propio y lo suma a la actualización.
      *

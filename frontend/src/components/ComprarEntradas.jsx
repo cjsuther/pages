@@ -3,6 +3,7 @@ import { X, Loader2, Check } from 'lucide-react';
 import { formatearPrecio, opcionesDeCantidad } from '../utils/entradas';
 import { esEmailValido, sugerenciaDeEmail } from '../utils/email';
 import { resumirLugares } from '../utils/plano';
+import { evento as eventoDePixel } from '../utils/metaPixel';
 import PlanoDeLugares from './PlanoDeLugares';
 
 /**
@@ -14,7 +15,10 @@ import PlanoDeLugares from './PlanoDeLugares';
  * Si el evento tiene plano, en lugar de la cantidad se eligen los lugares:
  * la cantidad es cuántos se tocaron.
  */
-function ComprarEntradas({ evento, entradas, apiUrl, color = '#3B82F6', onCerrar }) {
+function ComprarEntradas({ evento, entradas, apiUrl, color = '#3B82F6', onCerrar, pixelId = null }) {
+  // El pixel de la página que se está mirando. Desde el detalle de un evento
+  // no viene por prop: ahí el evento trae el de su propia página.
+  const pixel = pixelId || evento.meta_pixel_id;
   const [datos, setDatos] = useState({ nombre: '', email: '', telefono: '', cantidad: 1 });
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState(null);
@@ -108,6 +112,17 @@ function ComprarEntradas({ evento, entradas, apiUrl, color = '#3B82F6', onCerrar
         setEnviando(false);
         return;
       }
+
+      // Arrancó el checkout. Se manda antes de irse a Mercado Pago, que es
+      // la última pantalla nuestra que ve: después ya no podríamos.
+      eventoDePixel(pixel, 'InitiateCheckout', {
+        content_type: 'product',
+        content_ids: [String(evento.id)],
+        content_name: evento.text,
+        num_items: cantidad,
+        value: total,
+        currency: entradas.moneda,
+      });
 
       // Con cobro se sale a Mercado Pago; sin cobro ya está confirmada.
       if (cuerpo.url) {

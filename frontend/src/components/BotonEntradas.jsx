@@ -14,7 +14,7 @@ import { textoSobre } from '../utils/colores';
  * Devuelve null si el evento no vende entradas, para que las plantillas puedan
  * escribir `<BotonEntradas /> || <a href={url}>` sin condicionales anidados.
  */
-function BotonEntradas({ evento, color = '#3B82F6' }) {
+function BotonEntradas({ evento, color = '#3B82F6', pixelId = null }) {
   const { apiUrl } = useContext(AuthContext);
   const [comprando, setComprando] = useState(false);
 
@@ -68,6 +68,7 @@ function BotonEntradas({ evento, color = '#3B82F6' }) {
 
       {comprando && (
         <ComprarEntradas
+          pixelId={pixelId}
           evento={evento}
           entradas={entradas}
           apiUrl={apiUrl}

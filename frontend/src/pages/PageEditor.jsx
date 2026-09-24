@@ -6,6 +6,7 @@ import GooglePlacesAutocomplete from '../components/GooglePlacesAutocomplete';
 import SeccionRedes from '../components/SeccionRedes';
 import SeccionEntradas from '../components/SeccionEntradas';
 import PanelMetricas from '../components/PanelMetricas';
+import PixelDeMeta from '../components/PixelDeMeta';
 import { analizarEmbed, portadaDe } from '../utils/embeds';
 import { paleta } from '../utils/colores';
 import MiniaturaPlantilla from '../components/MiniaturaPlantilla';
@@ -323,6 +324,25 @@ function PageEditor() {
     } finally {
       setGlobalLoading(false);
     }
+  };
+
+  /**
+   * Guarda el pixel de Meta. Va aparte del formulario de Configuración porque
+   * vive en otra solapa, y porque la API lo puede rechazar por la forma.
+   */
+  const guardarPixel = async (valor) => {
+    const response = await fetch(`${apiUrl}/pages/detail.php?id=${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ meta_pixel_id: valor })
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'No pudimos guardar el pixel');
+    }
+
+    setPage((actual) => ({ ...actual, meta_pixel_id: data.page ? data.page.meta_pixel_id : valor }));
   };
 
   const uploadImage = async (file) => {
@@ -993,7 +1013,10 @@ function PageEditor() {
         )}
 
         {seccion === 'metricas' && (
-          <PanelMetricas pageId={id} slug={page.url_slug} />
+          <>
+            <PanelMetricas pageId={id} slug={page.url_slug} />
+            <PixelDeMeta pixelInicial={page.meta_pixel_id} onGuardar={guardarPixel} />
+          </>
         )}
 
         {seccion === 'admins' && isOwner && (

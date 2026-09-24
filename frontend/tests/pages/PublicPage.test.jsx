@@ -27,6 +27,30 @@ function render(slug = 'mi-pagina') {
 }
 
 describe('PublicPage', () => {
+  describe('pixel de Meta', () => {
+    it('una página con pixel manda la vista a ese pixel', async () => {
+      mockFetch({ 'public/page.php': { page: pagina({ meta_pixel_id: '1234567890123456' }) } });
+      window.fbq = vi.fn();
+
+      render();
+
+      await waitFor(() => expect(window.fbq).toHaveBeenCalledWith(
+        'trackSingle', '1234567890123456', 'PageView', undefined,
+      ));
+    });
+
+    /** Una página sin pixel no carga nada de Meta. */
+    it('una página sin pixel no mide con Meta', async () => {
+      mockFetch({ 'public/page.php': { page: pagina() } });
+      window.fbq = vi.fn();
+
+      render();
+
+      await screen.findByText('Mi Página');
+      expect(window.fbq).not.toHaveBeenCalled();
+    });
+  });
+
   beforeEach(() => {
     window.gtag = vi.fn();
   });

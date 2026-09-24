@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Check, Clock, X, Loader2, MapPin, Calendar } from 'lucide-react';
 import { formatearPrecio } from '../utils/entradas';
+import { evento } from '../utils/metaPixel';
 
 /**
  * Pantalla a la que vuelve el comprador desde Mercado Pago.
@@ -44,6 +45,28 @@ function EstadoOrden({ apiUrl }) {
 
     return () => { vigente = false; };
   }, [apiUrl, codigo, intentos]);
+
+  // La compra, en el pixel de quien vendió. Va acá y no al salir a Mercado
+  // Pago porque recién acá se sabe que el pago entró, y sólo una vez por
+  // orden: con el reintento de más abajo, esta pantalla se consulta varias
+  // veces mientras se acredita.
+  const yaRegistrada = useRef(false);
+
+  useEffect(() => {
+    if (!orden || orden.estado !== 'pagada' || yaRegistrada.current) {
+      return;
+    }
+
+    yaRegistrada.current = true;
+
+    evento(orden.meta_pixel_id, 'Purchase', {
+      content_type: 'product',
+      content_name: orden.evento,
+      num_items: orden.cantidad,
+      value: orden.total,
+      currency: orden.moneda,
+    });
+  }, [orden]);
 
   // El aviso de pago puede tardar unos segundos: se reintenta un rato antes de
   // darlo por no acreditado, en lugar de mostrarle "pendiente" a alguien que ya pagó.

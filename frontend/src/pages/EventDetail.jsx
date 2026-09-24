@@ -6,6 +6,7 @@ import BotonEntradas, { vendeEntradas } from '../components/BotonEntradas';
 import FondoDeLaCaja from '../components/FondoDeLaCaja';
 import RezonarBadge from '../components/RezonarBadge';
 import { paleta, conAlfa, textoSobre } from '../utils/colores';
+import { vista, evento } from '../utils/metaPixel';
 import { CLASES_ALREDEDOR, CLASES_CAJA, estiloDeAlrededor, estiloDeCaja } from '../utils/plantillas';
 
 /**
@@ -31,8 +32,27 @@ function EventDetail() {
     fetch(`${apiUrl}/public/event.php?id=${id}`)
       .then(res => res.json())
       .then(data => {
-        if (data.error) setError(data.error);
-        else setEvent(data.event);
+        if (data.error) {
+          setError(data.error);
+          return;
+        }
+
+        setEvent(data.event);
+
+        // Una respuesta sin evento ni error la resuelve la pantalla de abajo:
+        // acá sólo hay que no tocar lo que no vino.
+        if (!data.event) {
+          return;
+        }
+
+        // ViewContent además de la vista: es lo que después deja armar un
+        // público con quienes miraron un show y no compraron.
+        vista(data.event.meta_pixel_id);
+        evento(data.event.meta_pixel_id, 'ViewContent', {
+          content_type: 'product',
+          content_ids: [String(data.event.id)],
+          content_name: data.event.text,
+        });
       })
       .catch(() => setError('Error al cargar el evento'))
       .finally(() => setLoading(false));

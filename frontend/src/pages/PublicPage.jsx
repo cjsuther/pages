@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { AuthContext } from '../App';
 import { trackEvent } from '../utils/analytics';
+import { vista } from '../utils/metaPixel';
 import MinimalTemplate from '../components/templates/MinimalTemplate';
 import CardsTemplate from '../components/templates/CardsTemplate';
 import ModernTemplate from '../components/templates/ModernTemplate';
@@ -34,6 +35,9 @@ function PublicPage({ slugForzado = null }) {
 
       setPage(data.page);
       trackEvent.viewPublicPage(slug);
+      // El pixel es de quien tiene la página, así que se carga recién ahora:
+      // antes de saber de qué página es la pantalla no hay pixel que usar.
+      vista(data.page.meta_pixel_id);
     } catch (err) {
       setError(err.message);
     } finally {

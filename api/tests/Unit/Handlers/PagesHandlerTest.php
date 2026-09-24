@@ -688,6 +688,59 @@ class PagesHandlerTest extends HandlerTestCase
         $this->assertFalse($res->body['es_plataforma']);
     }
 
+    // --------------------------------------------------------- pixel de Meta
+
+    public function testUpdateGuardaElPixelDeMeta()
+    {
+        $this->autorizarPagina();
+        $this->db->onWrite('UPDATE pages SET', 1);
+        $this->db->onSelect('SELECT * FROM pages WHERE id = ?', [['id' => 5]]);
+
+        PagesHandler::detail($this->db, $this->put(
+            ['meta_pixel_id' => ' 1234567890123456 '],
+            $this->user(),
+            ['id' => '5']
+        ));
+
+        $llamada = $this->db->callsFor('UPDATE pages SET')[0];
+        $this->assertStringContainsString('meta_pixel_id = ?', $llamada['sql']);
+        $this->assertSame('1234567890123456', $this->db->paramsFor('UPDATE pages SET')[0]);
+    }
+
+    /**
+     * Un pixel mal copiado —el fragmento de código entero, o un número corto—
+     * no mide nada, y mirando la página no hay forma de darse cuenta.
+     */
+    public function testUpdateRechazaUnPixelQueNoEsUnPixel()
+    {
+        $this->autorizarPagina();
+
+        $res = PagesHandler::detail($this->db, $this->put(
+            ['meta_pixel_id' => "<script>fbq('init', '123');</script>"],
+            $this->user(),
+            ['id' => '5']
+        ));
+
+        $this->assertStatus(400, $res);
+        $this->assertNoWrites();
+    }
+
+    /** Vaciarlo es la forma de dejar de medir con Meta. */
+    public function testUpdateVaciaElPixel()
+    {
+        $this->autorizarPagina();
+        $this->db->onWrite('UPDATE pages SET', 1);
+        $this->db->onSelect('SELECT * FROM pages WHERE id = ?', [['id' => 5]]);
+
+        PagesHandler::detail($this->db, $this->put(
+            ['meta_pixel_id' => ''],
+            $this->user(),
+            ['id' => '5']
+        ));
+
+        $this->assertNull($this->db->paramsFor('UPDATE pages SET')[0]);
+    }
+
     // ------------------------------------------------------- dominio propio
 
     /**

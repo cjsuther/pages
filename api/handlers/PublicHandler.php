@@ -202,7 +202,10 @@ class PublicHandler
                 p.background_color,
                 p.text_color,
                 p.template,
-                p.background_image
+                p.background_image,
+                -- El pixel de la página: el detalle de un evento es una
+                -- pantalla suya, y quien anuncia el show necesita medirla.
+                p.meta_pixel_id
             FROM links l
             JOIN link_groups lg ON l.group_id = lg.id
             JOIN pages p ON lg.page_id = p.id

@@ -299,7 +299,7 @@ function MinimalTemplate({ page }) {
 
               <PrecioEvento evento={modalEvent} className="mt-4" />
 
-              <BotonEntradas evento={modalEvent} color={colores.boton} />
+              <BotonEntradas evento={modalEvent} color={colores.boton} pixelId={page.meta_pixel_id} />
 
               {modalEvent.url && !vendeEntradas(modalEvent) && (
                 <a

@@ -214,4 +214,29 @@ describe('EstadoOrden', () => {
       expect(screen.getByText('No encontramos tu orden')).toBeInTheDocument();
     });
   });
+
+  describe('pixel de Meta', () => {
+    /** La compra se registra en el pixel de quien vendió, con lo que se pagó. */
+    it('una orden pagada registra la compra', async () => {
+      window.fbq = vi.fn();
+
+      await montar({ ...ORDEN, meta_pixel_id: '1234567890123456' });
+
+      expect(window.fbq).toHaveBeenCalledWith('trackSingle', '1234567890123456', 'Purchase', {
+        content_type: 'product',
+        content_name: 'Fiesta de fin de año',
+        num_items: 2,
+        value: 3000,
+        currency: 'ARS',
+      });
+    });
+
+    it('una orden que todavía no se pagó no registra ninguna compra', async () => {
+      window.fbq = vi.fn();
+
+      await montar({ ...ORDEN, estado: 'reservada', meta_pixel_id: '1234567890123456' });
+
+      expect(window.fbq).not.toHaveBeenCalled();
+    });
+  });
 });
