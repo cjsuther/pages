@@ -16,9 +16,14 @@ import PlanoDeLugares from './PlanoDeLugares';
  * la cantidad es cuántos se tocaron.
  */
 function ComprarEntradas({ evento, entradas, apiUrl, color = '#3B82F6', onCerrar, pixelId = null }) {
-  // El pixel de la página que se está mirando. Desde el detalle de un evento
-  // no viene por prop: ahí el evento trae el de su propia página.
-  const pixel = pixelId || evento.meta_pixel_id;
+  // El pixel donde se mide esta venta: el de la página que vende.
+  //
+  // En un evento colaborado no es la página que se está mirando sino la dueña
+  // del evento, que es la que cobra. Si fueran distintos, el arranque del
+  // checkout quedaría en una cuenta y la compra —que se registra al volver de
+  // Mercado Pago, con los datos de la orden— en la otra, y ninguna de las dos
+  // podría comparar cuántos de los que empezaron terminaron comprando.
+  const pixel = evento.meta_pixel_id || evento.source_page_pixel || pixelId;
   const [datos, setDatos] = useState({ nombre: '', email: '', telefono: '', cantidad: 1 });
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState(null);

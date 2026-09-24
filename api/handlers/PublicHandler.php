@@ -104,6 +104,10 @@ class PublicHandler
             SELECT l.*, 1 as is_collaborated, ec.id as collaboration_id,
                 rp.id as source_page_id, rp.title as source_page_title,
                 rp.url_slug as source_page_slug, rp.profile_image as source_page_image,
+                -- El pixel de la página dueña del evento: las entradas las
+                -- vende ella, así que la compra se mide en su cuenta y no en
+                -- la de la página que lo está mostrando.
+                rp.meta_pixel_id as source_page_pixel,
                 (l.event_date IS NOT NULL AND l.event_date < ?) as event_due
             FROM event_collaborations ec
             JOIN links l ON ec.link_id = l.id

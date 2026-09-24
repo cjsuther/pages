@@ -491,4 +491,53 @@ describe('ComprarEntradas', () => {
       expect(screen.getByRole('checkbox', { name: 'Fila A, butaca 3, ocupado' })).toHaveAttribute('aria-checked', 'false');
     });
   });
+
+  describe('pixel de Meta', () => {
+    const PIXEL_PAGINA = '1111111111111111';
+    const PIXEL_DUENO = '2222222222222222';
+
+    const empezarLaCompra = async (props) => {
+      global.fetch.mockReturnValueOnce(respuesta({ codigo: 'X', url: 'https://mp.test/pagar' }));
+      montar(props);
+      completarFormulario();
+      fireEvent.click(screen.getByRole('button', { name: 'IR A PAGAR' }));
+      await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+    };
+
+    it('el arranque del checkout va al pixel de la página', async () => {
+      window.fbq = vi.fn();
+
+      await empezarLaCompra({ pixelId: PIXEL_PAGINA });
+
+      expect(window.fbq).toHaveBeenCalledWith('trackSingle', PIXEL_PAGINA, 'InitiateCheckout', expect.objectContaining({
+        value: 1500,
+        currency: 'ARS',
+        num_items: 1,
+      }));
+    });
+
+    /**
+     * Las entradas de un evento colaborado las vende la página dueña, y la
+     * compra se registra en su pixel: el arranque tiene que ir al mismo, o
+     * ninguna de las dos cuentas puede comparar quién empezó y quién compró.
+     */
+    it('en un evento colaborado va al pixel de la página que vende', async () => {
+      window.fbq = vi.fn();
+
+      await empezarLaCompra({
+        evento: { ...EVENTO, source_page_pixel: PIXEL_DUENO },
+        pixelId: PIXEL_PAGINA,
+      });
+
+      expect(window.fbq).toHaveBeenCalledWith('trackSingle', PIXEL_DUENO, 'InitiateCheckout', expect.anything());
+    });
+
+    it('sin pixel no se mide nada', async () => {
+      window.fbq = vi.fn();
+
+      await empezarLaCompra();
+
+      expect(window.fbq).not.toHaveBeenCalled();
+    });
+  });
 });
