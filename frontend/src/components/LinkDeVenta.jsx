@@ -17,7 +17,6 @@ function LinkDeVenta({ linkId, apiUrl, token }) {
       token={token}
       icono={Share2}
       titulo="Compartir cómo viene la venta"
-      descripcion="Un link para mandarle a quien quiera seguir la venta sin tener cuenta en Rezonar: ve cuántas entradas van, cuánto se recaudó y, si el evento tiene plano, qué lugares están vendidos."
       etiqueta="Link para compartir"
       textoCrear="Crear link para compartir"
       ayuda="Quien tenga este link ve lo recaudado del show, pero no los datos de quienes compraron."

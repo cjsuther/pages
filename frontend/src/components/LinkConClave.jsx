@@ -11,7 +11,7 @@ import { Copy, Check, ExternalLink, RefreshCw, Loader2 } from 'lucide-react';
  * vive en un solo lugar y cada uno pone sus textos.
  */
 function LinkConClave({
-  endpoint, token, icono: Icono, titulo, descripcion, etiqueta, textoCrear, ayuda,
+  endpoint, token, icono: Icono, titulo, etiqueta, textoCrear, ayuda,
   avisoCambiar, avisoDesactivar,
 }) {
   const [url, setUrl] = useState(null);
@@ -78,12 +78,9 @@ function LinkConClave({
 
   return (
     <div className="space-y-5">
-      <div className="flex items-start gap-3">
-        <Icono className="w-6 h-6 text-tinta shrink-0 mt-0.5" />
-        <div>
-          <h2 className="font-bold text-tinta">{titulo}</h2>
-          <p className="text-sm text-tinta-media">{descripcion}</p>
-        </div>
+      <div className="flex items-center gap-2">
+        <Icono className="w-5 h-5 text-tinta shrink-0" />
+        <h2 className="font-bold text-tinta">{titulo}</h2>
       </div>
 
       {!url && (

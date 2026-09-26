@@ -15,7 +15,6 @@ function LinkDePuerta({ linkId, apiUrl, token }) {
       token={token}
       icono={DoorOpen}
       titulo="Control de ingreso"
-      descripcion="Un link para quien esté en la puerta: escanea el QR de cada entrada o busca a la persona en la lista, y marca que entró. No necesita cuenta en Rezonar."
       etiqueta="Link de puerta"
       textoCrear="Crear link de puerta"
       ayuda="Quien tenga este link ve los nombres de quienes compraron. Pasalo sólo a la gente de la puerta."
