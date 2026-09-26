@@ -114,6 +114,7 @@ class AuthHandler
             'scope' => 'openid email profile',
             'access_type' => 'offline',
             'prompt' => 'consent',
+            'state' => self::estadoDeVuelta($req->param('volver')),
         ]));
     }
 
@@ -125,6 +126,7 @@ class AuthHandler
             'response_type' => 'code',
             'response_mode' => 'form_post',
             'scope' => 'name email',
+            'state' => self::estadoDeVuelta($req->param('volver')),
         ]));
     }
 
@@ -135,7 +137,7 @@ class AuthHandler
         $http = $http === null ? new HttpClient() : $http;
 
         if (!$req->param('code')) {
-            return self::errorDeLogin($req->param('error', 'No authorization code received'));
+            return self::errorDeLogin($req->param('error', 'No authorization code received'), self::vuelta($req));
         }
 
         $respuesta = $http->post(self::GOOGLE_TOKEN_URL, [
@@ -147,13 +149,13 @@ class AuthHandler
         ]);
 
         if ($respuesta['status'] !== 200) {
-            return self::errorDeLogin('token_exchange_failed');
+            return self::errorDeLogin('token_exchange_failed', self::vuelta($req));
         }
 
         $tokenData = json_decode($respuesta['body'], true);
 
         if (!isset($tokenData['access_token'])) {
-            return self::errorDeLogin('no_access_token');
+            return self::errorDeLogin('no_access_token', self::vuelta($req));
         }
 
         $perfil = $http->get(self::GOOGLE_USERINFO_URL, [
@@ -162,7 +164,7 @@ class AuthHandler
         $userInfo = json_decode($perfil['body'], true);
 
         if (!isset($userInfo['email'])) {
-            return self::errorDeLogin('no_email');
+            return self::errorDeLogin('no_email', self::vuelta($req));
         }
 
         $user = self::buscarOCrearUsuarioOAuth($db, 'google', [
@@ -172,7 +174,7 @@ class AuthHandler
             'avatar_url' => isset($userInfo['picture']) ? $userInfo['picture'] : null,
         ]);
 
-        return self::redirigirConSesion($user);
+        return self::redirigirConSesion($user, self::vuelta($req));
     }
 
     public static function appleCallback($db, Request $req, HttpClient $http = null)
@@ -181,7 +183,7 @@ class AuthHandler
 
         // Apple responde con response_mode=form_post: los datos llegan en $_POST.
         if (!$req->formInput('code')) {
-            return self::errorDeLogin($req->formInput('error', 'No authorization code received'));
+            return self::errorDeLogin($req->formInput('error', 'No authorization code received'), self::vuelta($req));
         }
 
         $clientSecret = AppleJWT::generateClientSecret(
@@ -200,23 +202,23 @@ class AuthHandler
         ]);
 
         if ($respuesta['status'] !== 200) {
-            return self::errorDeLogin('token_exchange_failed');
+            return self::errorDeLogin('token_exchange_failed', self::vuelta($req));
         }
 
         $tokenData = json_decode($respuesta['body'], true);
 
         if (!isset($tokenData['id_token'])) {
-            return self::errorDeLogin('no_id_token');
+            return self::errorDeLogin('no_id_token', self::vuelta($req));
         }
 
         $payload = self::payloadDeIdToken($tokenData['id_token']);
 
         if ($payload === null) {
-            return self::errorDeLogin('invalid_token');
+            return self::errorDeLogin('invalid_token', self::vuelta($req));
         }
 
         if (!isset($payload['email'])) {
-            return self::errorDeLogin('no_email');
+            return self::errorDeLogin('no_email', self::vuelta($req));
         }
 
         $user = self::buscarOCrearUsuarioOAuth($db, 'apple', [
@@ -226,7 +228,7 @@ class AuthHandler
             'avatar_url' => null,
         ]);
 
-        return self::redirigirConSesion($user);
+        return self::redirigirConSesion($user, self::vuelta($req));
     }
 
     /**
@@ -329,12 +331,12 @@ class AuthHandler
     }
 
     /** Vuelve al frontend con el token en la URL para que la SPA lo guarde. */
-    private static function redirigirConSesion($user)
+    private static function redirigirConSesion($user, $destino = null)
     {
         // Si el alta falló, $user viene en false. El código original accedía
         // igual a $user['id'] y redirigía con un token roto; acá se corta.
         if (!is_array($user) || !isset($user['id'])) {
-            return self::errorDeLogin('user_creation_failed');
+            return self::errorDeLogin('user_creation_failed', $destino);
         }
 
         $token = JWT::encode(['user_id' => $user['id'], 'email' => $user['email']], JWT_SECRET);
@@ -347,12 +349,91 @@ class AuthHandler
         ];
 
         return Response::redirect(
-            FRONTEND_URL . '/login?token=' . $token . '&user=' . urlencode(json_encode($userData))
+            self::destino($destino) . '/login?token=' . $token . '&user=' . urlencode(json_encode($userData))
         );
     }
 
-    private static function errorDeLogin($error)
+    private static function errorDeLogin($error, $destino = null)
     {
-        return Response::redirect(FRONTEND_URL . '/login?error=' . urlencode($error));
+        return Response::redirect(self::destino($destino) . '/login?error=' . urlencode($error));
+    }
+
+    // ------------------------------------------------ de dónde salió la sesión
+
+    /**
+     * A dónde volver después de entrar con Google o con Apple.
+     *
+     * Se volvía siempre a FRONTEND_URL, así que quien entraba desde un
+     * subdominio —Carcajada— terminaba en la home de Rezonar: la sesión quedaba
+     * del otro lado y no había forma de seguir.
+     *
+     * El origen viaja firmado en el `state` de OAuth, que es el campo que el
+     * protocolo tiene para llevar contexto de ida y vuelta. Firmado porque
+     * vuelve por el navegador de cualquiera: sin eso, este endpoint mandaría a
+     * alguien recién logueado, con su token en la dirección, a donde dijera un
+     * parámetro.
+     */
+    private static function estadoDeVuelta($origen)
+    {
+        $limpio = self::origenPermitido($origen);
+
+        if ($limpio === null) {
+            return '';
+        }
+
+        return base64_encode($limpio) . '.' . hash_hmac('sha256', $limpio, JWT_SECRET);
+    }
+
+    /** El origen que venía en el `state`, si la firma cierra. */
+    private static function vuelta(Request $req)
+    {
+        $estado = (string) $req->param('state', $req->formInput('state', ''));
+
+        if ($estado === '' || strpos($estado, '.') === false) {
+            return null;
+        }
+
+        list($codificado, $firma) = explode('.', $estado, 2);
+        $origen = base64_decode($codificado, true);
+
+        if ($origen === false || !hash_equals(hash_hmac('sha256', $origen, JWT_SECRET), $firma)) {
+            return null;
+        }
+
+        return self::origenPermitido($origen);
+    }
+
+    /**
+     * Sólo el sitio y sus subdominios.
+     *
+     * Con la lista abierta, el login sería un trampolín: alguien manda un link
+     * a "entrar con Google" que termina en su propio sitio, con el token de
+     * quien entró escrito en la dirección.
+     */
+    private static function origenPermitido($origen)
+    {
+        $origen = rtrim(trim((string) $origen), '/');
+
+        if ($origen === '') {
+            return null;
+        }
+
+        $partes = parse_url($origen);
+        $host = isset($partes['host']) ? strtolower($partes['host']) : '';
+        $nuestro = strtolower((string) parse_url(FRONTEND_URL, PHP_URL_HOST));
+        $esquema = isset($partes['scheme']) ? $partes['scheme'] : '';
+
+        if ($host === '' || $nuestro === '' || ($esquema !== '' && $esquema !== 'https')) {
+            return null;
+        }
+
+        $esNuestro = $host === $nuestro || substr($host, -strlen('.' . $nuestro)) === '.' . $nuestro;
+
+        return $esNuestro ? 'https://' . $host : null;
+    }
+
+    private static function destino($destino)
+    {
+        return $destino === null ? rtrim(FRONTEND_URL, '/') : $destino;
     }
 }

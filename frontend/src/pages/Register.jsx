@@ -36,12 +36,12 @@ function Register() {
 
   const handleGoogleLogin = () => {
     trackEvent.event('register_attempt', { method: 'google' });
-    window.location.href = `${apiUrl}/auth/google-login.php`;
+    window.location.href = `${apiUrl}/auth/google-login.php?volver=${encodeURIComponent(window.location.origin)}`;
   };
 
   const handleAppleLogin = () => {
     trackEvent.event('register_attempt', { method: 'apple' });
-    window.location.href = `${apiUrl}/auth/apple-login.php`;
+    window.location.href = `${apiUrl}/auth/apple-login.php?volver=${encodeURIComponent(window.location.origin)}`;
   };
 
   const handleSubmit = async (e) => {

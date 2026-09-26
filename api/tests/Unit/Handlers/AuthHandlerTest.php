@@ -654,4 +654,56 @@ class AuthHandlerTest extends HandlerTestCase
     {
         return new Request('POST', [], [], null, [], [], $form);
     }
+
+    // ------------------------------------------- de dónde salió la sesión
+
+    /** El origen viaja en el `state`, que es el campo que OAuth tiene para eso. */
+    public function testEntrarDesdeUnSubdominioVuelveAlSubdominio()
+    {
+        $subdominio = 'https://carcajada.' . parse_url(FRONTEND_URL, PHP_URL_HOST);
+        $ida = AuthHandler::googleLogin($this->db, new Request('GET', [], ['volver' => $subdominio]));
+
+        parse_str(parse_url($ida->redirectUrl, PHP_URL_QUERY), $parametros);
+
+        $vuelta = AuthHandler::googleCallback(
+            $this->db,
+            new Request('GET', [], ['error' => 'cancelado', 'state' => $parametros['state']])
+        );
+
+        $this->assertStringStartsWith($subdominio . '/login', $vuelta->redirectUrl);
+    }
+
+    /**
+     * Sin esto el login sería un trampolín: un link a "entrar con Google" que
+     * termina en otro sitio, con el token de quien entró en la dirección.
+     */
+    public function testNoSePuedeVolverACualquierLado()
+    {
+        $ida = AuthHandler::googleLogin($this->db, new Request('GET', [], ['volver' => 'https://sitio-ajeno.com']));
+
+        parse_str(parse_url($ida->redirectUrl, PHP_URL_QUERY), $parametros);
+
+        $this->assertSame('', $parametros['state'], 'un origen ajeno no viaja');
+    }
+
+    /** Un state con la firma cambiada no manda a nadie a ningún lado. */
+    public function testUnEstadoFirmadoDeOtraManeraSeIgnora()
+    {
+        $falso = base64_encode('https://sitio-ajeno.com') . '.firmafalsa';
+
+        $vuelta = AuthHandler::googleCallback(
+            $this->db,
+            new Request('GET', [], ['error' => 'cancelado', 'state' => $falso])
+        );
+
+        $this->assertStringStartsWith(FRONTEND_URL . '/login', $vuelta->redirectUrl);
+    }
+
+    /** Quien entra desde el sitio de siempre sigue volviendo al sitio de siempre. */
+    public function testSinOrigenVuelveAlSitio()
+    {
+        $vuelta = AuthHandler::googleCallback($this->db, new Request('GET', [], ['error' => 'cancelado']));
+
+        $this->assertStringStartsWith(FRONTEND_URL . '/login', $vuelta->redirectUrl);
+    }
 }

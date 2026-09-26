@@ -228,7 +228,11 @@ describe('Register', () => {
 
       fireEvent.click(screen.getByRole('button', { name: /Continuar con Google/ }));
 
-      expect(window.location.href).toBe(`${API_URL}/auth/google-login.php`);
+      // Con el origen: la vuelta del OAuth tiene que caer donde se empezó,
+      // y no siempre en rezon.ar.
+      expect(window.location.href).toBe(
+        `${API_URL}/auth/google-login.php?volver=${encodeURIComponent(window.location.origin)}`
+      );
       expect(window.gtag).toHaveBeenCalledWith('event', 'register_attempt', { method: 'google' });
     });
 
@@ -237,7 +241,11 @@ describe('Register', () => {
 
       fireEvent.click(screen.getByRole('button', { name: /Continuar con Apple/ }));
 
-      expect(window.location.href).toBe(`${API_URL}/auth/apple-login.php`);
+      // Con el origen: la vuelta del OAuth tiene que caer donde se empezó,
+      // y no siempre en rezon.ar.
+      expect(window.location.href).toBe(
+        `${API_URL}/auth/apple-login.php?volver=${encodeURIComponent(window.location.origin)}`
+      );
       expect(window.gtag).toHaveBeenCalledWith('event', 'register_attempt', { method: 'apple' });
     });
   });

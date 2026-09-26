@@ -57,7 +57,11 @@ describe('Login', () => {
 
       fireEvent.click(screen.getByRole('button', { name: /Continuar con Google/ }));
 
-      expect(window.location.href).toBe(`${API_URL}/auth/google-login.php`);
+      // Con el origen: la vuelta del OAuth tiene que caer donde se empezó,
+      // y no siempre en rezon.ar.
+      expect(window.location.href).toBe(
+        `${API_URL}/auth/google-login.php?volver=${encodeURIComponent(window.location.origin)}`
+      );
     });
 
     it('registra el intento en analytics', () => {

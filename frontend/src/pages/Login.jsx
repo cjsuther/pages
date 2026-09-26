@@ -57,12 +57,16 @@ function Login() {
 
   const handleGoogleLogin = () => {
     trackEvent.event('login_attempt', { method: 'google' });
-    window.location.href = `${apiUrl}/auth/google-login.php`;
+    // De dónde salió: entrar con Google se va del sitio y vuelve, y sin esto
+    // volvía siempre a rezon.ar. Quien entraba desde Carcajada terminaba en la
+    // home de Rezonar, con la sesión del otro lado.
+    const volver = encodeURIComponent(window.location.origin);
+    window.location.href = `${apiUrl}/auth/google-login.php?volver=${volver}`;
   };
 
   const handleAppleLogin = () => {
     trackEvent.event('login_attempt', { method: 'apple' });
-    window.location.href = `${apiUrl}/auth/apple-login.php`;
+    window.location.href = `${apiUrl}/auth/apple-login.php?volver=${encodeURIComponent(window.location.origin)}`;
   };
 
   return (
