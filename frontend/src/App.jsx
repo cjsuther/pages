@@ -20,6 +20,8 @@ import EstadoOrden from './pages/EstadoOrden';
 import Autorizar from './pages/Autorizar';
 import SubirImagen from './pages/SubirImagen';
 import { paginaDelDominio } from './utils/dominio';
+import { esSitioCarcajada } from './utils/carcajada';
+import RutasCarcajada from './carcajada/RutasCarcajada';
 
 // La URL de la API sale de VITE_API_URL (ver .env.production). El valor por
 // defecto es el de desarrollo, así que `npm run dev` funciona sin configurar
@@ -86,6 +88,10 @@ function App() {
       <AuthContext.Provider value={{ token, user, esPlataforma, login, logout, updateUser, apiUrl: API_URL }}>
         <BrowserRouter>
           <AppRoutes />
+          {/* Carcajada vive en su subdominio con esta misma aplicación: las
+              cuentas, la API y los componentes son los de Rezonar, y lo único
+              que cambia son las pantallas. */}
+          {esSitioCarcajada() ? <RutasCarcajada apiUrl={API_URL} /> : (
           <Routes>
             {/* En un dominio propio la raíz es la página, no el home de
                 Rezonar. El resto de las rutas —/evento, /entrada— andan igual
@@ -117,6 +123,7 @@ function App() {
             <Route path="/subir/:token" element={<SubirImagen />} />
             <Route path="/:slug" element={<PublicPage />} />
           </Routes>
+          )}
         </BrowserRouter>
       </AuthContext.Provider>
     </HelmetProvider>

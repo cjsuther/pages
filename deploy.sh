@@ -19,6 +19,9 @@ set -uo pipefail
 SSH_HOST="u414051709@195.35.33.1"
 SSH_PORT="65002"
 REMOTE_ROOT="/home/u414051709/domains/rezon.ar/public_html"
+# Carcajada corre la misma aplicación en su propio subdominio: se le copia el
+# mismo build, con su .htaccess.
+REMOTE_CARCAJADA="/home/u414051709/domains/rezon.ar/public_html/carcajada"
 REMOTE_BACKUPS="/home/u414051709/backups"
 SITE_URL="https://rezon.ar"
 
@@ -227,6 +230,19 @@ if hacer_frontend; then
     || morir "falló el rsync del frontend"
   ok "dist/ sincronizado"
 
+  # --- Carcajada, el mismo build en su subdominio.
+  rsync "${local_flags[@]}" \
+    --exclude '.DS_Store' \
+    -e "ssh -p $SSH_PORT -o BatchMode=yes" \
+    "$FRONTEND_DIR/dist/" "$SSH_HOST:$REMOTE_CARCAJADA/" \
+    || morir "falló el rsync de Carcajada"
+
+  rsync "${local_flags[@]}" \
+    -e "ssh -p $SSH_PORT -o BatchMode=yes" \
+    "$PROJECT_DIR/carcajada-publico/.htaccess" "$SSH_HOST:$REMOTE_CARCAJADA/.htaccess" \
+    || morir "falló el .htaccess de Carcajada"
+  ok "carcajada.rezon.ar sincronizado"
+
   # Los bundles llevan hash en el nombre: los de builds viejos quedan huérfanos.
   if [ "$DRY_RUN" -eq 0 ]; then
     VIGENTES=$(cd "$FRONTEND_DIR/dist/assets" && ls | tr '\n' '|' | sed 's/|$//')
@@ -263,6 +279,8 @@ comprobar "eventos recientes"     "$SITE_URL/api/public/recent-events.php"  200
 comprobar "buscador"              "$SITE_URL/api/public/search.php?q=ab"    200
 comprobar "página sin slug (400)" "$SITE_URL/api/public/page.php"           400
 comprobar "endpoint protegido"    "$SITE_URL/api/pages/index.php"           401
+comprobar "carcajada"             "https://carcajada.rezon.ar/"             200
+comprobar "carcajada, el QR"      "$SITE_URL/api/public/carcajada-hoy.php"  200
 
 if hacer_frontend; then
   BUNDLE_NOMBRE=$(basename "$(ls "$FRONTEND_DIR/dist/assets/"*.js | head -1)")

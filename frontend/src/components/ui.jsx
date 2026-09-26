@@ -164,6 +164,8 @@ export function Chip({ tono = 'neutro', className = '', children }) {
     neutro: 'bg-papel-hueso text-tinta-media border-borde',
     verde: 'bg-verde-claro text-verde-oscuro border-verde-medio',
     solido: 'bg-verde text-verde-tinta border-transparent',
+    // Algo quedó pendiente y alguien lo tiene que completar.
+    alerta: 'bg-amber-50 text-amber-900 border-amber-200',
   };
 
   return (
