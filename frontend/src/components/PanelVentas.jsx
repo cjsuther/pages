@@ -4,6 +4,7 @@ import { formatearPrecio, etiquetaDeEstado, colorDeEstado } from '../utils/entra
 import { urlDeWhatsApp } from '../utils/telefono';
 import { IconoDeMarca } from './IconosRedes';
 import { resumirLugares } from '../utils/plano';
+import LinkDeVenta from './LinkDeVenta';
 
 /**
  * Estados desde los que una compra se puede dar de baja.
@@ -15,13 +16,26 @@ const CANCELABLES = ['pagada', 'reservada'];
 
 export const sePuedeCancelar = (estado) => CANCELABLES.includes(estado);
 
+/** "ventas-fiesta-de-fin-de-ano.xlsx", o el id del evento si no hay nombre. */
+export function nombreDelArchivo(nombreEvento, linkId) {
+  const limpio = String(nombreEvento || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60);
+
+  return `ventas-${limpio || `evento-${linkId}`}.xlsx`;
+}
+
 /**
  * Listado de ventas de un evento, dentro del modal de edición.
  *
  * Muestra los datos de contacto de los compradores, así que el servidor sólo lo
  * responde a quien administra la página.
  */
-function PanelVentas({ linkId, apiUrl, token }) {
+function PanelVentas({ linkId, apiUrl, token, nombreEvento = '' }) {
   const [datos, setDatos] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
@@ -60,9 +74,10 @@ function PanelVentas({ linkId, apiUrl, token }) {
   const exportar = async () => {
     // La descarga necesita la cabecera de sesión, así que no puede ser un
     // enlace directo: se trae el archivo y se descarga desde memoria.
-    const r = await fetch(`${apiUrl}/entradas/ventas.php?link_id=${linkId}&formato=csv`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const r = await fetch(
+      `${apiUrl}/entradas/ventas.php?link_id=${linkId}&formato=excel&evento=${encodeURIComponent(nombreEvento)}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
 
     if (!r.ok) {
       setError('No pudimos generar el archivo');
@@ -74,7 +89,10 @@ function PanelVentas({ linkId, apiUrl, token }) {
     const enlace = document.createElement('a');
 
     enlace.href = url;
-    enlace.download = `ventas-evento-${linkId}.csv`;
+    // El servidor manda el nombre en la cabecera, pero una descarga desde
+    // memoria no la mira: se repite acá para que el archivo no se llame como
+    // una cadena de números.
+    enlace.download = nombreDelArchivo(nombreEvento, linkId);
     document.body.appendChild(enlace);
     enlace.click();
     document.body.removeChild(enlace);
@@ -155,6 +173,10 @@ function PanelVentas({ linkId, apiUrl, token }) {
         </p>
       )}
 
+      {/* El link para mostrarle a alguien de afuera cómo viene la venta. Va
+          acá, con las ventas, porque es lo mismo que se está mirando. */}
+      <LinkDeVenta linkId={linkId} apiUrl={apiUrl} token={token} />
+
       <ComisionDeLaPlataforma resumen={resumen} />
 
       <Acreditacion resumen={resumen} />
@@ -176,7 +198,7 @@ function PanelVentas({ linkId, apiUrl, token }) {
             className="text-sm text-tinta-media hover:text-tinta flex items-center gap-2"
           >
             <Download className="w-4 h-4" />
-            Exportar CSV
+            Exportar Excel
           </button>
         )}
       </div>

@@ -25,10 +25,16 @@ const COLORES = {
  *
  * Es sólo la vista: lo elegido lo maneja quien lo usa, que es el que sabe el
  * máximo por compra y qué hacer con la elección.
+ *
+ * Sin `onCambiar` no hay nada para elegir y el plano queda para mirar: así lo
+ * usa el link que muestra cómo viene la venta, donde tocar una butaca no
+ * tendría ningún efecto y prometerlo sería mentir.
  */
 function PlanoDeLugares({
-  plano, ocupados = [], elegidos = [], onCambiar, maximo = Infinity, color = '#6FBE44',
+  plano, ocupados = [], elegidos = [], onCambiar = null, maximo = Infinity, color = '#6FBE44',
 }) {
+  const soloMirar = typeof onCambiar !== 'function';
+
   const alternarLugar = (id) => {
     if (ocupados.includes(id)) return;
 
@@ -68,14 +74,14 @@ function PlanoDeLugares({
               ocupados={ocupados}
               elegidos={elegidos}
               color={color}
-              onLugar={alternarLugar}
-              onMesa={alternarLaMesa}
+              onLugar={soloMirar ? null : alternarLugar}
+              onMesa={soloMirar ? null : alternarLaMesa}
             />
           ))}
         </svg>
       </div>
 
-      <Referencias color={color} />
+      <Referencias color={color} soloMirar={soloMirar} />
     </div>
   );
 }
@@ -238,11 +244,12 @@ function Butaca({ lugar, ocupado, elegido, color, onLugar }) {
   );
 }
 
-function Referencias({ color }) {
+function Referencias({ color, soloMirar = false }) {
   const items = [
-    { etiqueta: 'Libre', fondo: COLORES.libre, borde: COLORES.trazo },
-    { etiqueta: 'Elegido', fondo: color, borde: COLORES.trazo },
-    { etiqueta: 'Ocupado', fondo: COLORES.ocupado, borde: COLORES.ocupado },
+    { etiqueta: soloMirar ? 'Sin vender' : 'Libre', fondo: COLORES.libre, borde: COLORES.trazo },
+    // Sin nada para elegir, esa referencia no explicaría ningún color de la pantalla.
+    ...(soloMirar ? [] : [{ etiqueta: 'Elegido', fondo: color, borde: COLORES.trazo }]),
+    { etiqueta: soloMirar ? 'Vendido' : 'Ocupado', fondo: COLORES.ocupado, borde: COLORES.ocupado },
   ];
 
   return (

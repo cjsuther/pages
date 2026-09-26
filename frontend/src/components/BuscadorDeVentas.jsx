@@ -96,7 +96,7 @@ function BuscadorDeVentas({ pageId, apiUrl, token }) {
         <h3 className="text-xl font-bold mb-1 tracking-tight">{elegido.text}</h3>
         <p className="text-sm text-tinta-suave mb-6">{fechaLegible(elegido)}</p>
 
-        <PanelVentas linkId={elegido.id} apiUrl={apiUrl} token={token} />
+        <PanelVentas linkId={elegido.id} apiUrl={apiUrl} token={token} nombreEvento={elegido.text} />
       </div>
     );
   }

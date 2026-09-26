@@ -1,7 +1,12 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
-import PanelVentas from '../../src/components/PanelVentas';
+// El link para compartir tiene su propia pantalla y sus propios tests: acá
+// sólo estorbaría, porque pide su estado al servidor y correría la cuenta de
+// llamadas de todo lo demás.
+vi.mock('../../src/components/LinkDeVenta', () => ({ default: () => null }));
+
+import PanelVentas, { nombreDelArchivo } from '../../src/components/PanelVentas';
 
 const VENTA = {
   id: 1,
@@ -215,13 +220,38 @@ describe('PanelVentas', () => {
     it('el botón aparece sólo si hay ventas', async () => {
       await montar({ ordenes: [] });
 
-      expect(screen.queryByText('Exportar CSV')).not.toBeInTheDocument();
+      expect(screen.queryByText('Exportar Excel')).not.toBeInTheDocument();
     });
 
     it('aparece cuando hay ventas', async () => {
       await montar({ ordenes: [VENTA] });
 
-      expect(screen.getByText('Exportar CSV')).toBeInTheDocument();
+      expect(screen.getByText('Exportar Excel')).toBeInTheDocument();
+    });
+
+    /**
+     * Era un CSV y Excel en español lo abría todo en una columna. El archivo
+     * lleva el nombre del evento porque se bajan varios y después se mezclan.
+     */
+    it('pide el archivo de Excel del evento', async () => {
+      await montar({ ordenes: [VENTA] });
+
+      global.fetch.mockReturnValueOnce(Promise.resolve({
+        ok: true,
+        blob: () => Promise.resolve(new Blob(['x'])),
+      }));
+      global.URL.createObjectURL = vi.fn(() => 'blob:x');
+      global.URL.revokeObjectURL = vi.fn();
+
+      fireEvent.click(screen.getByText('Exportar Excel'));
+
+      await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
+      expect(global.fetch.mock.calls[1][0]).toContain('formato=excel');
+    });
+
+    it('el archivo se llama como el evento', () => {
+      expect(nombreDelArchivo('Fiesta de fin de año', 7)).toBe('ventas-fiesta-de-fin-de-ano.xlsx');
+      expect(nombreDelArchivo('', 7)).toBe('ventas-evento-7.xlsx');
     });
   });
 

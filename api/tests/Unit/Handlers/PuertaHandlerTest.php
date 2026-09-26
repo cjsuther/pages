@@ -25,7 +25,7 @@ class PuertaHandlerTest extends HandlerTestCase
 
     private function laClaveEsDelEvento($linkId = 100)
     {
-        $this->db->onSelect('FROM event_door_access da', [[
+        $this->db->onSelect('FROM event_access_links al', [[
             'id' => $linkId, 'text' => 'Fiesta', 'event_date' => '2026-12-31',
             'event_time' => '22:00:00', 'event_address' => 'Niceto', 'pagina' => 'Club',
         ]]);
@@ -47,13 +47,13 @@ class PuertaHandlerTest extends HandlerTestCase
         $r = PuertaHandler::link($this->db, new Request('POST', [], ['link_id' => 100], $this->sesion()));
 
         $this->assertSame(403, $r->status);
-        $this->assertSame(0, $this->db->countCalls('INSERT INTO event_door_access'));
+        $this->assertSame(0, $this->db->countCalls('INSERT INTO event_access_links'));
     }
 
     public function testGenerarDevuelveElLinkConLaClave()
     {
         $this->puedeAdministrarElEvento();
-        $this->db->onWrite('INSERT INTO event_door_access', 1);
+        $this->db->onWrite('INSERT INTO event_access_links', 1);
 
         $r = PuertaHandler::link($this->db, new Request('POST', [], ['link_id' => 100], $this->sesion()));
 
@@ -76,7 +76,7 @@ class PuertaHandlerTest extends HandlerTestCase
 
         PuertaHandler::link($this->db, new Request('DELETE', [], ['link_id' => 100], $this->sesion()));
 
-        $this->assertSame([100], $this->db->paramsFor('DELETE FROM event_door_access'));
+        $this->assertSame([100, 'puerta'], $this->db->paramsFor('DELETE FROM event_access_links'));
     }
 
     // ---------------------------------------------------------------- puerta

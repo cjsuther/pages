@@ -386,9 +386,9 @@ class EntradasHandlerTest extends HandlerTestCase
 
     // ---------------------------------------------------------------- ventas
 
-    private function hayVentas()
+    private function hayVentas(array $overrides = [])
     {
-        $this->db->onSelect('FROM ticket_orders', [[
+        $this->db->onSelect('FROM ticket_orders', [array_merge([
             'id' => 1, 'codigo' => 'ABC123DEF456', 'nombre' => 'Ana Gómez',
             'email' => 'ana@example.com', 'telefono' => '1122334455',
             'cantidad' => 2, 'precio_unitario' => '1500.00', 'total' => '3000.00',
@@ -396,7 +396,7 @@ class EntradasHandlerTest extends HandlerTestCase
             'moneda' => 'ARS', 'estado' => 'pagada', 'reserva_vence_en' => null,
             'mp_payment_id' => '99', 'pagada_en' => '2026-08-16 20:00:00',
             'created_at' => '2026-08-16 19:58:00', 'vencida' => 0,
-        ]]);
+        ], $overrides)]);
         $this->db->onSelect('FROM event_ticketing WHERE link_id', [['capacidad' => 100]]);
     }
 
@@ -427,7 +427,25 @@ class EntradasHandlerTest extends HandlerTestCase
         $this->assertSame(100, $r->body['capacidad']);
     }
 
-    public function testSePuedenExportarLasVentasComoCsv()
+    public function testSePuedenExportarLasVentasComoExcel()
+    {
+        $this->puedeAdministrarElEvento();
+        $this->hayVentas();
+
+        $r = EntradasHandler::ventas($this->db, new Request('GET', [],
+            ['link_id' => 100, 'formato' => 'excel', 'evento' => 'Fiesta de fin de año'], $this->sesion()));
+
+        $cabeceras = implode(' ', $r->headers);
+
+        $this->assertStringContainsString('spreadsheetml.sheet', $cabeceras);
+        $this->assertStringContainsString('attachment', $cabeceras);
+        // El nombre lleva el evento: se baja uno por show y después se mezclan.
+        $this->assertStringContainsString('filename="ventas-fiesta-de-fin-de-ano.xlsx"', $cabeceras);
+        $this->assertStringContainsString('Ana Gómez', $this->hojaDe($r->raw));
+    }
+
+    /** Una pantalla vieja que no se recargó pide "csv" y tiene que bajar el Excel igual. */
+    public function testElFormatoViejoTambienBajaElExcel()
     {
         $this->puedeAdministrarElEvento();
         $this->hayVentas();
@@ -435,10 +453,23 @@ class EntradasHandlerTest extends HandlerTestCase
         $r = EntradasHandler::ventas($this->db,
             new Request('GET', [], ['link_id' => 100, 'formato' => 'csv'], $this->sesion()));
 
-        $this->assertStringContainsString('text/csv', implode(' ', $r->headers));
-        $this->assertStringContainsString('attachment', implode(' ', $r->headers));
-        $this->assertStringContainsString('Ana Gómez', $r->raw);
-        $this->assertStringContainsString('Codigo,Nombre,Email', $r->raw, 'la primera fila son los encabezados');
+        $this->assertStringContainsString('spreadsheetml.sheet', implode(' ', $r->headers));
+        $this->assertStringContainsString('filename="ventas.xlsx"', implode(' ', $r->headers));
+    }
+
+    /** El XML de la hoja del archivo que se descarga. */
+    private function hojaDe($contenido)
+    {
+        $ruta = tempnam(sys_get_temp_dir(), 'test');
+        file_put_contents($ruta, $contenido);
+
+        $zip = new \ZipArchive();
+        $zip->open($ruta);
+        $hoja = $zip->getFromName('xl/worksheets/sheet1.xml');
+        $zip->close();
+        unlink($ruta);
+
+        return $hoja;
     }
 
     // --------------------------------------------------- eventos con ventas
@@ -627,27 +658,25 @@ class EntradasHandlerTest extends HandlerTestCase
         $this->assertStringContainsString('et.id IS NOT NULL OR v.link_id IS NOT NULL', $sql);
     }
 
-    // ------------------------------------------------------------ csv seguro
-
-    /** Un nombre con coma partiría la fila en dos columnas. */
-    public function testUnaComaEnElNombreNoRompeLaFila()
-    {
-        $this->assertSame('"Gómez, Ana"', EntradasHandler::campoCsv('Gómez, Ana'));
-    }
-
-    public function testLasComillasSeEscapan()
-    {
-        $this->assertSame('"Ana ""La Turca"" Gómez"', EntradasHandler::campoCsv('Ana "La Turca" Gómez'));
-    }
+    // ------------------------------------------------------ exportación segura
 
     /**
-     * Excel interpreta como fórmula lo que empieza con = + - o @: un nombre
-     * cargado a propósito puede ejecutar algo al abrir el archivo.
+     * En un CSV, Excel interpretaba como fórmula lo que empezaba con = + - o
+     * @, así que un nombre cargado a propósito podía ejecutar algo al abrir el
+     * archivo. En el xlsx la celda declara que es texto y no se evalúa.
      */
-    public function testUnCampoQueParezcaFormulaSeNeutraliza()
+    public function testUnNombreQueParezcaFormulaViajaComoTexto()
     {
-        $this->assertSame('"\'=1+1"', EntradasHandler::campoCsv('=1+1'));
-        $this->assertSame('"\'@SUM(A1)"', EntradasHandler::campoCsv('@SUM(A1)'));
+        $this->puedeAdministrarElEvento();
+        $this->hayVentas(['nombre' => '=1+1']);
+
+        $r = EntradasHandler::ventas($this->db,
+            new Request('GET', [], ['link_id' => 100, 'formato' => 'excel'], $this->sesion()));
+
+        $hoja = $this->hojaDe($r->raw);
+
+        $this->assertStringContainsString('t="inlineStr"><is><t xml:space="preserve">=1+1', $hoja);
+        $this->assertStringNotContainsString('<f>', $hoja, 'nada tiene que ser una fórmula');
     }
 
     // -------------------------------------------------------------- cancelar

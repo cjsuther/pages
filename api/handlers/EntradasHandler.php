@@ -272,8 +272,10 @@ class EntradasHandler
 
         $ventas['capacidad'] = $config === null ? 0 : (int) $config['capacidad'];
 
-        if ($req->param('formato') === 'csv') {
-            return self::csv($ventas['ordenes']);
+        if (in_array($req->param('formato'), ['excel', 'csv'], true)) {
+            // csv sigue aceptándose como nombre: es lo que manda una pantalla
+            // vieja que todavía no se recargó, y baja el mismo Excel.
+            return self::excel($ventas['ordenes'], $req->param('evento', ''));
         }
 
         return Response::ok($ventas);
@@ -416,37 +418,52 @@ class EntradasHandler
 
     // --------------------------------------------------------------- internos
 
-    private static function csv(array $ordenes)
+    /**
+     * Las ventas en un archivo de Excel.
+     *
+     * Antes era un CSV, que en Excel en español entraba todo en una columna
+     * —el separador de listas es el punto y coma— y además reinterpretaba los
+     * códigos y las fechas. Acá cada celda lleva su tipo: las cantidades y los
+     * importes son números y se pueden sumar en la planilla.
+     */
+    private static function excel(array $ordenes, $evento)
     {
-        $filas = ['Codigo,Nombre,Email,Telefono,Cantidad,Ingresaron,Lugares,Total,Moneda,Estado,Fecha'];
+        $filas = [];
 
         foreach ($ordenes as $o) {
-            $filas[] = implode(',', array_map(['EntradasHandler', 'campoCsv'], [
-                $o['codigo'], $o['nombre'], $o['email'], $o['telefono'],
-                $o['cantidad'], isset($o['ingresadas']) ? $o['ingresadas'] : 0, Plano::resumir(isset($o['lugares']) ? $o['lugares'] : []),
-                $o['total'], $o['moneda'], $o['estado'], $o['created_at'],
-            ]));
+            $filas[] = [
+                $o['codigo'],
+                $o['nombre'],
+                $o['email'],
+                $o['telefono'],
+                (int) $o['cantidad'],
+                isset($o['ingresadas']) ? (int) $o['ingresadas'] : 0,
+                Plano::resumir(isset($o['lugares']) ? $o['lugares'] : []),
+                (float) $o['total'],
+                $o['moneda'],
+                $o['estado'],
+                $o['created_at'],
+            ];
         }
 
-        return Response::raw(200, implode("\n", $filas), [
-            'Content-Type: text/csv; charset=utf-8',
-            'Content-Disposition: attachment; filename="ventas.csv"',
-        ]);
+        $contenido = Excel::tabla(
+            ['Código', 'Nombre', 'Email', 'Teléfono', 'Cantidad', 'Ingresaron', 'Lugares',
+             'Total', 'Moneda', 'Estado', 'Fecha'],
+            $filas,
+            'Ventas'
+        );
+
+        return Response::raw(200, $contenido, Excel::cabeceras(self::nombreDelArchivo($evento)));
     }
 
-    /**
-     * Un nombre con coma partiría la fila en dos columnas, y uno que empieza
-     * con = lo interpreta Excel como fórmula.
-     */
-    public static function campoCsv($valor)
+    /** "ventas-fiesta-de-fin-de-ano.xlsx": se baja uno por evento y se mezclan. */
+    private static function nombreDelArchivo($evento)
     {
-        $valor = (string) $valor;
+        $limpio = strtolower(trim((string) $evento));
+        $limpio = strtr($limpio, ['á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ñ' => 'n']);
+        $limpio = trim(preg_replace('/[^a-z0-9]+/', '-', $limpio), '-');
 
-        if (preg_match('/^[=+\-@]/', $valor)) {
-            $valor = "'" . $valor;
-        }
-
-        return '"' . str_replace('"', '""', $valor) . '"';
+        return 'ventas' . ($limpio === '' ? '' : '-' . mb_substr($limpio, 0, 60)) . '.xlsx';
     }
 
     private static function pageIdDelLink($db, $linkId)

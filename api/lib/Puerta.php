@@ -30,82 +30,37 @@ class Puerta
      */
     public static function generarClave($db, $linkId)
     {
-        $clave = bin2hex(random_bytes(16));
-
-        $stmt = $db->prepare('
-            INSERT INTO event_door_access (link_id, clave_hash, clave_cifrada)
-            VALUES (?, ?, ?)
-            ON DUPLICATE KEY UPDATE
-                clave_hash = VALUES(clave_hash),
-                clave_cifrada = VALUES(clave_cifrada),
-                created_at = CURRENT_TIMESTAMP
-        ');
-        $stmt->execute([(int) $linkId, self::hash($clave), Cripto::cifrar($clave)]);
-
-        return $clave;
+        return ClaveDeEvento::generar($db, $linkId, ClaveDeEvento::PUERTA);
     }
 
     /** La clave vigente del evento, en claro, o null si no tiene link. */
     public static function claveDelEvento($db, $linkId)
     {
-        $stmt = $db->prepare('SELECT clave_cifrada FROM event_door_access WHERE link_id = ?');
-        $stmt->execute([(int) $linkId]);
-        $cifrada = $stmt->fetchColumn();
-
-        if ($cifrada === false) {
-            return null;
-        }
-
-        $clave = Cripto::descifrar($cifrada);
-
-        return $clave === null || $clave === false || $clave === '' ? null : $clave;
+        return ClaveDeEvento::clave($db, $linkId, ClaveDeEvento::PUERTA);
     }
 
     public static function revocar($db, $linkId)
     {
-        $stmt = $db->prepare('DELETE FROM event_door_access WHERE link_id = ?');
-        $stmt->execute([(int) $linkId]);
+        ClaveDeEvento::revocar($db, $linkId, ClaveDeEvento::PUERTA);
     }
 
-    /**
-     * La dirección que se le pasa a quien está en la puerta.
-     *
-     * La clave va después del #: el navegador no la manda al pedir la página,
-     * así que no queda escrita en los registros del servidor ni en los de
-     * nadie en el medio. La pantalla la lee de ahí y la manda a la API en el
-     * cuerpo del pedido, que tampoco se registra.
-     */
+    /** La dirección que se le pasa a quien está en la puerta. */
     public static function url($clave)
     {
-        return rtrim(FRONTEND_URL, '/') . '/puerta#' . $clave;
+        return ClaveDeEvento::url($clave, ClaveDeEvento::PUERTA);
     }
 
     /**
-     * El evento al que da acceso una clave, o null.
+     * El evento al que da acceso una clave de puerta, o null.
+     *
+     * Exige que sea de puerta: la clave del link de ventas no puede marcar
+     * gente entrando, aunque las dos salgan de la misma tabla.
      *
      * @return array|null ['id', 'text', 'event_date', 'event_time', 'event_address', 'pagina']
      */
     public static function eventoDeLaClave($db, $clave)
     {
-        $clave = (string) $clave;
-
-        // Una clave con otra forma no puede ser válida: no hace falta ir a la base.
-        if (!preg_match('/^[a-f0-9]{32}$/', $clave)) {
-            return null;
-        }
-
-        $stmt = $db->prepare('
-            SELECT l.id, l.text, l.event_date, l.event_time, l.event_address, p.title AS pagina
-            FROM event_door_access da
-            INNER JOIN links l ON l.id = da.link_id
-            INNER JOIN link_groups lg ON lg.id = l.group_id
-            INNER JOIN pages p ON p.id = lg.page_id
-            WHERE da.clave_hash = ?
-        ');
-        $stmt->execute([self::hash($clave)]);
-        $fila = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        return $fila === false ? null : $fila;
+        return ClaveDeEvento::evento($db, $clave, ClaveDeEvento::PUERTA);
     }
 
     // ------------------------------------------------------------ la lista
@@ -272,7 +227,7 @@ class Puerta
 
     public static function hash($clave)
     {
-        return hash('sha256', (string) $clave);
+        return ClaveDeEvento::hash($clave);
     }
 
     // ------------------------------------------------------------ internos

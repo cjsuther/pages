@@ -178,7 +178,7 @@ class PuertaTest extends HandlerTestCase
     public function testUnaClaveConOtraFormaNiSiquieraSeBusca()
     {
         $this->assertNull(Puerta::eventoDeLaClave($this->db, "' OR 1=1 --"));
-        $this->assertFalse($this->db->ran('FROM event_door_access'));
+        $this->assertFalse($this->db->ran('FROM event_access_links'));
     }
 
     /** Se busca por el hash: la clave en claro no está en la base. */
@@ -188,20 +188,24 @@ class PuertaTest extends HandlerTestCase
 
         Puerta::eventoDeLaClave($this->db, $clave);
 
-        $this->assertSame([hash('sha256', $clave)], $this->db->paramsFor('FROM event_door_access'));
+        $this->assertSame(
+            [hash('sha256', $clave), 'puerta'],
+            $this->db->paramsFor('FROM event_access_links')
+        );
     }
 
     public function testGenerarDevuelveUnaClaveQueSeGuardaHasheadaYCifrada()
     {
-        $this->db->onWrite('INSERT INTO event_door_access', 1);
+        $this->db->onWrite('INSERT INTO event_access_links', 1);
 
         $clave = Puerta::generarClave($this->db, 100);
-        $params = $this->db->paramsFor('INSERT INTO event_door_access');
+        $params = $this->db->paramsFor('INSERT INTO event_access_links');
 
         $this->assertMatchesRegularExpression('/^[a-f0-9]{32}$/', $clave);
-        $this->assertSame(hash('sha256', $clave), $params[1]);
-        $this->assertNotSame($clave, $params[2]);
-        $this->assertSame($clave, \Cripto::descifrar($params[2]));
+        $this->assertSame('puerta', $params[1]);
+        $this->assertSame(hash('sha256', $clave), $params[2]);
+        $this->assertNotSame($clave, $params[3]);
+        $this->assertSame($clave, \Cripto::descifrar($params[3]));
     }
 
     /** La clave va después del #, para que no quede en los registros del servidor. */

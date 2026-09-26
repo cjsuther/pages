@@ -345,7 +345,7 @@ function ItemEditor() {
         )}
 
         {tab === 'ventas' && group.type === 'eventos' && (
-          <PanelVentas linkId={item.id} apiUrl={apiUrl} token={token} />
+          <PanelVentas linkId={item.id} apiUrl={apiUrl} token={token} nombreEvento={item.text} />
         )}
 
         {tab === 'puerta' && group.type === 'eventos' && (
