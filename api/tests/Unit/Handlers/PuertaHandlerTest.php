@@ -110,8 +110,8 @@ class PuertaHandlerTest extends HandlerTestCase
 
         $this->assertSame(200, $r->status);
         $this->assertSame('Fiesta', $r->body['evento']['text']);
-        // La pantalla se pinta con los colores de la página.
-        $this->assertSame('#0E0F0C', $r->body['evento']['colores']['background_color']);
+        // La pantalla se ve como Rezonar: los colores de la página no viajan.
+        $this->assertArrayNotHasKey('colores', $r->body['evento']);
         $this->assertCount(1, $r->body['ordenes']);
     }
 

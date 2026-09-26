@@ -6,7 +6,7 @@ import {
 import EscanerQr from '../components/EscanerQr';
 import { resumirLugares } from '../utils/plano';
 import { codigoDesdeQr, filtrarOrdenes, horaCorta, describirResultado } from '../utils/puerta';
-import { temaDeEvento } from '../utils/tema';
+import { temaDelSitio } from '../utils/tema';
 import { ProveedorDeTema, Fondo, Tarjeta, Boton, Rotulo, useTema } from '../components/UiDeEvento';
 
 /** "sábado 31 de diciembre · 22:00", o null si el evento no tiene fecha. */
@@ -33,10 +33,7 @@ const SEGUNDOS_ENTRE_ACTUALIZACIONES = 15;
  * va después del # (el navegador no la manda al servidor al pedir la página).
  * Se le puede dar a cualquiera que esté en la puerta sin darle una cuenta.
  *
- * Se ve como el sitio, y de la página del evento toma una sola cosa: si es
- * clara u oscura. Una página oscura no puede mandar a quien está en la puerta
- * a una pantalla blanca, que a las once de la noche encandila y encima delata
- * dónde está parado.
+ * Se ve como el resto de Rezonar, igual que el reporte de venta.
  */
 function Puerta({ apiUrl }) {
   const clave = useRef(window.location.hash.replace(/^#/, '')).current;
@@ -149,7 +146,7 @@ function Puerta({ apiUrl }) {
   };
 
   const encontradas = filtrarOrdenes(ordenes, busqueda);
-  const tema = temaDeEvento(evento ? evento.colores : null);
+  const tema = temaDelSitio();
 
   return (
     <ProveedorDeTema tema={tema}>

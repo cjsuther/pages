@@ -5,7 +5,7 @@ import { Calendar, MapPin, Loader2, RefreshCw } from 'lucide-react';
 import PlanoDeLugares from '../components/PlanoDeLugares';
 import RitmoDeVenta from '../components/RitmoDeVenta';
 import { formatearPrecio } from '../utils/entradas';
-import { temaDeEvento } from '../utils/tema';
+import { temaDelSitio } from '../utils/tema';
 import { ProveedorDeTema, Fondo, Tarjeta, Boton, Rotulo, Dato } from '../components/UiDeEvento';
 
 /** Cada cuánto se vuelve a pedir el estado, para dejar la pantalla abierta. */
@@ -90,7 +90,7 @@ function VentaEnVivo({ apiUrl }) {
   }
 
   const { evento, venta, plano, ocupados = [], ritmo = [] } = datos;
-  const tema = temaDeEvento(evento.colores);
+  const tema = temaDelSitio();
 
   return (
     <ProveedorDeTema tema={tema}>
@@ -182,13 +182,7 @@ function VentaEnVivo({ apiUrl }) {
                 <Rotulo className="mb-3">Lugares</Rotulo>
                 {/* El mismo plano que ve quien compra, con lo vendido marcado.
                     Sin nada para elegir: acá sólo se mira. */}
-                <PlanoDeLugares
-                  plano={plano}
-                  ocupados={ocupados}
-                  color={tema.acento}
-                  superficie={tema.fondo}
-                  trazo={tema.texto}
-                />
+                <PlanoDeLugares plano={plano} ocupados={ocupados} color={tema.acento} />
               </Tarjeta>
             )}
           </>

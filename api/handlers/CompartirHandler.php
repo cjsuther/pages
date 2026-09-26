@@ -90,16 +90,6 @@ class CompartirHandler
                 // de quién es el show y no una pantalla de números sueltos.
                 'profile_image'    => $evento['profile_image'],
                 'background_image' => $evento['background_image'],
-                // Los colores de la página: quien abre el link reconoce de
-                // quién es el show, igual que en el detalle del evento.
-                'colores' => [
-                    'primary_color'    => $evento['primary_color'],
-                    'secondary_color'  => $evento['secondary_color'],
-                    'card_color'       => $evento['card_color'],
-                    'title_color'      => $evento['title_color'],
-                    'background_color' => $evento['background_color'],
-                    'text_color'       => $evento['text_color'],
-                ],
             ],
         ] + VentasCompartidas::estado($db, (int) $evento['id']));
     }

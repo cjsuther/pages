@@ -98,8 +98,12 @@ describe('VentaEnVivo', () => {
     expect(barra.firstChild.style.backgroundColor).toBe('rgb(111, 190, 68)');
   });
 
-  /** De la página se toma una sola cosa: si es clara u oscura. */
-  it('una página oscura da una pantalla oscura', async () => {
+  /**
+   * El fondo de una página es cómo se ve esa página para su público, no cómo
+   * se ve el panel de quien la administra: con una página oscura, esta
+   * pantalla salía negra aunque Rezonar sea claro.
+   */
+  it('una página oscura no oscurece la pantalla', async () => {
     const { container } = await montar({
       ...ESTADO,
       evento: { ...ESTADO.evento, colores: { background_color: '#0E0F0C', text_color: '#F5F5F0' } },
@@ -107,7 +111,7 @@ describe('VentaEnVivo', () => {
 
     await screen.findByText('Fiesta de fin de año');
 
-    expect(container.firstChild.style.backgroundColor).toBe('rgb(17, 19, 17)');
+    expect(container.firstChild.style.backgroundColor).toBe('rgb(247, 248, 245)');
   });
 
   it('muestra cuántas van y lo recaudado', async () => {

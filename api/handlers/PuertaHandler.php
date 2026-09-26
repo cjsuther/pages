@@ -108,17 +108,6 @@ class PuertaHandler
             'event_time'    => $evento['event_time'],
             'event_address' => $evento['event_address'],
             'pagina'        => $evento['pagina'],
-            // Los colores de la página: la pantalla se pinta con ellos, así
-            // que una página oscura no manda a nadie a una puerta blanca que
-            // encandila a las once de la noche.
-            'colores' => [
-                'primary_color'    => $evento['primary_color'],
-                'secondary_color'  => $evento['secondary_color'],
-                'card_color'       => $evento['card_color'],
-                'title_color'      => $evento['title_color'],
-                'background_color' => $evento['background_color'],
-                'text_color'       => $evento['text_color'],
-            ],
         ];
     }
 }
