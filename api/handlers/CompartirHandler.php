@@ -86,6 +86,10 @@ class CompartirHandler
                 'image_url'     => $evento['image_url'],
                 'pagina'        => $evento['pagina'],
                 'url_slug'      => $evento['url_slug'],
+                // La identidad de la página: quien abre el link tiene que ver
+                // de quién es el show y no una pantalla de números sueltos.
+                'profile_image'    => $evento['profile_image'],
+                'background_image' => $evento['background_image'],
                 // Los colores de la página: quien abre el link reconoce de
                 // quién es el show, igual que en el detalle del evento.
                 'colores' => [
@@ -98,5 +102,41 @@ class CompartirHandler
                 ],
             ],
         ] + VentasCompartidas::estado($db, (int) $evento['id']));
+    }
+
+    // ---------------------------------------------------------- vista previa
+
+    /**
+     * Lo mínimo del evento para armar la previsualización al compartir.
+     *
+     * Lo pide index.php cuando alguien manda el link por WhatsApp, así que va
+     * por GET con la clave en la dirección: en ese momento la clave ya está en
+     * el camino, que es justamente lo que permite que haya previsualización.
+     *
+     * Sale sólo lo que ya es público en la página del evento —el nombre, el
+     * afiche, la fecha, el lugar— y nada de la venta: la previsualización la
+     * ve cualquiera a quien le reenvíen el mensaje.
+     */
+    public static function vistaPrevia($db, Request $req)
+    {
+        if ($req->method !== 'GET') {
+            return Response::methodNotAllowed();
+        }
+
+        $evento = ClaveDeEvento::evento($db, $req->param('clave'), ClaveDeEvento::VENTAS);
+
+        if ($evento === null) {
+            return Response::notFound('Este link no es válido');
+        }
+
+        return Response::ok(['evento' => [
+            'text'          => $evento['text'],
+            'description'   => $evento['description'],
+            'image_url'     => $evento['image_url'],
+            'event_date'    => $evento['event_date'],
+            'event_time'    => $evento['event_time'],
+            'event_address' => $evento['event_address'],
+            'pagina'        => $evento['pagina'],
+        ]]);
     }
 }

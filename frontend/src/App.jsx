@@ -117,7 +117,11 @@ function App() {
             <Route path="/evento/:id" element={<EventDetail />} />
             <Route path="/entrada/:codigo" element={<EstadoOrden apiUrl={API_URL} />} />
             <Route path="/puerta" element={<Puerta apiUrl={API_URL} />} />
+            {/* La clave va en la dirección: es lo que le permite a WhatsApp
+                mostrar el afiche del evento al compartir el link. Sin clave
+                sigue andando para los links viejos, que la llevaban tras el #. */}
             <Route path="/venta" element={<VentaEnVivo apiUrl={API_URL} />} />
+            <Route path="/venta/:clave" element={<VentaEnVivo apiUrl={API_URL} />} />
             {/* Antes de /:slug: es una ruta del sitio, no una página pública. */}
             <Route path="/oauth/authorize" element={<Autorizar />} />
             <Route path="/subir/:token" element={<SubirImagen />} />

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { Calendar, MapPin, Loader2, RefreshCw } from 'lucide-react';
 import PlanoDeLugares from '../components/PlanoDeLugares';
@@ -17,12 +18,15 @@ const SEGUNDOS_ENTRE_ACTUALIZACIONES = 60;
  * ver cómo se está vendiendo pero no administra la página ni tiene cuenta.
  * Por eso muestra números y lugares ocupados, nunca quiénes compraron.
  *
- * La clave va después del # de la dirección, igual que en la puerta: el
- * navegador no la manda al pedir la página, así que no queda escrita en los
- * registros del servidor.
+ * La clave va en la dirección y no después del #, a diferencia de la puerta:
+ * es un link que se manda por WhatsApp, y lo que está después del # no lo ve
+ * nadie más que el navegador —tampoco WhatsApp, que entonces no puede armar
+ * la previsualización con el afiche y la fecha—. Los links viejos, con la
+ * clave después del #, siguen funcionando.
  */
 function VentaEnVivo({ apiUrl }) {
-  const clave = useRef(window.location.hash.replace(/^#/, '')).current;
+  const { clave: claveDeLaRuta } = useParams();
+  const clave = useRef(claveDeLaRuta || window.location.hash.replace(/^#/, '')).current;
   const [datos, setDatos] = useState(null);
   const [error, setError] = useState(null);
   const [cargando, setCargando] = useState(true);
@@ -100,11 +104,28 @@ function VentaEnVivo({ apiUrl }) {
 
       <div className="max-w-xl mx-auto px-4 py-10 space-y-6">
         <header>
+          {/* El afiche primero: es lo que hace reconocer el show de un vistazo,
+              y hasta ahora la pantalla era sólo números sobre un color. */}
+          {evento.image_url && (
+            <img
+              src={evento.image_url}
+              alt=""
+              className="w-full rounded-2xl border mb-5 object-cover max-h-72"
+              style={{ borderColor: tema.borde }}
+            />
+          )}
+
           <Rotulo>Cómo viene la venta</Rotulo>
           <h1 className="text-3xl sm:text-4xl font-bold tracking-tight mt-1" style={{ color: tema.titulo }}>
             {evento.text}
           </h1>
-          <p className="text-sm" style={{ color: tema.suave }}>{evento.pagina}</p>
+
+          <p className="flex items-center gap-2 text-sm mt-1" style={{ color: tema.suave }}>
+            {evento.profile_image && (
+              <img src={evento.profile_image} alt="" className="w-6 h-6 rounded-full object-cover" />
+            )}
+            {evento.pagina}
+          </p>
 
           {evento.event_date && (
             <p className="flex items-center gap-2 text-sm mt-4" style={{ color: tema.suave }}>

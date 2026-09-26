@@ -27,7 +27,9 @@ class CompartirHandlerTest extends HandlerTestCase
     {
         $this->db->onSelect('FROM event_access_links al', [[
             'id' => 100, 'text' => 'Fiesta', 'event_date' => '2026-12-31', 'event_time' => '22:00:00',
-            'event_address' => 'Niceto', 'image_url' => null, 'pagina' => 'Club', 'url_slug' => 'club',
+            'event_address' => 'Niceto', 'image_url' => 'https://rezon.ar/uploads/afiche.jpg',
+            'description' => 'Una noche de stand up', 'pagina' => 'Club', 'url_slug' => 'club',
+            'profile_image' => 'https://rezon.ar/uploads/logo.jpg', 'background_image' => null,
             'primary_color' => '#6FBE44', 'secondary_color' => null, 'card_color' => null,
             'title_color' => null, 'background_color' => '#FFFFFF', 'text_color' => '#000000',
         ]]);
@@ -72,7 +74,9 @@ class CompartirHandlerTest extends HandlerTestCase
         $r = CompartirHandler::link($this->db, new Request('POST', [], ['link_id' => 100], $this->sesion()));
 
         $this->assertSame(200, $r->status);
-        $this->assertMatchesRegularExpression('#/venta\#[a-f0-9]{32}$#', $r->body['url']);
+        // La clave va en el camino y no después del #: es lo que permite que
+        // WhatsApp arme la previsualización del evento al compartirlo.
+        $this->assertMatchesRegularExpression('#/venta/[a-f0-9]{32}$#', $r->body['url']);
         $this->assertSame('ventas', $this->db->paramsFor('INSERT INTO event_access_links')[1]);
     }
 
@@ -140,5 +144,41 @@ class CompartirHandlerTest extends HandlerTestCase
 
         $this->assertArrayNotHasKey('ordenes', $r->body);
         $this->assertStringNotContainsString('@', json_encode($r->body));
+    }
+
+    // ---------------------------------------------------------- vista previa
+
+    /** Es lo que WhatsApp lee para armar la tarjeta del link. */
+    public function testLaVistaPreviaTraeElAficheYLaFecha()
+    {
+        $this->laClaveEsDelEvento();
+
+        $r = CompartirHandler::vistaPrevia($this->db, new Request('GET', [], ['clave' => $this->clave()]));
+
+        $this->assertSame(200, $r->status);
+        $this->assertSame('Fiesta', $r->body['evento']['text']);
+        $this->assertSame('https://rezon.ar/uploads/afiche.jpg', $r->body['evento']['image_url']);
+        $this->assertSame('2026-12-31', $r->body['evento']['event_date']);
+    }
+
+    /**
+     * La previsualización la ve cualquiera a quien le reenvíen el mensaje: lo
+     * vendido y lo recaudado no pueden salir por ahí.
+     */
+    public function testLaVistaPreviaNoDiceComoVieneLaVenta()
+    {
+        $this->laClaveEsDelEvento();
+
+        $r = CompartirHandler::vistaPrevia($this->db, new Request('GET', [], ['clave' => $this->clave()]));
+
+        $this->assertArrayNotHasKey('venta', $r->body);
+        $this->assertSame(0, $this->db->countCalls('AS vendidas'));
+    }
+
+    public function testLaVistaPreviaDeUnLinkInvalidoNoDiceNada()
+    {
+        $r = CompartirHandler::vistaPrevia($this->db, new Request('GET', [], ['clave' => $this->clave()]));
+
+        $this->assertSame(404, $r->status);
     }
 }

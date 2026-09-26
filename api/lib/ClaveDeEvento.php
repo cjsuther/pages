@@ -29,6 +29,20 @@ class ClaveDeEvento
         self::VENTAS => '/venta',
     ];
 
+    /**
+     * Qué links llevan la clave en el camino en vez de después del #.
+     *
+     * Después del # es más discreto —el navegador no la manda al pedir la
+     * página— pero tiene un costo: WhatsApp tampoco la ve, así que no puede
+     * armar la previsualización y el link se comparte como un cuadro vacío.
+     *
+     * El de la venta se comparte justamente por ahí, y lo que se previsualiza
+     * —el nombre del show, el afiche, la fecha— ya es público en la página del
+     * evento. El de la puerta no se comparte para que nadie lo vea: se le pasa
+     * a quien trabaja esa noche, y ahí la discreción vale más.
+     */
+    private static $enElCamino = [self::VENTAS];
+
     public static function tipoValido($tipo)
     {
         return isset(self::$pantallas[$tipo]);
@@ -74,12 +88,13 @@ class ClaveDeEvento
         $stmt->execute([(int) $linkId, $tipo]);
     }
 
-    /** La dirección que se comparte. La clave va después del #. */
+    /** La dirección que se comparte. */
     public static function url($clave, $tipo)
     {
         $pantalla = isset(self::$pantallas[$tipo]) ? self::$pantallas[$tipo] : '/';
+        $separador = in_array($tipo, self::$enElCamino, true) ? '/' : '#';
 
-        return rtrim(FRONTEND_URL, '/') . $pantalla . '#' . $clave;
+        return rtrim(FRONTEND_URL, '/') . $pantalla . $separador . $clave;
     }
 
     /**
@@ -98,8 +113,8 @@ class ClaveDeEvento
         }
 
         $stmt = $db->prepare('
-            SELECT l.id, l.text, l.event_date, l.event_time, l.event_address, l.image_url,
-                   p.title AS pagina, p.url_slug,
+            SELECT l.id, l.text, l.description, l.event_date, l.event_time, l.event_address, l.image_url,
+                   p.title AS pagina, p.url_slug, p.profile_image, p.background_image,
                    p.primary_color, p.secondary_color, p.card_color, p.title_color,
                    p.background_color, p.text_color
             FROM event_access_links al

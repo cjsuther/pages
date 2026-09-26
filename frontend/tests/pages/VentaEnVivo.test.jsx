@@ -1,8 +1,8 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
-import { HelmetProvider } from 'react-helmet-async';
+import { screen, waitFor } from '@testing-library/react';
 import VentaEnVivo from '../../src/pages/VentaEnVivo';
+import { renderConProviders } from '../helpers/render';
 
 const CLAVE = 'd'.repeat(32);
 
@@ -13,6 +13,8 @@ const ESTADO = {
     event_time: '22:00:00',
     event_address: 'Niceto Vega 5510',
     pagina: 'Club Niceto',
+    image_url: 'https://rezon.ar/uploads/afiche.jpg',
+    profile_image: 'https://rezon.ar/uploads/logo.jpg',
     colores: { background_color: '#FFFFFF', text_color: '#111111', primary_color: '#6FBE44' },
   },
   venta: {
@@ -28,9 +30,12 @@ function respuesta(cuerpo, ok = true) {
   return Promise.resolve({ ok, json: () => Promise.resolve(cuerpo) });
 }
 
-async function montar(cuerpo = ESTADO, ok = true) {
+async function montar(cuerpo = ESTADO, ok = true, ruta = `/venta/${CLAVE}`) {
   global.fetch.mockReturnValue(respuesta(cuerpo, ok));
-  const vista = render(<HelmetProvider><VentaEnVivo apiUrl="https://api.test/api" /></HelmetProvider>);
+  const vista = renderConProviders(<VentaEnVivo apiUrl="https://api.test/api" />, {
+    route: ruta,
+    path: '/venta/:clave',
+  });
   await waitFor(() => expect(global.fetch).toHaveBeenCalled());
   return vista;
 }
@@ -46,12 +51,35 @@ describe('VentaEnVivo', () => {
     window.location.hash = '';
   });
 
-  /** La clave va en el cuerpo del pedido: en la URL quedaría en los registros. */
-  it('manda la clave en el cuerpo, no en la dirección', async () => {
+  /** La clave viaja en la dirección, que es lo que deja armar la previsualización. */
+  it('toma la clave de la dirección', async () => {
     await montar();
 
     expect(global.fetch.mock.calls[0][0]).toBe('https://api.test/api/public/venta.php');
     expect(JSON.parse(global.fetch.mock.calls[0][1].body)).toEqual({ clave: CLAVE });
+  });
+
+  /** Los links repartidos antes llevaban la clave después del #. */
+  it('los links viejos, con la clave después del #, siguen andando', async () => {
+    window.location.hash = `#${CLAVE}`;
+    global.fetch.mockReturnValue(respuesta(ESTADO));
+
+    renderConProviders(<VentaEnVivo apiUrl="https://api.test/api" />, { route: '/venta', path: '/venta' });
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+    expect(JSON.parse(global.fetch.mock.calls[0][1].body)).toEqual({ clave: CLAVE });
+  });
+
+  /** Era una pantalla de números sueltos: el afiche es lo que hace reconocer el show. */
+  it('muestra el afiche del evento y la identidad de la página', async () => {
+    await montar();
+
+    const imagenes = await screen.findAllByRole('presentation');
+
+    expect(imagenes.map((i) => i.getAttribute('src'))).toEqual([
+      'https://rezon.ar/uploads/afiche.jpg',
+      'https://rezon.ar/uploads/logo.jpg',
+    ]);
   });
 
   it('muestra cuántas van y lo recaudado', async () => {
@@ -91,7 +119,7 @@ describe('VentaEnVivo', () => {
 
   it('sin clave no pide nada y lo dice', async () => {
     window.location.hash = '';
-    render(<HelmetProvider><VentaEnVivo apiUrl="https://api.test/api" /></HelmetProvider>);
+    renderConProviders(<VentaEnVivo apiUrl="https://api.test/api" />, { route: '/venta', path: '/venta' });
 
     expect(await screen.findByText(/link está incompleto/)).toBeInTheDocument();
     expect(global.fetch).not.toHaveBeenCalled();

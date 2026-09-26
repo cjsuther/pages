@@ -42,6 +42,35 @@ function buscarEvento($apiUrl, $id) {
     return null;
 }
 
+/**
+ * El evento detrás de un link de venta compartido.
+ *
+ * Es lo que hace que mandar el link por WhatsApp muestre el afiche y la fecha
+ * en vez de un cuadro vacío. Sólo trae lo que ya es público en la página del
+ * evento: la previsualización la ve cualquiera a quien le reenvíen el
+ * mensaje, así que por ahí no sale nada de la venta.
+ */
+function buscarVentaCompartida($apiUrl, $clave) {
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $apiUrl . '/api/public/venta-preview.php?clave=' . urlencode($clave));
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($httpCode === 200 && $response) {
+        $data = json_decode($response, true);
+
+        if (isset($data['evento'])) {
+            return $data['evento'];
+        }
+    }
+
+    return null;
+}
+
 /** Trae una página de la API. $clave es 'slug' o 'dominio'. */
 function buscarPagina($apiUrl, $clave, $valor) {
     $ch = curl_init();
@@ -71,12 +100,18 @@ function buscarPagina($apiUrl, $clave, $valor) {
 // índices no empiezan en cero y la comparación de abajo nunca da.
 $segmentos = array_values($pathSegments);
 $evento = null;
+$venta = null;
 
 if (count($segmentos) === 2 && $segmentos[0] === 'evento' && ctype_digit($segmentos[1])) {
     $evento = buscarEvento($apiUrl, $segmentos[1]);
 }
 
-if ($evento) {
+// /venta/<clave>: el link que se comparte para seguir cómo viene la venta.
+if (count($segmentos) === 2 && $segmentos[0] === 'venta' && preg_match('/^[a-f0-9]{32}$/', $segmentos[1])) {
+    $venta = buscarVentaCompartida($apiUrl, $segmentos[1]);
+}
+
+if ($venta || $evento) {
     // El evento ya trae todo: no hace falta buscar la página.
 } elseif ($esDominioPropio && count($pathSegments) === 0) {
     $pageData = buscarPagina($apiUrl, 'dominio', $hostPelado);
@@ -102,7 +137,29 @@ function unaLinea($texto) {
     return trim(preg_replace('/\s+/', ' ', (string) $texto));
 }
 
-if ($evento) {
+if ($venta) {
+    // Al compartir se ve de qué show se trata y cuándo es; que adentro haya
+    // números de venta no cambia lo que se previsualiza.
+    $title = htmlspecialchars(unaLinea($venta['text']))
+        . (!empty($venta['pagina']) ? ' | ' . htmlspecialchars(unaLinea($venta['pagina'])) : ' | Rezonar');
+
+    $cuando = '';
+
+    if (!empty($venta['event_date'])) {
+        $fecha = date_create($venta['event_date']);
+        $meses = ['', 'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
+                  'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+
+        if ($fecha) {
+            $cuando = $fecha->format('j') . ' de ' . $meses[(int) $fecha->format('n')];
+            $cuando .= !empty($venta['event_time']) ? ' · ' . substr($venta['event_time'], 0, 5) : '';
+        }
+    }
+
+    $partes = array_filter([$cuando, unaLinea($venta['event_address'])]);
+    $description = htmlspecialchars($partes ? 'Cómo viene la venta · ' . implode(' · ', $partes) : 'Cómo viene la venta de entradas.');
+    $ogImage = !empty($venta['image_url']) ? htmlspecialchars($venta['image_url']) : '';
+} elseif ($evento) {
     $title = htmlspecialchars(unaLinea($evento['text']))
         . (!empty($evento['page_title']) ? ' | ' . htmlspecialchars(unaLinea($evento['page_title'])) : ' | Rezonar');
     $description = !empty($evento['description'])
