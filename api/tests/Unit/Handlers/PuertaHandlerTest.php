@@ -28,6 +28,8 @@ class PuertaHandlerTest extends HandlerTestCase
         $this->db->onSelect('FROM event_access_links al', [[
             'id' => $linkId, 'text' => 'Fiesta', 'event_date' => '2026-12-31',
             'event_time' => '22:00:00', 'event_address' => 'Niceto', 'pagina' => 'Club',
+            'primary_color' => '#6FBE44', 'secondary_color' => null, 'card_color' => null,
+            'title_color' => null, 'background_color' => '#0E0F0C', 'text_color' => '#F5F5F0',
         ]]);
     }
 
@@ -108,6 +110,8 @@ class PuertaHandlerTest extends HandlerTestCase
 
         $this->assertSame(200, $r->status);
         $this->assertSame('Fiesta', $r->body['evento']['text']);
+        // La pantalla se pinta con los colores de la página.
+        $this->assertSame('#0E0F0C', $r->body['evento']['colores']['background_color']);
         $this->assertCount(1, $r->body['ordenes']);
     }
 

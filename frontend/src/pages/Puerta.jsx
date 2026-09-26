@@ -6,6 +6,8 @@ import {
 import EscanerQr from '../components/EscanerQr';
 import { resumirLugares } from '../utils/plano';
 import { codigoDesdeQr, filtrarOrdenes, horaCorta, describirResultado } from '../utils/puerta';
+import { temaDeEvento } from '../utils/tema';
+import { ProveedorDeTema, Fondo, Tarjeta, Boton, Rotulo, useTema } from '../components/UiDeEvento';
 
 /** "sábado 31 de diciembre · 22:00", o null si el evento no tiene fecha. */
 function fechaDelEvento(evento) {
@@ -30,6 +32,10 @@ const SEGUNDOS_ENTRE_ACTUALIZACIONES = 15;
  * No lleva sesión: se entra con un link que genera quien organiza, y la clave
  * va después del # (el navegador no la manda al servidor al pedir la página).
  * Se le puede dar a cualquiera que esté en la puerta sin darle una cuenta.
+ *
+ * Se pinta con los colores de la página del evento: una página oscura no
+ * puede mandar a quien está en la puerta a una pantalla blanca, que a las
+ * once de la noche encandila y encima delata dónde está parado.
  */
 function Puerta({ apiUrl }) {
   const clave = useRef(window.location.hash.replace(/^#/, '')).current;
@@ -142,9 +148,11 @@ function Puerta({ apiUrl }) {
   };
 
   const encontradas = filtrarOrdenes(ordenes, busqueda);
+  const tema = temaDeEvento(evento ? evento.colores : null);
 
   return (
-    <div className="min-h-screen bg-papel-hueso">
+    <ProveedorDeTema tema={tema}>
+      <Fondo>
       <Helmet>
         <title>Puerta{evento ? ` · ${evento.text}` : ''}</title>
         {/* La lista tiene nombres de personas: no tiene que aparecer en ningún buscador. */}
@@ -152,101 +160,113 @@ function Puerta({ apiUrl }) {
         <meta name="referrer" content="no-referrer" />
       </Helmet>
 
-      <div className="max-w-lg mx-auto px-4 py-6 space-y-5">
+      <div className="max-w-lg mx-auto px-4 py-8 space-y-5">
         {cargando && (
-          <p className="flex items-center gap-2 text-tinta-suave">
+          <p className="flex items-center gap-2" style={{ color: tema.tenue }}>
             <Loader2 className="w-4 h-4 animate-spin" /> Cargando...
           </p>
         )}
 
         {error && !evento && (
-          <p role="alert" className="text-sm text-red-700 bg-red-50 border border-red-200 px-4 py-3">{error}</p>
+          <p role="alert" className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+            {error}
+          </p>
         )}
 
         {evento && (
           <>
             <header>
-              <p className="text-xs font-bold tracking-widest text-tinta-suave">PUERTA · {evento.pagina}</p>
-              <h1 className="text-2xl font-bold text-tinta">{evento.text}</h1>
+              <Rotulo>Puerta · {evento.pagina}</Rotulo>
+              <h1 className="text-3xl font-bold tracking-tight mt-1" style={{ color: tema.titulo }}>
+                {evento.text}
+              </h1>
               {fechaDelEvento(evento) && (
-                <p className="text-sm text-tinta-media">{fechaDelEvento(evento)}</p>
+                <p className="text-sm" style={{ color: tema.suave }}>{fechaDelEvento(evento)}</p>
               )}
             </header>
 
             {resumen && (
-              <div className="bg-white border border-borde p-4">
-                <p className="text-sm text-tinta-suave">Entraron</p>
-                <p className="text-3xl font-bold text-tinta">
+              <Tarjeta className="p-5">
+                <Rotulo>Entraron</Rotulo>
+                <p className="text-4xl font-bold tracking-tight mt-1" style={{ color: tema.titulo }}>
                   {resumen.ingresadas}
-                  <span className="text-lg text-tinta-suave font-semibold"> de {resumen.entradas}</span>
+                  <span className="text-lg font-semibold" style={{ color: tema.tenue }}>
+                    {' '}de {resumen.entradas}
+                  </span>
                 </p>
-                <div className="h-2 bg-borde mt-2">
+                <div className="h-2 mt-3 rounded-full overflow-hidden" style={{ backgroundColor: tema.borde }}>
                   <div
-                    className="h-2 bg-verde"
-                    style={{ width: `${resumen.entradas ? (100 * resumen.ingresadas) / resumen.entradas : 0}%` }}
+                    className="h-2"
+                    style={{
+                      width: `${resumen.entradas ? (100 * resumen.ingresadas) / resumen.entradas : 0}%`,
+                      backgroundColor: tema.acento,
+                    }}
                   />
                 </div>
-              </div>
+              </Tarjeta>
             )}
 
             {error && (
-              <p className="text-xs text-amber-700">No se pudo actualizar la lista: {error}</p>
+              <p className="text-xs" style={{ color: tema.suave }}>No se pudo actualizar la lista: {error}</p>
             )}
 
-            <button
-              type="button"
+            <Boton
+              tamano="bloque"
+              variante={escaneando ? 'secundario' : 'primario'}
               onClick={() => setEscaneando((e) => !e)}
-              className={`w-full py-4 font-bold flex items-center justify-center gap-2 ${
-                escaneando ? 'bg-white border border-borde-fuerte text-tinta' : 'bg-tinta text-white'
-              }`}
             >
               {escaneando ? <CameraOff className="w-5 h-5" /> : <Camera className="w-5 h-5" />}
               {escaneando ? 'Cerrar cámara' : 'Escanear QR'}
-            </button>
+            </Boton>
 
             {escaneando && <EscanerQr onLeer={alLeerQr} pausado={Boolean(resultado) || procesando} />}
 
             <div>
               <label htmlFor="puerta-buscar" className="sr-only">Buscar por nombre, código o lugar</label>
               <div className="relative">
-                <Search className="w-4 h-4 text-tinta-suave absolute left-3 top-1/2 -translate-y-1/2" />
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2" style={{ color: tema.tenue }} />
                 <input
                   id="puerta-buscar"
                   type="search"
                   value={busqueda}
                   onChange={(e) => setBusqueda(e.target.value)}
                   placeholder="Buscar por nombre, código o lugar"
-                  className="w-full pl-9 pr-3 py-3 bg-white border border-borde-fuerte text-tinta focus:border-verde-oscuro focus:outline-none"
+                  className="w-full pl-9 pr-3 py-3 rounded-xl border focus:outline-none"
+                  style={{ backgroundColor: tema.tarjeta, borderColor: tema.borde, color: tema.texto }}
                 />
               </div>
             </div>
 
-            <ul className="bg-white border border-borde divide-y divide-borde">
+            <Tarjeta className="overflow-hidden">
+            <ul className="divide-y" style={{ borderColor: tema.borde }}>
               {encontradas.length === 0 && (
-                <li className="p-4 text-sm text-tinta-suave">
+                <li className="p-4 text-sm" style={{ color: tema.tenue }}>
                   {ordenes.length === 0 ? 'Todavía no hay entradas vendidas.' : 'Nadie coincide con esa búsqueda.'}
                 </li>
               )}
               {encontradas.map((o) => {
                 const completa = o.ingresadas >= o.cantidad;
                 return (
-                  <li key={o.codigo}>
+                  <li key={o.codigo} style={{ borderColor: tema.borde }}>
                     <button
                       type="button"
                       onClick={() => mirar(o.codigo)}
-                      className="w-full text-left p-4 flex items-center justify-between gap-3 hover:bg-papel-hueso"
+                      className="w-full text-left p-4 flex items-center justify-between gap-3 transition-opacity hover:opacity-80"
                     >
                       <span className="min-w-0">
-                        <span className="block font-semibold text-tinta truncate">{o.nombre}</span>
-                        <span className="block text-xs text-tinta-suave font-mono">{o.codigo}</span>
+                        <span className="block font-semibold truncate">{o.nombre}</span>
+                        <span className="block text-xs font-mono" style={{ color: tema.tenue }}>{o.codigo}</span>
                         {o.lugares.length > 0 && (
-                          <span className="block text-xs text-tinta-media">{resumirLugares(o.lugares)}</span>
+                          <span className="block text-xs" style={{ color: tema.suave }}>
+                            {resumirLugares(o.lugares)}
+                          </span>
                         )}
                       </span>
                       <span
-                        className={`shrink-0 text-sm font-bold px-2 py-1 ${
-                          completa ? 'bg-verde-claro text-verde-oscuro' : 'text-tinta'
-                        }`}
+                        className="shrink-0 text-sm font-bold px-2.5 py-1 rounded-full"
+                        style={completa
+                          ? { backgroundColor: tema.acento, color: tema.textoBoton }
+                          : { color: tema.suave }}
                       >
                         {o.ingresadas}/{o.cantidad}
                       </span>
@@ -255,6 +275,7 @@ function Puerta({ apiUrl }) {
                 );
               })}
             </ul>
+            </Tarjeta>
           </>
         )}
       </div>
@@ -269,10 +290,16 @@ function Puerta({ apiUrl }) {
           onCerrar={() => setResultado(null)}
         />
       )}
-    </div>
+      </Fondo>
+    </ProveedorDeTema>
   );
 }
 
+/**
+ * El sí y el no no se pintan con los colores de la página: son los tres de
+ * siempre —verde, ámbar y rojo— porque en la puerta se leen de lejos y sin
+ * pensar. Una página de fondo rojo no puede volver roja una entrada válida.
+ */
 const TONOS = {
   bien: { fondo: 'bg-verde', texto: 'text-verde-tinta', Icono: Check },
   aviso: { fondo: 'bg-amber-400', texto: 'text-tinta', Icono: AlertTriangle },
@@ -284,6 +311,7 @@ const TONOS = {
  * en una puerta con gente esperando no hay tiempo de leer.
  */
 function TarjetaDeEntrada({ respuesta, procesando, onIngresar, onDeshacer, onCerrar }) {
+  const tema = useTema();
   const orden = respuesta.orden;
   const [cantidad, setCantidad] = useState(orden ? Math.max(1, orden.restantes) : 1);
 
@@ -297,12 +325,13 @@ function TarjetaDeEntrada({ respuesta, procesando, onIngresar, onDeshacer, onCer
   const tono = TONOS[descripcion.tono];
 
   return (
-    <div className="fixed inset-0 z-50 bg-tinta/50 flex items-end sm:items-center justify-center" onClick={onCerrar}>
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onCerrar}>
       <div
         role="dialog"
         aria-modal="true"
         aria-label={descripcion.titulo}
-        className="bg-white w-full max-w-lg"
+        className="w-full max-w-lg overflow-hidden rounded-t-2xl sm:rounded-2xl"
+        style={{ backgroundColor: tema.tarjeta, color: tema.texto }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className={`${tono.fondo} ${tono.texto} px-5 py-6 flex items-center gap-3`}>
@@ -316,15 +345,15 @@ function TarjetaDeEntrada({ respuesta, procesando, onIngresar, onDeshacer, onCer
         <div className="p-5 space-y-4">
           {orden && (
             <div>
-              <p className="text-xl font-bold text-tinta">{orden.nombre}</p>
-              <p className="text-sm text-tinta-suave font-mono">{orden.codigo}</p>
-              <p className="text-sm text-tinta-media mt-1">
+              <p className="text-xl font-bold">{orden.nombre}</p>
+              <p className="text-sm font-mono" style={{ color: tema.tenue }}>{orden.codigo}</p>
+              <p className="text-sm mt-1" style={{ color: tema.suave }}>
                 {orden.cantidad} {orden.cantidad === 1 ? 'entrada' : 'entradas'}
                 {orden.ingresadas > 0 && ` · entraron ${orden.ingresadas}`}
                 {orden.ingreso_en && ` (${horaCorta(orden.ingreso_en)})`}
               </p>
               {orden.lugares.length > 0 && (
-                <p className="text-base font-bold text-tinta mt-1">{resumirLugares(orden.lugares)}</p>
+                <p className="text-base font-bold mt-1">{resumirLugares(orden.lugares)}</p>
               )}
             </div>
           )}
@@ -333,14 +362,15 @@ function TarjetaDeEntrada({ respuesta, procesando, onIngresar, onDeshacer, onCer
             <div className="space-y-3">
               {orden.restantes > 1 && (
                 <div>
-                  <label htmlFor="puerta-cantidad" className="block text-sm font-semibold text-tinta mb-1">
+                  <label htmlFor="puerta-cantidad" className="block text-sm font-semibold mb-1">
                     ¿Cuántos entran ahora?
                   </label>
                   <select
                     id="puerta-cantidad"
                     value={cantidad}
                     onChange={(e) => setCantidad(Number(e.target.value))}
-                    className="w-full px-3 py-3 bg-white border border-borde-fuerte text-tinta"
+                    className="w-full px-3 py-3 rounded-xl border"
+                    style={{ backgroundColor: tema.fondo, borderColor: tema.borde, color: tema.texto }}
                   >
                     {Array.from({ length: orden.restantes }, (_, i) => i + 1).map((n) => (
                       <option key={n} value={n}>{n} de {orden.restantes}</option>
@@ -348,11 +378,13 @@ function TarjetaDeEntrada({ respuesta, procesando, onIngresar, onDeshacer, onCer
                   </select>
                 </div>
               )}
+              {/* Verde de la marca y no el de la página: marcar un ingreso es
+                  la acción de esta pantalla y tiene que decir "sí" sola. */}
               <button
                 type="button"
                 disabled={procesando}
                 onClick={() => onIngresar(orden.codigo, cantidad)}
-                className="w-full py-4 bg-verde text-verde-tinta font-bold text-lg flex items-center justify-center gap-2 disabled:opacity-60"
+                className="w-full py-4 rounded-full bg-verde text-verde-tinta font-bold text-lg flex items-center justify-center gap-2 disabled:opacity-60"
               >
                 {procesando && <Loader2 className="w-5 h-5 animate-spin" />}
                 {cantidad === 1 ? 'Marcar que entró' : `Marcar que entraron ${cantidad}`}
@@ -362,23 +394,18 @@ function TarjetaDeEntrada({ respuesta, procesando, onIngresar, onDeshacer, onCer
 
           <div className="flex items-center justify-between gap-3">
             {orden && (recien > 0 || orden.ingresadas > 0) ? (
-              <button
-                type="button"
+              <Boton
+                variante="fantasma"
                 disabled={procesando}
                 onClick={() => onDeshacer(orden.codigo, recien > 0 ? recien : 1)}
-                className="inline-flex items-center gap-1.5 text-sm font-semibold text-tinta-media hover:text-tinta disabled:opacity-50"
               >
                 <Undo2 className="w-4 h-4" />
                 {recien > 1 ? `Deshacer (${recien})` : 'Deshacer uno'}
-              </button>
+              </Boton>
             ) : <span />}
-            <button
-              type="button"
-              onClick={onCerrar}
-              className="px-5 py-3 border border-borde-fuerte text-tinta font-semibold"
-            >
+            <Boton variante="secundario" tamano="lg" onClick={onCerrar}>
               Seguir
-            </button>
+            </Boton>
           </div>
         </div>
       </div>

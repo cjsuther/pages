@@ -32,6 +32,10 @@ const COLORES = {
  */
 function PlanoDeLugares({
   plano, ocupados = [], elegidos = [], onCambiar = null, maximo = Infinity, color = '#6FBE44',
+  // El plano se dibuja sobre blanco salvo que lo metan en una pantalla que
+  // sigue los colores de la página: ahí toma los suyos, para que no quede un
+  // recuadro blanco en el medio de una pantalla oscura.
+  superficie = null, trazo = null,
 }) {
   const soloMirar = typeof onCambiar !== 'function';
 
@@ -49,11 +53,22 @@ function PlanoDeLugares({
     onCambiar(alternarMesa(elemento, elegidos, ocupados, maximo));
   };
 
+  const paleta = superficie === null
+    ? COLORES
+    : { ...COLORES, libre: superficie, mesa: superficie, trazo: trazo || COLORES.trazo,
+        texto: trazo || COLORES.texto, textoSuave: trazo || COLORES.textoSuave };
+
   return (
     <div>
       {/* El scroll horizontal es del plano y no de la página: en un teléfono
           un plano ancho se recorre con el dedo sin que se corra todo lo demás. */}
-      <div className="overflow-x-auto border border-borde bg-white">
+      <div
+        className="overflow-x-auto border rounded-xl"
+        style={{
+          backgroundColor: paleta.libre,
+          borderColor: superficie === null ? undefined : trazo,
+        }}
+      >
         <svg
           viewBox={`0 0 ${plano.ancho} ${plano.alto}`}
           width="100%"
@@ -74,6 +89,7 @@ function PlanoDeLugares({
               ocupados={ocupados}
               elegidos={elegidos}
               color={color}
+              paleta={paleta}
               onLugar={soloMirar ? null : alternarLugar}
               onMesa={soloMirar ? null : alternarLaMesa}
             />
@@ -81,7 +97,7 @@ function PlanoDeLugares({
         </svg>
       </div>
 
-      <Referencias color={color} soloMirar={soloMirar} />
+      <Referencias color={color} soloMirar={soloMirar} paleta={paleta} />
     </div>
   );
 }
@@ -92,12 +108,13 @@ function PlanoDeLugares({
  */
 export function DibujoDelElemento({
   elemento, ocupados = [], elegidos = [], color = '#6FBE44', onLugar = null, onMesa = null,
+  paleta = COLORES,
 }) {
   if (elemento.tipo === 'escenario') {
     const h = huella(elemento);
     return (
       <g>
-        <rect x={h.x} y={h.y} width={h.ancho} height={h.alto} rx={0.2} fill={COLORES.escenario} />
+        <rect x={h.x} y={h.y} width={h.ancho} height={h.alto} rx={0.2} fill={paleta.escenario} />
         <text
           x={h.x + h.ancho / 2}
           y={h.y + h.alto / 2}
@@ -105,7 +122,7 @@ export function DibujoDelElemento({
           dominantBaseline="central"
           fontSize={0.55}
           fontWeight={700}
-          fill={COLORES.textoSuave}
+          fill={paleta.textoSuave}
           style={{ textTransform: 'uppercase', letterSpacing: '0.08em' }}
         >
           {elemento.texto}
@@ -126,12 +143,12 @@ export function DibujoDelElemento({
           dominantBaseline="central"
           fontSize={0.45}
           fontWeight={700}
-          fill={COLORES.texto}
+          fill={paleta.texto}
         >
           {elemento.nombre}
         </text>
       ) : (
-        <Mesa elemento={elemento} onMesa={onMesa} />
+        <Mesa elemento={elemento} onMesa={onMesa} paleta={paleta} />
       )}
 
       {lugares.map((lugar) => (
@@ -142,13 +159,14 @@ export function DibujoDelElemento({
           elegido={elegidos.includes(lugar.id)}
           color={color}
           onLugar={onLugar}
+          paleta={paleta}
         />
       ))}
     </g>
   );
 }
 
-function Mesa({ elemento, onMesa }) {
+function Mesa({ elemento, onMesa, paleta }) {
   const lado = ladoDeMesa(elemento.lugares);
   const cx = elemento.x + lado / 2;
   const cy = elemento.y + lado / 2;
@@ -156,8 +174,8 @@ function Mesa({ elemento, onMesa }) {
   const interactiva = Boolean(onMesa);
 
   const props = {
-    fill: COLORES.mesa,
-    stroke: COLORES.trazo,
+    fill: paleta.mesa,
+    stroke: paleta.trazo,
     strokeWidth: 0.05,
     style: interactiva ? { cursor: 'pointer' } : undefined,
     onClick: interactiva ? () => onMesa(elemento) : undefined,
@@ -177,7 +195,7 @@ function Mesa({ elemento, onMesa }) {
         dominantBaseline="central"
         fontSize={0.42}
         fontWeight={700}
-        fill={COLORES.texto}
+        fill={paleta.texto}
         pointerEvents="none"
       >
         {elemento.nombre}
@@ -186,11 +204,11 @@ function Mesa({ elemento, onMesa }) {
   );
 }
 
-function Butaca({ lugar, ocupado, elegido, color, onLugar }) {
+function Butaca({ lugar, ocupado, elegido, color, onLugar, paleta }) {
   const interactiva = Boolean(onLugar) && !ocupado;
 
-  let relleno = COLORES.libre;
-  if (ocupado) relleno = COLORES.ocupado;
+  let relleno = paleta.libre;
+  if (ocupado) relleno = paleta.ocupado;
   if (elegido) relleno = color;
 
   const alternar = () => {
@@ -225,7 +243,7 @@ function Butaca({ lugar, ocupado, elegido, color, onLugar }) {
         cy={lugar.cy}
         r={RADIO_BUTACA}
         fill={relleno}
-        stroke={ocupado ? 'none' : COLORES.trazo}
+        stroke={ocupado ? 'none' : paleta.trazo}
         strokeWidth={elegido ? 0.08 : 0.05}
       />
       <text
@@ -234,7 +252,7 @@ function Butaca({ lugar, ocupado, elegido, color, onLugar }) {
         textAnchor="middle"
         dominantBaseline="central"
         fontSize={0.3}
-        fill={ocupado ? COLORES.libre : (elegido ? COLORES.texto : COLORES.textoSuave)}
+        fill={ocupado ? paleta.libre : (elegido ? paleta.texto : paleta.textoSuave)}
         fontWeight={elegido ? 700 : 400}
         pointerEvents="none"
       >
@@ -244,12 +262,12 @@ function Butaca({ lugar, ocupado, elegido, color, onLugar }) {
   );
 }
 
-function Referencias({ color, soloMirar = false }) {
+function Referencias({ color, soloMirar = false, paleta = COLORES }) {
   const items = [
-    { etiqueta: soloMirar ? 'Sin vender' : 'Libre', fondo: COLORES.libre, borde: COLORES.trazo },
+    { etiqueta: soloMirar ? 'Sin vender' : 'Libre', fondo: paleta.libre, borde: paleta.trazo },
     // Sin nada para elegir, esa referencia no explicaría ningún color de la pantalla.
-    ...(soloMirar ? [] : [{ etiqueta: 'Elegido', fondo: color, borde: COLORES.trazo }]),
-    { etiqueta: soloMirar ? 'Vendido' : 'Ocupado', fondo: COLORES.ocupado, borde: COLORES.ocupado },
+    ...(soloMirar ? [] : [{ etiqueta: 'Elegido', fondo: color, borde: paleta.trazo }]),
+    { etiqueta: soloMirar ? 'Vendido' : 'Ocupado', fondo: paleta.ocupado, borde: paleta.ocupado },
   ];
 
   return (

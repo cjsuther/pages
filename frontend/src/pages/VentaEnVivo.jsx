@@ -4,7 +4,8 @@ import { Calendar, MapPin, Loader2, RefreshCw } from 'lucide-react';
 import PlanoDeLugares from '../components/PlanoDeLugares';
 import RitmoDeVenta from '../components/RitmoDeVenta';
 import { formatearPrecio } from '../utils/entradas';
-import { paleta } from '../utils/colores';
+import { temaDeEvento } from '../utils/tema';
+import { ProveedorDeTema, Fondo, Tarjeta, Boton, Rotulo, Dato } from '../components/UiDeEvento';
 
 /** Cada cuánto se vuelve a pedir el estado, para dejar la pantalla abierta. */
 const SEGUNDOS_ENTRE_ACTUALIZACIONES = 60;
@@ -85,10 +86,11 @@ function VentaEnVivo({ apiUrl }) {
   }
 
   const { evento, venta, plano, ocupados = [], ritmo = [] } = datos;
-  const colores = paleta(evento.colores || {});
+  const tema = temaDeEvento(evento.colores);
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: colores.fondo, color: colores.texto }}>
+    <ProveedorDeTema tema={tema}>
+      <Fondo>
       <Helmet>
         <title>Venta · {evento.text}</title>
         {/* El link se reenvía por mensaje: no tiene que aparecer en ningún buscador. */}
@@ -96,14 +98,16 @@ function VentaEnVivo({ apiUrl }) {
         <meta name="referrer" content="no-referrer" />
       </Helmet>
 
-      <div className="max-w-xl mx-auto px-4 py-8 space-y-6">
+      <div className="max-w-xl mx-auto px-4 py-10 space-y-6">
         <header>
-          <p className="text-xs font-bold tracking-widest opacity-60">CÓMO VIENE LA VENTA</p>
-          <h1 className="text-3xl font-bold" style={{ color: colores.titulo }}>{evento.text}</h1>
-          <p className="text-sm opacity-70">{evento.pagina}</p>
+          <Rotulo>Cómo viene la venta</Rotulo>
+          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight mt-1" style={{ color: tema.titulo }}>
+            {evento.text}
+          </h1>
+          <p className="text-sm" style={{ color: tema.suave }}>{evento.pagina}</p>
 
           {evento.event_date && (
-            <p className="flex items-center gap-2 text-sm mt-3 opacity-80">
+            <p className="flex items-center gap-2 text-sm mt-4" style={{ color: tema.suave }}>
               <Calendar className="w-4 h-4 shrink-0" />
               {new Date(`${String(evento.event_date).slice(0, 10)}T00:00:00`).toLocaleDateString('es-AR', {
                 weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
@@ -113,7 +117,7 @@ function VentaEnVivo({ apiUrl }) {
           )}
 
           {evento.event_address && (
-            <p className="flex items-center gap-2 text-sm opacity-80">
+            <p className="flex items-center gap-2 text-sm" style={{ color: tema.suave }}>
               <MapPin className="w-4 h-4 shrink-0" />
               {evento.event_address}
             </p>
@@ -121,25 +125,27 @@ function VentaEnVivo({ apiUrl }) {
         </header>
 
         {!venta ? (
-          <p className="text-sm opacity-70 border p-6" style={{ borderColor: colores.bordeTarjeta }}>
-            Este evento todavía no vende entradas por Rezonar.
-          </p>
+          <Tarjeta className="p-6">
+            <p className="text-sm" style={{ color: tema.suave }}>
+              Este evento todavía no vende entradas por Rezonar.
+            </p>
+          </Tarjeta>
         ) : (
           <>
-            <section className="p-5 border" style={{ backgroundColor: colores.tarjeta, borderColor: colores.bordeTarjeta }}>
-              <p className="text-sm opacity-70">Vendidas</p>
-              <p className="text-4xl font-bold" style={{ color: colores.titulo }}>
+            <Tarjeta className="p-6">
+              <Rotulo>Vendidas</Rotulo>
+              <p className="text-5xl font-bold tracking-tight mt-1" style={{ color: tema.titulo }}>
                 {venta.vendidas}
-                <span className="text-xl font-semibold opacity-60"> de {venta.capacidad}</span>
+                <span className="text-xl font-semibold" style={{ color: tema.tenue }}> de {venta.capacidad}</span>
               </p>
 
               <Barra
                 porcentaje={venta.capacidad ? (100 * venta.vendidas) / venta.capacidad : 0}
-                color={colores.acento}
-                fondo={colores.bordeTarjeta}
+                color={tema.acento}
+                fondo={tema.borde}
               />
 
-              <dl className="grid grid-cols-2 gap-4 mt-5 text-sm">
+              <dl className="grid grid-cols-2 gap-4 mt-6">
                 <Dato etiqueta="Disponibles" valor={venta.disponibles} />
                 {venta.reservadas > 0 && <Dato etiqueta="Reservando ahora" valor={venta.reservadas} />}
                 <Dato etiqueta="Compras" valor={venta.compras} />
@@ -148,48 +154,46 @@ function VentaEnVivo({ apiUrl }) {
               </dl>
 
               {!venta.activo && (
-                <p className="text-xs mt-4 opacity-70">La venta está pausada.</p>
+                <p className="text-xs mt-4" style={{ color: tema.suave }}>La venta está pausada.</p>
               )}
-            </section>
+            </Tarjeta>
 
             {ritmo.length > 0 && (
-              <section className="p-5 border" style={{ backgroundColor: colores.tarjeta, borderColor: colores.bordeTarjeta }}>
+              <Tarjeta className="p-6">
                 {/* La pregunta de quien abre esto no es cuántas van, sino si se
                     está moviendo o se frenó. */}
-                <h2 className="text-sm font-bold mb-3 opacity-70">ÚLTIMOS 30 DÍAS</h2>
-                <RitmoDeVenta dias={ritmo} color={colores.acento} colorTexto={colores.texto} />
-              </section>
+                <Rotulo className="mb-3">Últimos 30 días</Rotulo>
+                <RitmoDeVenta dias={ritmo} color={tema.acento} colorTexto={tema.texto} />
+              </Tarjeta>
             )}
 
             {plano && (
-              <section className="p-5 border" style={{ backgroundColor: colores.tarjeta, borderColor: colores.bordeTarjeta }}>
-                <h2 className="text-sm font-bold mb-3 opacity-70">LUGARES</h2>
+              <Tarjeta className="p-6">
+                <Rotulo className="mb-3">Lugares</Rotulo>
                 {/* El mismo plano que ve quien compra, con lo vendido marcado.
                     Sin nada para elegir: acá sólo se mira. */}
-                <PlanoDeLugares plano={plano} ocupados={ocupados} color={colores.acento} />
-              </section>
+                <PlanoDeLugares
+                  plano={plano}
+                  ocupados={ocupados}
+                  color={tema.acento}
+                  superficie={tema.fondo}
+                  trazo={tema.texto}
+                />
+              </Tarjeta>
             )}
           </>
         )}
 
-        <footer className="flex items-center justify-between text-xs opacity-60">
-          <button type="button" onClick={traer} className="inline-flex items-center gap-1.5">
-            {actualizando ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+        <footer className="flex items-center justify-between">
+          <Boton variante="fantasma" tamano="sm" onClick={traer}>
+            {actualizando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
             Actualizar
-          </button>
-          {error && <span className="text-red-700">No se pudo actualizar</span>}
+          </Boton>
+          {error && <span className="text-xs text-red-500">No se pudo actualizar</span>}
         </footer>
       </div>
-    </div>
-  );
-}
-
-function Dato({ etiqueta, valor }) {
-  return (
-    <div>
-      <dt className="opacity-60">{etiqueta}</dt>
-      <dd className="text-lg font-bold" style={{ color: 'inherit' }}>{valor}</dd>
-    </div>
+      </Fondo>
+    </ProveedorDeTema>
   );
 }
 

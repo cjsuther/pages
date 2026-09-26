@@ -222,13 +222,15 @@ describe('EstadoOrden', () => {
 
       await montar({ ...ORDEN, meta_pixel_id: '1234567890123456' });
 
-      expect(window.fbq).toHaveBeenCalledWith('trackSingle', '1234567890123456', 'Purchase', {
+      // El Purchase sale de un efecto, así que se espera en vez de mirar justo
+      // después de renderizar: con la máquina cargada, llegaba tarde.
+      await waitFor(() => expect(window.fbq).toHaveBeenCalledWith('trackSingle', '1234567890123456', 'Purchase', {
         content_type: 'product',
         content_name: 'Fiesta de fin de año',
         num_items: 2,
         value: 3000,
         currency: 'ARS',
-      });
+      }));
     });
 
     it('una orden que todavía no se pagó no registra ninguna compra', async () => {
