@@ -24,9 +24,13 @@ const ERRORES = {
 };
 
 /** Las dos mitades de la sección, en el orden en que se muestran. */
+// Primero lo que se mira seguido. La configuración de cobro se toca una vez
+// —cuando se conecta Mercado Pago— y después de eso no se vuelve; las ventas
+// se miran todas las semanas, y estaban a un clic de distancia todos los días
+// por una pantalla que ya se resolvió.
 const SUBSECCIONES = [
-  { clave: 'cobros', etiqueta: 'Configuración' },
   { clave: 'ventas', etiqueta: 'Ventas' },
+  { clave: 'cobros', etiqueta: 'Configuración' },
 ];
 
 function SeccionEntradas({ pageId, apiUrl, token, emailContacto = '', onGuardarContacto }) {
@@ -39,12 +43,13 @@ function SeccionEntradas({ pageId, apiUrl, token, emailContacto = '', onGuardarC
   // La sub-solapa va en la URL como la sección: volver de editar un evento
   // tiene que dejarte donde estabas, no en CONFIGURACIÓN.
   const subEnUrl = parametros.get('e');
-  const subseccion = SUBSECCIONES.some((x) => x.clave === subEnUrl) ? subEnUrl : 'cobros';
+  const subseccion = SUBSECCIONES.some((x) => x.clave === subEnUrl) ? subEnUrl : 'ventas';
 
   const setSubseccion = (clave) => {
     const proximos = new URLSearchParams(parametros);
 
-    if (clave === 'cobros') {
+    // La solapa que abre por defecto no necesita quedar escrita en la URL.
+    if (clave === 'ventas') {
       proximos.delete('e');
     } else {
       proximos.set('e', clave);
@@ -99,6 +104,10 @@ function SeccionEntradas({ pageId, apiUrl, token, emailContacto = '', onGuardarC
     const limpios = new URLSearchParams(parametros);
     limpios.delete('conectado');
     limpios.delete('error');
+    // Mercado Pago devuelve a esta sección, y el resultado de la conexión se
+    // cuenta en CONFIGURACIÓN: sin esto el cartel quedaría en una solapa que
+    // no es la que se abre, y la vuelta se vería como que no pasó nada.
+    limpios.set('e', 'cobros');
     setParametros(limpios, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

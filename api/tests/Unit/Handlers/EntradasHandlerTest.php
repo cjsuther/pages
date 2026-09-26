@@ -214,6 +214,9 @@ class EntradasHandlerTest extends HandlerTestCase
 
         $this->assertTrue($r->isRedirect());
         $this->assertStringContainsString('conectado=1', $r->redirectUrl);
+        // El editor lee la solapa de `s`: con otro nombre la vuelta cae en la
+        // configuración general y el resultado de la conexión no se ve.
+        $this->assertStringContainsString('?s=entradas', $r->redirectUrl);
         $this->assertTrue($this->db->ran('INSERT INTO page_payment_settings'));
     }
 

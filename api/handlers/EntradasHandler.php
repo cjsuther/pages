@@ -147,7 +147,11 @@ class EntradasHandler
 
     private static function volverAlEditor($pageId, $error)
     {
-        $destino = rtrim(FRONTEND_URL, '/') . '/page/' . (int) $pageId . '?seccion=entradas';
+        // El editor lee la solapa de `s`. Con `seccion` —como estaba— la vuelta
+        // desde Mercado Pago caía en la configuración general de la página, y
+        // el resultado de la conexión se veía recién si alguien entraba a
+        // ENTRADAS por su cuenta.
+        $destino = rtrim(FRONTEND_URL, '/') . '/page/' . (int) $pageId . '?s=entradas';
 
         return Response::redirect($destino . ($error === null ? '&conectado=1' : '&error=' . $error));
     }
