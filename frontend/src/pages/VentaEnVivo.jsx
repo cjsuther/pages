@@ -104,17 +104,6 @@ function VentaEnVivo({ apiUrl }) {
 
       <div className="max-w-xl mx-auto px-4 py-10 space-y-6">
         <header>
-          {/* El afiche primero: es lo que hace reconocer el show de un vistazo,
-              y hasta ahora la pantalla era sólo números sobre un color. */}
-          {evento.image_url && (
-            <img
-              src={evento.image_url}
-              alt=""
-              className="w-full rounded-2xl border mb-5 object-cover max-h-72"
-              style={{ borderColor: tema.borde }}
-            />
-          )}
-
           <Rotulo>Cómo viene la venta</Rotulo>
           <h1 className="text-3xl sm:text-4xl font-bold tracking-tight mt-1" style={{ color: tema.titulo }}>
             {evento.text}

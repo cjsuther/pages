@@ -70,16 +70,44 @@ describe('VentaEnVivo', () => {
     expect(JSON.parse(global.fetch.mock.calls[0][1].body)).toEqual({ clave: CLAVE });
   });
 
-  /** Era una pantalla de números sueltos: el afiche es lo que hace reconocer el show. */
-  it('muestra el afiche del evento y la identidad de la página', async () => {
+  /**
+   * El afiche ocupaba media pantalla antes de los números, que son lo que se
+   * viene a mirar. Queda el logo, que alcanza para saber de quién es el show.
+   */
+  it('no muestra el afiche, sí el logo de la página', async () => {
     await montar();
 
-    const imagenes = await screen.findAllByRole('presentation');
+    await screen.findByText('Fiesta de fin de año');
+    const imagenes = screen.queryAllByRole('presentation');
 
-    expect(imagenes.map((i) => i.getAttribute('src'))).toEqual([
-      'https://rezon.ar/uploads/afiche.jpg',
-      'https://rezon.ar/uploads/logo.jpg',
-    ]);
+    expect(imagenes.map((i) => i.getAttribute('src'))).toEqual(['https://rezon.ar/uploads/logo.jpg']);
+  });
+
+  /**
+   * Es una pantalla de Rezonar: el acento es el verde de la marca y no el color
+   * que haya elegido cada página, que hacía una pantalla distinta por evento.
+   */
+  it('se ve como el sitio, no como la página', async () => {
+    await montar({
+      ...ESTADO,
+      evento: { ...ESTADO.evento, colores: { background_color: '#FFFFFF', text_color: '#111311', primary_color: '#E8B454' } },
+    });
+
+    const barra = await screen.findByLabelText('70% vendido');
+
+    expect(barra.firstChild.style.backgroundColor).toBe('rgb(111, 190, 68)');
+  });
+
+  /** De la página se toma una sola cosa: si es clara u oscura. */
+  it('una página oscura da una pantalla oscura', async () => {
+    const { container } = await montar({
+      ...ESTADO,
+      evento: { ...ESTADO.evento, colores: { background_color: '#0E0F0C', text_color: '#F5F5F0' } },
+    });
+
+    await screen.findByText('Fiesta de fin de año');
+
+    expect(container.firstChild.style.backgroundColor).toBe('rgb(17, 19, 17)');
   });
 
   it('muestra cuántas van y lo recaudado', async () => {

@@ -33,9 +33,10 @@ const SEGUNDOS_ENTRE_ACTUALIZACIONES = 15;
  * va después del # (el navegador no la manda al servidor al pedir la página).
  * Se le puede dar a cualquiera que esté en la puerta sin darle una cuenta.
  *
- * Se pinta con los colores de la página del evento: una página oscura no
- * puede mandar a quien está en la puerta a una pantalla blanca, que a las
- * once de la noche encandila y encima delata dónde está parado.
+ * Se ve como el sitio, y de la página del evento toma una sola cosa: si es
+ * clara u oscura. Una página oscura no puede mandar a quien está en la puerta
+ * a una pantalla blanca, que a las once de la noche encandila y encima delata
+ * dónde está parado.
  */
 function Puerta({ apiUrl }) {
   const clave = useRef(window.location.hash.replace(/^#/, '')).current;
