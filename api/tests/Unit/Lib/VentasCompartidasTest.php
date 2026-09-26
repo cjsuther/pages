@@ -89,20 +89,34 @@ class VentasCompartidasTest extends HandlerTestCase
     }
 
     /** No alcanza con cuántas van: quien mira quiere saber si se movió esta semana. */
-    public function testElRitmoVienePorDia()
+    public function testElRitmoTraeLosTreintaDiasAunqueNoSeHayaVendido()
     {
         $this->hayEvento();
         $this->hayTotales();
-        $this->db->onSelect('DATE(pagada_en)', [
-            ['dia' => '2026-09-20', 'vendidas' => '12'],
-            ['dia' => '2026-09-21', 'vendidas' => '8'],
-        ]);
+        $ayer = date('Y-m-d', strtotime(\Fechas::hoy() . ' -1 day'));
+        $this->db->onSelect('DATE(pagada_en)', [['dia' => $ayer, 'vendidas' => '12']]);
 
         $ritmo = VentasCompartidas::estado($this->db, 100)['ritmo'];
 
-        $this->assertSame([
-            ['dia' => '2026-09-20', 'vendidas' => 12],
-            ['dia' => '2026-09-21', 'vendidas' => 8],
-        ], $ritmo);
+        $this->assertCount(30, $ritmo);
+        $this->assertSame(\Fechas::hoy(), $ritmo[29]['dia'], 'el último día es hoy');
+        $this->assertSame(['dia' => $ayer, 'vendidas' => 12], $ritmo[28]);
+        $this->assertSame(0, $ritmo[0]['vendidas'], 'un día sin ventas vale cero, no se saltea');
+    }
+
+    /**
+     * Tres días sueltos se dibujaban pegados, como si hubieran sido seguidos.
+     * Los días vacíos son parte de la respuesta: muestran que se frenó.
+     */
+    public function testLosDiasVaciosTambienVienen()
+    {
+        $this->hayEvento();
+        $this->hayTotales();
+        $this->db->onSelect('DATE(pagada_en)', []);
+
+        $ritmo = VentasCompartidas::estado($this->db, 100)['ritmo'];
+
+        $this->assertCount(30, $ritmo);
+        $this->assertSame(0, array_sum(array_column($ritmo, 'vendidas')));
     }
 }

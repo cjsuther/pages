@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { Calendar, MapPin, Loader2, RefreshCw } from 'lucide-react';
 import PlanoDeLugares from '../components/PlanoDeLugares';
+import RitmoDeVenta from '../components/RitmoDeVenta';
 import { formatearPrecio } from '../utils/entradas';
 import { paleta } from '../utils/colores';
 
@@ -156,7 +157,7 @@ function VentaEnVivo({ apiUrl }) {
                 {/* La pregunta de quien abre esto no es cuántas van, sino si se
                     está moviendo o se frenó. */}
                 <h2 className="text-sm font-bold mb-3 opacity-70">ÚLTIMOS 30 DÍAS</h2>
-                <Ritmo dias={ritmo} color={colores.acento} />
+                <RitmoDeVenta dias={ritmo} color={colores.acento} colorTexto={colores.texto} />
               </section>
             )}
 
@@ -204,26 +205,6 @@ function Barra({ porcentaje, color, fondo }) {
     >
       <div className="h-3" style={{ width: `${ancho}%`, backgroundColor: color }} />
     </div>
-  );
-}
-
-/** Un día por barra, alto según lo vendido. */
-function Ritmo({ dias, color }) {
-  const tope = Math.max(...dias.map((d) => d.vendidas), 1);
-
-  return (
-    <ul className="flex items-end gap-1 h-24">
-      {dias.map((d) => (
-        <li
-          key={d.dia}
-          className="flex-1 min-w-[4px]"
-          style={{ height: `${Math.max(4, (100 * d.vendidas) / tope)}%`, backgroundColor: color }}
-          title={`${d.dia}: ${d.vendidas}`}
-        >
-          <span className="sr-only">{d.dia}: {d.vendidas} entradas</span>
-        </li>
-      ))}
-    </ul>
   );
 }
 

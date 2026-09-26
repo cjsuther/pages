@@ -1,10 +1,11 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
-// El link para compartir tiene su propia pantalla y sus propios tests: acá
-// sólo estorbaría, porque pide su estado al servidor y correría la cuenta de
-// llamadas de todo lo demás.
+// Los dos links para compartir tienen sus propios tests: acá sólo estorbarían,
+// porque cada uno pide su estado al servidor y correrían la cuenta de llamadas
+// de todo lo demás.
 vi.mock('../../src/components/LinkDeVenta', () => ({ default: () => null }));
+vi.mock('../../src/components/LinkDePuerta', () => ({ default: () => null }));
 
 import PanelVentas, { nombreDelArchivo } from '../../src/components/PanelVentas';
 

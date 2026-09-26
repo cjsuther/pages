@@ -5,6 +5,7 @@ import { urlDeWhatsApp } from '../utils/telefono';
 import { IconoDeMarca } from './IconosRedes';
 import { resumirLugares } from '../utils/plano';
 import LinkDeVenta from './LinkDeVenta';
+import LinkDePuerta from './LinkDePuerta';
 
 /**
  * Estados desde los que una compra se puede dar de baja.
@@ -173,9 +174,14 @@ function PanelVentas({ linkId, apiUrl, token, nombreEvento = '' }) {
         </p>
       )}
 
-      {/* El link para mostrarle a alguien de afuera cómo viene la venta. Va
-          acá, con las ventas, porque es lo mismo que se está mirando. */}
-      <LinkDeVenta linkId={linkId} apiUrl={apiUrl} token={token} />
+      {/* Los dos links que se le pasan a alguien sin cuenta: el que muestra
+          cómo viene la venta y el de la puerta. Van juntos y acá, con las
+          ventas, porque se reparten en el mismo momento —cuando se arma el
+          show— y porque es lo que se está mirando. */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <LinkDeVenta linkId={linkId} apiUrl={apiUrl} token={token} />
+        <LinkDePuerta linkId={linkId} apiUrl={apiUrl} token={token} />
+      </div>
 
       <ComisionDeLaPlataforma resumen={resumen} />
 

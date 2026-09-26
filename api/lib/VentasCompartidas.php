@@ -87,10 +87,15 @@ class VentasCompartidas
     }
 
     /**
-     * Cuántas entradas se vendieron cada día.
+     * Cuántas entradas se vendieron cada día del último mes.
      *
      * Es lo que responde la pregunta que se hace quien mira el link: no
      * cuántas van, sino si se está moviendo o se frenó.
+     *
+     * Vienen los treinta días, también los que no vendieron nada. Antes salían
+     * sólo los días con ventas, y tres días sueltos se dibujaban pegados como
+     * si fueran seguidos: un show que vendió el 1, el 12 y el 27 se veía igual
+     * que uno que vendió tres días corridos.
      *
      * @return array<array{dia: string, vendidas: int}>
      */
@@ -100,16 +105,26 @@ class VentasCompartidas
             SELECT DATE(pagada_en) AS dia, SUM(cantidad) AS vendidas
             FROM ticket_orders
             WHERE link_id = ? AND estado = 'pagada' AND pagada_en IS NOT NULL
-              AND pagada_en >= (NOW() - INTERVAL " . self::DIAS_DE_RITMO . " DAY)
+              AND pagada_en >= (CURDATE() - INTERVAL " . (self::DIAS_DE_RITMO - 1) . " DAY)
             GROUP BY DATE(pagada_en)
-            ORDER BY dia
         ");
         $stmt->execute([(int) $linkId]);
 
-        $dias = [];
+        $porDia = [];
 
         foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $fila) {
-            $dias[] = ['dia' => $fila['dia'], 'vendidas' => (int) $fila['vendidas']];
+            $porDia[$fila['dia']] = (int) $fila['vendidas'];
+        }
+
+        $dias = [];
+
+        // El día de hoy es el del huso del evento, no el del servidor: si no,
+        // entre las 21 y la medianoche la última columna sería la de mañana.
+        $hoy = Fechas::hoy();
+
+        for ($i = self::DIAS_DE_RITMO - 1; $i >= 0; $i--) {
+            $dia = date('Y-m-d', strtotime("$hoy -$i day"));
+            $dias[] = ['dia' => $dia, 'vendidas' => isset($porDia[$dia]) ? $porDia[$dia] : 0];
         }
 
         return $dias;

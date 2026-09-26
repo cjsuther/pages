@@ -74,7 +74,8 @@ describe('VentaEnVivo', () => {
   it('muestra el ritmo de los últimos días', async () => {
     await montar();
 
-    expect(await screen.findByText('2026-09-20: 12 entradas')).toBeInTheDocument();
+    expect(await screen.findByText('20 entradas en 30 días')).toBeInTheDocument();
+    expect(screen.getByLabelText('20 sept: 12 entradas')).toBeInTheDocument();
   });
 
   it('con plano muestra los lugares vendidos, sin poder elegirlos', async () => {
