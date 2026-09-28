@@ -18,6 +18,11 @@ set -uo pipefail
 
 SSH_HOST="u414051709@195.35.33.1"
 SSH_PORT="65002"
+# La misma cuenta de Hostinger aloja masrosas; se usa su clave de deploy.
+SSH_KEY="$HOME/.ssh/masrosas_deploy"
+# Opciones comunes a ssh, rsync y scp. IdentitiesOnly evita que ssh pruebe
+# otras claves del agente y el servidor corte por demasiados intentos.
+SSH_OPTS="-i $SSH_KEY -o IdentitiesOnly=yes -o BatchMode=yes"
 REMOTE_ROOT="/home/u414051709/domains/rezon.ar/public_html"
 # Carcajada corre la misma aplicación en su propio subdominio: se le copia el
 # mismo build, con su .htaccess.
@@ -65,14 +70,14 @@ ok()     { printf "  ${VERDE}✓${NC} %s\n" "$1"; }
 aviso()  { printf "  ${AMARILLO}!${NC} %s\n" "$1"; }
 morir()  { printf "\n${ROJO}✗ %s${NC}\n" "$1"; exit 1; }
 
-ssh_remoto() { ssh -p "$SSH_PORT" -o BatchMode=yes -o ConnectTimeout=15 "$SSH_HOST" "$@"; }
+ssh_remoto() { ssh $SSH_OPTS -p "$SSH_PORT" -o ConnectTimeout=15 "$SSH_HOST" "$@"; }
 
 # rsync con las exclusiones comunes. En dry-run agrega -n.
 sincronizar() {
   local origen="$1" destino="$2"; shift 2
   local flags=(-az --delete --omit-dir-times --no-perms)
   [ "$DRY_RUN" -eq 1 ] && flags+=(-n -v)
-  rsync "${flags[@]}" "$@" -e "ssh -p $SSH_PORT -o BatchMode=yes" "$origen" "$SSH_HOST:$destino"
+  rsync "${flags[@]}" "$@" -e "ssh $SSH_OPTS -p $SSH_PORT" "$origen" "$SSH_HOST:$destino"
 }
 
 # ------------------------------------------------------------------ preliminares
@@ -84,6 +89,7 @@ titulo "Preliminares"
 command -v rsync >/dev/null || morir "falta rsync"
 command -v npm   >/dev/null || morir "falta npm"
 command -v php   >/dev/null || morir "falta php"
+[ -f "$SSH_KEY" ] || morir "falta la clave SSH $SSH_KEY"
 
 ssh_remoto 'echo ok' >/dev/null 2>&1 || morir "no se puede conectar por SSH a $SSH_HOST:$SSH_PORT"
 ok "conexión SSH"
@@ -177,7 +183,7 @@ if hacer_api; then
   # El .htaccess de uploads sí se despliega (uploads/ está excluido, pero este
   # archivo es configuración nuestra, no contenido del usuario).
   if [ -f "$API_DIR/uploads/.htaccess" ] && [ "$DRY_RUN" -eq 0 ]; then
-    scp -q -P "$SSH_PORT" -o BatchMode=yes "$API_DIR/uploads/.htaccess" \
+    scp -q $SSH_OPTS -P "$SSH_PORT" "$API_DIR/uploads/.htaccess" \
       "$SSH_HOST:$REMOTE_ROOT/api/uploads/.htaccess" && ok "endurecido api/uploads/.htaccess"
   fi
 
@@ -225,7 +231,7 @@ if hacer_frontend; then
 
   rsync "${local_flags[@]}" \
     --exclude '.DS_Store' \
-    -e "ssh -p $SSH_PORT -o BatchMode=yes" \
+    -e "ssh $SSH_OPTS -p $SSH_PORT" \
     "$FRONTEND_DIR/dist/" "$SSH_HOST:$REMOTE_ROOT/" \
     || morir "falló el rsync del frontend"
   ok "dist/ sincronizado"
@@ -233,12 +239,12 @@ if hacer_frontend; then
   # --- Carcajada, el mismo build en su subdominio.
   rsync "${local_flags[@]}" \
     --exclude '.DS_Store' \
-    -e "ssh -p $SSH_PORT -o BatchMode=yes" \
+    -e "ssh $SSH_OPTS -p $SSH_PORT" \
     "$FRONTEND_DIR/dist/" "$SSH_HOST:$REMOTE_CARCAJADA/" \
     || morir "falló el rsync de Carcajada"
 
   rsync "${local_flags[@]}" \
-    -e "ssh -p $SSH_PORT -o BatchMode=yes" \
+    -e "ssh $SSH_OPTS -p $SSH_PORT" \
     "$PROJECT_DIR/carcajada-publico/.htaccess" "$SSH_HOST:$REMOTE_CARCAJADA/.htaccess" \
     || morir "falló el .htaccess de Carcajada"
   ok "carcajada.rezon.ar sincronizado"
@@ -305,5 +311,5 @@ fi
 
 printf "  ${ROJO}$FALLOS comprobación(es) fallaron${NC}\n"
 echo "  Para revertir:"
-echo "    ssh -p $SSH_PORT $SSH_HOST 'cd $REMOTE_ROOT && tar xzf $REMOTE_BACKUPS/rezonar-predeploy-$STAMP.tar.gz'"
+echo "    ssh -i $SSH_KEY -p $SSH_PORT $SSH_HOST 'cd $REMOTE_ROOT && tar xzf $REMOTE_BACKUPS/rezonar-predeploy-$STAMP.tar.gz'"
 exit 1
