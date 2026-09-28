@@ -341,6 +341,34 @@ class CollaborationsHandlerTest extends HandlerTestCase
         $this->assertSame(['accepted', 50, 3], $this->db->paramsFor('UPDATE event_collaborations SET status'));
     }
 
+    /** Desde que acepta, la página colaboradora ve a los clientes del evento. */
+    public function testAceptarRegistraElEventoParaCompartirSusClientes()
+    {
+        $this->colaboracionPendienteDe(11);
+        $this->db->onSelect('SELECT lg.id FROM link_groups lg', [['id' => 50]]);
+
+        CollaborationsHandler::detail($this->db, $this->put(
+            ['status' => 'accepted', 'group_id' => 50],
+            $this->user(11),
+            ['id' => '3']
+        ));
+
+        $this->assertSame([100], $this->db->paramsFor('INSERT INTO event_records'));
+    }
+
+    public function testRechazarNoRegistraNada()
+    {
+        $this->colaboracionPendienteDe(11);
+
+        CollaborationsHandler::detail($this->db, $this->put(
+            ['status' => 'rejected'],
+            $this->user(11),
+            ['id' => '3']
+        ));
+
+        $this->assertFalse($this->db->ran('INSERT INTO event_records'));
+    }
+
     public function testRechazarDejaElGrupoEnNull()
     {
         $this->colaboracionPendienteDe(11);
@@ -404,6 +432,18 @@ class CollaborationsHandlerTest extends HandlerTestCase
         $this->assertStatus(200, $res);
         $this->assertSame('Colaboración eliminada', $res->body['message']);
         $this->assertSame([3], $this->db->paramsFor('DELETE FROM event_collaborations'));
+    }
+
+    /** Deshecha la colaboración, la página deja de ver a los clientes. */
+    public function testEliminarActualizaQuienesVenLosClientes()
+    {
+        $this->colaboracionEntre(9, 11);
+        $this->db->onSelect('SELECT id FROM event_records WHERE link_id', [[7]]);
+        $this->db->onSelect('SELECT id FROM event_records WHERE link_id', [[7]]);
+
+        CollaborationsHandler::detail($this->db, $this->delete(['id' => '3'], $this->user(9)));
+
+        $this->assertSame([7, 100], $this->db->paramsFor('DELETE FROM event_record_pages'));
     }
 
     public function testElColaboradorPuedeEliminar()
@@ -596,6 +636,7 @@ class CollaborationsHandlerTest extends HandlerTestCase
     {
         $this->db->onSelect('SELECT ec.*, rp.user_id as requester_owner_id', [[
             'id' => 3,
+            'link_id' => 100,
             'requester_owner_id' => $requesterOwnerId,
             'collaborator_owner_id' => $collaboratorOwnerId,
         ]]);

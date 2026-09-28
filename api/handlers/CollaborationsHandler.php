@@ -287,6 +287,12 @@ class CollaborationsHandler
             $stmt->execute([$status, $status === 'accepted' ? $groupId : null, $collabId]);
 
             $aceptada = $status === 'accepted';
+
+            // Desde que acepta, la página colaboradora ve a los clientes del
+            // evento, y los sigue viendo aunque el evento se borre.
+            if ($aceptada) {
+                Clientes::registrarEvento($db, (int) $collab['link_id']);
+            }
             $notifTitulo = $aceptada ? 'Colaboración aceptada' : 'Colaboración rechazada';
             $notifMensaje = $aceptada
                 ? 'La página "' . $collab['collaborator_page_title'] . '" aceptó colaborar en el evento "' . $collab['event_title'] . '"'
@@ -345,6 +351,9 @@ class CollaborationsHandler
 
             $stmt = $db->prepare('DELETE FROM event_collaborations WHERE id = ?');
             $stmt->execute([$collabId]);
+
+            // Deshecha la colaboración, la página deja de ver a los clientes.
+            Clientes::actualizarEvento($db, (int) $collab['link_id']);
 
             return Response::ok(['message' => 'Colaboración eliminada']);
 

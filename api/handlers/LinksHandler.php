@@ -201,6 +201,10 @@ class LinksHandler
             // madrugada siguiente.
             Importador::marcarEditados($db, $linkId, self::nombresDeCampos($fields));
 
+            // Si el evento vende, su registro guarda el título y la fecha
+            // nuevos: son los que se van a ver si algún día se borra.
+            Clientes::actualizarEvento($db, $linkId);
+
             $stmt = $db->prepare('SELECT * FROM links WHERE id = ?');
             $stmt->execute([$linkId]);
             $link = $stmt->fetch();
@@ -218,6 +222,11 @@ class LinksHandler
             if (!PageAccess::canManageLink($db, $linkId, $req->userId())) {
                 return Response::notFound('Link not found');
             }
+
+            // Las compras sobreviven al evento colgadas de su registro. Se
+            // refresca antes de borrar para que quede con los últimos datos y
+            // con las colaboraciones de este momento.
+            Clientes::actualizarEvento($db, $linkId);
 
             $stmt = $db->prepare('DELETE FROM links WHERE id = ?');
             $stmt->execute([$linkId]);

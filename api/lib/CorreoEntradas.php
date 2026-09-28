@@ -89,6 +89,7 @@ class CorreoEntradas
             WHERE estado = 'pagada'
               AND mail_enviado_en IS NULL
               AND mail_intentos < ?
+              AND link_id IS NOT NULL
             ORDER BY id
             LIMIT " . (int) $limite);
         $stmt->execute([self::MAX_INTENTOS]);

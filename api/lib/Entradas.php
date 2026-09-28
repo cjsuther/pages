@@ -316,17 +316,22 @@ class Entradas
             $esGratis = $precio <= 0;
             $codigo = self::codigoLibre($db);
 
+            // La compra se ata también al registro del evento, que es lo que
+            // queda si el evento se borra: sin él, quien compró se perdería.
+            $recordId = Clientes::registrarEvento($db, $linkId);
+
             // Una reserva sin cobro se confirma en el acto: no hay pago que
             // esperar, así que dejarla vencer perdería la reserva sin motivo.
             $insert = $db->prepare('
                 INSERT INTO ticket_orders
-                    (codigo, link_id, nombre, email, telefono, cantidad,
+                    (codigo, link_id, record_id, nombre, email, telefono, cantidad,
                      precio_unitario, total, moneda, estado, reserva_vence_en, pagada_en)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ');
             $insert->execute([
                 $codigo,
                 (int) $linkId,
+                $recordId,
                 trim($datos['nombre']),
                 trim($datos['email']),
                 // Opcional: la columna no acepta null, así que se guarda vacío.
@@ -420,6 +425,7 @@ class Entradas
             WHERE estado = 'reservada'
               AND mp_payment_id IS NULL
               AND total > 0
+              AND link_id IS NOT NULL
               AND created_at >= (NOW() - INTERVAL ? DAY)
             ORDER BY created_at DESC
             LIMIT " . (int) $limite . "
@@ -447,6 +453,7 @@ class Entradas
               AND mp_payment_id IS NOT NULL
               AND mp_comision_cobrada IS NULL
               AND total > 0
+              AND link_id IS NOT NULL
             ORDER BY created_at DESC
             LIMIT " . (int) $limite . "
         ");

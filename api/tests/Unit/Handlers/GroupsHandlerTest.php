@@ -276,6 +276,16 @@ class GroupsHandlerTest extends HandlerTestCase
         $this->assertSame([5], $this->db->paramsFor('DELETE FROM link_groups'));
     }
 
+    public function testAntesDeBorrarUnGrupoSeRefrescanLosRegistrosDeSusEventos()
+    {
+        $this->autorizarGrupo();
+        $this->db->onWrite('DELETE FROM link_groups', 1);
+
+        GroupsHandler::detail($this->db, $this->delete(['id' => '5'], $this->user()));
+
+        $this->assertSame([5], $this->db->paramsFor('WHERE l.group_id = ?'));
+    }
+
     public function testDeleteDevuelve500SiLaBaseFalla()
     {
         $this->autorizarGrupo();

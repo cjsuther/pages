@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Genera un archivo de Excel (.xlsx) de una hoja.
+ * Genera un archivo de Excel (.xlsx).
  *
  * Reemplaza al CSV, que traía dos problemas todo el tiempo: Excel en español
  * abre las comas como una sola columna, y convierte solo lo que parece otra
@@ -10,8 +10,8 @@
  *
  * Un xlsx es un zip con unos pocos XML adentro, así que se arma a mano en vez
  * de sumar una dependencia grande a un hosting compartido. Lo que se necesita
- * acá es una tabla con encabezado: no hay fórmulas, ni estilos de celda más
- * allá del encabezado en negrita, ni varias hojas.
+ * acá son tablas con encabezado: no hay fórmulas ni estilos de celda más
+ * allá del encabezado en negrita.
  */
 class Excel
 {
@@ -26,16 +26,30 @@ class Excel
      */
     public static function tabla(array $encabezados, array $filas, $hoja = 'Hoja 1')
     {
-        $xml = self::hoja($encabezados, $filas);
+        return self::libro([['nombre' => $hoja, 'encabezados' => $encabezados, 'filas' => $filas]]);
+    }
 
-        return self::zip([
-            '[Content_Types].xml' => self::tiposDeContenido(),
+    /**
+     * Un archivo con varias solapas.
+     *
+     * @param array[] $hojas Cada una: nombre, encabezados y filas, como tabla().
+     * @return string
+     */
+    public static function libro(array $hojas)
+    {
+        $archivos = [
+            '[Content_Types].xml' => self::tiposDeContenido(count($hojas)),
             '_rels/.rels' => self::relacionesRaiz(),
-            'xl/workbook.xml' => self::libro($hoja),
-            'xl/_rels/workbook.xml.rels' => self::relacionesDelLibro(),
+            'xl/workbook.xml' => self::indice(array_column($hojas, 'nombre')),
+            'xl/_rels/workbook.xml.rels' => self::relacionesDelLibro(count($hojas)),
             'xl/styles.xml' => self::estilos(),
-            'xl/worksheets/sheet1.xml' => $xml,
-        ]);
+        ];
+
+        foreach (array_values($hojas) as $i => $hoja) {
+            $archivos['xl/worksheets/sheet' . ($i + 1) . '.xml'] = self::hoja($hoja['encabezados'], $hoja['filas']);
+        }
+
+        return self::zip($archivos);
     }
 
     /**
@@ -161,14 +175,20 @@ class Excel
         return $contenido;
     }
 
-    private static function tiposDeContenido()
+    private static function tiposDeContenido($hojas)
     {
+        $partes = '';
+
+        for ($i = 1; $i <= $hojas; $i++) {
+            $partes .= '<Override PartName="/xl/worksheets/sheet' . $i . '.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>';
+        }
+
         return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
             . '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
             . '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
             . '<Default Extension="xml" ContentType="application/xml"/>'
             . '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
-            . '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+            . $partes
             . '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
             . '</Types>';
     }
@@ -181,25 +201,37 @@ class Excel
             . '</Relationships>';
     }
 
-    private static function libro($hoja)
+    private static function indice(array $nombres)
     {
-        // Excel no acepta más de 31 caracteres ni : \ / ? * [ ] en el nombre
-        // de una solapa: con eso adentro, no abre el archivo.
-        $nombre = mb_substr(preg_replace('#[:\\\\/?*\[\]]#', ' ', (string) $hoja), 0, 31);
+        $hojas = '';
+
+        foreach (array_values($nombres) as $i => $hoja) {
+            // Excel no acepta más de 31 caracteres ni : \ / ? * [ ] en el
+            // nombre de una solapa: con eso adentro, no abre el archivo.
+            $nombre = mb_substr(preg_replace('#[:\\\\/?*\[\]]#', ' ', (string) $hoja), 0, 31);
+            $hojas .= '<sheet name="' . self::escapar($nombre) . '" sheetId="' . ($i + 1) . '" r:id="rId' . ($i + 1) . '"/>';
+        }
 
         return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
             . '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"'
             . ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
-            . '<sheets><sheet name="' . self::escapar($nombre) . '" sheetId="1" r:id="rId1"/></sheets>'
+            . '<sheets>' . $hojas . '</sheets>'
             . '</workbook>';
     }
 
-    private static function relacionesDelLibro()
+    /** Una relación por hoja y, después de todas, la de los estilos. */
+    private static function relacionesDelLibro($hojas)
     {
+        $relaciones = '';
+
+        for ($i = 1; $i <= $hojas; $i++) {
+            $relaciones .= '<Relationship Id="rId' . $i . '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet' . $i . '.xml"/>';
+        }
+
         return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
             . '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-            . '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
-            . '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
+            . $relaciones
+            . '<Relationship Id="rId' . ($hojas + 1) . '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
             . '</Relationships>';
     }
 

@@ -300,7 +300,7 @@ class EntradasHandlerTest extends HandlerTestCase
     public function testNoSePuedePonerPrecioSinMercadoPagoConectado()
     {
         $this->puedeAdministrarElEvento();
-        $this->db->onSelect('lg.page_id', [[5]]);
+        $this->db->onSelect('SELECT lg.page_id', [[5]]);
 
         $r = EntradasHandler::config($this->db, new Request('POST', [
             'capacidad' => 100, 'precio' => 1500,
@@ -368,7 +368,7 @@ class EntradasHandlerTest extends HandlerTestCase
     public function testDevuelveLosPlanosDeLosOtrosEventosDeLaPagina()
     {
         $this->puedeAdministrarElEvento();
-        $this->db->onSelect('lg.page_id', [[5]]);
+        $this->db->onSelect('SELECT lg.page_id', [[5]]);
         $this->db->onSelect('et.plano IS NOT NULL', [
             ['id' => 90, 'text' => 'Show de agosto', 'event_date' => '2026-08-01', 'plano' => json_encode($this->planoValido())],
             // Uno roto no se ofrece: copiarlo fallaría recién al guardar.

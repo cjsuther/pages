@@ -540,6 +540,27 @@ class LinksHandlerTest extends HandlerTestCase
         $this->assertSame([5], $this->db->paramsFor('DELETE FROM links'));
     }
 
+    /**
+     * Las compras sobreviven colgadas del registro del evento: tiene que
+     * quedar con los últimos datos antes de que el evento desaparezca.
+     */
+    public function testAntesDeBorrarUnEventoSeRefrescaSuRegistro()
+    {
+        $this->autorizarLink();
+        $this->db->onSelect('SELECT id FROM event_records WHERE link_id', [[7]]);
+        $this->db->onSelect('SELECT id FROM event_records WHERE link_id', [[7]]);
+        $this->db->onWrite('DELETE FROM links', 1);
+
+        LinksHandler::detail($this->db, $this->delete(['id' => '5'], $this->user()));
+
+        $sqls = array_column($this->db->log(), 'sql');
+        $registro = array_keys(array_filter($sqls, function ($s) { return strpos($s, 'INSERT INTO event_records') !== false; }));
+        $borrado = array_keys(array_filter($sqls, function ($s) { return strpos($s, 'DELETE FROM links') !== false; }));
+
+        $this->assertNotEmpty($registro, 'se refresca el registro');
+        $this->assertLessThan($borrado[0], $registro[0], 'y antes de borrar');
+    }
+
     public function testDeleteDevuelve500SiLaBaseFalla()
     {
         $this->autorizarLink();

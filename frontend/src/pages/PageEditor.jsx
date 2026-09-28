@@ -6,6 +6,7 @@ import GooglePlacesAutocomplete from '../components/GooglePlacesAutocomplete';
 import SeccionRedes from '../components/SeccionRedes';
 import SeccionEntradas from '../components/SeccionEntradas';
 import PanelMetricas from '../components/PanelMetricas';
+import PanelClientes from '../components/PanelClientes';
 import PixelDeMeta from '../components/PixelDeMeta';
 import { analizarEmbed, portadaDe } from '../utils/embeds';
 import { paleta } from '../utils/colores';
@@ -54,6 +55,7 @@ const SECCIONES = [
   { clave: 'contenido', etiqueta: 'Contenido' },
   { clave: 'redes',     etiqueta: 'Redes sociales' },
   { clave: 'entradas',  etiqueta: 'Entradas' },
+  { clave: 'clientes',  etiqueta: 'Clientes' },
   { clave: 'metricas',  etiqueta: 'Métricas' },
   { clave: 'admins',    etiqueta: 'Administradores', soloDueno: true },
 ];
@@ -1010,6 +1012,10 @@ function PageEditor() {
               updatePage({ email_contacto: email });
             }}
           />
+        )}
+
+        {seccion === 'clientes' && (
+          <PanelClientes pageId={id} apiUrl={apiUrl} token={token} slug={page.url_slug} />
         )}
 
         {seccion === 'metricas' && (

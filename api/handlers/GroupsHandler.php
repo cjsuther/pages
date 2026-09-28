@@ -135,6 +135,9 @@ class GroupsHandler
                 return Response::notFound('Group not found');
             }
 
+            // Borrar el grupo borra sus eventos: lo mismo que al borrar uno.
+            Clientes::actualizarEventosDelGrupo($db, $groupId);
+
             $stmt = $db->prepare('DELETE FROM link_groups WHERE id = ?');
             $stmt->execute([$groupId]);
 

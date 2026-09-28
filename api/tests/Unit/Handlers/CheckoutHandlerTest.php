@@ -39,7 +39,7 @@ class CheckoutHandlerTest extends HandlerTestCase
     private function hayCredencialesDeCobro($conectadoPor = 'oauth', $veces = 1)
     {
         for ($i = 0; $i < $veces; $i++) {
-            $this->db->onSelect('lg.page_id', [[5]]);
+            $this->db->onSelect('SELECT lg.page_id', [[5]]);
             $this->db->onSelect('FROM page_payment_settings WHERE page_id', [[
                 'page_id' => 5,
                 'mp_user_id' => '987654321',
@@ -214,7 +214,7 @@ class CheckoutHandlerTest extends HandlerTestCase
     public function testSinCredencialesNoSeCobraYSeLiberaLaReserva()
     {
         $this->hayEventoQueVende();
-        $this->db->onSelect('lg.page_id', [[5]]);
+        $this->db->onSelect('SELECT lg.page_id', [[5]]);
 
         $r = CheckoutHandler::comprar($this->db, $this->pedido(), new FakeHttpClient());
 

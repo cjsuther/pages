@@ -318,8 +318,8 @@ class EntradasTest extends HandlerTestCase
         $params = $this->db->paramsFor('INSERT INTO ticket_orders');
 
         $this->assertSame('reservada', $r['orden']['estado']);
-        $this->assertSame('reservada', $params[9]);
-        $this->assertNotNull($params[10], 'tiene que tener fecha de vencimiento');
+        $this->assertSame('reservada', $params[10]);
+        $this->assertNotNull($params[11], 'tiene que tener fecha de vencimiento');
     }
 
     /** Sin cobro no hay pago que esperar: dejarla vencer perdería la reserva. */
@@ -334,8 +334,8 @@ class EntradasTest extends HandlerTestCase
 
         $this->assertTrue($r['orden']['es_gratis']);
         $this->assertSame('pagada', $r['orden']['estado']);
-        $this->assertSame('pagada', $params[9]);
-        $this->assertNull($params[10], 'no tiene que vencer');
+        $this->assertSame('pagada', $params[10]);
+        $this->assertNull($params[11], 'no tiene que vencer');
     }
 
     public function testElTotalEsPrecioPorCantidad()
@@ -362,7 +362,7 @@ class EntradasTest extends HandlerTestCase
         Entradas::crearOrden($this->db, 100, $this->comprador());
         $params = $this->db->paramsFor('INSERT INTO ticket_orders');
 
-        $this->assertSame(1500.0, $params[6]);
+        $this->assertSame(1500.0, $params[7]);
     }
 
     public function testElCodigoDeLaOrdenTieneElLargoDeLaColumna()

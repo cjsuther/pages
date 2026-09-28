@@ -281,7 +281,7 @@ class HerramientasMcpTest extends HandlerTestCase
     public function testElModoGratisNoPideMercadoPago()
     {
         $this->db->onSelect('SELECT 1 FROM links l', [[1]]);
-        $this->db->onSelect('lg.page_id', [[5]]);
+        $this->db->onSelect('SELECT lg.page_id', [[5]]);
         $this->db->onSelect('FROM event_ticketing', [[]]);
         $this->db->onWrite('INSERT INTO event_ticketing', 1);
 

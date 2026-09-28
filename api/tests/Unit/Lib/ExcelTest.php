@@ -85,4 +85,27 @@ class ExcelTest extends TestCase
         $this->assertStringNotContainsString('"ventas del "show"', implode('', $cabeceras));
         $this->assertSame('ventas-del-show-.xlsx', Excel::nombreSeguro('ventas del "show".xlsx'));
     }
+
+    public function testUnLibroLlevaUnaSolapaPorHoja()
+    {
+        $archivo = Excel::libro([
+            ['nombre' => 'Clientes', 'encabezados' => ['Email'], 'filas' => [['ana@example.com']]],
+            ['nombre' => 'Compras', 'encabezados' => ['Código'], 'filas' => [['ABC123']]],
+        ]);
+
+        $libro = $this->parte($archivo, 'xl/workbook.xml');
+        $this->assertStringContainsString('<sheet name="Clientes" sheetId="1" r:id="rId1"/>', $libro);
+        $this->assertStringContainsString('<sheet name="Compras" sheetId="2" r:id="rId2"/>', $libro);
+
+        $this->assertStringContainsString('ana@example.com', $this->parte($archivo, 'xl/worksheets/sheet1.xml'));
+        $this->assertStringContainsString('ABC123', $this->parte($archivo, 'xl/worksheets/sheet2.xml'));
+
+        // Los estilos van después de las hojas: si comparten id con una, Excel
+        // da el archivo por dañado.
+        $relaciones = $this->parte($archivo, 'xl/_rels/workbook.xml.rels');
+        $this->assertStringContainsString('Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles"', $relaciones);
+
+        $tipos = $this->parte($archivo, '[Content_Types].xml');
+        $this->assertStringContainsString('/xl/worksheets/sheet2.xml', $tipos);
+    }
 }
