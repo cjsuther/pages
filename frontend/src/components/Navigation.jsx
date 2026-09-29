@@ -10,6 +10,7 @@ const SECCIONES = [
   { a: '/', texto: 'Inicio' },
   { a: '/pages', texto: 'Seguir páginas' },
   { a: '/my-pages', texto: 'Mis páginas' },
+  { a: '/precios', texto: 'Precios' },
 ];
 
 /**

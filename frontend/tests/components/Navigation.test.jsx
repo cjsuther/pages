@@ -53,6 +53,12 @@ describe('Navigation', () => {
       expect(screen.getAllByRole('link', { name: 'Crear mi página' }).length).toBeGreaterThan(0);
     });
 
+    it('muestra los precios', () => {
+      renderConProviders(<Navigation />);
+
+      expect(screen.getByRole('link', { name: 'Precios' })).toHaveAttribute('href', '/precios');
+    });
+
     it('el logo lleva al inicio', () => {
       renderConProviders(<Navigation />);
 
@@ -67,6 +73,7 @@ describe('Navigation', () => {
       expect(screen.getByRole('link', { name: 'Inicio' })).toHaveAttribute('href', '/');
       expect(screen.getByRole('link', { name: 'Seguir páginas' })).toHaveAttribute('href', '/pages');
       expect(screen.getByRole('link', { name: 'Mis páginas' })).toHaveAttribute('href', '/my-pages');
+      expect(screen.getByRole('link', { name: 'Precios' })).toHaveAttribute('href', '/precios');
     });
 
     it('no ofrece iniciar sesión', () => {
