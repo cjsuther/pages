@@ -16,7 +16,7 @@ class PagesHandler
         'login', 'register', 'dashboard', 'page', 'api', 'admin', 'auth',
         'public', 'pages', 'groups', 'links', 'user', 'users', 'config',
         'settings', 'logout', 'profile', 'account', 'artistas',
-        'asistentes',
+        'asistentes', 'precios',
     ];
 
     private static $defaults = [

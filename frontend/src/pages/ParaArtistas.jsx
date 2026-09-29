@@ -8,6 +8,8 @@ import { AuthContext } from '../App';
 import Navigation from '../components/Navigation';
 import { PieDePagina } from '../components/Marco';
 import { Boton, Rotulo, Tarjeta, TituloSeccion } from '../components/ui';
+import { formatearPorcentaje } from '../utils/comisiones';
+import { useCostos, CuentaDeEjemplo } from '../components/CostosDeVenta';
 
 /**
  * La página que le explica a un artista para qué le sirve Rezonar.
@@ -83,7 +85,7 @@ const PASOS_INSTAGRAM = [
 const PREGUNTAS = [
   {
     q: '¿Cuánto sale?',
-    a: 'Armar tu página, cargar fechas y que te sigan es gratis. Si vendés entradas por Rezonar se aplica una comisión, que ves antes de activar la venta.',
+    a: 'Armar tu página, cargar fechas y que te sigan es gratis. Si vendés entradas por Rezonar se descuenta una comisión de cada entrada paga, y Mercado Pago cobra la suya por procesar el pago. Las reservas sin costo no pagan nada.',
   },
   {
     q: '¿Sirve si ya tengo Linktree?',
@@ -103,9 +105,63 @@ const PREGUNTAS = [
   },
 ];
 
+function CostosDeVenta({ costos }) {
+  const { comision, mercadopago } = costos;
+
+  return (
+    <section className="border-b border-borde bg-papel-hueso">
+      <div className="max-w-5xl mx-auto px-5 sm:px-6 py-14">
+        <TituloSeccion
+          titulo="Cuánto cuesta vender entradas"
+          bajada="Armar la página y publicar fechas es gratis. Sólo se cobra sobre las entradas pagas que vendés."
+        />
+
+        <div className="grid md:grid-cols-[1fr_auto] gap-8 items-start">
+          <ul className="space-y-4 text-tinta-media leading-relaxed">
+            <li>
+              <strong className="text-tinta">Comisión de Rezonar: {formatearPorcentaje(comision)}%</strong>{' '}
+              de cada entrada vendida. Se descuenta en el momento del cobro: el comprador
+              paga el precio que pusiste, una sola vez, y a tu cuenta entra el resto.
+            </li>
+            {mercadopago && (
+              <li>
+                <strong className="text-tinta">Mercado Pago: {formatearPorcentaje(mercadopago.porcentaje)}%</strong>{' '}
+                por procesar el pago, y la plata se libera a los {mercadopago.dias} días de la
+                compra. Eso lo cobra Mercado Pago, no nosotros; podés verlo en{' '}
+                <a
+                  href="https://www.mercadopago.com.ar/costs-section/release-options"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-verde-oscuro font-semibold hover:underline underline-offset-4"
+                >
+                  sus costos
+                </a>
+                .
+              </li>
+            )}
+            <li>
+              <strong className="text-tinta">Las reservas sin costo no pagan nada.</strong>{' '}
+              Tampoco hay abono mensual ni costo por publicar fechas.
+            </li>
+          </ul>
+
+          <CuentaDeEjemplo costos={costos} className="md:w-72" />
+        </div>
+
+        <div className="mt-8">
+          <Boton a="/precios" variante="secundario">
+            Ver precios y cuándo cobrás <ArrowRight className="w-4 h-4" />
+          </Boton>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function ParaArtistas() {
-  const { token } = useContext(AuthContext);
+  const { token, apiUrl } = useContext(AuthContext);
   const destinoCrear = token ? '/my-pages' : '/register';
+  const costos = useCostos(apiUrl);
 
   return (
     <div className="min-h-screen bg-white text-tinta flex flex-col">
@@ -341,6 +397,10 @@ function ParaArtistas() {
             </div>
           </div>
         </section>
+
+        {/* ------------------------------------------------------- costos */}
+
+        {costos && <CostosDeVenta costos={costos} />}
 
         {/* ------------------------------------------------------- preguntas */}
 

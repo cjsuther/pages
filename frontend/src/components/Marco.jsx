@@ -29,6 +29,9 @@ export function PieDePagina() {
             <Link to="/artistas" className="text-tinta-media hover:text-verde-oscuro font-medium transition-colors">
               Para artistas
             </Link>
+            <Link to="/precios" className="text-tinta-media hover:text-verde-oscuro font-medium transition-colors">
+              Precios
+            </Link>
             <Link to="/pages" className="text-tinta-media hover:text-verde-oscuro font-medium transition-colors">
               Descubrir páginas
             </Link>

@@ -422,4 +422,24 @@ class PublicHandler
             return Response::serverError($e->getMessage());
         }
     }
+
+    // ----------------------------------------------------------------- costos
+
+    /**
+     * Lo que se descuenta de cada entrada vendida, para quien todavía no tiene
+     * cuenta. Quien está pensando si vender por acá tiene que poder hacer la
+     * cuenta antes de registrarse, no después. Sale de la misma configuración
+     * que se usa al cobrar, así que el número publicado es el que se aplica.
+     */
+    public static function costos($db, Request $req)
+    {
+        if ($req->method !== 'GET') {
+            return Response::methodNotAllowed();
+        }
+
+        return Response::ok([
+            'comision'    => Comision::porcentaje(),
+            'mercadopago' => Comision::mercadoPago(),
+        ]);
+    }
 }

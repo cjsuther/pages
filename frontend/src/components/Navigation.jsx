@@ -169,6 +169,12 @@ function Navigation() {
                   Para artistas
                 </Link>
                 <Link
+                  to="/precios"
+                  className="text-sm font-semibold text-tinta-media hover:text-tinta transition-colors"
+                >
+                  Precios
+                </Link>
+                <Link
                   to="/login"
                   className="text-sm font-semibold text-tinta-media hover:text-tinta transition-colors"
                 >
@@ -223,6 +229,13 @@ function Navigation() {
                   className="block px-3 py-2.5 rounded-xl font-semibold text-tinta-media hover:text-tinta hover:bg-papel-hueso transition-colors"
                 >
                   Para artistas
+                </Link>
+                <Link
+                  to="/precios"
+                  onClick={cerrar}
+                  className="block px-3 py-2.5 rounded-xl font-semibold text-tinta-media hover:text-tinta hover:bg-papel-hueso transition-colors"
+                >
+                  Precios
                 </Link>
                 <Link
                   to="/login"

@@ -525,4 +525,35 @@ class PublicHandlerTest extends HandlerTestCase
 
         $this->assertError(500, $res, 'Server error: índice corrupto');
     }
+
+    // ================================================================= costos
+
+    /** Quien todavía no tiene cuenta tiene que poder ver lo que se le cobra. */
+    public function testCostosNoExigeSesion()
+    {
+        $res = PublicHandler::costos(null, $this->get());
+
+        $this->assertStatus(200, $res);
+    }
+
+    /** Los mismos números que se aplican al cobrar, no una copia aparte. */
+    public function testCostosPublicaLoQueSeAplicaAlCobrar()
+    {
+        $res = PublicHandler::costos(null, $this->get());
+
+        $this->assertSame(\Comision::porcentaje(), $res->body['comision']);
+        $this->assertSame(\Comision::mercadoPago(), $res->body['mercadopago']);
+    }
+
+    public function testCostosNoTocaLaBase()
+    {
+        PublicHandler::costos($this->db, $this->get());
+
+        $this->assertSame(0, $this->db->countCalls('SELECT'));
+    }
+
+    public function testCostosRechazaOtrosMetodos()
+    {
+        $this->assertError(405, PublicHandler::costos($this->db, $this->post()), 'Method not allowed');
+    }
 }

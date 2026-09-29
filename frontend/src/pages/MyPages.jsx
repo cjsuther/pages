@@ -150,6 +150,7 @@ function MyPages() {
       'login', 'register', 'dashboard', 'page', 'api', 'admin', 'auth',
       'public', 'pages', 'groups', 'links', 'user', 'users', 'config',
       'settings', 'logout', 'profile', 'account', 'artistas', 'feed', 'my-pages',
+      'asistentes', 'precios',
     ];
     if (reservedSlugs.includes(newPage.url_slug.toLowerCase())) {
       setError('Esta URL está reservada y no puede ser utilizada');
