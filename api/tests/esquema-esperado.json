@@ -22,6 +22,9 @@
         "nombre": "migration_carcajada.sql",
         "foto_url": "migration_carcajada.sql",
         "instagram": "migration_carcajada.sql",
+        "estudio_con": "migration_carcajada_invitados.sql",
+        "egreso_anio": "migration_carcajada_invitados.sql",
+        "material": "migration_carcajada_invitados.sql",
         "personas_comprometidas": "migration_carcajada.sql",
         "created_at": "migration_carcajada.sql",
         "updated_at": "migration_carcajada.sql"
@@ -47,6 +50,7 @@
         "fecha": "migration_carcajada.sql",
         "hora": "migration_carcajada.sql",
         "lugar": "migration_carcajada.sql",
+        "descripcion": "migration_carcajada_invitados.sql",
         "notas": "migration_carcajada.sql",
         "created_at": "migration_carcajada.sql",
         "updated_at": "migration_carcajada.sql"

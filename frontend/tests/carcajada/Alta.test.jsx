@@ -74,6 +74,38 @@ describe('Alta de comediante', () => {
     expect(screen.getByRole('button', { name: 'Guardar cambios' })).toBeInTheDocument();
   });
 
+  /** La formación y el material son para la producción: van en el alta. */
+  it('manda con quién estudió, el año de egreso y su material', async () => {
+    await montar();
+
+    fireEvent.change(screen.getByLabelText('¿Con quién estudiaste?'), { target: { value: 'Escuela de Humor Sur' } });
+    fireEvent.change(screen.getByLabelText('Año de egreso'), { target: { value: '2019' } });
+    fireEvent.change(screen.getByLabelText('Contanos de qué va tu material'), { target: { value: 'Stand up de mi familia' } });
+
+    global.fetch.mockReturnValueOnce(respuesta({ success: true, comediante: { nombre: 'Ana Gómez', comprometidas: 10 } }));
+    fireEvent.click(screen.getByRole('button', { name: 'Anotarme' }));
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
+    expect(JSON.parse(global.fetch.mock.calls[1][1].body)).toMatchObject({
+      estudio_con: 'Escuela de Humor Sur', egreso_anio: '2019', material: 'Stand up de mi familia',
+    });
+  });
+
+  it('quien ya se anotó ve su formación cargada', async () => {
+    await montar({
+      comediante: {
+        nombre: 'La Turca', instagram: null, foto_url: null, comprometidas: 8,
+        estudio_con: 'Taller de Pepe', egreso_anio: 2021, material: 'Absurdo',
+      },
+      sugerencia: SUGERENCIA,
+      productor: false,
+    });
+
+    expect(screen.getByLabelText('¿Con quién estudiaste?')).toHaveValue('Taller de Pepe');
+    expect(screen.getByLabelText('Año de egreso')).toHaveValue(2021);
+    expect(screen.getByLabelText('Contanos de qué va tu material')).toHaveValue('Absurdo');
+  });
+
   it('muestra el error del servidor', async () => {
     await montar();
     global.fetch.mockReturnValueOnce(respuesta({ error: 'Esa página no es tuya.' }, false));

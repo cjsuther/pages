@@ -8,6 +8,10 @@
  * resuelve solo lo que un formulario abierto no puede —que nadie se anote dos
  * veces ni ponga la página de otro— porque el alta se hace con la sesión.
  *
+ * Quien produce también puede sumar a alguien que no tiene cuenta, cargando
+ * sólo nombre, foto e Instagram: un invitado. No tiene usuario ni página, y
+ * sus datos los mantiene quien produce.
+ *
  * La evaluación de una noche vive en el lineup y no en el comediante: la
  * ficha de alguien es el conjunto de sus noches, no un número que se pisa.
  */
@@ -18,6 +22,11 @@ class Carcajada
 
     /** Tope de gente que alguien puede prometer: más que eso es un error de tipeo. */
     const MAX_PERSONAS = 500;
+
+    /** Primer año de egreso que se acepta; antes de eso es un error de tipeo. */
+    const PRIMER_EGRESO = 1950;
+
+    const LARGO_MATERIAL = 2000;
 
     // ------------------------------------------------------------ productores
 
@@ -96,7 +105,8 @@ class Carcajada
     /**
      * Anota a alguien o actualiza sus datos.
      *
-     * @param array $datos ['page_id', 'nombre', 'foto_url', 'instagram', 'personas_comprometidas']
+     * @param array $datos ['page_id', 'nombre', 'foto_url', 'instagram', 'personas_comprometidas',
+     *                      'estudio_con', 'egreso_anio', 'material']
      * @return array{ok: bool, error: string|null}
      */
     public static function guardarComediante($db, $userId, array $datos)
@@ -117,6 +127,26 @@ class Carcajada
             return ['ok' => false, 'error' => 'La cantidad de gente tiene que estar entre 0 y ' . self::MAX_PERSONAS];
         }
 
+        $estudioCon = isset($datos['estudio_con']) ? trim((string) $datos['estudio_con']) : '';
+
+        if (mb_strlen($estudioCon) > 120) {
+            return ['ok' => false, 'error' => 'Lo de con quién estudiaste es demasiado largo'];
+        }
+
+        $egreso = isset($datos['egreso_anio']) && $datos['egreso_anio'] !== '' && $datos['egreso_anio'] !== null
+            ? (int) $datos['egreso_anio']
+            : null;
+
+        if ($egreso !== null && ($egreso < self::PRIMER_EGRESO || $egreso > (int) date('Y'))) {
+            return ['ok' => false, 'error' => 'El año de egreso tiene que estar entre ' . self::PRIMER_EGRESO . ' y ' . date('Y')];
+        }
+
+        $material = isset($datos['material']) ? trim((string) $datos['material']) : '';
+
+        if (mb_strlen($material) > self::LARGO_MATERIAL) {
+            return ['ok' => false, 'error' => 'La descripción del material puede tener hasta ' . self::LARGO_MATERIAL . ' caracteres'];
+        }
+
         // La página tiene que ser suya: es lo que el público va a abrir desde
         // el QR, y con la sesión en la mano no hay motivo para creerle al
         // navegador de quién es.
@@ -126,14 +156,17 @@ class Carcajada
 
         $stmt = $db->prepare('
             INSERT INTO carcajada_comediantes
-                (user_id, page_id, nombre, foto_url, instagram, personas_comprometidas)
-            VALUES (?, ?, ?, ?, ?, ?)
+                (user_id, page_id, nombre, foto_url, instagram, personas_comprometidas, estudio_con, egreso_anio, material)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 page_id = VALUES(page_id),
                 nombre = VALUES(nombre),
                 foto_url = VALUES(foto_url),
                 instagram = VALUES(instagram),
-                personas_comprometidas = VALUES(personas_comprometidas)
+                personas_comprometidas = VALUES(personas_comprometidas),
+                estudio_con = VALUES(estudio_con),
+                egreso_anio = VALUES(egreso_anio),
+                material = VALUES(material)
         ');
         $stmt->execute([
             (int) $userId,
@@ -142,6 +175,9 @@ class Carcajada
             isset($datos['foto_url']) && $datos['foto_url'] !== '' ? $datos['foto_url'] : null,
             isset($datos['instagram']) ? self::usuarioDeInstagram($datos['instagram']) : null,
             $personas,
+            $estudioCon === '' ? null : $estudioCon,
+            $egreso,
+            $material === '' ? null : $material,
         ]);
 
         return ['ok' => true, 'error' => null];
@@ -157,7 +193,8 @@ class Carcajada
     public static function fichas($db)
     {
         $stmt = $db->prepare('
-            SELECT c.id, c.nombre, c.foto_url, c.instagram, c.personas_comprometidas,
+            SELECT c.id, c.user_id, c.nombre, c.foto_url, c.instagram, c.personas_comprometidas,
+                   c.estudio_con, c.egreso_anio, c.material,
                    p.url_slug, p.title AS pagina,
                    COUNT(l.id) AS shows,
                    AVG(l.puntaje) AS puntaje,
@@ -168,7 +205,8 @@ class Carcajada
             LEFT JOIN pages p ON p.id = c.page_id
             LEFT JOIN carcajada_lineup l ON l.comediante_id = c.id
             LEFT JOIN carcajada_shows s ON s.id = l.show_id
-            GROUP BY c.id, c.nombre, c.foto_url, c.instagram, c.personas_comprometidas, p.url_slug, p.title
+            GROUP BY c.id, c.user_id, c.nombre, c.foto_url, c.instagram, c.personas_comprometidas,
+                     c.estudio_con, c.egreso_anio, c.material, p.url_slug, p.title
             ORDER BY c.nombre
         ');
         $stmt->execute();
@@ -185,6 +223,10 @@ class Carcajada
                 'instagram' => $fila['instagram'],
                 'url_slug'  => $fila['url_slug'],
                 'pagina'    => $fila['pagina'],
+                'con_cuenta' => $fila['user_id'] !== null,
+                'estudio_con' => $fila['estudio_con'],
+                'egreso_anio' => $fila['egreso_anio'] === null ? null : (int) $fila['egreso_anio'],
+                'material'  => $fila['material'],
                 'comprometidas' => (int) $fila['personas_comprometidas'],
                 'shows'     => (int) $fila['shows'],
                 // null y no cero: nadie evaluado todavía no es un cero de puntaje.
@@ -196,6 +238,69 @@ class Carcajada
         }
 
         return $fichas;
+    }
+
+    /**
+     * Da de alta o corrige a un comediante sin cuenta.
+     *
+     * Sólo se tocan los invitados: los datos de quien tiene cuenta los maneja
+     * esa persona desde su alta, y quien produce no puede pisárselos.
+     *
+     * @param int|null $comedianteId null para darlo de alta
+     * @param array $datos ['nombre', 'foto_url', 'instagram']
+     * @return array{ok: bool, error: string|null, id: int|null}
+     */
+    public static function guardarInvitado($db, $comedianteId, array $datos)
+    {
+        $nombre = isset($datos['nombre']) ? trim((string) $datos['nombre']) : '';
+
+        if ($nombre === '') {
+            return ['ok' => false, 'error' => 'Falta el nombre', 'id' => null];
+        }
+
+        if (mb_strlen($nombre) > 80) {
+            return ['ok' => false, 'error' => 'El nombre es demasiado largo', 'id' => null];
+        }
+
+        $foto = isset($datos['foto_url']) ? trim((string) $datos['foto_url']) : '';
+
+        // La foto se muestra en la página pública: sólo una dirección web.
+        if ($foto !== '' && (!preg_match('#^https?://#i', $foto) || mb_strlen($foto) > 500)) {
+            return ['ok' => false, 'error' => 'La foto tiene que ser una imagen subida o una dirección web', 'id' => null];
+        }
+
+        $valores = [
+            $nombre,
+            $foto === '' ? null : $foto,
+            isset($datos['instagram']) ? self::usuarioDeInstagram($datos['instagram']) : null,
+        ];
+
+        if ($comedianteId) {
+            $stmt = $db->prepare('SELECT user_id FROM carcajada_comediantes WHERE id = ?');
+            $stmt->execute([(int) $comedianteId]);
+            $fila = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if ($fila === false) {
+                return ['ok' => false, 'error' => 'Ese comediante no existe', 'id' => null];
+            }
+
+            if ($fila['user_id'] !== null) {
+                return ['ok' => false, 'error' => 'Tiene cuenta: sus datos los cambia desde su alta', 'id' => null];
+            }
+
+            $stmt = $db->prepare('UPDATE carcajada_comediantes SET nombre = ?, foto_url = ?, instagram = ? WHERE id = ?');
+            $stmt->execute(array_merge($valores, [(int) $comedianteId]));
+
+            return ['ok' => true, 'error' => null, 'id' => (int) $comedianteId];
+        }
+
+        $stmt = $db->prepare('
+            INSERT INTO carcajada_comediantes (user_id, page_id, nombre, foto_url, instagram)
+            VALUES (NULL, NULL, ?, ?, ?)
+        ');
+        $stmt->execute($valores);
+
+        return ['ok' => true, 'error' => null, 'id' => (int) $db->lastInsertId()];
     }
 
     // ------------------------------------------------------------------ shows
@@ -281,6 +386,16 @@ class Carcajada
         return ['ok' => true, 'error' => null, 'id' => (int) $db->lastInsertId()];
     }
 
+    /**
+     * La descripción pública del show. Se guarda ya limpia: lo que llega del
+     * editor lo puede mandar cualquiera, y se muestra en una página abierta.
+     */
+    public static function guardarDescripcion($db, $showId, $html)
+    {
+        $stmt = $db->prepare('UPDATE carcajada_shows SET descripcion = ? WHERE id = ?');
+        $stmt->execute([HtmlSimple::limpiar($html), (int) $showId]);
+    }
+
     public static function borrarShow($db, $showId)
     {
         $stmt = $db->prepare('DELETE FROM carcajada_shows WHERE id = ?');
@@ -291,7 +406,7 @@ class Carcajada
     public static function show($db, $showId)
     {
         $stmt = $db->prepare('
-            SELECT s.id, s.fecha, s.hora, s.lugar, s.notas, s.ciclo_id,
+            SELECT s.id, s.fecha, s.hora, s.lugar, s.descripcion, s.notas, s.ciclo_id,
                    ci.nombre AS ciclo, ci.slug AS ciclo_slug
             FROM carcajada_shows s
             INNER JOIN carcajada_ciclos ci ON ci.id = s.ciclo_id
@@ -316,7 +431,7 @@ class Carcajada
     {
         $stmt = $db->prepare('
             SELECT l.id, l.comediante_id, l.orden, l.puntaje, l.personas_traidas, l.comentario, l.evaluado_en,
-                   c.nombre, c.foto_url, c.instagram, c.personas_comprometidas,
+                   c.user_id, c.nombre, c.foto_url, c.instagram, c.personas_comprometidas,
                    p.url_slug, p.title AS pagina
             FROM carcajada_lineup l
             INNER JOIN carcajada_comediantes c ON c.id = l.comediante_id
@@ -336,6 +451,7 @@ class Carcajada
                 'instagram'       => $fila['instagram'],
                 'url_slug'        => $fila['url_slug'],
                 'pagina'          => $fila['pagina'],
+                'con_cuenta'      => $fila['user_id'] !== null,
                 'comprometidas'   => (int) $fila['personas_comprometidas'],
                 'puntaje'         => $fila['puntaje'] === null ? null : (int) $fila['puntaje'],
                 'personas_traidas' => $fila['personas_traidas'] === null ? null : (int) $fila['personas_traidas'],
@@ -428,6 +544,9 @@ class Carcajada
 
     // ----------------------------------------------------------------- público
 
+    /** Cuántas otras fechas se muestran debajo del show. */
+    const OTRAS_FECHAS = 6;
+
     /**
      * El show que hay que mostrarle al público ahora.
      *
@@ -437,8 +556,6 @@ class Carcajada
      */
     public static function showEnCurso($db)
     {
-        $hoy = Fechas::hoy();
-
         $stmt = $db->prepare('
             SELECT s.id
             FROM carcajada_shows s
@@ -446,14 +563,19 @@ class Carcajada
             ORDER BY s.fecha, s.id
             LIMIT 1
         ');
-        $stmt->execute([$hoy]);
+        $stmt->execute([Fechas::hoy()]);
         $id = $stmt->fetchColumn();
 
-        if ($id === false) {
-            return null;
-        }
+        return $id === false ? null : self::showPublico($db, (int) $id);
+    }
 
-        $show = self::show($db, (int) $id);
+    /**
+     * Un show tal como lo ve el público: la descripción, quiénes se presentan
+     * y las próximas fechas de Carcajada. null si no existe.
+     */
+    public static function showPublico($db, $showId)
+    {
+        $show = self::show($db, $showId);
 
         if ($show === null) {
             return null;
@@ -461,14 +583,17 @@ class Carcajada
 
         return [
             'show' => [
-                'ciclo'  => $show['ciclo'],
-                'fecha'  => $show['fecha'],
-                'hora'   => $show['hora'],
-                'lugar'  => $show['lugar'],
-                'es_hoy' => $show['fecha'] === $hoy,
+                'id'          => $show['id'],
+                'ciclo'       => $show['ciclo'],
+                'fecha'       => $show['fecha'],
+                'hora'        => $show['hora'],
+                'lugar'       => $show['lugar'],
+                'descripcion' => $show['descripcion'],
+                'es_hoy'      => $show['fecha'] === Fechas::hoy(),
             ],
             // Sólo lo que el público necesita para encontrar a alguien después
-            // del show: cómo se llama, la cara y a dónde seguirlo.
+            // del show: cómo se llama, la cara y a dónde seguirlo. Nada de lo
+            // que se anota en su ficha.
             'comediantes' => array_map(function ($c) {
                 return [
                     'nombre'    => $c['nombre'],
@@ -477,7 +602,32 @@ class Carcajada
                     'url_slug'  => $c['url_slug'],
                 ];
             }, $show['lineup']),
+            'otras' => self::proximasFechas($db, $show['id']),
         ];
+    }
+
+    /** Las fechas que vienen, sin la que se está mirando. */
+    public static function proximasFechas($db, $exceptoShowId)
+    {
+        $stmt = $db->prepare('
+            SELECT s.id, s.fecha, s.hora, s.lugar, ci.nombre AS ciclo
+            FROM carcajada_shows s
+            INNER JOIN carcajada_ciclos ci ON ci.id = s.ciclo_id
+            WHERE s.fecha >= ? AND s.id <> ?
+            ORDER BY s.fecha, s.hora, s.id
+            LIMIT ' . self::OTRAS_FECHAS . '
+        ');
+        $stmt->execute([Fechas::hoy(), (int) $exceptoShowId]);
+
+        return array_map(function ($fila) {
+            return [
+                'id'    => (int) $fila['id'],
+                'ciclo' => $fila['ciclo'],
+                'fecha' => $fila['fecha'],
+                'hora'  => $fila['hora'],
+                'lugar' => $fila['lugar'],
+            ];
+        }, $stmt->fetchAll(PDO::FETCH_ASSOC));
     }
 
     // ---------------------------------------------------------------- internos
@@ -491,6 +641,9 @@ class Carcajada
             'foto_url'      => $fila['foto_url'],
             'instagram'     => $fila['instagram'],
             'comprometidas' => (int) $fila['personas_comprometidas'],
+            'estudio_con'   => $fila['estudio_con'],
+            'egreso_anio'   => $fila['egreso_anio'] === null ? null : (int) $fila['egreso_anio'],
+            'material'      => $fila['material'],
             'url_slug'      => isset($fila['url_slug']) ? $fila['url_slug'] : null,
             'pagina'        => isset($fila['pagina']) ? $fila['pagina'] : null,
         ];

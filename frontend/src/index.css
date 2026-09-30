@@ -65,3 +65,16 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   stroke: #111311;
   stroke-width: 0.14;
 }
+
+/* Texto con formato básico (EditorSimple y la descripción de un show de
+   Carcajada). El reset de Tailwind les saca los márgenes y las viñetas. */
+.editor-simple p,
+.texto-rico p { margin: 0 0 0.75em; }
+.editor-simple ul,
+.texto-rico ul { list-style: disc; padding-left: 1.5em; margin: 0 0 0.75em; }
+.editor-simple ol,
+.texto-rico ol { list-style: decimal; padding-left: 1.5em; margin: 0 0 0.75em; }
+.editor-simple a,
+.texto-rico a { text-decoration: underline; text-underline-offset: 3px; }
+.texto-rico > :last-child { margin-bottom: 0; }
+.editor-simple:empty::before { content: attr(data-placeholder); color: rgb(0 0 0 / 0.35); }

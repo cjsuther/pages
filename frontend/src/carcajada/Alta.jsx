@@ -2,8 +2,11 @@ import React, { useContext, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Check, Loader2, ExternalLink } from 'lucide-react';
 import { AuthContext } from '../App';
-import { Boton, Campo, Tarjeta, Rotulo, Aviso, Cargando } from '../components/ui';
+import { Boton, Campo, AreaTexto, Tarjeta, Rotulo, Aviso, Cargando } from '../components/ui';
 import { URL_REZONAR, urlDeRezonar } from '../utils/carcajada';
+
+/** Hasta cuántos caracteres entra la descripción del material (Carcajada::LARGO_MATERIAL). */
+const LARGO_MATERIAL = 2000;
 
 /**
  * El alta de un comediante: lo que completa cuando quiere anotarse.
@@ -20,7 +23,10 @@ function Alta() {
   const { token, apiUrl } = useContext(AuthContext);
 
   const [datos, setDatos] = useState(null);
-  const [form, setForm] = useState({ nombre: '', instagram: '', foto_url: '', personas_comprometidas: 10 });
+  const [form, setForm] = useState({
+    nombre: '', instagram: '', foto_url: '', personas_comprometidas: 10,
+    estudio_con: '', egreso_anio: '', material: '',
+  });
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [guardado, setGuardado] = useState(false);
@@ -49,6 +55,9 @@ function Alta() {
           instagram: (yaEsta && yaEsta.instagram) || (sugerido && sugerido.instagram) || '',
           foto_url: (yaEsta && yaEsta.foto_url) || (sugerido && sugerido.foto_url) || '',
           personas_comprometidas: yaEsta ? yaEsta.comprometidas : 10,
+          estudio_con: (yaEsta && yaEsta.estudio_con) || '',
+          egreso_anio: yaEsta && yaEsta.egreso_anio ? String(yaEsta.egreso_anio) : '',
+          material: (yaEsta && yaEsta.material) || '',
         });
       } catch (e) {
         if (vigente) setError(e.message);
@@ -217,6 +226,56 @@ function Alta() {
             <p className="text-xs text-tinta-suave mt-1">
               Sé realista: después se compara con la que viene de verdad, y es lo que miramos
               para armar las fechas.
+            </p>
+          </div>
+
+          {/* La formación y el material son para la producción, al armar las
+              fechas: no salen en la pantalla del show. */}
+          <div className="grid gap-5 sm:grid-cols-[1fr_10rem]">
+            <div>
+              <label htmlFor="carcajada-estudio" className="block text-sm font-semibold text-tinta mb-1.5">
+                ¿Con quién estudiaste?
+              </label>
+              <Campo
+                id="carcajada-estudio"
+                value={form.estudio_con}
+                onChange={(e) => cambiar('estudio_con', e.target.value)}
+                placeholder="Escuela, taller o profe"
+                maxLength={120}
+              />
+            </div>
+
+            <div>
+              <label htmlFor="carcajada-egreso" className="block text-sm font-semibold text-tinta mb-1.5">
+                Año de egreso
+              </label>
+              <Campo
+                id="carcajada-egreso"
+                type="number"
+                inputMode="numeric"
+                min="1950"
+                max={new Date().getFullYear()}
+                value={form.egreso_anio}
+                onChange={(e) => cambiar('egreso_anio', e.target.value)}
+                placeholder="2020"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label htmlFor="carcajada-material" className="block text-sm font-semibold text-tinta mb-1.5">
+              Contanos de qué va tu material
+            </label>
+            <AreaTexto
+              id="carcajada-material"
+              rows={5}
+              value={form.material}
+              onChange={(e) => cambiar('material', e.target.value)}
+              placeholder="Temas, estilo, cuánto dura tu set, si es apto para todo público..."
+              maxLength={LARGO_MATERIAL}
+            />
+            <p className="text-xs text-tinta-suave mt-1">
+              Lo lee la producción para armar las fechas; no sale en la pantalla del show.
             </p>
           </div>
 

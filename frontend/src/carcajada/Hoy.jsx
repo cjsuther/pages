@@ -1,32 +1,44 @@
 import React, { useEffect, useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
-import { Instagram, ExternalLink, Loader2 } from 'lucide-react';
+import { Instagram, ExternalLink, Loader2, ChevronRight } from 'lucide-react';
 import { fechaLarga, urlDeInstagram, urlDeRezonar } from '../utils/carcajada';
 
 /**
- * Lo que ve el público cuando escanea el QR durante el show.
+ * La página de una fecha de Carcajada.
+ *
+ * Es lo que abre el público cuando escanea el QR durante el show, y también
+ * la página de cada fecha (/fecha/:id). Va en este orden: de qué se trata la
+ * noche, quiénes se presentan y qué otras fechas vienen.
  *
  * Es un cartel en la pared de un bar: sin sesión, sin clave y sin nada que
- * completar. La pregunta que viene a contestar es una sola —"¿quién era el
- * que me hizo reír?"— así que muestra la cara, el nombre y a dónde seguirlo.
- *
- * La dirección es fija y siempre muestra el show del día; si hoy no hay,
- * muestra el próximo. Eso es lo que permite imprimir el QR una vez y que
- * siga sirviendo la fecha que viene.
+ * completar. Sin id muestra el show del día; si hoy no hay, el próximo. Eso
+ * es lo que permite imprimir el QR una vez y que siga sirviendo la fecha que
+ * viene.
  */
 function Hoy({ apiUrl }) {
+  const { id } = useParams();
   const [datos, setDatos] = useState(null);
+  const [noExiste, setNoExiste] = useState(false);
   const [cargando, setCargando] = useState(true);
 
   useEffect(() => {
     let vigente = true;
+    setCargando(true);
+    setNoExiste(false);
 
     (async () => {
       try {
-        const r = await fetch(`${apiUrl}/public/carcajada-hoy.php`);
+        const r = await fetch(`${apiUrl}/public/carcajada-hoy.php${id ? `?id=${encodeURIComponent(id)}` : ''}`);
         const cuerpo = await r.json();
 
-        if (vigente && r.ok) setDatos(cuerpo);
+        if (!vigente) return;
+
+        if (r.ok) {
+          setDatos(cuerpo);
+        } else if (r.status === 404) {
+          setNoExiste(true);
+        }
       } catch (e) {
         // Sin conexión no hay nada que mostrar: abajo se explica.
       } finally {
@@ -34,8 +46,13 @@ function Hoy({ apiUrl }) {
       }
     })();
 
+    // Al pasar de una fecha a otra, arrancar desde arriba.
+    if (typeof window !== 'undefined' && window.scrollTo) {
+      try { window.scrollTo(0, 0); } catch (e) { /* jsdom */ }
+    }
+
     return () => { vigente = false; };
-  }, [apiUrl]);
+  }, [apiUrl, id]);
 
   if (cargando) {
     return (
@@ -45,8 +62,9 @@ function Hoy({ apiUrl }) {
     );
   }
 
-  const show = datos && datos.show;
+  const show = !noExiste && datos && datos.show;
   const comediantes = (datos && datos.comediantes) || [];
+  const otras = (datos && datos.otras) || [];
 
   return (
     // Oscuro y no blanco: esto se abre en la oscuridad de un bar, con el show
@@ -62,12 +80,17 @@ function Hoy({ apiUrl }) {
           <div className="text-center py-16">
             <p className="text-3xl font-bold">Carcajada</p>
             <p className="text-white/60 mt-3">
-              No hay ninguna fecha cargada todavía. Volvé a escanear durante el próximo show.
+              {noExiste
+                ? 'Esa fecha no existe o ya no está publicada.'
+                : 'No hay ninguna fecha cargada todavía. Volvé a escanear durante el próximo show.'}
             </p>
+            {noExiste && (
+              <Link to="/hoy" className="inline-block mt-6 text-verde font-semibold">Ver la próxima fecha</Link>
+            )}
           </div>
         ) : (
           <>
-            <header className="text-center mb-10">
+            <header className="text-center mb-8">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/50">
                 {show.es_hoy ? 'Esta noche' : 'Próxima fecha'}
               </p>
@@ -76,54 +99,92 @@ function Hoy({ apiUrl }) {
               {show.lugar && <p className="text-white/50 text-sm">{show.lugar}</p>}
             </header>
 
-            {comediantes.length === 0 ? (
-              <p className="text-center text-white/60">El line-up se anuncia en un rato.</p>
-            ) : (
-              <ul className="space-y-4">
-                {comediantes.map((c) => (
-                  <li key={`${c.nombre}-${c.url_slug || ''}`} className="bg-white/[0.06] rounded-2xl p-4 flex items-center gap-4">
-                    {c.foto_url ? (
-                      <img src={c.foto_url} alt="" className="w-16 h-16 rounded-full object-cover shrink-0" />
-                    ) : (
-                      <span className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center text-xl font-bold shrink-0">
-                        {c.nombre.charAt(0).toUpperCase()}
-                      </span>
-                    )}
-
-                    <div className="min-w-0 flex-1">
-                      <p className="text-lg font-bold truncate">{c.nombre}</p>
-
-                      <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-sm">
-                        {c.url_slug && (
-                          <a
-                            href={urlDeRezonar(c.url_slug)}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1 text-verde font-semibold"
-                          >
-                            Sus fechas <ExternalLink className="w-3.5 h-3.5" />
-                          </a>
-                        )}
-                        {c.instagram && (
-                          <a
-                            href={urlDeInstagram(c.instagram)}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1 text-white/70"
-                          >
-                            <Instagram className="w-3.5 h-3.5" /> @{c.instagram}
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
+            {show.descripcion && (
+              <section
+                aria-label="Sobre la fecha"
+                className="texto-rico text-white/80 leading-relaxed mb-10 [&_a]:text-verde"
+                // Viene limpio del servidor (HtmlSimple): sólo p, br, strong,
+                // em, u, listas y links web.
+                dangerouslySetInnerHTML={{ __html: show.descripcion }}
+              />
             )}
 
-            <p className="text-center text-white/40 text-xs mt-10">
-              Seguilos: así se enteran de la próxima fecha antes que nadie.
-            </p>
+            <section aria-labelledby="titulo-lineup">
+              <h2 id="titulo-lineup" className="text-xs font-semibold uppercase tracking-[0.2em] text-white/50 mb-4">
+                Quiénes se presentan
+              </h2>
+
+              {comediantes.length === 0 ? (
+                <p className="text-white/60">El line-up se anuncia en un rato.</p>
+              ) : (
+                <ul className="space-y-4">
+                  {comediantes.map((c, i) => (
+                    <li key={`${i}-${c.nombre}`} className="bg-white/[0.06] rounded-2xl p-4 flex items-center gap-4">
+                      {c.foto_url ? (
+                        <img src={c.foto_url} alt="" className="w-16 h-16 rounded-full object-cover shrink-0" />
+                      ) : (
+                        <span className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center text-xl font-bold shrink-0">
+                          {c.nombre.charAt(0).toUpperCase()}
+                        </span>
+                      )}
+
+                      <div className="min-w-0 flex-1">
+                        <p className="text-lg font-bold truncate">{c.nombre}</p>
+
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-sm">
+                          {c.url_slug && (
+                            <a
+                              href={urlDeRezonar(c.url_slug)}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 text-verde font-semibold"
+                            >
+                              Sus fechas <ExternalLink className="w-3.5 h-3.5" />
+                            </a>
+                          )}
+                          {c.instagram && (
+                            <a
+                              href={urlDeInstagram(c.instagram)}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 text-white/70"
+                            >
+                              <Instagram className="w-3.5 h-3.5" /> @{c.instagram}
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              <p className="text-center text-white/40 text-xs mt-6">
+                Seguilos: así se enteran de la próxima fecha antes que nadie.
+              </p>
+            </section>
+
+            {otras.length > 0 && (
+              <section aria-labelledby="titulo-otras" className="mt-12">
+                <h2 id="titulo-otras" className="text-xs font-semibold uppercase tracking-[0.2em] text-white/50 mb-4">
+                  Otras fechas de Carcajada
+                </h2>
+                <ul className="divide-y divide-white/10 border-y border-white/10">
+                  {otras.map((o) => (
+                    <li key={o.id}>
+                      <Link to={`/fecha/${o.id}`} className="flex items-center gap-3 py-4 group">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-bold">{o.ciclo}</p>
+                          <p className="text-sm text-white/60 capitalize">{fechaLarga(o.fecha, o.hora)}</p>
+                          {o.lugar && <p className="text-xs text-white/40 truncate">{o.lugar}</p>}
+                        </div>
+                        <ChevronRight className="w-5 h-5 text-white/40 group-hover:text-white shrink-0" />
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
           </>
         )}
       </div>

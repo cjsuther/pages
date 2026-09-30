@@ -21,6 +21,7 @@ function RutasCarcajada({ apiUrl }) {
   return (
     <Routes>
       <Route path="/hoy" element={<Hoy apiUrl={apiUrl} />} />
+      <Route path="/fecha/:id" element={<Hoy apiUrl={apiUrl} />} />
       <Route path="/login" element={<ConMarco><Login /></ConMarco>} />
       <Route path="/" element={<ConMarco><ConSesion><Alta /></ConSesion></ConMarco>} />
       <Route path="/shows" element={<ConMarco><ConSesion><Shows /></ConSesion></ConMarco>} />

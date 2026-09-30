@@ -88,11 +88,119 @@ class CarcajadaTest extends HandlerTestCase
         $r = Carcajada::guardarComediante($this->db, 7, [
             'page_id' => 5, 'nombre' => 'Ana Gómez', 'instagram' => '@anagomez',
             'foto_url' => 'https://rezon.ar/uploads/ana.jpg', 'personas_comprometidas' => 12,
+            'estudio_con' => '  Escuela de Humor Sur ', 'egreso_anio' => '2019', 'material' => 'Stand up sobre mi familia.',
         ]);
         $params = $this->db->paramsFor('INSERT INTO carcajada_comediantes');
 
         $this->assertTrue($r['ok']);
-        $this->assertSame([7, 5, 'Ana Gómez', 'https://rezon.ar/uploads/ana.jpg', 'anagomez', 12], $params);
+        $this->assertSame([
+            7, 5, 'Ana Gómez', 'https://rezon.ar/uploads/ana.jpg', 'anagomez', 12,
+            'Escuela de Humor Sur', 2019, 'Stand up sobre mi familia.',
+        ], $params);
+    }
+
+    /** Con quién estudió, el egreso y el material son opcionales: vacíos quedan en NULL, no en "". */
+    public function testLaFormacionEsOpcional()
+    {
+        $this->laPaginaEsSuya();
+        $this->db->onWrite('INSERT INTO carcajada_comediantes', 1);
+
+        Carcajada::guardarComediante($this->db, 7, [
+            'page_id' => 5, 'nombre' => 'Ana', 'estudio_con' => '', 'egreso_anio' => '', 'material' => '   ',
+        ]);
+
+        $this->assertSame([null, null, null], array_slice($this->db->paramsFor('INSERT INTO carcajada_comediantes'), 6));
+    }
+
+    /** Un año de egreso fuera de rango es un error de tipeo, no un dato. */
+    public function testElEgresoTieneQueSerUnAnioPosible()
+    {
+        $this->laPaginaEsSuya();
+
+        foreach (['1900', (string) ((int) date('Y') + 1)] as $anio) {
+            $r = Carcajada::guardarComediante($this->db, 7, ['page_id' => 5, 'nombre' => 'Ana', 'egreso_anio' => $anio]);
+
+            $this->assertFalse($r['ok'], "aceptó $anio");
+            $this->assertStringContainsString('año de egreso', $r['error']);
+        }
+
+        $this->assertSame(0, $this->db->countCalls('INSERT INTO carcajada_comediantes'));
+    }
+
+    public function testElMaterialTieneUnTope()
+    {
+        $this->laPaginaEsSuya();
+
+        $r = Carcajada::guardarComediante($this->db, 7, [
+            'page_id' => 5, 'nombre' => 'Ana', 'material' => str_repeat('a', Carcajada::LARGO_MATERIAL + 1),
+        ]);
+
+        $this->assertFalse($r['ok']);
+    }
+
+    // ------------------------------------------------------------ invitados
+
+    /** Alguien sin cuenta: sólo nombre, foto e Instagram, y sin usuario ni página. */
+    public function testUnInvitadoSeDaDeAltaSinCuenta()
+    {
+        $this->db->onInsert('INSERT INTO carcajada_comediantes', 44);
+
+        $r = Carcajada::guardarInvitado($this->db, null, [
+            'nombre' => ' Pepe Invitado ', 'foto_url' => 'https://rezon.ar/api/uploads/pepe.jpg', 'instagram' => 'https://instagram.com/pepe.ok',
+        ]);
+
+        $this->assertSame(['ok' => true, 'error' => null, 'id' => 44], $r);
+        $this->assertSame(['Pepe Invitado', 'https://rezon.ar/api/uploads/pepe.jpg', 'pepe.ok'], $this->db->paramsFor('INSERT INTO carcajada_comediantes'));
+        $this->assertSame(1, $this->db->countCalls('VALUES (NULL, NULL, ?, ?, ?)'));
+    }
+
+    public function testUnInvitadoNecesitaNombre()
+    {
+        $r = Carcajada::guardarInvitado($this->db, null, ['nombre' => '  ']);
+
+        $this->assertFalse($r['ok']);
+        $this->assertSame(0, $this->db->countCalls('INSERT'));
+    }
+
+    /** La foto se muestra en la página pública: un javascript: o una ruta rara no pasan. */
+    public function testLaFotoDelInvitadoTieneQueSerUnaDireccionWeb()
+    {
+        foreach (['javascript:alert(1)', 'data:image/png;base64,xx', '/uploads/x.jpg'] as $foto) {
+            $r = Carcajada::guardarInvitado($this->db, null, ['nombre' => 'Pepe', 'foto_url' => $foto]);
+
+            $this->assertFalse($r['ok'], "aceptó $foto");
+        }
+
+        $this->assertSame(0, $this->db->countCalls('INSERT'));
+    }
+
+    public function testSeCorrigeUnInvitado()
+    {
+        $this->db->onSelect('SELECT user_id FROM carcajada_comediantes', [['user_id' => null]]);
+        $this->db->onWrite('UPDATE carcajada_comediantes', 1);
+
+        $r = Carcajada::guardarInvitado($this->db, 44, ['nombre' => 'Pepe Corregido', 'foto_url' => '', 'instagram' => '']);
+
+        $this->assertTrue($r['ok']);
+        $this->assertSame(['Pepe Corregido', null, null, 44], $this->db->paramsFor('UPDATE carcajada_comediantes'));
+    }
+
+    /** Los datos de quien tiene cuenta los maneja esa persona: quien produce no se los pisa. */
+    public function testNoSePisanLosDatosDeQuienTieneCuenta()
+    {
+        $this->db->onSelect('SELECT user_id FROM carcajada_comediantes', [['user_id' => 7]]);
+
+        $r = Carcajada::guardarInvitado($this->db, 9, ['nombre' => 'Otro nombre']);
+
+        $this->assertFalse($r['ok']);
+        $this->assertSame(0, $this->db->countCalls('UPDATE'));
+    }
+
+    public function testNoSeCorrigeUnComedianteQueNoExiste()
+    {
+        $this->db->onSelect('SELECT user_id FROM carcajada_comediantes', []);
+
+        $this->assertFalse(Carcajada::guardarInvitado($this->db, 99, ['nombre' => 'Pepe'])['ok']);
     }
 
     /** Anotarse dos veces con la misma cuenta actualiza, no duplica. */
@@ -206,11 +314,11 @@ class CarcajadaTest extends HandlerTestCase
     {
         $this->db->onSelect('WHERE s.fecha >= ?', [[7]]);
         $this->db->onSelect('FROM carcajada_shows s', [[
-            'id' => 7, 'fecha' => \Fechas::hoy(), 'hora' => '21:00:00', 'lugar' => 'Humboldt 1574',
+            'id' => 7, 'fecha' => \Fechas::hoy(), 'hora' => '21:00:00', 'lugar' => 'Humboldt 1574', 'descripcion' => null,
             'notas' => null, 'ciclo_id' => 1, 'ciclo' => 'JaJaJaJueves', 'ciclo_slug' => 'jajajajueves',
         ]]);
         $this->db->onSelect('FROM carcajada_lineup l', [[
-            'id' => 1, 'comediante_id' => 9, 'orden' => 1, 'puntaje' => 5, 'personas_traidas' => 8,
+            'id' => 1, 'comediante_id' => 9, 'user_id' => 30, 'orden' => 1, 'puntaje' => 5, 'personas_traidas' => 8,
             'comentario' => 'secreto', 'evaluado_en' => '2026-09-01 00:00:00', 'nombre' => 'Ana Gómez',
             'foto_url' => 'https://rezon.ar/uploads/ana.jpg', 'instagram' => 'anagomez',
             'personas_comprometidas' => 10, 'url_slug' => 'anagomez', 'pagina' => 'Ana Gómez',
@@ -233,11 +341,11 @@ class CarcajadaTest extends HandlerTestCase
     {
         $this->db->onSelect('WHERE s.fecha >= ?', [[7]]);
         $this->db->onSelect('FROM carcajada_shows s', [[
-            'id' => 7, 'fecha' => '2026-12-31', 'hora' => null, 'lugar' => null, 'notas' => null,
+            'id' => 7, 'fecha' => '2026-12-31', 'hora' => null, 'lugar' => null, 'descripcion' => null, 'notas' => null,
             'ciclo_id' => 1, 'ciclo' => 'JaJaJaJueves', 'ciclo_slug' => 'jajajajueves',
         ]]);
         $this->db->onSelect('FROM carcajada_lineup l', [[
-            'id' => 1, 'comediante_id' => 9, 'orden' => 1, 'puntaje' => 2, 'personas_traidas' => 1,
+            'id' => 1, 'comediante_id' => 9, 'user_id' => 30, 'orden' => 1, 'puntaje' => 2, 'personas_traidas' => 1,
             'comentario' => 'flojo', 'evaluado_en' => null, 'nombre' => 'Ana', 'foto_url' => null,
             'instagram' => null, 'personas_comprometidas' => 10, 'url_slug' => 'ana', 'pagina' => 'Ana',
         ]]);

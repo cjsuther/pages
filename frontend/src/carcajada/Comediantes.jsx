@@ -77,7 +77,10 @@ function Comediantes() {
                     )}
 
                     <div className="min-w-0 flex-1">
-                      <p className="font-bold text-tinta">{c.nombre}</p>
+                      <p className="font-bold text-tinta">
+                        {c.nombre}
+                        {!c.con_cuenta && <Chip className="ml-2 align-middle">Sin cuenta</Chip>}
+                      </p>
 
                       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs mt-0.5">
                         {c.url_slug && (
@@ -122,6 +125,17 @@ function Comediantes() {
                           </dd>
                         </div>
                       </dl>
+
+                      {(c.estudio_con || c.egreso_anio) && (
+                        <p className="text-sm text-tinta-media mt-3">
+                          Estudió{c.estudio_con ? ` con ${c.estudio_con}` : ''}
+                          {c.egreso_anio ? ` · egresó en ${c.egreso_anio}` : ''}
+                        </p>
+                      )}
+
+                      {c.material && (
+                        <p className="text-sm text-tinta-media mt-2 whitespace-pre-line">{c.material}</p>
+                      )}
                     </div>
 
                     <div className="shrink-0 text-right space-y-1">

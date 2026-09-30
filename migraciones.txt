@@ -39,3 +39,4 @@ migration_links_de_evento.sql
 migration_carcajada.sql
 migration_clientes.sql
 migration_clientes_relleno.sql
+migration_carcajada_invitados.sql

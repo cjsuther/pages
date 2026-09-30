@@ -39,6 +39,9 @@ class CarcajadaHandler
                 'foto_url'  => $req->input('foto_url'),
                 'instagram' => $req->input('instagram'),
                 'personas_comprometidas' => $req->input('personas_comprometidas'),
+                'estudio_con' => $req->input('estudio_con'),
+                'egreso_anio' => $req->input('egreso_anio'),
+                'material'    => $req->input('material'),
             ]);
 
             if (!$resultado['ok']) {
@@ -56,7 +59,10 @@ class CarcajadaHandler
 
     // ------------------------------------------------------------- productor
 
-    /** El listado de comediantes con su ficha. */
+    /**
+     * El listado de comediantes con su ficha, y el alta o la corrección de
+     * los que no tienen cuenta (POST crea, PUT con ?id corrige).
+     */
     public static function comediantes($db, Request $req)
     {
         $error = self::exigirProductor($db, $req);
@@ -65,11 +71,27 @@ class CarcajadaHandler
             return $error;
         }
 
-        if ($req->method !== 'GET') {
-            return Response::methodNotAllowed();
+        if ($req->method === 'GET') {
+            return Response::ok(['comediantes' => Carcajada::fichas($db)]);
         }
 
-        return Response::ok(['comediantes' => Carcajada::fichas($db)]);
+        if ($req->method === 'POST' || $req->method === 'PUT') {
+            $id = $req->method === 'PUT' ? (int) $req->param('id') : null;
+
+            if ($req->method === 'PUT' && !$id) {
+                return Response::error(400, 'id requerido');
+            }
+
+            $resultado = Carcajada::guardarInvitado($db, $id, self::datosDeInvitado($req));
+
+            if (!$resultado['ok']) {
+                return Response::error(400, $resultado['error']);
+            }
+
+            return Response::ok(['success' => true, 'id' => $resultado['id'], 'comediantes' => Carcajada::fichas($db)]);
+        }
+
+        return Response::methodNotAllowed();
     }
 
     /** Los shows y los ciclos: listar, crear y editar. */
@@ -166,6 +188,21 @@ class CarcajadaHandler
                 }
                 break;
 
+            case 'invitar':
+                // Alguien sin cuenta: se da de alta y queda sumado a la fecha.
+                $alta = Carcajada::guardarInvitado($db, null, self::datosDeInvitado($req));
+
+                if (!$alta['ok']) {
+                    return Response::error(400, $alta['error']);
+                }
+
+                Carcajada::sumarAlLineup($db, $showId, $alta['id']);
+                break;
+
+            case 'descripcion':
+                Carcajada::guardarDescripcion($db, $showId, $req->input('descripcion'));
+                break;
+
             case 'sacar':
                 Carcajada::sacarDelLineup($db, $showId, $comedianteId);
                 break;
@@ -196,17 +233,23 @@ class CarcajadaHandler
                 return Response::error(400, 'Acción desconocida');
         }
 
-        return Response::ok(['success' => true, 'show' => Carcajada::show($db, $showId)]);
+        return Response::ok([
+            'success'     => true,
+            'show'        => Carcajada::show($db, $showId),
+            'comediantes' => Carcajada::fichas($db),
+        ]);
     }
 
     // --------------------------------------------------------------- público
 
     /**
-     * Lo que ve quien escanea el QR durante el show.
+     * Lo que ve quien escanea el QR durante el show, o quien abre una fecha.
      *
      * Sin sesión y sin clave: es un cartel en la pared de un bar. Por eso sale
      * sólo lo que hace falta para encontrar a alguien después —cómo se llama,
      * la cara, a dónde seguirlo— y nada de lo que se anota en su ficha.
+     *
+     * Sin ?id es el show del día (o el próximo); con ?id, esa fecha.
      */
     public static function hoy($db, Request $req)
     {
@@ -214,16 +257,33 @@ class CarcajadaHandler
             return Response::methodNotAllowed();
         }
 
+        $showId = (int) $req->param('id');
+
+        if ($showId) {
+            $publico = Carcajada::showPublico($db, $showId);
+
+            return $publico === null ? Response::notFound('Esa fecha no existe') : Response::ok($publico);
+        }
+
         $enCurso = Carcajada::showEnCurso($db);
 
         if ($enCurso === null) {
-            return Response::ok(['show' => null, 'comediantes' => []]);
+            return Response::ok(['show' => null, 'comediantes' => [], 'otras' => []]);
         }
 
         return Response::ok($enCurso);
     }
 
     // -------------------------------------------------------------- internos
+
+    private static function datosDeInvitado(Request $req)
+    {
+        return [
+            'nombre'    => $req->input('nombre'),
+            'foto_url'  => $req->input('foto_url'),
+            'instagram' => $req->input('instagram'),
+        ];
+    }
 
     private static function exigirProductor($db, Request $req)
     {
