@@ -853,6 +853,23 @@ class EntradasTest extends HandlerTestCase
         $this->assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $r);
     }
 
+    /**
+     * Y en la zona del servidor, como el resto de las fechas. Mirar sólo el
+     * formato dejó pasar que se guardaba la hora de Mercado Pago sin
+     * convertir: cuatro horas antes.
+     */
+    public function testLaFechaDeAcreditacionSeGuardaEnLaZonaDelServidor()
+    {
+        $zona = date_default_timezone_get();
+        date_default_timezone_set('UTC');
+
+        try {
+            $this->assertSame('2026-10-10 14:00:00', Entradas::fechaDeAcreditacion(['acreditacion' => '2026-10-10T10:00:00.000-04:00']));
+        } finally {
+            date_default_timezone_set($zona);
+        }
+    }
+
     public function testSinFechaDeAcreditacionNoSeInventaNinguna()
     {
         $this->assertNull(Entradas::fechaDeAcreditacion([]));
@@ -1259,5 +1276,111 @@ class EntradasTest extends HandlerTestCase
         }
 
         return null;
+    }
+
+    // ------------------------------------------------ casos de borde de la venta
+
+    /**
+     * El máximo por compra acota cuánto se lleva una sola persona. Fuera de
+     * rango no se guarda: con 0 nadie podría comprar, y sin techo una sola
+     * compra podría llevarse el evento entero.
+     *
+     * @dataProvider maximosFueraDeRango
+     */
+    public function testElMaximoPorCompraTieneQueEstarEnRango($maximo)
+    {
+        $r = Entradas::guardarConfig($this->db, 100, [
+            'capacidad' => 100, 'precio' => 1000, 'max_por_compra' => $maximo,
+        ]);
+
+        $this->assertFalse($r['ok']);
+        $this->assertStringContainsString('entre 1 y ' . Entradas::MAX_POR_COMPRA, $r['error']);
+        $this->assertSame(0, $this->db->countCalls('INSERT INTO event_ticketing'));
+    }
+
+    public function maximosFueraDeRango()
+    {
+        return ['cero' => [0], 'negativo' => [-3], 'por encima del tope' => [Entradas::MAX_POR_COMPRA + 1]];
+    }
+
+    public function testBorrarLaConfiguracionSacaLaVentaDelEvento()
+    {
+        Entradas::borrarConfig($this->db, '100');
+
+        $this->assertSame([100], $this->db->paramsFor('DELETE FROM event_ticketing WHERE link_id'));
+    }
+
+    /** Lo que manda el navegador no es de fiar: una cadena donde va una lista no es una compra. */
+    public function testLugaresQueNoSonUnaListaSeRechazanSinTocarLaBase()
+    {
+        $r = Entradas::crearOrden($this->db, 100, $this->comprador(['lugares' => 'f:A:1']));
+
+        $this->assertFalse($r['ok']);
+        $this->assertStringContainsString('formato', $r['error']);
+        $this->assertSame([], $this->db->log());
+    }
+
+    /**
+     * Si la base falla a mitad de la compra, lo que se escribió se deshace:
+     * una orden sin sus lugares, o lugares sin su orden, dejarían butacas
+     * bloqueadas que nadie pagó. Y el error tiene que llegar arriba, no
+     * convertirse en una compra "exitosa" que no existe.
+     */
+    public function testSiLaBaseFallaAMitadDeLaCompraSeDeshaceTodo()
+    {
+        $this->hayEventoConPlano();
+        $this->hayOcupadas(0);
+        $this->hayLugaresOcupados([]);
+        $this->db->onInsert('INSERT INTO ticket_orders', 77);
+        $this->db->failOn('INSERT INTO ticket_order_lugares', 'se cortó la conexión');
+
+        try {
+            Entradas::crearOrden($this->db, 100, $this->comprador(['lugares' => ['f:A:1']]));
+            $this->fail('el error de la base tenía que propagarse');
+        } catch (\PDOException $e) {
+            $this->assertSame('se cortó la conexión', $e->getMessage());
+        }
+
+        $this->assertTrue($this->db->rolledBack);
+        $this->assertFalse($this->db->committed);
+        $this->assertFalse($this->db->inTransaction());
+    }
+
+    /**
+     * El código de la orden es aleatorio y se verifica contra la base. Si
+     * cinco intentos seguidos chocan, algo está muy mal: mejor no vender que
+     * darle a alguien el código de otra compra.
+     */
+    public function testSiNoHayCodigoLibreLaCompraNoSeHace()
+    {
+        $this->hayEvento();
+        $this->hayOcupadas(0);
+        $this->db->onSelect('SELECT 1 FROM ticket_orders WHERE codigo', array_fill(0, 5, [1]));
+
+        try {
+            Entradas::crearOrden($this->db, 100, $this->comprador());
+            $this->fail('tenía que fallar sin código libre');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('código de orden', $e->getMessage());
+        }
+
+        $this->assertSame(5, $this->db->countCalls('SELECT 1 FROM ticket_orders WHERE codigo'));
+        $this->assertSame(0, $this->db->countCalls('INSERT INTO ticket_orders'));
+        $this->assertTrue($this->db->rolledBack);
+    }
+
+    /** Agrandar el plano con lugares ya vendidos es válido mientras esos lugares sigan estando. */
+    public function testSePuedeCambiarElPlanoSiLoVendidoSigueEnEl()
+    {
+        $plano = $this->planoDeDosFilas();
+        $plano['elementos'][0]['butacas'] = 8;
+
+        $this->hayOcupadas(1);
+        $this->hayLugaresOcupados(['f:A:3']);
+
+        $r = Entradas::guardarConfig($this->db, 100, ['precio' => 0, 'plano' => $plano]);
+
+        $this->assertTrue($r['ok'], (string) $r['error']);
+        $this->assertSame(1, $this->db->countCalls('INSERT INTO event_ticketing'));
     }
 }

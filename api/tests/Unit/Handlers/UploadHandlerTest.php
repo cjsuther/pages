@@ -306,7 +306,6 @@ class UploadHandlerTest extends HandlerTestCase
 
         ob_start();
         imagepng($im);
-        imagedestroy($im);
 
         return ob_get_clean();
     }
@@ -521,7 +520,6 @@ class FakeFileStorage extends FileStorage
         $im = imagecreatetruecolor(8, 8);
         ob_start();
         imagepng($im);
-        imagedestroy($im);
 
         return ob_get_clean();
     }

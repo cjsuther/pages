@@ -332,4 +332,137 @@ class ClientesTest extends HandlerTestCase
         $this->assertStringContainsString('Otra fecha', $compras);
         $this->assertSame(2, substr_count($compras, 'ana@example.com'));
     }
+
+    // ------------------------------------------------------ más filtros y bordes
+
+    /** El filtro por evento se arma con esta lista: los borrados también, marcados. */
+    public function testLaListaDeEventosIncluyeLosBorrados()
+    {
+        $this->db->onSelect('WHERE rp.page_id = ?', [
+            ['id' => 8, 'titulo' => 'Show de hoy', 'event_date' => '2026-09-30', 'event_time' => '21:00:00',
+             'link_id' => '349', 'rol' => 'organizador', 'compras' => '3'],
+            ['id' => 5, 'titulo' => 'Uno borrado', 'event_date' => '2026-06-01', 'event_time' => null,
+             'link_id' => null, 'rol' => 'colaborador', 'compras' => '1'],
+        ]);
+
+        $eventos = Clientes::eventos($this->db, 5);
+
+        $this->assertSame([
+            'id' => 8, 'titulo' => 'Show de hoy', 'event_date' => '2026-09-30', 'event_time' => '21:00:00',
+            'eliminado' => false, 'link_id' => 349, 'rol' => 'organizador', 'compras' => 3,
+        ], $eventos[0]);
+        $this->assertTrue($eventos[1]['eliminado']);
+        $this->assertNull($eventos[1]['link_id']);
+        $this->assertSame([5], $this->db->paramsFor('WHERE rp.page_id = ?'));
+    }
+
+    /** Sin email no hay forma de reconocer a la persona: no se inventa un cliente. */
+    public function testUnaCompraSinEmailNoArmaUnCliente()
+    {
+        $this->hayCompras([
+            $this->compra(['codigo' => 'A1', 'email' => '   ']),
+            $this->compra(['codigo' => 'B2']),
+        ]);
+
+        $r = $this->listar();
+
+        $this->assertCount(1, $r['clientes']);
+        $this->assertSame('ana@example.com', $r['clientes'][0]['email']);
+    }
+
+    public function testElHastaDejaAfueraLosEventosPosteriores()
+    {
+        $this->hayCompras([
+            $this->compra(['codigo' => 'A1', 'event_date' => '2026-12-01']),
+            $this->compra(['codigo' => 'B2', 'email' => 'beto@example.com', 'event_date' => '2026-09-01']),
+            $this->compra(['codigo' => 'C3', 'email' => 'caro@example.com', 'event_date' => null]),
+        ]);
+
+        $r = $this->listar(['hasta' => '2026-10-01']);
+
+        $this->assertSame(['beto@example.com'], array_column($r['clientes'], 'email'));
+    }
+
+    /**
+     * Compró, reservó gratis o sólo sigue la página: son tres públicos
+     * distintos y el filtro tiene que separarlos sin mezclar.
+     */
+    public function testFiltraPorOrigen()
+    {
+        $compras = function () {
+            $this->hayCompras([
+                $this->compra(['codigo' => 'A1']),
+                $this->compra(['codigo' => 'B2', 'email' => 'beto@example.com', 'total' => '0.00']),
+            ]);
+            $this->haySeguidores([
+                ['user_id' => 13, 'email' => 'caro@example.com', 'name' => 'Caro', 'created_at' => '2026-07-01 12:00:00'],
+            ]);
+        };
+
+        $compras();
+        $this->assertSame(['ana@example.com'], array_column($this->listar(['origen' => 'compro'])['clientes'], 'email'));
+
+        $compras();
+        $this->assertSame(['beto@example.com'], array_column($this->listar(['origen' => 'reservo'])['clientes'], 'email'));
+
+        $compras();
+        $this->assertSame(['caro@example.com'], array_column($this->listar(['origen' => 'sigue'])['clientes'], 'email'));
+    }
+
+    public function testFiltraAQuienTieneCuenta()
+    {
+        $this->hayCompras([
+            $this->compra(['codigo' => 'A1', 'user_id' => 12]),
+            $this->compra(['codigo' => 'B2', 'email' => 'beto@example.com']),
+        ]);
+
+        $this->assertSame(['ana@example.com'], array_column($this->listar(['cuenta' => 'si'])['clientes'], 'email'));
+    }
+
+    /** Un seguidor sin fecha no rompe el orden por actividad ni inventa una. */
+    public function testUnSeguidorSinFechaNoTieneActividad()
+    {
+        $this->haySeguidores([
+            ['user_id' => 13, 'email' => 'caro@example.com', 'name' => 'Caro', 'created_at' => null],
+        ]);
+
+        $c = $this->listar()['clientes'][0];
+
+        $this->assertNull($c['primera_actividad']);
+        $this->assertNull($c['ultima_actividad']);
+    }
+
+    /**
+     * En el Excel lo gastado es un número, para poder sumarlo. Si la persona
+     * pagó en dos monedas no se suman peras con manzanas: va el detalle.
+     */
+    public function testElExcelNoSumaMonedasDistintas()
+    {
+        $this->hayCompras([
+            $this->compra(['codigo' => 'A1', 'total' => '1500.00', 'moneda' => 'ARS']),
+            $this->compra(['codigo' => 'B2', 'record_id' => 8, 'total' => '20.00', 'moneda' => 'USD']),
+        ]);
+        $this->haySeguidores([
+            ['user_id' => 13, 'email' => 'caro@example.com', 'name' => 'Caro', 'created_at' => '2026-07-01 12:00:00'],
+        ]);
+
+        $personas = $this->hojaDelExcel(Clientes::excel($this->listar()['clientes']), 1);
+
+        $this->assertStringContainsString('ARS 1500 · USD 20', $personas);
+        // Quien sólo sigue no gastó nada: cero, no una celda vacía.
+        $this->assertMatchesRegularExpression('/caro@example\.com.*?<v>0<\/v>/s', $personas);
+    }
+
+    private function hojaDelExcel($contenido, $numero)
+    {
+        $ruta = tempnam(sys_get_temp_dir(), 'test');
+        file_put_contents($ruta, $contenido);
+        $zip = new ZipArchive();
+        $zip->open($ruta);
+        $hoja = $zip->getFromName("xl/worksheets/sheet$numero.xml");
+        $zip->close();
+        unlink($ruta);
+
+        return $hoja;
+    }
 }

@@ -406,4 +406,87 @@ class MercadoPagoTest extends TestCase
     {
         $this->assertNull(MercadoPago::comisionDePlataforma(['status' => 'approved']));
     }
+
+    // ------------------------------------------------------- respuestas raras
+
+    public function testSeReconoceLaFormaDeUnaClavePublica()
+    {
+        $this->assertTrue(MercadoPago::pareceClavePublica('APP_USR-abcdef01-2345-6789-abcd-ef0123456789'));
+        $this->assertTrue(MercadoPago::pareceClavePublica('TEST-abcdef01-2345-6789-abcd-ef0123456789'));
+        $this->assertFalse(MercadoPago::pareceClavePublica('APP_USR-corta'));
+        $this->assertFalse(MercadoPago::pareceClavePublica('pk_live_abcdef0123456789abcdef'));
+    }
+
+    /** Una cuenta sin apodo se reconoce por el email: el dueño tiene que saber cuál conectó. */
+    public function testSinApodoLaCuentaSeReconocePorElEmail()
+    {
+        $http = (new FakeHttpClient())->responde('/users/me', 200, ['id' => 1, 'email' => 'sala@example.com']);
+
+        $r = (new MercadoPago(self::TOKEN_PROD, $http))->verificar();
+
+        $this->assertTrue($r['ok']);
+        $this->assertSame('sala@example.com', $r['cuenta']);
+    }
+
+    /** Sin id de preferencia no hay link de pago: no se manda al comprador a ningún lado. */
+    public function testUnaPreferenciaIlegibleNoDaUnLink()
+    {
+        $http = (new FakeHttpClient())->responde('/checkout/preferences', 201, 'Service Unavailable');
+
+        $r = (new MercadoPago(self::TOKEN_PROD, $http))->crearPreferencia($this->compra());
+
+        $this->assertFalse($r['ok']);
+        $this->assertNull($r['url']);
+        $this->assertSame('Respuesta ilegible de Mercado Pago', $r['error']);
+    }
+
+    /** Un error sin mensaje igual se explica: con el código que devolvió. */
+    public function testUnErrorSinMensajeDiceElCodigo()
+    {
+        $http = (new FakeHttpClient())->responde('/checkout/preferences', 502, '<html>Bad Gateway</html>');
+
+        $r = (new MercadoPago(self::TOKEN_PROD, $http))->crearPreferencia($this->compra());
+
+        $this->assertSame('Mercado Pago respondió 502', $r['error']);
+    }
+
+    /** Un pago sin estado no se puede acreditar ni rechazar: se trata como no leído. */
+    public function testUnPagoSinEstadoNoSeDaPorLeido()
+    {
+        $http = (new FakeHttpClient())->responde('/v1/payments/', 200, ['id' => 99, 'external_reference' => 'ABC123DEF456']);
+
+        $r = (new MercadoPago(self::TOKEN_PROD, $http))->consultarPago('99');
+
+        $this->assertFalse($r['ok']);
+        $this->assertNull($r['estado']);
+    }
+
+    public function testUnaBusquedaIlegibleNoEncuentraNada()
+    {
+        $http = (new FakeHttpClient())->responde('/v1/payments/search', 200, ['paging' => ['total' => 0]]);
+
+        $this->assertFalse((new MercadoPago('APP_USR-token', $http))->buscarPagoPorReferencia('ABC123')['ok']);
+    }
+
+    public function testUnaBusquedaFallidaNoEncuentraNada()
+    {
+        $r = (new MercadoPago('APP_USR-token', $this->httpBuscando([$this->compra()], 500)))->buscarPagoPorReferencia('ABC123');
+
+        $this->assertFalse($r['ok']);
+    }
+
+    /** Un resultado roto entre los pagos no tapa al aprobado que viene después. */
+    public function testUnResultadoRotoSeSaltea()
+    {
+        $http = $this->httpBuscando([
+            'basura',
+            ['id' => 7],
+            ['id' => 8, 'status' => 'approved', 'external_reference' => 'ABC123', 'transaction_amount' => 100],
+        ]);
+
+        $r = (new MercadoPago('APP_USR-token', $http))->buscarPagoPorReferencia('ABC123');
+
+        $this->assertTrue($r['ok']);
+        $this->assertSame(8, (int) $r['id']);
+    }
 }

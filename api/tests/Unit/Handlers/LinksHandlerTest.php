@@ -621,4 +621,50 @@ class LinksHandlerTest extends HandlerTestCase
         $this->assertSame(0.0, LinksHandler::precioONull(-500));
     }
 
+    /**
+     * Borrar sólo la longitud también deja el evento sin punto en el mapa,
+     * aunque la latitud siga guardada.
+     */
+    public function testUpdateDeEventoRechazaBorrarSoloLaLongitud()
+    {
+        $this->autorizarLink();
+        $this->db->onSelect('SELECT l.id, lg.type', [['id' => 5, 'type' => 'eventos']]);
+        $this->db->onSelect('SELECT event_latitude, event_longitude', [[
+            'event_latitude' => '-34.6',
+            'event_longitude' => '-58.4',
+        ]]);
+
+        $res = LinksHandler::detail($this->db, $this->put(
+            ['event_longitude' => ''],
+            $this->user(),
+            ['id' => '5']
+        ));
+
+        $this->assertError(400, $res, 'Los eventos deben tener coordenadas');
+        $this->assertNoWrites();
+    }
+
+    /** Mover el punto del mapa manda las dos coordenadas nuevas, no mezcla con las viejas. */
+    public function testUpdateDeEventoConCoordenadasNuevas()
+    {
+        $this->autorizarLink();
+        $this->db->onSelect('SELECT l.id, lg.type', [['id' => 5, 'type' => 'eventos']]);
+        $this->db->onSelect('SELECT event_latitude, event_longitude', [[
+            'event_latitude' => '-34.6',
+            'event_longitude' => '-58.4',
+        ]]);
+        $this->db->onWrite('UPDATE links SET', 1);
+        $this->db->onSelect('SELECT * FROM links WHERE id = ?', [['id' => 5]]);
+
+        $res = LinksHandler::detail($this->db, $this->put(
+            ['event_latitude' => '-31.4', 'event_longitude' => '-64.2'],
+            $this->user(),
+            ['id' => '5']
+        ));
+
+        $this->assertStatus(200, $res);
+        $params = $this->db->paramsFor('UPDATE links SET');
+        $this->assertContains('-31.4', $params);
+        $this->assertContains('-64.2', $params);
+    }
 }

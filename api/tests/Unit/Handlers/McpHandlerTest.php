@@ -259,4 +259,61 @@ class McpHandlerTest extends HandlerTestCase
 
         $this->assertSame(405, $r->status);
     }
+
+    public function testSoloSeAtiendePorPost()
+    {
+        $r = $this->pedir(['jsonrpc' => '2.0', 'id' => 1, 'method' => 'ping'], self::CLAVE, 'PUT');
+
+        $this->assertSame(405, $r->status);
+    }
+
+    /**
+     * Si una herramienta revienta (la base se cayó a mitad de crear un
+     * evento), el asistente recibe un error de JSON-RPC genérico: el detalle
+     * técnico, que puede traer nombres de tablas o datos, no sale.
+     */
+    public function testUnaHerramientaQueRevientaDevuelveErrorInternoSinDetalles()
+    {
+        $this->claveValida();
+        $this->db->failOn('FROM pages WHERE user_id', "SQLSTATE[42S02]: Table 'u414051709_rezonar.pages' doesn't exist");
+
+        $r = $this->pedir([
+            'jsonrpc' => '2.0', 'id' => 9, 'method' => 'tools/call',
+            'params' => ['name' => 'listar_paginas', 'arguments' => []],
+        ]);
+
+        $this->assertSame(200, $r->status);
+        $this->assertSame(9, $r->body['id']);
+        $this->assertSame(-32603, $r->body['error']['code']);
+        $this->assertStringNotContainsString('SQLSTATE', json_encode($r->body));
+        $this->assertStringNotContainsString('u414051709', json_encode($r->body));
+    }
+
+    /** Sin el prefijo de las claves de API, la credencial es un token de OAuth. */
+    public function testUnTokenDeOauthTambienIdentifica()
+    {
+        $this->db->onSelect('FROM oauth_tokens t', [[
+            'id' => 4, 'user_id' => 7, 'expira_en' => date('Y-m-d H:i:s', time() + 3600),
+            'email' => 'ana@example.com', 'name' => 'Ana',
+        ]]);
+        $this->db->onWrite('UPDATE oauth_tokens SET ultimo_uso_en', 1);
+
+        $r = $this->pedir(['jsonrpc' => '2.0', 'id' => 1, 'method' => 'ping'], 'token-de-oauth-opaco');
+
+        $this->assertSame(200, $r->status);
+        $this->assertSame(0, $this->db->countCalls('FROM api_keys'));
+        $this->assertTrue($this->db->ran('FROM oauth_tokens t'));
+    }
+
+    public function testUnTokenDeOauthVencidoNoSeAtiende()
+    {
+        $this->db->onSelect('FROM oauth_tokens t', [[
+            'id' => 4, 'user_id' => 7, 'expira_en' => '2020-01-01 00:00:00',
+            'email' => 'ana@example.com', 'name' => 'Ana',
+        ]]);
+
+        $r = $this->pedir(['jsonrpc' => '2.0', 'id' => 1, 'method' => 'ping'], 'token-de-oauth-opaco');
+
+        $this->assertSame(401, $r->status);
+    }
 }

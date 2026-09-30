@@ -710,4 +710,174 @@ class CheckoutHandlerTest extends HandlerTestCase
     {
         $this->assertSame(400, CheckoutHandler::orden($this->db, new Request('GET'))->status);
     }
+
+    // ------------------------------------------------------- casos de borde
+
+    public function testComprarSinEventoEs400YNoTocaLaBase()
+    {
+        $r = CheckoutHandler::comprar($this->db, $this->pedido(['link_id' => null]));
+
+        $this->assertError(400, $r, 'link_id requerido');
+        $this->assertSame([], $this->db->log());
+    }
+
+    /** Mercado Pago avisa por POST (webhook) o por GET (IPN vieja); nada más. */
+    public function testElAvisoRechazaOtrosMetodos()
+    {
+        $r = CheckoutHandler::aviso($this->db, new Request('PUT', [], ['orden' => self::CODIGO]), new FakeHttpClient());
+
+        $this->assertSame(405, $r->status);
+    }
+
+    /**
+     * Si la página desconectó Mercado Pago no hay con qué consultar el pago.
+     * Se responde 200 igual: reintentar no lo va a arreglar, y la orden queda
+     * para la conciliación cuando vuelva a conectar.
+     */
+    public function testUnAvisoDeUnaPaginaSinCredencialesSeRespondeSinConsultar()
+    {
+        $this->hayOrdenPendiente();
+        $this->db->onSelect('SELECT lg.page_id', [[5]]);
+        $http = new FakeHttpClient();
+
+        $r = CheckoutHandler::aviso($this->db, $this->avisoDe('99'), $http);
+
+        $this->assertSame(200, $r->status);
+        $this->assertSame('la página no tiene credenciales', $r->body['motivo']);
+        $this->assertFalse($http->llamoA('/v1/payments/'));
+        $this->assertNoWrites();
+    }
+
+    /**
+     * Los webhooks de Mercado Pago mandan `?data.id=123&type=payment` en la
+     * URL. PHP convierte los puntos de las claves de $_GET en guiones bajos,
+     * así que en producción esa clave llega como `data_id`. Se buscaba
+     * 'data.id', que nunca podía llegar: un aviso sin cuerpo se descartaba
+     * como "sin datos" y la compra quedaba esperando a la conciliación.
+     */
+    public function testUnWebhookConElIdSoloEnLaUrlSeProcesa()
+    {
+        $this->hayOrdenPendiente();
+        $this->hayCredencialesDeCobro();
+        $this->db->onSelect('FROM ticket_orders WHERE codigo', [['codigo' => self::CODIGO, 'estado' => 'reservada']]);
+        $this->db->onWrite('UPDATE ticket_orders', 1);
+
+        // Tal como llega a $_GET en producción.
+        $aviso = new Request('POST', [], ['orden' => self::CODIGO, 'data_id' => '99', 'type' => 'payment']);
+
+        $this->assertSame('pago acreditado', CheckoutHandler::aviso($this->db, $aviso, $this->httpConPago([]))->body['motivo']);
+    }
+
+    public function testConciliarSinCredencialesNoConsultaNiAcredita()
+    {
+        $this->hayOrdenPendiente();
+        $this->db->onSelect('SELECT lg.page_id', [[5]]);
+        $http = $this->httpConBusqueda([$this->pagoDe()]);
+
+        $r = CheckoutHandler::conciliar($this->db, self::CODIGO, $http);
+
+        $this->assertFalse($r['revisada']);
+        $this->assertSame('la página no tiene credenciales', $r['motivo']);
+        $this->assertFalse($http->llamoA('/v1/payments/search'));
+    }
+
+    public function testConciliarUnaOrdenInexistente()
+    {
+        $r = CheckoutHandler::conciliar($this->db, 'NOEXISTE0000', new FakeHttpClient());
+
+        $this->assertSame(['revisada' => false, 'acreditada' => false, 'motivo' => 'orden inexistente'], $r);
+    }
+
+    public function testLaOrdenSoloSeConsultaPorGet()
+    {
+        $r = CheckoutHandler::orden($this->db, new Request('POST', [], ['codigo' => self::CODIGO]));
+
+        $this->assertSame(405, $r->status);
+    }
+
+    // --------------------------------------------------- completarDesglose
+
+    private function pagoConDesglose(array $overrides = [])
+    {
+        return $this->httpConPago(array_merge([
+            'transaction_details' => ['net_received_amount' => 2800.0],
+            'fee_details' => [
+                ['type' => 'mercadopago_fee', 'amount' => 170.0],
+                ['type' => 'application_fee', 'amount' => 30.0],
+            ],
+            'money_release_date' => '2026-10-10T12:00:00.000-03:00',
+        ], $overrides));
+    }
+
+    /**
+     * Las ventas anteriores a que se guardara la comisión de plataforma por
+     * separado no tienen el desglose. Se le vuelve a preguntar a Mercado
+     * Pago por ese pago y se guarda lo que falta, sin tocar el estado.
+     */
+    public function testCompletarDesgloseGuardaNetoYComisiones()
+    {
+        $this->hayOrdenPendiente(['estado' => 'pagada']);
+        $this->hayCredencialesDeCobro();
+        $this->db->onWrite('UPDATE ticket_orders SET mp_neto', 1);
+
+        $this->assertTrue(CheckoutHandler::completarDesglose($this->db, self::CODIGO, '555', $this->pagoConDesglose()));
+
+        $params = $this->db->paramsFor('UPDATE ticket_orders SET mp_neto');
+        $this->assertSame([2800.0, 200.0, 30.0], array_slice($params, 0, 3));
+        $this->assertSame(self::CODIGO, end($params));
+        $this->assertStringNotContainsString('estado =', explode('WHERE', $this->db->callsFor('UPDATE ticket_orders SET mp_neto')[0]['sql'])[0]);
+    }
+
+    /** Sólo las ventas cobradas: una reserva no tiene desglose que completar. */
+    public function testCompletarDesgloseIgnoraLoQueNoEstaPagado()
+    {
+        $this->hayOrdenPendiente(['estado' => 'reservada']);
+        $http = $this->pagoConDesglose();
+
+        $this->assertFalse(CheckoutHandler::completarDesglose($this->db, self::CODIGO, '555', $http));
+        $this->assertFalse($http->llamoA('/v1/payments/'));
+    }
+
+    public function testCompletarDesgloseDeUnaOrdenInexistente()
+    {
+        $this->assertFalse(CheckoutHandler::completarDesglose($this->db, self::CODIGO, '555', new FakeHttpClient()));
+    }
+
+    public function testCompletarDesgloseSinCredencialesNoConsulta()
+    {
+        $this->hayOrdenPendiente(['estado' => 'pagada']);
+        $this->db->onSelect('SELECT lg.page_id', [[5]]);
+        $http = $this->pagoConDesglose();
+
+        $this->assertFalse(CheckoutHandler::completarDesglose($this->db, self::CODIGO, '555', $http));
+        $this->assertFalse($http->llamoA('/v1/payments/'));
+    }
+
+    /**
+     * El id del pago viene de nuestros registros, pero se verifica igual: si
+     * el pago que devuelve Mercado Pago es de otra orden, sus números no se
+     * copian a ésta.
+     */
+    public function testCompletarDesgloseNoCopiaLosNumerosDeOtraOrden()
+    {
+        $this->hayOrdenPendiente(['estado' => 'pagada']);
+        $this->hayCredencialesDeCobro();
+
+        $r = CheckoutHandler::completarDesglose(
+            $this->db, self::CODIGO, '555', $this->pagoConDesglose(['external_reference' => 'OTRAORDEN000'])
+        );
+
+        $this->assertFalse($r);
+        $this->assertNoWrites();
+    }
+
+    public function testCompletarDesgloseSiMercadoPagoNoRespondeNoEscribe()
+    {
+        $this->hayOrdenPendiente(['estado' => 'pagada']);
+        $this->hayCredencialesDeCobro();
+        $http = (new FakeHttpClient())->responde('/v1/payments/', 500, '');
+
+        $this->assertFalse(CheckoutHandler::completarDesglose($this->db, self::CODIGO, '555', $http));
+        $this->assertNoWrites();
+    }
 }

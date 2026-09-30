@@ -769,4 +769,193 @@ class EntradasHandlerTest extends HandlerTestCase
         $this->assertSame(409, $r->status);
         $this->assertSame(0, $this->db->countCalls('UPDATE ticket_orders'));
     }
+
+    // ------------------------------------------------------- casos de borde
+
+    public function testLasCredencialesNoAceptanOtrosMetodos()
+    {
+        $this->puedeAdministrar();
+
+        $r = EntradasHandler::credenciales($this->db, new Request('PATCH', [], ['page_id' => 5], $this->sesion()));
+
+        $this->assertSame(405, $r->status);
+        $this->assertNoWrites();
+    }
+
+    public function testConectarNoAceptaOtrosMetodos()
+    {
+        $r = EntradasHandler::conectar($this->db, new Request('DELETE', [], ['page_id' => 5], $this->sesion()));
+
+        $this->assertSame(405, $r->status);
+    }
+
+    public function testConectarExigePageId()
+    {
+        $r = EntradasHandler::conectar($this->db, new Request('POST', [], [], $this->sesion()));
+
+        $this->assertSame(400, $r->status);
+    }
+
+    /** Volver sin código es una vuelta rota: no hay nada que canjear ni guardar. */
+    public function testElCallbackSinCodigoVuelveAvisandolo()
+    {
+        $http = new FakeHttpClient();
+
+        $r = EntradasHandler::oauthCallback($this->db,
+            new Request('GET', [], ['state' => $this->estadoValido()]), $http);
+
+        $this->assertStringContainsString('error=sin_codigo', $r->redirectUrl);
+        $this->assertFalse($http->llamoA('/oauth/token'));
+        $this->assertNoWrites();
+    }
+
+    /**
+     * Mercado Pago respondió 200 pero sin un token utilizable. No se guarda
+     * una conexión vacía: el dueño vería "conectado" y sus ventas fallarían.
+     */
+    public function testUnCanjeSinTokenNoDejaLaCuentaComoConectada()
+    {
+        $this->puedeAdministrar();
+        $http = (new FakeHttpClient())->responde('/oauth/token', 200, [
+            'access_token' => '', 'user_id' => 987654321, 'public_key' => 'APP_USR-publica',
+        ]);
+
+        $r = EntradasHandler::oauthCallback($this->db,
+            new Request('GET', [], ['code' => 'CODIGO-123', 'state' => $this->estadoValido()]), $http);
+
+        $this->assertStringContainsString('error=no_se_pudo_guardar', $r->redirectUrl);
+        $this->assertSame(0, $this->db->countCalls('INSERT INTO page_payment_settings'));
+    }
+
+    public function testLaConfiguracionExigeElEvento()
+    {
+        $r = EntradasHandler::config($this->db, new Request('GET', [], [], $this->sesion()));
+
+        $this->assertSame(400, $r->status);
+    }
+
+    /**
+     * El editor muestra en una sola pantalla la venta, lo vendido, las
+     * butacas que no se pueden sacar y los dos descuentos. Si falta alguno,
+     * el dueño pone un precio sin saber cuánto le queda.
+     */
+    public function testLaConfiguracionTraeTodoLoQueNecesitaElEditor()
+    {
+        $this->puedeAdministrarElEvento();
+        $this->db->onSelect('FROM event_ticketing WHERE link_id', [[
+            'link_id' => 100, 'activo' => 1, 'capacidad' => 80, 'precio' => '2000.00',
+            'moneda' => 'ARS', 'max_por_compra' => 6, 'plano' => null,
+        ]]);
+        $this->db->onSelect('COALESCE(SUM(cantidad), 0)', [[7]]);
+        $this->db->onSelect('FROM ticket_order_lugares tl', [['lugar' => 'f:A:1']]);
+        $this->db->onSelect('SELECT lg.page_id', [[5]]);
+        $this->db->onSelect('FROM page_payment_settings WHERE page_id', [[
+            'page_id' => 5, 'mp_user_id' => '987654321', 'modo' => 'produccion',
+            'conectado_por' => 'oauth', 'verificado_en' => '2026-08-16 20:00:00',
+        ]]);
+
+        $r = EntradasHandler::config($this->db, new Request('GET', [], ['link_id' => 100], $this->sesion()));
+
+        $this->assertSame(200, $r->status);
+        $this->assertSame(80, (int) $r->body['entradas']['capacidad']);
+        $this->assertSame(7, $r->body['ocupadas']);
+        $this->assertSame(['f:A:1'], $r->body['lugares_ocupados']);
+        $this->assertTrue($r->body['cobros']['admite_split']);
+        $this->assertSame(10.0, $r->body['comision']);
+        $this->assertSame(['porcentaje' => 7.25, 'dias' => 3], $r->body['mercadopago']);
+        $this->assertNoWrites();
+    }
+
+    /** El plano que manda el editor llega a la base tal cual, como JSON. */
+    public function testElPlanoQueMandaElEditorSeGuarda()
+    {
+        $this->puedeAdministrarElEvento();
+        $this->db->onSelect('COALESCE(SUM(cantidad), 0)', [[0]]);
+        $this->db->onWrite('INSERT INTO event_ticketing', 1);
+
+        $r = EntradasHandler::config($this->db, new Request('POST', [
+            'precio' => 0, 'plano' => $this->planoValido(),
+        ], ['link_id' => 100], $this->sesion()));
+
+        $this->assertSame(200, $r->status);
+        $params = $this->db->paramsFor('INSERT INTO event_ticketing');
+        $this->assertSame(4, $params[2], 'con plano, la capacidad son sus lugares');
+        $this->assertEquals($this->planoValido(), json_decode($params[6], true));
+    }
+
+    public function testUnaConfiguracionInvalidaDevuelveElMotivo()
+    {
+        $this->puedeAdministrarElEvento();
+
+        $r = EntradasHandler::config($this->db, new Request('POST', [
+            'capacidad' => 0, 'precio' => 0,
+        ], ['link_id' => 100], $this->sesion()));
+
+        $this->assertSame(400, $r->status);
+        $this->assertStringContainsString('capacidad', $r->body['error']);
+        $this->assertSame(0, $this->db->countCalls('INSERT INTO event_ticketing'));
+    }
+
+    public function testDesactivarSinNadaVendidoNoPideConfirmacion()
+    {
+        $this->puedeAdministrarElEvento();
+        $this->db->onSelect('COALESCE(SUM(cantidad), 0)', [[0]]);
+
+        $r = EntradasHandler::config($this->db, new Request('DELETE', [], ['link_id' => 100], $this->sesion()));
+
+        $this->assertSame(200, $r->status);
+        $this->assertSame([100], $this->db->paramsFor('DELETE FROM event_ticketing'));
+    }
+
+    /** Confirmado, se desactiva aunque haya ventas: las órdenes no se tocan. */
+    public function testDesactivarConfirmadoConVentasSoloSacaLaConfiguracion()
+    {
+        $this->puedeAdministrarElEvento();
+        $this->db->onSelect('COALESCE(SUM(cantidad), 0)', [[12]]);
+
+        $r = EntradasHandler::config($this->db,
+            new Request('DELETE', ['confirmar' => true], ['link_id' => 100], $this->sesion()));
+
+        $this->assertSame(200, $r->status);
+        $this->assertTrue($this->db->ran('DELETE FROM event_ticketing'));
+        $this->assertSame(0, $this->db->countCalls('ticket_orders SET'));
+        $this->assertSame(0, $this->db->countCalls('DELETE FROM ticket_orders'));
+    }
+
+    public function testLaConfiguracionNoAceptaOtrosMetodos()
+    {
+        $this->puedeAdministrarElEvento();
+
+        $r = EntradasHandler::config($this->db, new Request('PATCH', [], ['link_id' => 100], $this->sesion()));
+
+        $this->assertSame(405, $r->status);
+    }
+
+    public function testLasVentasSoloSeLeen()
+    {
+        $r = EntradasHandler::ventas($this->db, new Request('POST', [], ['link_id' => 100], $this->sesion()));
+
+        $this->assertSame(405, $r->status);
+    }
+
+    public function testElListadoDeEventosSoloSeLee()
+    {
+        $r = EntradasHandler::eventos($this->db, new Request('POST', [], ['page_id' => 5], $this->sesion()));
+
+        $this->assertSame(405, $r->status);
+    }
+
+    public function testLosPlanosSoloSeLeen()
+    {
+        $r = EntradasHandler::planos($this->db, new Request('POST', [], ['link_id' => 100], $this->sesion()));
+
+        $this->assertSame(405, $r->status);
+    }
+
+    public function testLosPlanosExigenElEvento()
+    {
+        $r = EntradasHandler::planos($this->db, new Request('GET', [], [], $this->sesion()));
+
+        $this->assertSame(400, $r->status);
+    }
 }

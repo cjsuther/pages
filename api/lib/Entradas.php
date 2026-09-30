@@ -582,7 +582,15 @@ class Entradas
 
         $momento = date_create($detalle['acreditacion']);
 
-        return $momento === false ? null : $momento->format('Y-m-d H:i:s');
+        if ($momento === false) {
+            return null;
+        }
+
+        // Mercado Pago la manda con su zona (-04:00). Se guarda en la del
+        // servidor, como pagada_en: sin convertir, quedaba cuatro horas antes.
+        $momento->setTimezone(new DateTimeZone(date_default_timezone_get()));
+
+        return $momento->format('Y-m-d H:i:s');
     }
 
     /**

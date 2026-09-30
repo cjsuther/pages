@@ -33,6 +33,9 @@ A personal pages platform (similar to Linktree) where users create public profil
 ### Database:
 - Base schema: `database.sql`
 - Migrations are standalone SQL files at project root: `migration_*.sql` (applied manually, no migration tool)
+- `migraciones.txt` lists `database.sql` and every migration in the order they apply. A new migration goes at the end of that list, and then `cd api && php tests/esquema.php generar` refreshes `api/tests/esquema-esperado.json` (a test fails if either step is missing)
+- `deploy.sh` compares production's schema with `esquema-esperado.json` on every deploy (even `--skip-tests`) and refuses to deploy if a table or column is missing: apply the pending migration in production first (DB backup before)
+- Production is MariaDB 11.8; local `api/config.php` does NOT point to the production database
 
 ## Commands
 
@@ -58,7 +61,16 @@ cp config.example.php config.php  # Then edit with real credentials
 php -S localhost:8000  # Dev server
 ```
 
-### No test suite or linter is configured for either service.
+### Tests
+```bash
+cd api && vendor/bin/phpunit                          # unit (FakePdo) + integration (real MariaDB)
+cd api && vendor/bin/phpunit --testsuite unit         # only unit
+cd api && vendor/bin/phpunit --testsuite integracion  # only integration
+cd frontend && npm test                               # Vitest
+```
+- Unit tests use `FakePdo`, which matches SQL by text fragments and never checks that tables or columns exist
+- Integration tests (`api/tests/Integration`, base class `IntegracionTestCase`) start a throwaway MariaDB (`brew install mariadb`; no existing server is touched), build the schema from `migraciones.txt`, and run the real queries. Without MariaDB they are skipped, except under `RZ_EXIGIR_BASE=1` (set by `deploy.sh`)
+- Coverage: `php -d pcov.directory=$PWD vendor/bin/phpunit --coverage-text` (needs the pcov extension)
 
 ## Key Conventions
 

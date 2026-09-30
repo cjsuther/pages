@@ -21,7 +21,6 @@ class HerramientasMcpTest extends HandlerTestCase
         $im = imagecreatetruecolor(12, 12);
         ob_start();
         imagepng($im);
-        imagedestroy($im);
 
         return ob_get_clean();
     }
@@ -502,5 +501,80 @@ class HerramientasMcpTest extends HandlerTestCase
         $this->assertFalse(HerramientasMcp::pareceUrl(base64_encode('bytes')));
         $this->assertFalse(HerramientasMcp::pareceUrl('/Users/cris/afiche.jpg'));
         $this->assertFalse(HerramientasMcp::pareceUrl(null));
+    }
+
+    // ------------------------------------------------------ más herramientas
+
+    /** El asistente ve, por evento, si vende entradas y a cuánto. */
+    public function testListarEventosTraeLaVentaDeCadaUno()
+    {
+        $this->laPaginaEsSuya(5);
+        $this->db->onSelect('LEFT JOIN event_ticketing t', [[
+            'evento_id' => 300, 'titulo' => 'Mi show', 'fecha' => '2026-12-01', 'hora' => '21:00:00',
+            'direccion' => 'Bolívar 624', 'url' => '', 'precio_desde' => null,
+            'vende_entradas' => 1, 'precio' => '5000.00', 'capacidad' => 120,
+        ]]);
+
+        $r = $this->correr('listar_eventos', ['pagina' => 'mi-pagina']);
+
+        $this->assertTrue($r['ok']);
+        $this->assertSame(300, $r['datos']['eventos'][0]['evento_id']);
+        $this->assertSame('5000.00', $r['datos']['eventos'][0]['precio']);
+        $this->assertSame([5], $this->db->paramsFor('LEFT JOIN event_ticketing t'));
+    }
+
+    /**
+     * Una página recién creada no tiene dónde poner fechas. El asistente no
+     * sabe de grupos: la agenda se crea sola y el evento va ahí.
+     */
+    public function testCrearElPrimerEventoDeUnaPaginaCreaLaAgenda()
+    {
+        $this->laPaginaEsSuya(5);
+        $this->db->onSelect('FROM link_groups WHERE page_id', []);
+        $this->db->onInsert('INSERT INTO link_groups', 21);
+        $this->geocodificacionQueAnda();
+        $this->db->onSelect('SELECT 1 FROM link_groups lg', [[1]]);
+        $this->db->onSelect('SELECT id, type FROM link_groups', [['id' => 21, 'type' => 'eventos']]);
+        $this->db->onWrite('INSERT INTO links', 1);
+        $this->db->onSelect('SELECT * FROM links WHERE id', [['id' => 300]]);
+
+        $r = $this->correr('crear_evento', [
+            'pagina' => 'mi-pagina', 'titulo' => 'Mi primer show',
+            'fecha' => '2026-12-01', 'direccion' => 'Bolívar 624',
+        ]);
+
+        $this->assertTrue($r['ok'], json_encode($r['datos']));
+        $this->assertSame([5], $this->db->paramsFor('INSERT INTO link_groups'));
+        $this->assertStringContainsString('"eventos"', $this->db->callsFor('INSERT INTO link_groups')[0]['sql']);
+        $this->assertContains(21, $this->db->paramsFor('INSERT INTO links'));
+    }
+
+    public function testActualizarLaHoraLaNormaliza()
+    {
+        $this->db->onSelect('SELECT 1 FROM links l', [[1]]);
+        $this->db->onSelect('SELECT event_latitude, event_longitude FROM links', [[
+            'event_latitude' => '-34.60', 'event_longitude' => '-58.38',
+        ]]);
+        $this->db->onWrite('UPDATE links', 1);
+        $this->db->onSelect('SELECT * FROM links WHERE id', [['id' => 300]]);
+
+        $r = $this->correr('actualizar_evento', ['evento_id' => 300, 'hora' => '8:30']);
+
+        $this->assertTrue($r['ok']);
+        $this->assertContains('08:30:00', $this->db->paramsFor('UPDATE links'));
+    }
+
+    /** Una dirección nueva que no se ubica no mueve nada: ni la ficha ni el mapa. */
+    public function testActualizarConUnaDireccionQueNoSeUbicaNoCambiaNada()
+    {
+        $this->db->onSelect('FROM geocode_cache WHERE huella', [[
+            'latitud' => null, 'longitud' => null, 'intentos' => 5,
+        ]]);
+
+        $r = $this->correr('actualizar_evento', ['evento_id' => 300, 'direccion' => 'por ahí']);
+
+        $this->assertFalse($r['ok']);
+        $this->assertStringContainsString('mapa', $r['datos']['error']);
+        $this->assertSame(0, $this->db->countCalls('UPDATE links'));
     }
 }

@@ -10,9 +10,20 @@
          beStrictAboutOutputDuringTests="true"
          convertDeprecationsToExceptions="false">
 
+    <!-- Los avisos de deprecación del motor (PHP 8.4+ marca los parámetros
+         implícitamente nullables, en nuestro código y en vendor/) van a
+         stderr: se siguen viendo, pero no se mezclan con la salida del test,
+         que failOnRisky trataría como una falla. En producción corre 8.3. -->
+    <php>
+        <ini name="display_errors" value="stderr"/>
+    </php>
+
     <testsuites>
         <testsuite name="unit">
             <directory>tests/Unit</directory>
+        </testsuite>
+        <testsuite name="integracion">
+            <directory>tests/Integration</directory>
         </testsuite>
     </testsuites>
 

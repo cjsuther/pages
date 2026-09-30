@@ -401,4 +401,66 @@ class CorreoEntradasTest extends HandlerTestCase
         $this->assertTrue($r['enviado']);
         $this->assertArrayNotHasKey('responder', $mailer->enviados[0]);
     }
+
+    // ----------------------------------------------------- lugares y bordes
+
+    /**
+     * Con plano, la entrada dice dónde sentarse: es lo primero que se busca en
+     * la puerta. Va en el HTML y en el texto plano, agrupado por fila.
+     */
+    public function testLaEntradaDiceLosLugaresElegidos()
+    {
+        $this->hayOrden();
+        $this->db->onSelect('SELECT lugar FROM ticket_order_lugares WHERE order_id', [
+            ['lugar' => 'f:C:5'], ['lugar' => 'f:C:4'], ['lugar' => 'm:2:1'],
+        ]);
+        $mailer = new FakeMailer();
+
+        $this->enviar($mailer);
+
+        $mensaje = $mailer->enviados[0];
+        $this->assertStringContainsString('Fila C: 4, 5 · Mesa 2: 1', $mensaje['html']);
+        $this->assertStringContainsString('Lugares: Fila C: 4, 5 · Mesa 2: 1', $mensaje['texto']);
+    }
+
+    public function testSinPlanoLaEntradaNoHablaDeLugares()
+    {
+        $this->hayOrden();
+        $mailer = new FakeMailer();
+
+        $this->enviar($mailer);
+
+        $this->assertStringNotContainsString('💺', $mailer->enviados[0]['html']);
+        $this->assertStringNotContainsString('Lugares:', $mailer->enviados[0]['texto']);
+    }
+
+    /** Un evento sin dirección cargada no manda una línea "Dónde:" vacía. */
+    public function testSinDireccionNoSeMandaUnaLineaVacia()
+    {
+        $this->hayOrden(['event_address' => '']);
+        $mailer = new FakeMailer();
+
+        $this->enviar($mailer);
+
+        $this->assertStringNotContainsString('📍', $mailer->enviados[0]['html']);
+        $this->assertStringNotContainsString('Dónde:', $mailer->enviados[0]['texto']);
+    }
+
+    /**
+     * El cron reintenta todas las pendientes y cuenta cuántas salieron. Una
+     * que no puede salir no frena a las demás.
+     */
+    public function testElCronCuentaLasQueSalieronYLasQueNo()
+    {
+        $this->db->onSelect('mail_intentos < ?', [['codigo' => 'AAAAAAAAAAAA'], ['codigo' => 'BBBBBBBBBBBB']]);
+        $this->hayOrden(['codigo' => 'AAAAAAAAAAAA']);
+        $this->hayOrden(['id' => 2, 'codigo' => 'BBBBBBBBBBBB', 'estado' => 'reservada']);
+        $this->db->onWrite('UPDATE ticket_orders', 1);
+        $mailer = new FakeMailer();
+
+        $resumen = CorreoEntradas::enviarPendientes($this->db, $mailer);
+
+        $this->assertSame(['enviados' => 1, 'fallidos' => 1], $resumen);
+        $this->assertCount(1, $mailer->enviados);
+    }
 }

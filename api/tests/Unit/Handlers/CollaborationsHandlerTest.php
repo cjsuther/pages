@@ -641,4 +641,56 @@ class CollaborationsHandlerTest extends HandlerTestCase
             'collaborator_owner_id' => $collaboratorOwnerId,
         ]]);
     }
+
+    // =============================================== fallas de la base (500)
+
+    /**
+     * Si la base falla, la respuesta es un 500 con el error y no una lista
+     * vacía: una bandeja "sin invitaciones" que en realidad no se pudo leer
+     * hace que nadie responda a tiempo.
+     */
+    public function testListarConLaBaseCaidaEsUn500()
+    {
+        $this->db->failOn('FROM event_collaborations ec JOIN links l', 'se cayó la base');
+
+        $res = CollaborationsHandler::index($this->db, $this->get(['type' => 'pending'], $this->user(9)));
+
+        $this->assertError(500, $res, 'se cayó la base');
+    }
+
+    public function testInvitarConLaBaseCaidaEsUn500()
+    {
+        $this->invitacionValida();
+        $this->db->failOn('INSERT INTO event_collaborations', 'se cayó la base');
+
+        $res = CollaborationsHandler::index($this->db, $this->post([
+            'link_id' => 100, 'collaborator_page_id' => 7,
+        ], $this->user(9)));
+
+        $this->assertError(500, $res, 'se cayó la base');
+    }
+
+    public function testResponderConLaBaseCaidaEsUn500()
+    {
+        $this->colaboracionPendienteDe(11);
+        $this->db->failOn('UPDATE event_collaborations SET status', 'se cayó la base');
+
+        $res = CollaborationsHandler::detail($this->db, $this->put(
+            ['status' => 'rejected'], $this->user(11), ['id' => '3']
+        ));
+
+        $this->assertError(500, $res, 'se cayó la base');
+        $this->assertFalse($this->db->ran('INSERT INTO notifications'), 'no se avisa una respuesta que no se guardó');
+    }
+
+    public function testEliminarConLaBaseCaidaEsUn500()
+    {
+        $this->colaboracionEntre(9, 11);
+        $this->db->failOn('DELETE FROM event_collaborations', 'se cayó la base');
+
+        $res = CollaborationsHandler::detail($this->db, $this->delete(['id' => '3'], $this->user(9)));
+
+        $this->assertError(500, $res, 'se cayó la base');
+        $this->assertFalse($this->db->ran('INSERT INTO event_records'), 'los clientes siguen compartidos como estaban');
+    }
 }

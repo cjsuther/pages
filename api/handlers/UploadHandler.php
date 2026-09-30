@@ -228,13 +228,9 @@ class UploadHandler
 
         $imagen = @imagecreatefromstring($bytes);
 
-        if ($imagen === false) {
-            return false;
-        }
-
-        imagedestroy($imagen);
-
-        return true;
+        // Sin imagedestroy(): no hace nada desde PHP 8.0 y en 8.5 está
+        // deprecada, así que emitiría un aviso en medio de la respuesta.
+        return $imagen !== false;
     }
 
     /**

@@ -8,6 +8,10 @@
 #   ./deploy.sh --only frontend sólo el frontend
 #   ./deploy.sh --skip-tests    omite la suite (no recomendado)
 #
+# Siempre, con cualquier opción, compara la base de producción con el esquema
+# que arman las migraciones (api/tests/esquema-esperado.json) y no despliega
+# si a producción le falta una tabla o una columna.
+#
 # Qué NO toca nunca en el servidor:
 #   - api/config.php   credenciales de producción
 #   - api/uploads/*    imágenes subidas por los usuarios
@@ -104,6 +108,30 @@ fi
 
 [ -f "$API_DIR/config.php" ] || morir "falta api/config.php (copiá config.example.php)"
 
+# --------------------------------------------------------- esquema de la base
+#
+# El 29/9 se subió código que usaba event_records sin haber corrido la
+# migración que la crea, y durante 16 horas no se pudo reservar. Los tests no
+# lo podían ver: miran el repositorio, no la base de producción. Esto sí.
+# No depende de --skip-tests ni de --only: el frontend nuevo también llama a
+# la API que ya está arriba.
+
+titulo "Esquema de la base de producción"
+
+ESQUEMA_REAL=$(ssh_remoto "$REMOTE_PHP -- $REMOTE_ROOT" < "$API_DIR/tests/esquema-real.php" 2>/dev/null)
+[ -n "$ESQUEMA_REAL" ] || morir "no se pudo leer el esquema de producción"
+
+FALTANTES=$(echo "$ESQUEMA_REAL" | php "$API_DIR/tests/esquema.php" faltantes)
+case $? in
+  0) ok "producción tiene todas las tablas y columnas que usan las migraciones" ;;
+  1) printf "\n${ROJO}  A la base de producción le falta:${NC}\n"
+     echo "$FALTANTES" | sed 's/^/    /'
+     echo
+     echo "  Aplicá esas migraciones (con un backup antes) y volvé a desplegar."
+     morir "esquema de producción incompleto; no se despliega" ;;
+  *) morir "no se pudo comparar el esquema de producción" ;;
+esac
+
 # ------------------------------------------------------------------------ tests
 
 if [ "$SKIP_TESTS" -eq 1 ]; then
@@ -112,7 +140,9 @@ if [ "$SKIP_TESTS" -eq 1 ]; then
 else
   titulo "Tests del backend"
   if [ -x "$API_DIR/vendor/bin/phpunit" ]; then
-    ( cd "$API_DIR" && ./vendor/bin/phpunit --no-coverage ) || morir "fallaron los tests de PHP; no se despliega"
+    # RZ_EXIGIR_BASE: sin MariaDB los tests de integración fallan en vez de
+    # saltearse, así un deploy no pasa sin haber probado contra una base real.
+    ( cd "$API_DIR" && RZ_EXIGIR_BASE=1 ./vendor/bin/phpunit --no-coverage ) || morir "fallaron los tests de PHP; no se despliega"
     ok "PHPUnit en verde"
   else
     aviso "PHPUnit no instalado (composer install en api/); se omite"

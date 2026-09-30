@@ -136,4 +136,57 @@ class PuertaHandlerTest extends HandlerTestCase
 
         $this->assertSame(400, $r->status);
     }
+
+    public function testElLinkExigeElEvento()
+    {
+        $r = PuertaHandler::link($this->db, new Request('GET', [], [], $this->sesion()));
+
+        $this->assertSame(400, $r->status);
+    }
+
+    public function testElLinkNoAceptaOtrosMetodos()
+    {
+        $this->puedeAdministrarElEvento();
+
+        $r = PuertaHandler::link($this->db, new Request('PUT', [], ['link_id' => 100], $this->sesion()));
+
+        $this->assertSame(405, $r->status);
+        $this->assertNoWrites();
+    }
+
+    /** Mirar una entrada de otro evento dice de cuál es, sin mostrar la compra. */
+    public function testMirarUsaElEventoDeLaClave()
+    {
+        $this->laClaveEsDelEvento(100);
+        $this->db->onSelect('WHERE o.codigo = ?', [[
+            'id' => 1, 'codigo' => 'ABC123DEF456', 'link_id' => 200, 'nombre' => 'Ana', 'cantidad' => 2,
+            'ingresadas' => 0, 'ingreso_en' => null, 'estado' => 'pagada', 'reserva_vence_en' => null,
+            'evento' => 'Otro show',
+        ]]);
+
+        $r = PuertaHandler::puerta($this->db, new Request('POST', [
+            'clave' => $this->claveValida(), 'accion' => 'mirar', 'codigo' => 'abc123def456',
+        ]));
+
+        $this->assertSame(200, $r->status);
+        $this->assertSame('otro_evento', $r->body['resultado']);
+        $this->assertNull($r->body['orden']);
+        $this->assertSame('Otro show', $r->body['evento']);
+        $this->assertNoWrites();
+    }
+
+    /** Deshacer un ingreso equivocado resta sólo en el evento de la clave. */
+    public function testDeshacerUsaElEventoDeLaClave()
+    {
+        $this->laClaveEsDelEvento(100);
+        $this->db->onWrite('SET ingreso_en = CASE', 1);
+
+        $r = PuertaHandler::puerta($this->db, new Request('POST', [
+            'clave' => $this->claveValida(), 'accion' => 'deshacer', 'codigo' => 'ABC123DEF456', 'cantidad' => 1,
+        ]));
+
+        $this->assertSame(200, $r->status);
+        $this->assertTrue($r->body['ok']);
+        $this->assertSame([1, 1, 'ABC123DEF456', 100, 1], $this->db->paramsFor('SET ingreso_en = CASE'));
+    }
 }

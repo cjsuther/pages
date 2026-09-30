@@ -358,8 +358,10 @@ class CheckoutHandler
             return (string) $req->body['data']['id'];
         }
 
-        if ($req->param('data.id')) {
-            return (string) $req->param('data.id');
+        // Mercado Pago lo manda como ?data.id=…, pero PHP convierte los puntos
+        // de las claves de $_GET en guiones bajos: llega como data_id.
+        if ($req->param('data_id')) {
+            return (string) $req->param('data_id');
         }
 
         $tipo = $req->param('topic', $req->param('type'));

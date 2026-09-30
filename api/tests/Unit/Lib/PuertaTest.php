@@ -213,4 +213,21 @@ class PuertaTest extends HandlerTestCase
     {
         $this->assertStringEndsWith('/puerta#' . str_repeat('b', 32), Puerta::url(str_repeat('b', 32)));
     }
+
+    /** Lo que no es un código ni siquiera llega a la base. */
+    public function testMirarAlgoQueNoEsUnCodigoNoConsulta()
+    {
+        $r = Puerta::mirar($this->db, 100, 'https://otro.sitio/cualquier-cosa');
+
+        $this->assertSame(Puerta::NO_EXISTE, $r['resultado']);
+        $this->assertNull($r['orden']);
+        $this->assertSame([], $this->db->log());
+    }
+
+    /** La clave de la puerta se guarda igual que las de los otros links del evento. */
+    public function testLaClaveSeHasheaComoLasDemas()
+    {
+        $this->assertSame(\ClaveDeEvento::hash('clave-de-puerta'), Puerta::hash('clave-de-puerta'));
+        $this->assertSame(hash('sha256', 'clave-de-puerta'), Puerta::hash('clave-de-puerta'));
+    }
 }

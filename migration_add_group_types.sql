@@ -1,6 +1,6 @@
 -- Agregar tipos de grupo y campos de eventos
 
-ALTER TABLE groups
+ALTER TABLE link_groups
 ADD COLUMN type ENUM('links', 'galeria', 'eventos') DEFAULT 'links' AFTER title;
 
 ALTER TABLE links

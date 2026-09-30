@@ -200,4 +200,22 @@ class MercadoPagoOAuthTest extends TestCase
         $this->assertFalse(MercadoPagoOAuth::estaPorVencer(null));
         $this->assertFalse(MercadoPagoOAuth::estaPorVencer(''));
     }
+
+    /** Un estado bien firmado pero sin la página no sirve: no se sabría dónde guardar. */
+    public function testUnEstadoSinPaginaNoSirve()
+    {
+        $sinPagina = JWT::encode(['user_id' => 7, 'uso' => 'mp_oauth', 'exp' => time() + 900], JWT_SECRET);
+
+        $this->assertNull(MercadoPagoOAuth::leerEstado($sinPagina));
+    }
+
+    public function testUnErrorSinMensajeDiceElCodigo()
+    {
+        $http = (new FakeHttpClient())->responde('/oauth/token', 503, 'Service Unavailable');
+
+        $r = (new MercadoPagoOAuth($http))->canjearCodigo('CODIGO');
+
+        $this->assertFalse($r['ok']);
+        $this->assertSame('Mercado Pago respondió 503', $r['error']);
+    }
 }
