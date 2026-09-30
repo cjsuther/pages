@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
-import { Instagram, ExternalLink, Loader2, ChevronRight } from 'lucide-react';
+import { Instagram, Loader2, ChevronRight } from 'lucide-react';
 import { fechaLarga, urlDeInstagram, urlDeRezonar } from '../utils/carcajada';
 
 /**
@@ -111,49 +111,50 @@ function Hoy({ apiUrl }) {
 
             <section aria-labelledby="titulo-lineup">
               <h2 id="titulo-lineup" className="text-xs font-semibold uppercase tracking-[0.2em] text-white/50 mb-4">
-                Quiénes se presentan
+                Comediantes
               </h2>
 
               {comediantes.length === 0 ? (
                 <p className="text-white/60">El line-up se anuncia en un rato.</p>
               ) : (
-                <ul className="space-y-4">
+                // Tres por fila también en el celular: la cara es lo que se
+                // reconoce, y así entra el line-up entero sin bajar.
+                <ul className="grid grid-cols-3 gap-3">
                   {comediantes.map((c, i) => (
-                    <li key={`${i}-${c.nombre}`} className="bg-white/[0.06] rounded-2xl p-4 flex items-center gap-4">
+                    <li key={`${i}-${c.nombre}`} className="bg-white/[0.06] rounded-2xl p-2.5 pb-3 flex flex-col items-center text-center min-w-0">
                       {c.foto_url ? (
-                        <img src={c.foto_url} alt="" className="w-16 h-16 rounded-full object-cover shrink-0" />
+                        <img src={c.foto_url} alt="" className="w-full aspect-square rounded-xl object-cover" />
                       ) : (
-                        <span className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center text-xl font-bold shrink-0">
+                        <span className="w-full aspect-square rounded-xl bg-white/10 flex items-center justify-center text-3xl font-bold">
                           {c.nombre.charAt(0).toUpperCase()}
                         </span>
                       )}
 
-                      <div className="min-w-0 flex-1">
-                        <p className="text-lg font-bold truncate">{c.nombre}</p>
+                      {/* Con página en Rezonar, el nombre lleva a sus fechas. */}
+                      {c.url_slug ? (
+                        <a
+                          href={urlDeRezonar(c.url_slug)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-2 w-full text-sm font-bold leading-tight break-words hover:text-verde"
+                        >
+                          {c.nombre}
+                        </a>
+                      ) : (
+                        <p className="mt-2 w-full text-sm font-bold leading-tight break-words">{c.nombre}</p>
+                      )}
 
-                        <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-sm">
-                          {c.url_slug && (
-                            <a
-                              href={urlDeRezonar(c.url_slug)}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center gap-1 text-verde font-semibold"
-                            >
-                              Sus fechas <ExternalLink className="w-3.5 h-3.5" />
-                            </a>
-                          )}
-                          {c.instagram && (
-                            <a
-                              href={urlDeInstagram(c.instagram)}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center gap-1 text-white/70"
-                            >
-                              <Instagram className="w-3.5 h-3.5" /> @{c.instagram}
-                            </a>
-                          )}
-                        </div>
-                      </div>
+                      {c.instagram && (
+                        <a
+                          href={urlDeInstagram(c.instagram)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-1 w-full inline-flex items-center justify-center gap-1 text-xs text-white/60 hover:text-white min-w-0"
+                        >
+                          <Instagram className="w-3 h-3 shrink-0" />
+                          <span className="truncate">@{c.instagram}</span>
+                        </a>
+                      )}
                     </li>
                   ))}
                 </ul>

@@ -40,8 +40,30 @@ describe('Hoy (la pantalla del QR)', () => {
 
     expect(await screen.findByText('JaJaJaJueves')).toBeInTheDocument();
     expect(screen.getByText('Esta noche')).toBeInTheDocument();
-    expect(screen.getAllByRole('link', { name: /Sus fechas/ })[0]).toHaveAttribute('href', 'https://rezon.ar/anagomez');
+    // Con página en Rezonar, el nombre lleva a sus fechas.
+    expect(screen.getByRole('link', { name: 'Ana Gómez' })).toHaveAttribute('href', 'https://rezon.ar/anagomez');
     expect(screen.getByRole('link', { name: '@anagomez' })).toHaveAttribute('href', 'https://instagram.com/anagomez');
+  });
+
+  /** Foto arriba, nombre abajo y en la tercera línea el Instagram. */
+  it('cada tarjeta va foto, nombre e Instagram, en ese orden', async () => {
+    montar();
+
+    const nombre = await screen.findByText('Ana Gómez');
+    const tarjeta = nombre.closest('li');
+    const foto = tarjeta.querySelector('img');
+    const instagram = screen.getByRole('link', { name: '@anagomez' });
+
+    expect(foto.compareDocumentPosition(nombre) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(nombre.compareDocumentPosition(instagram) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(tarjeta.parentElement.className).toContain('grid-cols-3');
+  });
+
+  it('sin página en Rezonar el nombre no es un link', async () => {
+    montar({ ...ESTADO, comediantes: [{ nombre: 'Pepe Invitado', foto_url: null, instagram: 'pepe', url_slug: null }] });
+
+    expect(await screen.findByText('Pepe Invitado')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Pepe Invitado' })).not.toBeInTheDocument();
   });
 
   /** Sin foto, la inicial: un círculo vacío no dice quién es. */
@@ -96,7 +118,7 @@ describe('Hoy (la pantalla del QR)', () => {
       montarEn('/hoy');
 
       const descripcion = (await screen.findByText('stand up')).closest('section');
-      const lineup = screen.getByRole('heading', { name: 'Quiénes se presentan' });
+      const lineup = screen.getByRole('heading', { name: 'Comediantes' });
       const otras = screen.getByRole('heading', { name: 'Otras fechas de Carcajada' });
 
       expect(descripcion.compareDocumentPosition(lineup) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
