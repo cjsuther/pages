@@ -68,8 +68,9 @@ class Puerta
     /**
      * Las compras pagadas del evento y cuánta gente entró.
      *
-     * Sólo lo que la puerta necesita para reconocer a alguien: nombre, código
-     * y lugares. El email y el teléfono no salen de acá, porque este link se
+     * Sólo lo que la puerta necesita para reconocer a alguien: nombre, código,
+     * lugares y tipos de entrada —quien controla tiene que poder pedir el
+     * carnet a quien entra con una de jubilado—. El email y el teléfono no salen de acá, porque este link se
      * le da a gente que no administra la página.
      */
     public static function lista($db, $linkId)
@@ -84,6 +85,7 @@ class Puerta
         $filas = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         $lugares = self::lugaresPorOrden($db, $linkId);
+        $items = Entradas::itemsPorOrden($db, $linkId);
         $entradas = 0;
         $ingresadas = 0;
         $ordenes = [];
@@ -91,7 +93,11 @@ class Puerta
         foreach ($filas as $fila) {
             $entradas += (int) $fila['cantidad'];
             $ingresadas += (int) $fila['ingresadas'];
-            $ordenes[] = self::publica($fila, isset($lugares[$fila['id']]) ? $lugares[$fila['id']] : []);
+            $ordenes[] = self::publica(
+                $fila,
+                isset($lugares[$fila['id']]) ? $lugares[$fila['id']] : [],
+                isset($items[$fila['id']]) ? $items[$fila['id']] : []
+            );
         }
 
         return [
@@ -135,7 +141,7 @@ class Puerta
             return ['resultado' => self::OTRO_EVENTO, 'orden' => null, 'evento' => $fila['evento']];
         }
 
-        $orden = self::publica($fila, Entradas::lugaresDeLaOrden($db, $fila['id']));
+        $orden = self::publica($fila, Entradas::lugaresDeLaOrden($db, $fila['id']), Entradas::itemsDeLaOrden($db, $fila['id']));
 
         if ($fila['estado'] !== 'pagada') {
             $vencida = $fila['estado'] === 'reservada'
@@ -232,7 +238,7 @@ class Puerta
 
     // ------------------------------------------------------------ internos
 
-    private static function publica(array $fila, array $lugares)
+    private static function publica(array $fila, array $lugares, array $items = [])
     {
         $cantidad = (int) $fila['cantidad'];
         $ingresadas = (int) $fila['ingresadas'];
@@ -245,6 +251,8 @@ class Puerta
             'restantes'  => max(0, $cantidad - $ingresadas),
             'ingreso_en' => $fila['ingreso_en'],
             'lugares'    => $lugares,
+            // "2 General · 1 Jubilados", o vacío si el evento tiene un solo precio.
+            'tipos'      => TiposDeEntrada::resumir($items),
         ];
     }
 

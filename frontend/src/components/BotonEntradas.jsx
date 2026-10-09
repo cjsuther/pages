@@ -2,7 +2,7 @@ import React, { useState, useContext } from 'react';
 import { Ticket } from 'lucide-react';
 import { AuthContext } from '../App';
 import ComprarEntradas from './ComprarEntradas';
-import { textoDeAccion, formatearPrecio } from '../utils/entradas';
+import { textoDeAccion, formatearPrecio, conVariosPrecios } from '../utils/entradas';
 import { textoSobre } from '../utils/colores';
 
 /**
@@ -54,9 +54,12 @@ function BotonEntradas({ evento, color = '#3B82F6', pixelId = null }) {
         {texto}
       </button>
 
+      {/* Con varios precios se anuncia el más barato de los que cobran. */}
       {!entradas.es_gratis && (
         <p className="text-sm mt-2 opacity-70">
-          {formatearPrecio(entradas.precio, entradas.moneda)} por entrada
+          {conVariosPrecios(entradas)
+            ? `Desde ${formatearPrecio(entradas.precio, entradas.moneda)}`
+            : `${formatearPrecio(entradas.precio, entradas.moneda)} por entrada`}
         </p>
       )}
 

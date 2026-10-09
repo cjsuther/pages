@@ -44,7 +44,7 @@ export function filtrarOrdenes(ordenes, busqueda) {
   const palabras = q.split(/\s+/);
 
   return ordenes.filter((o) => {
-    const texto = normalizar(`${o.nombre} ${o.codigo} ${resumirLugares(o.lugares)}`);
+    const texto = normalizar(`${o.nombre} ${o.codigo} ${resumirLugares(o.lugares)} ${o.tipos || ''}`);
     return palabras.every((p) => texto.includes(p));
   });
 }

@@ -36,8 +36,8 @@ class Entradas
     /**
      * Configuración de venta de un evento, o null si no tiene.
      *
-     * El plano vuelve ya decodificado: null si el evento vende sin lugares
-     * asignados.
+     * El plano y los tipos vuelven ya decodificados: null si el evento vende
+     * sin lugares asignados, o a un solo precio.
      */
     public static function configDelEvento($db, $linkId)
     {
@@ -45,7 +45,7 @@ class Entradas
         $stmt->execute([(int) $linkId]);
         $fila = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        return $fila === false ? null : self::conPlanoDecodificado($fila);
+        return $fila === false ? null : self::decodificada($fila);
     }
 
     /**
@@ -59,14 +59,36 @@ class Entradas
      * Con plano, la capacidad es la cantidad de lugares del plano, y lo que
      * venga en 'capacidad' no se usa.
      *
-     * @param array $datos ['activo', 'capacidad', 'precio', 'moneda', 'max_por_compra', 'plano'?]
+     * Los tipos de entrada siguen la misma regla que el plano: si no vienen se
+     * quedan los que estaban. Con tipos, el precio del evento es el de
+     * referencia que sale de ellos, y lo que venga en 'precio' no se usa.
+     *
+     * @param array $datos ['activo', 'capacidad', 'precio', 'moneda', 'max_por_compra', 'plano'?, 'tipos'?]
      * @return array{ok: bool, error: string|null}
      */
     public static function guardarConfig($db, $linkId, array $datos)
     {
+        $guardada = array_key_exists('plano', $datos) && array_key_exists('tipos', $datos)
+            ? null
+            : self::configDelEvento($db, $linkId);
+
         $plano = array_key_exists('plano', $datos)
             ? $datos['plano']
-            : self::planoGuardado($db, $linkId);
+            : ($guardada === null ? null : $guardada['plano']);
+
+        $tipos = TiposDeEntrada::normalizar(array_key_exists('tipos', $datos)
+            ? $datos['tipos']
+            : ($guardada === null ? null : $guardada['tipos']));
+
+        if (!$tipos['ok']) {
+            return ['ok' => false, 'error' => $tipos['error']];
+        }
+
+        $tipos = $tipos['tipos'];
+
+        if ($tipos !== null) {
+            $datos['precio'] = TiposDeEntrada::precioDeReferencia($tipos);
+        }
 
         if ($plano !== null) {
             $normalizado = Plano::normalizar($plano);
@@ -113,6 +135,20 @@ class Entradas
             }
         }
 
+        // Lo mismo con el cupo de cada tipo: no puede quedar por debajo de lo
+        // que ese tipo ya vendió.
+        if ($tipos !== null && $ocupadas > 0) {
+            $porTipo = self::ocupadasPorTipo($db, $linkId);
+
+            foreach ($tipos as $tipo) {
+                $tomadas = isset($porTipo[$tipo['id']]) ? $porTipo[$tipo['id']] : 0;
+
+                if ($tipo['cupo'] !== null && $tipo['cupo'] < $tomadas) {
+                    return ['ok' => false, 'error' => "Ya hay $tomadas entradas \"{$tipo['nombre']}\" tomadas: su cupo no puede ser menor"];
+                }
+            }
+        }
+
         // Sacar el plano con lugares vendidos dejaría esas entradas con un
         // lugar que ya nadie más respeta: el siguiente compraría sin elegir y
         // podría terminar en la misma butaca.
@@ -121,19 +157,21 @@ class Entradas
         }
 
         $stmt = $db->prepare('
-            INSERT INTO event_ticketing (link_id, activo, capacidad, precio, moneda, max_por_compra, plano)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO event_ticketing (link_id, activo, capacidad, precio, moneda, max_por_compra, plano, tipos)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 activo = VALUES(activo),
                 capacidad = VALUES(capacidad),
                 precio = VALUES(precio),
                 moneda = VALUES(moneda),
                 max_por_compra = VALUES(max_por_compra),
-                plano = VALUES(plano)
+                plano = VALUES(plano),
+                tipos = VALUES(tipos)
         ');
         $stmt->execute([
             (int) $linkId, $activo, $capacidad, $precio, $moneda, $maxPorCompra,
             $plano === null ? null : json_encode($plano, JSON_UNESCAPED_UNICODE),
+            $tipos === null ? null : json_encode($tipos, JSON_UNESCAPED_UNICODE),
         ]);
 
         return ['ok' => true, 'error' => null];
@@ -163,6 +201,37 @@ class Entradas
         $stmt->execute([(int) $linkId]);
 
         return (int) $stmt->fetchColumn();
+    }
+
+    /**
+     * Entradas tomadas de cada tipo, con la misma regla que ocupadas().
+     *
+     * Sólo cuentan las compras con renglones por tipo: las que se hicieron
+     * cuando el evento vendía a un solo precio no son de ningún tipo, y
+     * siguen contando para la capacidad del evento.
+     *
+     * @return array<string, int> id de tipo => entradas
+     */
+    public static function ocupadasPorTipo($db, $linkId)
+    {
+        $stmt = $db->prepare("
+            SELECT i.tipo, COALESCE(SUM(i.cantidad), 0) AS cantidad
+            FROM ticket_order_items i
+            INNER JOIN ticket_orders o ON o.id = i.order_id
+            WHERE o.link_id = ?
+              AND (o.estado = 'pagada'
+                   OR (o.estado = 'reservada' AND o.reserva_vence_en > NOW()))
+            GROUP BY i.tipo
+        ");
+        $stmt->execute([(int) $linkId]);
+
+        $porTipo = [];
+
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $fila) {
+            $porTipo[(string) $fila['tipo']] = (int) $fila['cantidad'];
+        }
+
+        return $porTipo;
     }
 
     /**
@@ -201,6 +270,45 @@ class Entradas
     }
 
     /**
+     * Qué tipos se llevó una orden. Vacío si el evento vendía a un solo precio.
+     *
+     * @return array<array{tipo: string, nombre: string, precio: float, cantidad: int}>
+     */
+    public static function itemsDeLaOrden($db, $ordenId)
+    {
+        $stmt = $db->prepare('
+            SELECT tipo, nombre, precio_unitario, cantidad
+            FROM ticket_order_items
+            WHERE order_id = ?
+            ORDER BY id
+        ');
+        $stmt->execute([(int) $ordenId]);
+
+        return array_map([self::class, 'item'], $stmt->fetchAll(PDO::FETCH_ASSOC));
+    }
+
+    /** @return array<int, array[]> Los tipos de cada orden del evento, por id de orden. */
+    public static function itemsPorOrden($db, $linkId)
+    {
+        $stmt = $db->prepare('
+            SELECT i.order_id, i.tipo, i.nombre, i.precio_unitario, i.cantidad
+            FROM ticket_order_items i
+            INNER JOIN ticket_orders o ON o.id = i.order_id
+            WHERE o.link_id = ?
+            ORDER BY i.id
+        ');
+        $stmt->execute([(int) $linkId]);
+
+        $porOrden = [];
+
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $fila) {
+            $porOrden[(int) $fila['order_id']][] = self::item($fila);
+        }
+
+        return $porOrden;
+    }
+
+    /**
      * Estado de venta de un evento, tal como lo ve el público.
      *
      * @return array|null null si el evento no vende entradas
@@ -218,6 +326,7 @@ class Entradas
         $disponibles = max(0, $capacidad - $ocupadas);
         $precio = (float) $config['precio'];
         $plano = $config['plano'];
+        $tipos = $config['tipos'];
 
         return [
             'activo'         => true,
@@ -233,6 +342,11 @@ class Entradas
             // plano y qué lugares ya no están. Nunca quién los tiene.
             'plano'          => $plano,
             'ocupados'       => $plano === null ? [] : self::lugaresOcupados($db, $linkId),
+            // Con tipos, cada uno dice cuántas le quedan: lo que le queda al
+            // evento, o menos si su cupo se termina antes.
+            'tipos'          => $tipos === null
+                ? null
+                : self::tiposConDisponibles($tipos, self::ocupadasPorTipo($db, $linkId), $disponibles),
         ];
     }
 
@@ -248,7 +362,12 @@ class Entradas
      * es cuántos se eligieron, y cada uno se verifica libre dentro del mismo
      * bloqueo que el cupo.
      *
-     * @param array $datos ['nombre', 'email', 'telefono', 'cantidad', 'lugares'?]
+     * En un evento con tipos de entrada, sin plano se pide cuántas de cada
+     * tipo —'tipos' => ['general' => 2, 'jubilados' => 1]— y la cantidad es la
+     * suma. Con plano el tipo lo pone la zona de cada lugar elegido. El cupo de
+     * cada tipo se verifica dentro del mismo bloqueo.
+     *
+     * @param array $datos ['nombre', 'email', 'telefono', 'cantidad', 'lugares'?, 'tipos'?]
      * @return array{ok: bool, error: string|null, orden: array|null, ocupados?: string[]}
      */
     public static function crearOrden($db, $linkId, array $datos)
@@ -262,6 +381,18 @@ class Entradas
 
             $lugares = array_values(array_unique(array_map('strval', $datos['lugares'])));
             $datos['cantidad'] = count($lugares);
+        }
+
+        $pedidoPorTipo = null;
+
+        if ($lugares === null && isset($datos['tipos'])) {
+            $pedidoPorTipo = self::pedidoPorTipo($datos['tipos']);
+
+            if ($pedidoPorTipo === null) {
+                return ['ok' => false, 'error' => 'Los tipos de entrada no tienen el formato esperado', 'orden' => null];
+            }
+
+            $datos['cantidad'] = array_sum($pedidoPorTipo);
         }
 
         $problema = self::validarComprador($datos);
@@ -285,7 +416,7 @@ class Entradas
                 return ['ok' => false, 'error' => 'Este evento no vende entradas', 'orden' => null];
             }
 
-            $config = self::conPlanoDecodificado($config);
+            $config = self::decodificada($config);
             $problemaDeLugares = self::problemaConLosLugares($db, $linkId, $config['plano'], $lugares);
 
             if ($problemaDeLugares !== null) {
@@ -312,8 +443,33 @@ class Entradas
                 ];
             }
 
-            $precio = (float) $config['precio'];
-            $esGratis = $precio <= 0;
+            $items = null;
+
+            if ($config['tipos'] !== null) {
+                $items = self::itemsDelPedido($db, $linkId, $config, $lugares, $pedidoPorTipo, $cantidad);
+
+                if (is_string($items)) {
+                    $db->rollBack();
+                    return ['ok' => false, 'error' => $items, 'orden' => null];
+                }
+            }
+
+            if ($items === null) {
+                $precio = (float) $config['precio'];
+                $total = round($precio * $cantidad, 2);
+            } else {
+                $total = round(array_sum(array_map(function ($i) {
+                    return $i['precio'] * $i['cantidad'];
+                }, $items)), 2);
+                // Con un solo tipo es su precio. Con varios, la columna dice el
+                // promedio: el detalle de verdad está en los renglones.
+                $precio = count($items) === 1 ? $items[0]['precio'] : round($total / $cantidad, 2);
+            }
+
+            // Lo que decide si hay cobro es el total, no el precio del evento:
+            // una compra sólo de entradas en 0 —"Invitado"— no tiene nada que
+            // pagar aunque el resto de los tipos cobre.
+            $esGratis = $total <= 0;
             $codigo = self::codigoLibre($db);
 
             // La compra se ata también al registro del evento, que es lo que
@@ -338,7 +494,7 @@ class Entradas
                 isset($datos['telefono']) ? trim($datos['telefono']) : '',
                 $cantidad,
                 $precio,
-                round($precio * $cantidad, 2),
+                $total,
                 $config['moneda'],
                 $esGratis ? 'pagada' : 'reservada',
                 $esGratis ? null : date('Y-m-d H:i:s', time() + self::MINUTOS_DE_RESERVA * 60),
@@ -355,6 +511,17 @@ class Entradas
                 }
             }
 
+            if ($items !== null) {
+                $conTipo = $db->prepare('
+                    INSERT INTO ticket_order_items (order_id, tipo, nombre, precio_unitario, cantidad)
+                    VALUES (?, ?, ?, ?, ?)
+                ');
+
+                foreach ($items as $item) {
+                    $conTipo->execute([$ordenId, $item['tipo'], $item['nombre'], $item['precio'], $item['cantidad']]);
+                }
+            }
+
             $db->commit();
 
             return [
@@ -365,11 +532,12 @@ class Entradas
                     'codigo'    => $codigo,
                     'cantidad'  => $cantidad,
                     'precio'    => $precio,
-                    'total'     => round($precio * $cantidad, 2),
+                    'total'     => $total,
                     'moneda'    => $config['moneda'],
                     'estado'    => $esGratis ? 'pagada' : 'reservada',
                     'es_gratis' => $esGratis,
                     'lugares'   => $config['plano'] === null ? [] : $lugares,
+                    'items'     => $items === null ? [] : $items,
                 ],
             ];
         } catch (Throwable $e) {
@@ -657,6 +825,7 @@ class Entradas
         }
 
         $fila['lugares'] = self::lugaresDeLaOrden($db, $fila['id']);
+        $fila['items'] = self::itemsDeLaOrden($db, $fila['id']);
 
         return $fila;
     }
@@ -685,7 +854,11 @@ class Entradas
         $ordenes = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         $lugaresPorOrden = self::lugaresPorOrden($db, $linkId);
+        $itemsPorOrden = self::itemsPorOrden($db, $linkId);
         $conflictos = self::lugaresVendidosDosVeces($ordenes, $lugaresPorOrden);
+        // Lo pagado de cada tipo. El nombre es el de la última compra: si el
+        // tipo se renombró, se lee como se llama ahora.
+        $porTipo = [];
 
         $vendidas = 0;
         $ingresadas = 0;
@@ -716,6 +889,7 @@ class Entradas
             unset($orden['vencida']);
 
             $orden['lugares'] = isset($lugaresPorOrden[$orden['id']]) ? $lugaresPorOrden[$orden['id']] : [];
+            $orden['items'] = isset($itemsPorOrden[$orden['id']]) ? $itemsPorOrden[$orden['id']] : [];
             $orden['lugares_en_conflicto'] = $orden['estado'] === 'pagada'
                 ? array_values(array_intersect($orden['lugares'], $conflictos))
                 : [];
@@ -725,6 +899,15 @@ class Entradas
                 $ingresadas += isset($orden['ingresadas']) ? (int) $orden['ingresadas'] : 0;
                 $recaudado += (float) $orden['total'];
                 $comisiones += (float) $orden['comision'];
+
+                foreach ($orden['items'] as $item) {
+                    if (!isset($porTipo[$item['tipo']])) {
+                        $porTipo[$item['tipo']] = ['tipo' => $item['tipo'], 'nombre' => $item['nombre'], 'vendidas' => 0, 'recaudado' => 0.0];
+                    }
+
+                    $porTipo[$item['tipo']]['vendidas'] += $item['cantidad'];
+                    $porTipo[$item['tipo']]['recaudado'] = round($porTipo[$item['tipo']]['recaudado'] + $item['precio'] * $item['cantidad'], 2);
+                }
 
                 // null es "no lo sabemos" —una venta anterior a que se guardara
                 // el desglose— y no es lo mismo que un cero, que sí sería una
@@ -812,6 +995,8 @@ class Entradas
                 // tomado el lugar: el pago se acredita igual, y quien organiza
                 // tiene que enterarse para reubicar a uno de los dos.
                 'lugares_en_conflicto' => $conflictos,
+                // Vacío si el evento nunca vendió por tipos.
+                'por_tipo' => array_values($porTipo),
             ],
         ];
     }
@@ -990,20 +1175,145 @@ class Entradas
 
     // ------------------------------------------------------------ internos
 
-    private static function conPlanoDecodificado(array $config)
+    private static function decodificada(array $config)
     {
         $plano = isset($config['plano']) && $config['plano'] !== '' ? json_decode($config['plano'], true) : null;
         $config['plano'] = is_array($plano) ? $plano : null;
+        $config['tipos'] = TiposDeEntrada::decodificar(isset($config['tipos']) ? $config['tipos'] : null);
 
         return $config;
     }
 
-    /** El plano que ya tiene guardado el evento, o null. */
-    private static function planoGuardado($db, $linkId)
+    /** Un renglón de ticket_order_items, con sus tipos. */
+    private static function item(array $fila)
     {
-        $config = self::configDelEvento($db, $linkId);
+        return [
+            'tipo'     => (string) $fila['tipo'],
+            'nombre'   => (string) $fila['nombre'],
+            'precio'   => (float) $fila['precio_unitario'],
+            'cantidad' => (int) $fila['cantidad'],
+        ];
+    }
 
-        return $config === null ? null : $config['plano'];
+    /** Los tipos como los ve el público: cuántas quedan de cada uno. */
+    private static function tiposConDisponibles(array $tipos, array $ocupadasPorTipo, $disponibles)
+    {
+        return array_map(function ($tipo) use ($ocupadasPorTipo, $disponibles) {
+            $quedan = $disponibles;
+
+            if ($tipo['cupo'] !== null) {
+                $tomadas = isset($ocupadasPorTipo[$tipo['id']]) ? $ocupadasPorTipo[$tipo['id']] : 0;
+                $quedan = min($quedan, max(0, (int) $tipo['cupo'] - $tomadas));
+            }
+
+            return [
+                'id'          => (string) $tipo['id'],
+                'nombre'      => $tipo['nombre'],
+                'precio'      => (float) $tipo['precio'],
+                'disponibles' => $quedan,
+                'agotado'     => $quedan < 1,
+            ];
+        }, $tipos);
+    }
+
+    /**
+     * Lo que pidió el comprador, limpio: id de tipo => cantidad, sin ceros.
+     *
+     * @return array<string, int>|null null si no tiene la forma esperada.
+     */
+    private static function pedidoPorTipo($crudo)
+    {
+        if (!is_array($crudo)) {
+            return null;
+        }
+
+        $pedido = [];
+
+        foreach ($crudo as $id => $cantidad) {
+            if (!preg_match(TiposDeEntrada::PATRON_ID, (string) $id) || !is_numeric($cantidad) || (int) $cantidad < 0) {
+                return null;
+            }
+
+            if ((int) $cantidad > 0) {
+                $pedido[(string) $id] = (int) $cantidad;
+            }
+        }
+
+        return $pedido;
+    }
+
+    /**
+     * Los renglones de la compra en un evento con tipos, o por qué no se puede.
+     *
+     * Con plano, el tipo de cada lugar lo dice su zona y lo que haya mandado
+     * el comprador no se mira: elegir "Jubilados" para una butaca de la
+     * platea VIP sería pagar menos por el mismo lugar.
+     *
+     * Sin plano y sin decir de qué tipo —una pantalla vieja, que sólo manda la
+     * cantidad— se acepta sólo si hay un tipo: con varios no hay forma de saber
+     * cuál quería.
+     *
+     * @return array|string
+     */
+    private static function itemsDelPedido($db, $linkId, array $config, $lugares, $pedidoPorTipo, $cantidad)
+    {
+        $tipos = $config['tipos'];
+        $porId = TiposDeEntrada::porId($tipos);
+
+        if ($config['plano'] !== null) {
+            $tipoDe = TiposDeEntrada::tiposPorLugar($config['plano'], $tipos);
+            $pedido = [];
+
+            foreach ($lugares as $lugar) {
+                $pedido[$tipoDe[$lugar]] = (isset($pedido[$tipoDe[$lugar]]) ? $pedido[$tipoDe[$lugar]] : 0) + 1;
+            }
+        } elseif ($pedidoPorTipo === null) {
+            if (count($tipos) > 1) {
+                return 'Elegí qué entradas querés';
+            }
+
+            $pedido = [(string) $tipos[0]['id'] => $cantidad];
+        } else {
+            $pedido = $pedidoPorTipo;
+
+            foreach (array_keys($pedido) as $id) {
+                if (!isset($porId[$id])) {
+                    return 'Uno de los tipos de entrada ya no existe. Volvé a cargar la página.';
+                }
+            }
+        }
+
+        $ocupadas = self::ocupadasPorTipo($db, $linkId);
+        $items = [];
+
+        // En el orden en que los cargó quien vende, que es como se leen en el
+        // mail y en las ventas.
+        foreach ($tipos as $tipo) {
+            $id = (string) $tipo['id'];
+
+            if (!isset($pedido[$id])) {
+                continue;
+            }
+
+            if ($tipo['cupo'] !== null) {
+                $quedan = (int) $tipo['cupo'] - (isset($ocupadas[$id]) ? $ocupadas[$id] : 0);
+
+                if ($pedido[$id] > $quedan) {
+                    return $quedan < 1
+                        ? "Se agotaron las entradas \"{$tipo['nombre']}\""
+                        : "Sólo quedan $quedan entradas \"{$tipo['nombre']}\"";
+                }
+            }
+
+            $items[] = [
+                'tipo'     => $id,
+                'nombre'   => $tipo['nombre'],
+                'precio'   => round((float) $tipo['precio'], 2),
+                'cantidad' => $pedido[$id],
+            ];
+        }
+
+        return $items;
     }
 
     /**

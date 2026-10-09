@@ -425,6 +425,93 @@ describe('PanelEntradas', () => {
   });
 
 
+  describe('tipos de entrada', () => {
+    const TIPOS = [
+      { id: 'general', nombre: 'General', precio: 8000, cupo: null },
+      { id: 'jubilados', nombre: 'Jubilados', precio: 5000, cupo: 20 },
+    ];
+
+    const variosTipos = () => fireEvent.click(screen.getByRole('radio', { name: /Varios tipos de entrada/ }));
+    const unSoloPrecio = () => fireEvent.click(screen.getByRole('radio', { name: /Un solo precio/ }));
+
+    /** El precio que había pasa a ser el del General: no se pierde lo cargado. */
+    it('al pasar a varios tipos, el precio que había queda como General', async () => {
+      await montar();
+      activar();
+      fireEvent.change(screen.getByLabelText('Precio por entrada'), { target: { value: '6000' } });
+
+      variosTipos();
+
+      expect(screen.queryByLabelText('Precio por entrada')).not.toBeInTheDocument();
+      expect(screen.getByLabelText('Nombre', { selector: '#tipo-nombre-general' })).toHaveValue('General');
+      expect(screen.getByLabelText('Precio', { selector: '#tipo-precio-general' })).toHaveValue(6000);
+    });
+
+    it('guarda los tipos junto con la configuración', async () => {
+      await montar({ entradas: { activo: 1, capacidad: 50, precio: 5000, max_por_compra: 10, tipos: TIPOS } });
+      global.fetch.mockReturnValueOnce(respuestaDe({ entradas: { activo: 1, capacidad: 50, tipos: TIPOS } }));
+
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar entradas' }));
+
+      await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
+      expect(JSON.parse(global.fetch.mock.calls[1][1].body).tipos).toEqual(TIPOS);
+    });
+
+    /** Mandar null es lo que le dice al servidor que vuelve a un solo precio. */
+    it('volver a un solo precio manda los tipos en null, con el precio del primero', async () => {
+      await montar({ entradas: { activo: 1, capacidad: 50, precio: 5000, max_por_compra: 10, tipos: TIPOS } });
+
+      unSoloPrecio();
+      expect(screen.getByLabelText('Precio por entrada')).toHaveValue(8000);
+
+      global.fetch.mockReturnValueOnce(respuestaDe({ entradas: { activo: 1 } }));
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar entradas' }));
+
+      await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
+      const cuerpo = JSON.parse(global.fetch.mock.calls[1][1].body);
+      expect(cuerpo.tipos).toBeNull();
+      expect(cuerpo.precio).toBe(8000);
+    });
+
+    it('un tipo sin nombre no deja guardar', async () => {
+      await montar();
+      activar();
+      variosTipos();
+
+      expect(screen.getByRole('alert')).toHaveTextContent('Cada tipo de entrada necesita un nombre.');
+      expect(screen.getByRole('button', { name: 'Guardar entradas' })).toBeDisabled();
+    });
+
+    /** Un "Invitado" en 0 no hace gratis al resto: si alguno cobra, hace falta Mercado Pago. */
+    it('si algún tipo cobra pide Mercado Pago', async () => {
+      await montar({
+        cobros: SIN_CONECTAR,
+        entradas: { activo: 1, capacidad: 50, precio: 0, max_por_compra: 10, tipos: [
+          { id: 'invitado', nombre: 'Invitado', precio: 0, cupo: null },
+          { id: 'general', nombre: 'General', precio: 100, cupo: null },
+        ] },
+      });
+
+      expect(screen.getByText(/Para cobrar tenés que conectar Mercado Pago/)).toBeInTheDocument();
+    });
+
+    it('con plano, cada fila elige de qué tipo son sus lugares', async () => {
+      const plano = { ancho: 12, alto: 6, elementos: [{ tipo: 'fila', nombre: 'A', desde: 1, butacas: 4, x: 0, y: 0 }] };
+      await montar({ entradas: { activo: 1, capacidad: 4, precio: 5000, max_por_compra: 10, plano, tipos: TIPOS } });
+
+      fireEvent.pointerDown(screen.getByTestId('elemento-0'));
+      fireEvent.change(screen.getByLabelText('Tipo de entrada'), { target: { value: 'jubilados' } });
+
+      expect(screen.getByText('General: 0 · Jubilados: 4')).toBeInTheDocument();
+
+      global.fetch.mockReturnValueOnce(respuestaDe({ entradas: { activo: 1 } }));
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar entradas' }));
+
+      await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
+      expect(JSON.parse(global.fetch.mock.calls[1][1].body).plano.elementos[0].entrada).toBe('jubilados');
+    });
+  });
+
   describe('plano de lugares', () => {
     const PLANO = {
       ancho: 12,

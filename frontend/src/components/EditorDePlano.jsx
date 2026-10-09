@@ -8,6 +8,7 @@ import {
   huella, lugaresDelElemento, lugaresDelPlano, lugaresRepetidos, resumirLugares,
   nuevoElemento, armarPlatea, redimensionar, dentroDelPlano,
 } from '../utils/plano';
+import { tipoDelElemento } from '../utils/tiposDeEntrada';
 
 const PIXELES_POR_CASILLERO = 22;
 
@@ -22,8 +23,10 @@ const CLASE_CAMPO = 'w-full px-3 py-2 bg-white border border-borde-fuerte text-t
  *
  * Los lugares ya vendidos se ven ocupados. El servidor no deja sacarlos, y
  * acá se avisa antes para que no sea una sorpresa al guardar.
+ *
+ * Con varios tipos de entrada, cada fila o mesa elige de cuál son sus lugares.
  */
-function EditorDePlano({ plano, onCambiar, ocupados = [] }) {
+function EditorDePlano({ plano, onCambiar, ocupados = [], tipos = null }) {
   const [elegido, setElegido] = useState(null);
   const [platea, setPlatea] = useState({ filas: 8, butacas: 12 });
   const [armando, setArmando] = useState(false);
@@ -34,6 +37,17 @@ function EditorDePlano({ plano, onCambiar, ocupados = [] }) {
   const repetidos = lugaresRepetidos(plano);
   const lugares = lugaresDelPlano(plano);
   const perdidos = ocupados.filter((id) => !lugares.includes(id));
+  const conTipos = Boolean(tipos && tipos.length > 1);
+  // Cuántos lugares quedaron de cada tipo: lo que se ve de un vistazo si
+  // alguna zona quedó con el tipo equivocado.
+  const lugaresPorTipo = conTipos
+    ? tipos.map((t) => ({
+      ...t,
+      lugares: plano.elementos
+        .filter((e) => tipoDelElemento(e, tipos) === t.id)
+        .reduce((suma, e) => suma + lugaresDelElemento(e).length, 0),
+    }))
+    : [];
 
   const reemplazar = (indice, cambios) => {
     const elementos = plano.elementos.map((e, i) => (
@@ -226,6 +240,12 @@ function EditorDePlano({ plano, onCambiar, ocupados = [] }) {
         {' '}Tocá una fila o una mesa para editarla, y arrastrala para moverla.
       </p>
 
+      {conTipos && (
+        <p className="text-sm text-tinta-media">
+          {lugaresPorTipo.map((t) => `${t.nombre || 'Sin nombre'}: ${t.lugares}`).join(' · ')}
+        </p>
+      )}
+
       {repetidos.length > 0 && (
         <p role="alert" className="text-sm text-red-700 bg-red-50 border border-red-200 px-4 py-3">
           Hay lugares repetidos: {resumirLugares(repetidos.slice(0, 8))}. Cambiá el nombre de
@@ -242,6 +262,7 @@ function EditorDePlano({ plano, onCambiar, ocupados = [] }) {
       {elemento && (
         <PanelDelElemento
           elemento={elemento}
+          tipos={conTipos ? tipos : null}
           vendidos={lugaresDelElemento(elemento).filter((l) => ocupados.includes(l.id)).length}
           onCambiar={(cambios) => reemplazar(elegido, cambios)}
           onMover={mover}
@@ -274,7 +295,7 @@ function EditorDePlano({ plano, onCambiar, ocupados = [] }) {
   );
 }
 
-function PanelDelElemento({ elemento, vendidos, onCambiar, onMover, onBorrar }) {
+function PanelDelElemento({ elemento, tipos, vendidos, onCambiar, onMover, onBorrar }) {
   const titulo = {
     fila: `Fila ${elemento.nombre}`,
     mesa: `Mesa ${elemento.nombre}`,
@@ -322,6 +343,27 @@ function PanelDelElemento({ elemento, vendidos, onCambiar, onMover, onBorrar }) 
           <CampoTexto id="elemento-texto" etiqueta="Texto" value={elemento.texto} onChange={(v) => onCambiar({ texto: v.slice(0, 40) })} />
           <CampoNumero id="elemento-ancho" etiqueta="Ancho" min={1} max={ANCHO_MAXIMO} value={elemento.ancho} onChange={(v) => onCambiar({ ancho: v })} />
           <CampoNumero id="elemento-alto" etiqueta="Alto" min={1} max={ALTO_MAXIMO} value={elemento.alto} onChange={(v) => onCambiar({ alto: v })} />
+        </div>
+      )}
+
+      {tipos && elemento.tipo !== 'escenario' && (
+        <div>
+          <label htmlFor="elemento-entrada" className="block text-xs font-semibold text-tinta mb-1">Tipo de entrada</label>
+          <select
+            id="elemento-entrada"
+            value={tipoDelElemento(elemento, tipos)}
+            onChange={(e) => onCambiar({ entrada: e.target.value })}
+            className={CLASE_CAMPO}
+          >
+            {tipos.map((t) => (
+              <option key={t.id} value={t.id}>{t.nombre || 'Sin nombre'}</option>
+            ))}
+          </select>
+          {vendidos > 0 && (
+            <p className="text-xs text-tinta-suave mt-1">
+              Lo ya vendido no cambia de precio: el tipo nuevo vale para lo que se venda de acá en más.
+            </p>
+          )}
         </div>
       )}
 

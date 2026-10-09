@@ -109,3 +109,15 @@ export function precioDeReferencia(precio) {
   // eso el público lo quiere ver.
   return numero <= 0 ? 'Gratis' : `Desde ${formatearPrecio(numero)}`;
 }
+
+/**
+ * Si el evento vende a más de un precio. Con tipos que salen todos lo mismo
+ * —General y Socios a $5000— sigue siendo "por entrada", no "desde".
+ */
+export function conVariosPrecios(entradas) {
+  if (!entradas || !Array.isArray(entradas.tipos)) {
+    return false;
+  }
+
+  return new Set(entradas.tipos.map((t) => Number(t.precio))).size > 1;
+}

@@ -258,4 +258,35 @@ class PlanoTest extends TestCase
         $this->assertSame('x:1:2', Plano::describir('x:1:2'));
         $this->assertSame('Fila A: 1 · general', Plano::resumir(['f:A:1', 'general']));
     }
+
+    // -------------------------------------------------------- tipo de entrada
+
+    /** Cada fila o mesa dice de qué tipo son sus lugares, y eso se guarda. */
+    public function testLaFilaYLaMesaGuardanSuTipoDeEntrada()
+    {
+        $fila = $this->fila('A', 2) + ['entrada' => 'vip'];
+        $mesa = $this->mesa('1', 2) + ['entrada' => 'general'];
+
+        $r = Plano::normalizar($this->plano([$fila, $mesa]));
+
+        $this->assertTrue($r['ok']);
+        $this->assertSame('vip', $r['plano']['elementos'][0]['entrada']);
+        $this->assertSame('general', $r['plano']['elementos'][1]['entrada']);
+    }
+
+    /** Un tipo con un id imposible no se guarda: la zona vende al primero. */
+    public function testUnTipoDeEntradaInvalidoSeDescarta()
+    {
+        $r = Plano::normalizar($this->plano([$this->fila('A', 2) + ['entrada' => 'no vale!']]));
+
+        $this->assertTrue($r['ok']);
+        $this->assertArrayNotHasKey('entrada', $r['plano']['elementos'][0]);
+    }
+
+    public function testSinTipoDeEntradaNoAgregaNada()
+    {
+        $r = Plano::normalizar($this->plano([$this->fila('A', 2)]));
+
+        $this->assertArrayNotHasKey('entrada', $r['plano']['elementos'][0]);
+    }
 }

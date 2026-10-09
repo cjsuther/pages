@@ -40,3 +40,4 @@ migration_carcajada.sql
 migration_clientes.sql
 migration_clientes_relleno.sql
 migration_carcajada_invitados.sql
+migration_tipos_de_entrada.sql

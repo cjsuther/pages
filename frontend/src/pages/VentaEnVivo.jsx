@@ -168,6 +168,26 @@ function VentaEnVivo({ apiUrl }) {
               )}
             </Tarjeta>
 
+            {venta.tipos && venta.tipos.length > 0 && (
+              <Tarjeta className="p-6">
+                <Rotulo className="mb-3">Por tipo de entrada</Rotulo>
+                <ul className="space-y-2">
+                  {venta.tipos.map((t) => (
+                    <li key={t.nombre} className="flex items-baseline justify-between gap-4">
+                      <span style={{ color: tema.titulo }}>
+                        <strong>{t.vendidas}</strong>
+                        {t.cupo !== null && <span style={{ color: tema.tenue }}> de {t.cupo}</span>}
+                        {' '}{t.nombre}
+                      </span>
+                      <span className="text-sm" style={{ color: tema.suave }}>
+                        {Number(t.precio) > 0 ? formatearPrecio(t.precio, venta.moneda) : 'Sin costo'}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </Tarjeta>
+            )}
+
             {ritmo.length > 0 && (
               <Tarjeta className="p-6">
                 {/* La pregunta de quien abre esto no es cuántas van, sino si se

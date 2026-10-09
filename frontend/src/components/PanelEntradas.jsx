@@ -3,7 +3,9 @@ import { Loader2, AlertTriangle, Check } from 'lucide-react';
 import { formatearPrecio, esGratis } from '../utils/entradas';
 import { formatearPorcentaje } from '../utils/comisiones';
 import { lugaresDelPlano, lugaresRepetidos, planoInicial } from '../utils/plano';
+import { algunoCobra, problemaConLosTipos, tiposIniciales } from '../utils/tiposDeEntrada';
 import EditorDePlano from './EditorDePlano';
+import EditorDeTipos from './EditorDeTipos';
 import CopiarPlano from './CopiarPlano';
 
 /**
@@ -17,6 +19,10 @@ import CopiarPlano from './CopiarPlano';
  * deducía de qué campos habían quedado cargados.
  *
  * Un precio de 0 es una reserva sin cobro y no necesita Mercado Pago.
+ *
+ * El precio puede ser uno solo o varios tipos de entrada —General, Jubilados,
+ * VIP—, cada uno con su precio y su cupo. Con plano, cada fila o mesa dice de
+ * qué tipo son sus lugares.
  */
 function PanelEntradas({ linkId, apiUrl, token, onCambio, enlace = null, onGuardarEnlace = null }) {
   const [config, setConfig] = useState(null);
@@ -34,6 +40,9 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio, enlace = null, onGuard
   // null es sin lugares asignados: se vende por cupo, como siempre.
   const [plano, setPlano] = useState(null);
   const [lugaresOcupados, setLugaresOcupados] = useState([]);
+  // null es un solo precio, como siempre.
+  const [tipos, setTipos] = useState(null);
+  const [ocupadasPorTipo, setOcupadasPorTipo] = useState({});
 
   const cabeceras = {
     'Content-Type': 'application/json',
@@ -65,9 +74,11 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio, enlace = null, onGuard
         setMercadoPago(cuerpo.mercadopago || null);
         setConfig(cuerpo.entradas);
         setLugaresOcupados(cuerpo.lugares_ocupados || []);
+        setOcupadasPorTipo(cuerpo.ocupadas_por_tipo || {});
 
         if (cuerpo.entradas) {
           setPlano(cuerpo.entradas.plano || null);
+          setTipos(cuerpo.entradas.tipos || null);
 
           setForm({
             capacidad: Number(cuerpo.entradas.capacidad),
@@ -110,6 +121,12 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio, enlace = null, onGuard
     setError(null);
   };
 
+  const cambiarTipos = (nuevos) => {
+    setTipos(nuevos);
+    setGuardado(false);
+    setError(null);
+  };
+
   const elegirModo = (cual) => {
     setModo(cual);
     setGuardado(false);
@@ -121,9 +138,10 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio, enlace = null, onGuard
     const r = await fetch(`${apiUrl}/entradas/evento.php?link_id=${linkId}`, {
       method: 'POST',
       headers: cabeceras,
-      // El plano va siempre, también en null: es lo que le dice al servidor
-      // que se saca. Con plano la capacidad la calcula él.
-      body: JSON.stringify({ ...form, activo, plano }),
+      // El plano y los tipos van siempre, también en null: es lo que le dice
+      // al servidor que se sacan. Con plano la capacidad la calcula él, y con
+      // tipos el precio.
+      body: JSON.stringify({ ...form, activo, plano, tipos }),
     });
     const cuerpo = await r.json();
 
@@ -134,6 +152,9 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio, enlace = null, onGuard
     setConfig(cuerpo.entradas);
     if (cuerpo.entradas && cuerpo.entradas.plano) {
       setForm((previo) => ({ ...previo, capacidad: Number(cuerpo.entradas.capacidad) }));
+    }
+    if (cuerpo.entradas) {
+      setTipos(cuerpo.entradas.tipos || null);
     }
     if (onCambio) onCambio(cuerpo.entradas);
   };
@@ -172,7 +193,8 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio, enlace = null, onGuard
   }
 
   const sinMercadoPago = !cobros || !cobros.configurado;
-  const quiereCobrar = !esGratis(form.precio);
+  const quiereCobrar = tipos ? algunoCobra(tipos) : !esGratis(form.precio);
+  const problemaDeTipos = problemaConLosTipos(tipos);
   const capacidad = plano ? lugaresDelPlano(plano).length : Number(form.capacidad);
   const disponibles = Math.max(0, capacidad - ocupadas);
   // Hay entradas vendidas sin lugar: pasar a plano dejaría a esa gente sin
@@ -300,7 +322,68 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio, enlace = null, onGuard
           </fieldset>
 
           {plano && (
-            <EditorDePlano plano={plano} onCambiar={cambiarPlano} ocupados={lugaresOcupados} />
+            <EditorDePlano plano={plano} onCambiar={cambiarPlano} ocupados={lugaresOcupados} tipos={tipos} />
+          )}
+
+          <fieldset>
+            <legend className="text-sm font-bold text-tinta-media mb-3 tracking-wide">
+              ¿CUÁNTO SALEN?
+            </legend>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <OpcionDeModo
+                nombre="precios"
+                valor="uno"
+                elegido={tipos ? 'varios' : 'uno'}
+                onElegir={() => {
+                  // El primer tipo —el General— pasa a ser el precio de todas.
+                  if (tipos && tipos.length > 0) cambiar('precio', Number(tipos[0].precio) || 0);
+                  cambiarTipos(null);
+                }}
+                titulo="Un solo precio"
+                detalle="Todas las entradas salen lo mismo."
+              />
+              <OpcionDeModo
+                nombre="precios"
+                valor="varios"
+                elegido={tipos ? 'varios' : 'uno'}
+                onElegir={() => cambiarTipos(
+                  config && config.tipos ? config.tipos : tiposIniciales(form.precio)
+                )}
+                titulo="Varios tipos de entrada"
+                detalle={plano
+                  ? 'General, VIP, Jubilados... Cada fila o mesa dice de qué tipo es.'
+                  : 'General, Jubilados, Anticipada... Cada uno con su precio.'}
+              />
+            </div>
+          </fieldset>
+
+          {tipos && (
+            <>
+              <EditorDeTipos tipos={tipos} onCambiar={cambiarTipos} vendidas={ocupadasPorTipo} />
+              {plano && tipos.length > 1 && (
+                <p className="text-xs text-tinta-suave">
+                  Tocá una fila o una mesa del plano para elegir de qué tipo son sus lugares.
+                  Las que no digan nada se venden como {tipos[0].nombre || 'el primer tipo'}.
+                </p>
+              )}
+              {problemaDeTipos && (
+                <p role="alert" className="text-sm text-red-700 bg-red-50 border border-red-200 px-4 py-3">
+                  {problemaDeTipos}
+                </p>
+              )}
+              {quiereCobrar && comision > 0 && cobros && cobros.admite_split && (
+                <p className="text-xs text-verde-oscuro">
+                  De cada entrada que cobra se descuenta la comisión de Rezonar ({formatearPorcentaje(comision)}%)
+                  {mercadoPago && (
+                    <>
+                      {' '}y, aparte, {formatearPorcentaje(mercadoPago.porcentaje)}% de Mercado Pago, que libera
+                      la plata a los {mercadoPago.dias} días de la compra
+                    </>
+                  )}.
+                </p>
+              )}
+            </>
           )}
 
           <div className="grid grid-cols-2 gap-4">
@@ -326,6 +409,7 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio, enlace = null, onGuard
               </div>
             )}
 
+            {!tipos && (
             <div>
               <label htmlFor="entradas-precio" className="block text-sm font-semibold text-tinta mb-1.5 tracking-wide">
                 Precio por entrada
@@ -368,6 +452,7 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio, enlace = null, onGuard
                 </>
               )}
             </div>
+            )}
           </div>
 
           <div>
@@ -438,7 +523,7 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio, enlace = null, onGuard
         <button
           type="button"
           onClick={guardar}
-          disabled={guardando || (modo === 'interno' && planoConProblemas)}
+          disabled={guardando || (modo === 'interno' && (planoConProblemas || problemaDeTipos !== null))}
           className="inline-flex items-center justify-center gap-2 rounded-full bg-verde text-verde-tinta px-6 py-3 font-semibold hover:bg-verde-oscuro hover:text-white transition-colors disabled:opacity-50 flex items-center gap-2"
         >
           {guardando && <Loader2 className="w-4 h-4 animate-spin" />}

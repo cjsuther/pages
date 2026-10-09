@@ -214,7 +214,7 @@ class CorreoEntradas
       ' . $bloqueFecha . $bloqueLugar . '
       <p style="margin:0 0 8px;color:#444444;font-size:15px">🎟 '
         . $cantidad . ($cantidad === 1 ? ' entrada' : ' entradas') . ' a nombre de ' . $e($orden['nombre']) . '</p>
-      ' . self::bloqueLugares($orden, $e) . '
+      ' . self::bloqueTipos($orden, $e) . self::bloqueLugares($orden, $e) . '
     </div>
 
     <a href="' . $e($url) . '"
@@ -229,6 +229,17 @@ class CorreoEntradas
   </td></tr>
 </table>
 </body></html>';
+    }
+
+    /** Qué entradas son, si el evento tiene tipos: "2 General · 1 Jubilados". */
+    private static function bloqueTipos(array $orden, $e)
+    {
+        if (empty($orden['items'])) {
+            return '';
+        }
+
+        return '<p style="margin:0 0 8px;color:#000000;font-size:15px;font-weight:700">'
+            . $e(TiposDeEntrada::resumir($orden['items'])) . '</p>';
     }
 
     /** Los lugares elegidos, si el evento tiene plano. */
@@ -291,6 +302,10 @@ class CorreoEntradas
         }
 
         $lineas[] = $cantidad . ($cantidad === 1 ? ' entrada' : ' entradas') . ' a nombre de ' . $orden['nombre'];
+
+        if (!empty($orden['items'])) {
+            $lineas[] = 'Entradas: ' . TiposDeEntrada::resumir($orden['items']);
+        }
 
         if (!empty($orden['lugares'])) {
             $lineas[] = 'Lugares: ' . Plano::resumir($orden['lugares']);

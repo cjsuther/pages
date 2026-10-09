@@ -259,6 +259,9 @@ function Puerta({ apiUrl }) {
                             {resumirLugares(o.lugares)}
                           </span>
                         )}
+                        {o.tipos && (
+                          <span className="block text-xs" style={{ color: tema.suave }}>{o.tipos}</span>
+                        )}
                       </span>
                       <span
                         className="shrink-0 text-sm font-bold px-2.5 py-1 rounded-full"
@@ -350,6 +353,11 @@ function TarjetaDeEntrada({ respuesta, procesando, onIngresar, onDeshacer, onCer
                 {orden.ingresadas > 0 && ` · entraron ${orden.ingresadas}`}
                 {orden.ingreso_en && ` (${horaCorta(orden.ingreso_en)})`}
               </p>
+              {/* El tipo va bien a la vista: es lo que dice si hay que pedir
+                  el carnet de jubilado o mandar a alguien a la zona VIP. */}
+              {orden.tipos && (
+                <p className="text-base font-bold mt-1">{orden.tipos}</p>
+              )}
               {orden.lugares.length > 0 && (
                 <p className="text-base font-bold mt-1">{resumirLugares(orden.lugares)}</p>
               )}

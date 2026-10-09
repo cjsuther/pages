@@ -205,7 +205,10 @@ class Plano
                     return 'la numeración de la fila tiene que empezar entre 1 y 999';
                 }
 
-                return ['tipo' => 'fila', 'nombre' => $nombre, 'desde' => $desde, 'butacas' => $butacas, 'x' => $x, 'y' => $y];
+                return self::conEntrada(
+                    ['tipo' => 'fila', 'nombre' => $nombre, 'desde' => $desde, 'butacas' => $butacas, 'x' => $x, 'y' => $y],
+                    $crudo
+                );
 
             case 'mesa':
                 $lugares = isset($crudo['lugares']) ? (int) $crudo['lugares'] : 0;
@@ -219,7 +222,10 @@ class Plano
                     return 'una mesa tiene que tener entre 1 y ' . self::MAX_LUGARES_POR_MESA . ' lugares';
                 }
 
-                return ['tipo' => 'mesa', 'nombre' => $nombre, 'lugares' => $lugares, 'forma' => $forma, 'x' => $x, 'y' => $y];
+                return self::conEntrada(
+                    ['tipo' => 'mesa', 'nombre' => $nombre, 'lugares' => $lugares, 'forma' => $forma, 'x' => $x, 'y' => $y],
+                    $crudo
+                );
 
             case 'escenario':
                 $texto = isset($crudo['texto']) ? trim((string) $crudo['texto']) : '';
@@ -241,6 +247,22 @@ class Plano
         }
 
         return 'tipo desconocido';
+    }
+
+    /**
+     * El tipo de entrada de una fila o una mesa, si lo dice.
+     *
+     * El plano no conoce los tipos del evento: sólo guarda a cuál apunta cada
+     * zona. Que exista lo resuelve quien vende, que manda los que no existen
+     * al primer tipo.
+     */
+    private static function conEntrada(array $elemento, array $crudo)
+    {
+        if (isset($crudo['entrada']) && preg_match(TiposDeEntrada::PATRON_ID, (string) $crudo['entrada'])) {
+            $elemento['entrada'] = (string) $crudo['entrada'];
+        }
+
+        return $elemento;
     }
 
     private static function mal($error)

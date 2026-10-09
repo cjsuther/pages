@@ -182,6 +182,8 @@ class EntradasHandler
                 // El editor del plano los marca: son los lugares que no se
                 // pueden sacar.
                 'lugares_ocupados' => Entradas::lugaresOcupados($db, $linkId),
+                // Y el de cada tipo: su cupo no puede bajar de acá.
+                'ocupadas_por_tipo' => (object) Entradas::ocupadasPorTipo($db, $linkId),
                 'cobros'   => Cobros::estado($db, self::pageIdDelLink($db, $linkId)),
                 // El dueño define el precio acá: necesita ver qué se le
                 // descuenta en la misma pantalla, no en otra sección. Y los
@@ -196,7 +198,7 @@ class EntradasHandler
 
             // Cobrar sin credencial cargada deja el checkout roto para el
             // comprador. Una reserva sin precio no necesita Mercado Pago.
-            if ($precio > 0 && !Cobros::estaConfigurado($db, self::pageIdDelLink($db, $linkId))) {
+            if (self::cobra($db, $linkId, $req, $precio) && !Cobros::estaConfigurado($db, self::pageIdDelLink($db, $linkId))) {
                 return Response::error(400,
                     'Para cobrar entradas primero tenés que conectar Mercado Pago en la sección Entradas de la página');
             }
@@ -213,6 +215,11 @@ class EntradasHandler
             // ejemplo— deja el que haya como está. Uno con plano null lo saca.
             if (array_key_exists('plano', $req->body)) {
                 $datos['plano'] = $req->body['plano'];
+            }
+
+            // Los tipos, igual: sin la clave quedan los que había.
+            if (array_key_exists('tipos', $req->body)) {
+                $datos['tipos'] = $req->body['tipos'];
             }
 
             $resultado = Entradas::guardarConfig($db, $linkId, $datos);
@@ -439,6 +446,7 @@ class EntradasHandler
                 (int) $o['cantidad'],
                 isset($o['ingresadas']) ? (int) $o['ingresadas'] : 0,
                 Plano::resumir(isset($o['lugares']) ? $o['lugares'] : []),
+                TiposDeEntrada::resumir(isset($o['items']) ? $o['items'] : []),
                 (float) $o['total'],
                 $o['moneda'],
                 $o['estado'],
@@ -448,7 +456,7 @@ class EntradasHandler
 
         $contenido = Excel::tabla(
             ['Código', 'Nombre', 'Email', 'Teléfono', 'Cantidad', 'Ingresaron', 'Lugares',
-             'Total', 'Moneda', 'Estado', 'Fecha'],
+             'Tipos', 'Total', 'Moneda', 'Estado', 'Fecha'],
             $filas,
             'Ventas'
         );
@@ -464,6 +472,35 @@ class EntradasHandler
         $limpio = trim(preg_replace('/[^a-z0-9]+/', '-', $limpio), '-');
 
         return 'ventas' . ($limpio === '' ? '' : '-' . mb_substr($limpio, 0, 60)) . '.xlsx';
+    }
+
+    /**
+     * Si la configuración que se guarda cobra algo.
+     *
+     * Con tipos, cobra si alguno tiene precio: un "Invitado" en 0 no hace
+     * gratis al resto. Si el pedido no trae tipos se miran los guardados,
+     * que son los que van a quedar.
+     */
+    private static function cobra($db, $linkId, Request $req, $precio)
+    {
+        if (array_key_exists('tipos', $req->body)) {
+            $tipos = is_array($req->body['tipos']) ? $req->body['tipos'] : [];
+        } else {
+            $config = Entradas::configDelEvento($db, $linkId);
+            $tipos = $config === null || $config['tipos'] === null ? [] : $config['tipos'];
+        }
+
+        if ($tipos === []) {
+            return $precio > 0;
+        }
+
+        foreach ($tipos as $tipo) {
+            if (is_array($tipo) && isset($tipo['precio']) && (float) $tipo['precio'] > 0) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static function pageIdDelLink($db, $linkId)

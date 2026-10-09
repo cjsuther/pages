@@ -104,6 +104,7 @@
         "precio": "migration_ticketing.sql",
         "moneda": "migration_ticketing.sql",
         "max_por_compra": "migration_ticketing.sql",
+        "tipos": "migration_tipos_de_entrada.sql",
         "plano": "migration_planos.sql",
         "created_at": "migration_ticketing.sql",
         "updated_at": "migration_ticketing.sql"
@@ -311,6 +312,14 @@
         "created_at": "migration_push_notifications.sql",
         "updated_at": "migration_push_notifications.sql",
         "last_seen_at": "migration_push_notifications.sql"
+    },
+    "ticket_order_items": {
+        "id": "migration_tipos_de_entrada.sql",
+        "order_id": "migration_tipos_de_entrada.sql",
+        "tipo": "migration_tipos_de_entrada.sql",
+        "nombre": "migration_tipos_de_entrada.sql",
+        "precio_unitario": "migration_tipos_de_entrada.sql",
+        "cantidad": "migration_tipos_de_entrada.sql"
     },
     "ticket_order_lugares": {
         "id": "migration_planos.sql",

@@ -39,6 +39,7 @@ class CheckoutHandler
             'telefono' => $req->input('telefono'),
             'cantidad' => $req->input('cantidad'),
             'lugares'  => $req->input('lugares'),
+            'tipos'    => $req->input('tipos'),
         ]);
 
         if (!$resultado['ok']) {
@@ -82,6 +83,7 @@ class CheckoutHandler
             'titulo'     => $evento['text'],
             'cantidad'   => $orden['cantidad'],
             'precio'     => $orden['precio'],
+            'items'      => self::itemsDelCobro($evento['text'], $orden['items']),
             'moneda'     => $orden['moneda'],
             'referencia' => $orden['codigo'],
             'urlRetorno' => self::urlDeRetorno($orden['codigo']),
@@ -324,6 +326,8 @@ class CheckoutHandler
             'pagina'        => $orden['pagina'],
             'url_slug'      => $orden['url_slug'],
             'lugares'       => array_map(['Plano', 'describir'], $orden['lugares']),
+            // "2 General · 1 Jubilados", o vacío si el evento tiene un solo precio.
+            'tipos'         => TiposDeEntrada::resumir($orden['items']),
             // Para que la compra se registre en el pixel de quien vendió, no
             // en el nuestro: es su venta y su publicidad.
             'meta_pixel_id' => isset($orden['meta_pixel_id']) ? $orden['meta_pixel_id'] : null,
@@ -371,6 +375,33 @@ class CheckoutHandler
         }
 
         return null;
+    }
+
+    /**
+     * Un renglón del checkout por tipo, para que el comprador vea qué paga.
+     *
+     * Los de precio 0 no van: Mercado Pago no acepta un ítem sin precio, y no
+     * cambian el total. Sin tipos no hay renglones y se cobra como siempre.
+     *
+     * @return array|null
+     */
+    private static function itemsDelCobro($titulo, array $items)
+    {
+        $cobrados = array_values(array_filter($items, function ($item) {
+            return $item['precio'] > 0;
+        }));
+
+        if ($cobrados === []) {
+            return null;
+        }
+
+        return array_map(function ($item) use ($titulo) {
+            return [
+                'titulo'   => $titulo . ' — ' . $item['nombre'],
+                'cantidad' => $item['cantidad'],
+                'precio'   => $item['precio'],
+            ];
+        }, $cobrados);
     }
 
     private static function evento($db, $linkId)

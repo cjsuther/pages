@@ -124,7 +124,9 @@ class HerramientasMcp
                 'name' => 'configurar_entradas',
                 'description' => 'Pone o saca la venta de entradas por Rezonar en un evento. '
                     . 'modo "gratis" es reserva sin costo; modo "pago" necesita precio y que la página '
-                    . 'tenga Mercado Pago conectado; modo "desactivar" corta la venta.',
+                    . 'tenga Mercado Pago conectado; modo "desactivar" corta la venta. '
+                    . 'Si el evento tiene tipos de entrada (varios precios, como General y Jubilados), '
+                    . 'el precio lo ponen los tipos y se cambia desde el editor de Rezonar: acá se ignora.',
                 'inputSchema' => [
                     'type' => 'object',
                     'properties' => [

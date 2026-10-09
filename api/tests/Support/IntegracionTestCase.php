@@ -54,6 +54,18 @@ abstract class IntegracionTestCase extends TestCase
         Plataforma::olvidar();
     }
 
+    /**
+     * PHPUnit guarda cada test hasta el final de la corrida, y con él su
+     * conexión: pasados los 151 tests de integración, el servidor rechazaba
+     * las siguientes con "Too many connections".
+     */
+    protected function tearDown(): void
+    {
+        $this->db = null;
+
+        parent::tearDown();
+    }
+
     /** El esquema que armaron database.sql y las migraciones: tabla => [columna => migración]. */
     protected static function esquema()
     {

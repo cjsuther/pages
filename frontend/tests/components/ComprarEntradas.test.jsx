@@ -492,6 +492,112 @@ describe('ComprarEntradas', () => {
     });
   });
 
+  describe('con tipos de entrada', () => {
+    const TIPOS = [
+      { id: 'general', nombre: 'General', precio: 8000, disponibles: 50, agotado: false },
+      { id: 'jubilados', nombre: 'Jubilados', precio: 5000, disponibles: 1, agotado: false },
+      { id: 'invitado', nombre: 'Invitado', precio: 0, disponibles: 50, agotado: false },
+    ];
+
+    const conTipos = (overrides = {}) => montar({
+      entradas: { ...ENTRADAS, precio: 5000, tipos: TIPOS, ...overrides },
+    });
+
+    it('se elige cuántas de cada tipo en vez de una cantidad', () => {
+      conTipos();
+
+      expect(screen.queryByLabelText('Cantidad')).not.toBeInTheDocument();
+      expect(screen.getByLabelText(/General/)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'IR A PAGAR' })).toBeDisabled();
+    });
+
+    /** Un tipo no ofrece más de lo que le queda. */
+    it('cada tipo ofrece hasta lo que le queda', () => {
+      conTipos();
+
+      const jubilados = screen.getByLabelText(/Jubilados/);
+      expect(Array.from(jubilados.options).map((o) => o.value)).toEqual(['0', '1']);
+    });
+
+    it('un tipo agotado no se puede elegir', () => {
+      conTipos({ tipos: [TIPOS[0], { ...TIPOS[1], disponibles: 0, agotado: true }] });
+
+      expect(screen.getByText('AGOTADO')).toBeInTheDocument();
+      expect(screen.queryByRole('combobox', { name: /Jubilados/ })).not.toBeInTheDocument();
+    });
+
+    it('el total suma lo de cada tipo y manda cuántas de cada uno', async () => {
+      global.fetch.mockReturnValueOnce(respuesta({ codigo: 'X', url: 'https://mp.test/pagar' }));
+      conTipos();
+      completarFormulario();
+
+      fireEvent.change(screen.getByLabelText(/General/), { target: { value: '2' } });
+      fireEvent.change(screen.getByLabelText(/Jubilados/), { target: { value: '1' } });
+
+      expect(screen.getByText(/21\.000/)).toBeInTheDocument();
+      expect(screen.getByText('2 × General')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'IR A PAGAR' }));
+
+      await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+      const cuerpo = JSON.parse(global.fetch.mock.calls[0][1].body);
+
+      expect(cuerpo.tipos).toEqual({ general: 2, jubilados: 1 });
+      expect(cuerpo.cantidad).toBe(3);
+    });
+
+    /** Sólo entradas sin costo: no hay nada que pagar, se confirma acá. */
+    it('una compra que no suma nada se confirma sin ir a pagar', () => {
+      conTipos();
+
+      fireEvent.change(screen.getByLabelText(/Invitado/), { target: { value: '2' } });
+
+      expect(screen.getByRole('button', { name: 'Confirmar reserva' })).toBeEnabled();
+    });
+
+    describe('con plano', () => {
+      const PLANO = {
+        ancho: 10,
+        alto: 6,
+        elementos: [
+          { tipo: 'fila', nombre: 'A', desde: 1, butacas: 2, x: 0, y: 0, entrada: 'jubilados' },
+          { tipo: 'fila', nombre: 'B', desde: 1, butacas: 2, x: 0, y: 1 },
+        ],
+      };
+
+      it('cada lugar paga el tipo de su zona', async () => {
+        global.fetch.mockReturnValueOnce(respuesta({ codigo: 'X', url: 'https://mp.test/pagar' }));
+        conTipos({ plano: PLANO, ocupados: [] });
+        completarFormulario();
+
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Fila A, butaca 1' }));
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Fila B, butaca 1' }));
+
+        expect(screen.getByText(/13\.000/)).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'IR A PAGAR' }));
+
+        await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+        const cuerpo = JSON.parse(global.fetch.mock.calls[0][1].body);
+
+        expect(cuerpo.lugares).toEqual(['f:A:1', 'f:B:1']);
+        expect(cuerpo.tipos).toBeUndefined();
+      });
+
+      /** El plano tiene lugar, pero ese tipo ya no se vende. */
+      it('las butacas de un tipo agotado se ven ocupadas', () => {
+        conTipos({
+          plano: PLANO,
+          ocupados: [],
+          tipos: [TIPOS[0], { ...TIPOS[1], disponibles: 0, agotado: true }],
+        });
+
+        expect(screen.getByRole('checkbox', { name: 'Fila A, butaca 1, ocupado' })).toBeInTheDocument();
+        expect(screen.getByRole('checkbox', { name: 'Fila B, butaca 1' })).toBeInTheDocument();
+      });
+    });
+  });
+
   describe('pixel de Meta', () => {
     const PIXEL_PAGINA = '1111111111111111';
     const PIXEL_DUENO = '2222222222222222';

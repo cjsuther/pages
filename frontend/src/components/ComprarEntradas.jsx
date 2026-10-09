@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { X, Loader2, Check } from 'lucide-react';
 import { formatearPrecio, opcionesDeCantidad } from '../utils/entradas';
 import { esEmailValido, sugerenciaDeEmail } from '../utils/email';
 import { resumirLugares } from '../utils/plano';
+import {
+  tiposPorLugar, pedidoDeLosLugares, resumenDelPedido, resumirTipos,
+} from '../utils/tiposDeEntrada';
 import { evento as eventoDePixel } from '../utils/metaPixel';
 import PlanoDeLugares from './PlanoDeLugares';
 
@@ -14,6 +17,9 @@ import PlanoDeLugares from './PlanoDeLugares';
  *
  * Si el evento tiene plano, en lugar de la cantidad se eligen los lugares:
  * la cantidad es cuántos se tocaron.
+ *
+ * Con tipos de entrada, sin plano se elige cuántas de cada tipo; con plano el
+ * tipo lo pone la zona de cada lugar, y el total sale de lo elegido.
  */
 function ComprarEntradas({ evento, entradas, apiUrl, color = '#3B82F6', onCerrar, pixelId = null }) {
   // El pixel donde se mide esta venta: el de la página que vende.
@@ -36,12 +42,43 @@ function ComprarEntradas({ evento, entradas, apiUrl, color = '#3B82F6', onCerrar
   // Empieza con lo que dijo la página, y se actualiza si al confirmar alguien
   // se adelantó con un lugar: elegir de nuevo sobre la foto vieja no sirve.
   const [ocupados, setOcupados] = useState(entradas.ocupados || []);
+  // Sin plano y con tipos: cuántas de cada uno.
+  const [pedido, setPedido] = useState({});
 
   const conPlano = Boolean(entradas.plano);
+  const tipos = Array.isArray(entradas.tipos) && entradas.tipos.length > 0 ? entradas.tipos : null;
   const cantidades = opcionesDeCantidad(entradas);
-  const cantidad = conPlano ? elegidos.length : Number(datos.cantidad);
-  const total = (Number(entradas.precio) || 0) * cantidad;
   const maximo = Number(entradas.max_por_compra) || 1;
+
+  const tipoDeLugar = useMemo(
+    () => (conPlano && tipos ? tiposPorLugar(entradas.plano, tipos) : {}),
+    [conPlano, tipos, entradas.plano]
+  );
+
+  // Las butacas de un tipo agotado se ven ocupadas: el plano tiene lugar,
+  // pero ese tipo ya no se puede vender.
+  const noElegibles = useMemo(() => {
+    const agotados = new Set((tipos || []).filter((t) => t.agotado).map((t) => t.id));
+    if (agotados.size === 0) return ocupados;
+
+    const extra = Object.keys(tipoDeLugar).filter((lugar) => agotados.has(tipoDeLugar[lugar]));
+    return Array.from(new Set([...ocupados, ...extra]));
+  }, [tipos, tipoDeLugar, ocupados]);
+
+  const resumen = tipos
+    ? resumenDelPedido(tipos, conPlano ? pedidoDeLosLugares(elegidos, tipoDeLugar) : pedido)
+    : null;
+  let cantidad = Number(datos.cantidad);
+  if (conPlano) cantidad = elegidos.length;
+  else if (resumen) cantidad = resumen.cantidad;
+  const total = resumen ? resumen.total : (Number(entradas.precio) || 0) * cantidad;
+  // Una compra que no suma nada —sólo entradas sin costo— no pasa por el pago.
+  const sinCobro = entradas.es_gratis || (resumen !== null && cantidad > 0 && total <= 0);
+
+  const cambiarPedido = (id, valor) => {
+    setPedido((previo) => ({ ...previo, [id]: valor }));
+    setError(null);
+  };
 
   const elegir = (nuevos) => {
     setElegidos(nuevos);
@@ -89,18 +126,23 @@ function ComprarEntradas({ evento, entradas, apiUrl, color = '#3B82F6', onCerrar
       return;
     }
 
+    if (!conPlano && resumen && resumen.cantidad === 0) {
+      setError('Elegí cuántas entradas querés.');
+      return;
+    }
+
     setEnviando(true);
     setError(null);
 
-    const pedido = conPlano
-      ? { ...datos, cantidad: elegidos.length, lugares: elegidos }
-      : datos;
+    let cuerpoDelPedido = datos;
+    if (conPlano) cuerpoDelPedido = { ...datos, cantidad: elegidos.length, lugares: elegidos };
+    else if (resumen) cuerpoDelPedido = { ...datos, cantidad, tipos: pedido };
 
     try {
       const respuesta = await fetch(`${apiUrl}/public/comprar.php`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ link_id: evento.id, ...pedido }),
+        body: JSON.stringify({ link_id: evento.id, ...cuerpoDelPedido }),
       });
 
       const cuerpo = await respuesta.json();
@@ -159,6 +201,10 @@ function ComprarEntradas({ evento, entradas, apiUrl, color = '#3B82F6', onCerrar
             Te esperamos en {evento.text}.
           </p>
 
+          {resumen && resumen.items.length > 0 && (
+            <p className="text-tinta font-bold mb-2">{resumirTipos(resumen.items)}</p>
+          )}
+
           {conPlano && elegidos.length > 0 && (
             <p className="text-tinta font-bold mb-6">{resumirLugares(elegidos)}</p>
           )}
@@ -191,9 +237,20 @@ function ComprarEntradas({ evento, entradas, apiUrl, color = '#3B82F6', onCerrar
             <p className="block text-sm font-semibold text-tinta mb-1.5 tracking-wide">
               ELEGÍ TUS LUGARES
             </p>
+            {tipos && tipos.length > 1 && (
+              <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-tinta-media mb-2">
+                {tipos.map((t) => (
+                  <li key={t.id}>
+                    <strong className="text-tinta">{t.nombre}</strong>{' '}
+                    {Number(t.precio) > 0 ? formatearPrecio(t.precio, entradas.moneda) : 'sin costo'}
+                    {t.agotado && ' · agotado'}
+                  </li>
+                ))}
+              </ul>
+            )}
             <PlanoDeLugares
               plano={entradas.plano}
-              ocupados={ocupados}
+              ocupados={noElegibles}
               elegidos={elegidos}
               onCambiar={elegir}
               maximo={maximo}
@@ -270,7 +327,17 @@ function ComprarEntradas({ evento, entradas, apiUrl, color = '#3B82F6', onCerrar
           ayuda="Por si hay que avisarte de un cambio"
         />
 
-        {!conPlano && (
+        {!conPlano && tipos && (
+          <SelectorDeTipos
+            tipos={tipos}
+            pedido={pedido}
+            maximo={maximo}
+            moneda={entradas.moneda}
+            onCambiar={cambiarPedido}
+          />
+        )}
+
+        {!conPlano && !tipos && (
           <div>
             <label htmlFor="entrada-cantidad" className="block text-sm font-semibold text-tinta mb-1.5 tracking-wide">
               Cantidad
@@ -294,6 +361,17 @@ function ComprarEntradas({ evento, entradas, apiUrl, color = '#3B82F6', onCerrar
           </div>
         )}
 
+        {resumen && resumen.items.length > 1 && (
+          <ul className="text-sm text-tinta-media space-y-1 border-t border-borde pt-4">
+            {resumen.items.map((i) => (
+              <li key={i.id} className="flex justify-between">
+                <span>{i.cantidad} × {i.nombre}</span>
+                <span>{formatearPrecio(i.subtotal, entradas.moneda)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+
         {!entradas.es_gratis && (
           <div className="flex items-baseline justify-between border-t border-borde pt-4">
             <span className="text-tinta-media">Total</span>
@@ -309,19 +387,19 @@ function ComprarEntradas({ evento, entradas, apiUrl, color = '#3B82F6', onCerrar
 
         <button
           type="submit"
-          disabled={enviando || (conPlano && elegidos.length === 0)}
+          disabled={enviando || (conPlano && elegidos.length === 0) || (resumen !== null && cantidad === 0)}
           className="w-full py-4 font-bold text-tinta flex items-center justify-center gap-2 disabled:opacity-60"
           style={{ backgroundColor: color }}
         >
           {enviando && <Loader2 className="w-4 h-4 animate-spin" />}
           {enviando
             ? 'PROCESANDO...'
-            : entradas.es_gratis
+            : sinCobro
               ? 'Confirmar reserva'
               : 'IR A PAGAR'}
         </button>
 
-        {!entradas.es_gratis && (
+        {!sinCobro && (
           <p className="text-xs text-tinta-suave text-center">
             Te vamos a llevar a Mercado Pago para completar el pago.
             Tu lugar queda reservado 15 minutos.
@@ -329,6 +407,57 @@ function ComprarEntradas({ evento, entradas, apiUrl, color = '#3B82F6', onCerrar
         )}
       </form>
     </Marco>
+  );
+}
+
+/**
+ * Cuántas de cada tipo, sin plano. Cada uno ofrece hasta lo que le queda y
+ * hasta lo que deja el máximo por compra con lo ya elegido de los otros.
+ */
+function SelectorDeTipos({ tipos, pedido, maximo, moneda, onCambiar }) {
+  const elegidas = tipos.reduce((suma, t) => suma + (Number(pedido[t.id]) || 0), 0);
+
+  return (
+    <fieldset className="space-y-3">
+      <legend className="block text-sm font-semibold text-tinta mb-1.5 tracking-wide">ENTRADAS</legend>
+
+      {tipos.map((t) => {
+        const propias = Number(pedido[t.id]) || 0;
+        const tope = Math.max(0, Math.min(Number(t.disponibles) || 0, maximo - (elegidas - propias)));
+        const id = `entrada-tipo-${t.id}`;
+
+        return (
+          <div key={t.id} className="flex items-center justify-between gap-4 border border-borde px-4 py-3">
+            <label htmlFor={id} className="min-w-0">
+              <span className="block font-bold text-tinta">{t.nombre}</span>
+              <span className="block text-sm text-tinta-suave">
+                {Number(t.precio) > 0 ? formatearPrecio(t.precio, moneda) : 'Sin costo'}
+                {!t.agotado && t.disponibles <= 10 && ` · quedan ${t.disponibles}`}
+              </span>
+            </label>
+
+            {t.agotado ? (
+              <span className="text-sm font-bold text-tinta-suave">AGOTADO</span>
+            ) : (
+              <select
+                id={id}
+                value={propias}
+                onChange={(e) => onCambiar(t.id, Number(e.target.value))}
+                className="px-3 py-2 bg-white border border-borde-fuerte text-tinta focus:border-verde-oscuro focus:outline-none"
+              >
+                {Array.from({ length: Math.max(tope, propias) + 1 }, (_, n) => (
+                  <option key={n} value={n}>{n}</option>
+                ))}
+              </select>
+            )}
+          </div>
+        );
+      })}
+
+      {elegidas >= maximo && (
+        <p className="text-xs text-amber-400">Llegaste al máximo de {maximo} por compra.</p>
+      )}
+    </fieldset>
   );
 }
 

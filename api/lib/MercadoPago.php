@@ -86,6 +86,9 @@ class MercadoPago
      *   @type string $titulo      Lo que ve el comprador en el checkout
      *   @type int    $cantidad
      *   @type float  $precio      Unitario
+     *   @type array  $items       Opcional: [['titulo', 'cantidad', 'precio']], uno por
+     *                             tipo de entrada. Si viene, reemplaza a título,
+     *                             cantidad y precio.
      *   @type string $moneda
      *   @type string $referencia  Código de nuestra orden, vuelve en el aviso
      *   @type string $urlRetorno  A dónde vuelve el comprador
@@ -97,13 +100,19 @@ class MercadoPago
      */
     public function crearPreferencia(array $datos)
     {
+        $items = empty($datos['items'])
+            ? [['titulo' => $datos['titulo'], 'cantidad' => $datos['cantidad'], 'precio' => $datos['precio']]]
+            : $datos['items'];
+
         $cuerpo = [
-            'items' => [[
-                'title'       => $datos['titulo'],
-                'quantity'    => (int) $datos['cantidad'],
-                'unit_price'  => (float) $datos['precio'],
-                'currency_id' => $datos['moneda'],
-            ]],
+            'items' => array_map(function ($item) use ($datos) {
+                return [
+                    'title'       => $item['titulo'],
+                    'quantity'    => (int) $item['cantidad'],
+                    'unit_price'  => (float) $item['precio'],
+                    'currency_id' => $datos['moneda'],
+                ];
+            }, $items),
             'payer' => [
                 'name'  => $datos['comprador']['nombre'],
                 'email' => $datos['comprador']['email'],

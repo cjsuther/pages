@@ -48,6 +48,8 @@ class VentasCompartidas
                 'moneda'      => $config['moneda'],
                 'compras'     => $totales['compras'],
                 'ingresadas'  => $totales['ingresadas'],
+                // Cuántas se vendieron de cada tipo, o null si vende a un solo precio.
+                'tipos'       => $config['tipos'] === null ? null : self::vendidasPorTipo($db, $linkId, $config['tipos']),
             ],
             'plano'    => $plano,
             'ocupados' => $plano === null ? [] : Entradas::lugaresOcupados($db, $linkId),
@@ -84,6 +86,38 @@ class VentasCompartidas
             'compras'    => (int) $fila['compras'],
             'recaudado'  => round((float) $fila['recaudado'], 2),
         ];
+    }
+
+    /**
+     * Lo pagado de cada tipo, en el orden en que los cargó quien vende.
+     *
+     * @return array<array{nombre: string, precio: float, cupo: int|null, vendidas: int}>
+     */
+    private static function vendidasPorTipo($db, $linkId, array $tipos)
+    {
+        $stmt = $db->prepare("
+            SELECT i.tipo, COALESCE(SUM(i.cantidad), 0) AS vendidas
+            FROM ticket_order_items i
+            INNER JOIN ticket_orders o ON o.id = i.order_id
+            WHERE o.link_id = ? AND o.estado = 'pagada'
+            GROUP BY i.tipo
+        ");
+        $stmt->execute([(int) $linkId]);
+
+        $porTipo = [];
+
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $fila) {
+            $porTipo[(string) $fila['tipo']] = (int) $fila['vendidas'];
+        }
+
+        return array_map(function ($tipo) use ($porTipo) {
+            return [
+                'nombre'   => $tipo['nombre'],
+                'precio'   => (float) $tipo['precio'],
+                'cupo'     => $tipo['cupo'] === null ? null : (int) $tipo['cupo'],
+                'vendidas' => isset($porTipo[$tipo['id']]) ? $porTipo[$tipo['id']] : 0,
+            ];
+        }, $tipos);
     }
 
     /**

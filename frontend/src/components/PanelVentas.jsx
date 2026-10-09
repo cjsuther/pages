@@ -4,6 +4,7 @@ import { formatearPrecio, etiquetaDeEstado, colorDeEstado } from '../utils/entra
 import { urlDeWhatsApp } from '../utils/telefono';
 import { IconoDeMarca } from './IconosRedes';
 import { resumirLugares } from '../utils/plano';
+import { resumirTipos } from '../utils/tiposDeEntrada';
 import LinkDeVenta from './LinkDeVenta';
 import LinkDePuerta from './LinkDePuerta';
 
@@ -183,6 +184,20 @@ function PanelVentas({ linkId, apiUrl, token, nombreEvento = '' }) {
         <LinkDePuerta linkId={linkId} apiUrl={apiUrl} token={token} />
       </div>
 
+      {resumen.por_tipo && resumen.por_tipo.length > 0 && (
+        <div className="border border-borde bg-white p-4">
+          <p className="text-xs font-bold text-tinta-suave tracking-wide mb-2">VENDIDAS POR TIPO</p>
+          <ul className="text-sm space-y-1">
+            {resumen.por_tipo.map((t) => (
+              <li key={t.tipo} className="flex justify-between gap-4">
+                <span className="text-tinta">{t.vendidas} {t.nombre}</span>
+                <span className="text-tinta-media">{formatearPrecio(t.recaudado)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <ComisionDeLaPlataforma resumen={resumen} />
 
       <Acreditacion resumen={resumen} />
@@ -247,6 +262,9 @@ function PanelVentas({ linkId, apiUrl, token, nombreEvento = '' }) {
                       >
                         {resumirLugares(o.lugares)}
                       </span>
+                    )}
+                    {o.items && o.items.length > 0 && (
+                      <span className="block text-xs text-tinta-media">{resumirTipos(o.items)}</span>
                     )}
                   </td>
                   <td className="px-3 py-2 text-tinta-media">
