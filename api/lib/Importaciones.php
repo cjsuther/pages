@@ -33,6 +33,9 @@ class Importaciones
             'artmedia' => function (array $parametros) use ($db) {
                 return (new ArtMedia())->eventos($parametros, $db);
             },
+            'movistararena' => function (array $parametros) use ($db) {
+                return (new MovistarArena())->eventos($parametros, $db);
+            },
         ];
     }
 
