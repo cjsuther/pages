@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   nuevoTipo, tiposIniciales, algunoCobra, precioDesde, problemaConLosTipos, tipoDelElemento,
   tiposPorLugar, pedidoDeLosLugares, resumenDelPedido, resumirTipos,
+  personasDe, unidades, lugaresSinCargo, precioDelTipo,
 } from '../../src/utils/tiposDeEntrada';
 import { conVariosPrecios } from '../../src/utils/entradas';
 
@@ -22,7 +23,7 @@ describe('tipos de entrada', () => {
   });
 
   it('al pasar a varios precios, el que había queda como General', () => {
-    expect(tiposIniciales(6000)[0]).toEqual({ id: 'general', nombre: 'General', precio: 6000, cupo: null });
+    expect(tiposIniciales(6000)[0]).toEqual({ id: 'general', nombre: 'General', precio: 6000, personas: 1, cupo: null });
     expect(tiposIniciales(6000)).toHaveLength(2);
   });
 
@@ -69,6 +70,43 @@ describe('tipos de entrada', () => {
     expect(resumen.cantidad).toBe(3);
     expect(resumen.total).toBe(21000);
     expect(resumirTipos(resumen.items)).toBe('2 General · 1 Jubilados');
+  });
+
+  describe('promos', () => {
+    const promo = { id: '2x1', nombre: 'Promo 2x1', precio: 8000, personas: 2, cupo: null };
+
+    it('un tipo sin personas es de una', () => {
+      expect(personasDe(tipos[0])).toBe(1);
+      expect(personasDe(promo)).toBe(2);
+    });
+
+    it('cada grupo que empieza paga la promo entera', () => {
+      expect([1, 2, 3, 4].map((n) => unidades(n, 2))).toEqual([1, 1, 2, 2]);
+      expect([0, 1, 2, 3].map((n) => lugaresSinCargo(n, 2))).toEqual([0, 1, 0, 1]);
+      expect(lugaresSinCargo(3, 1)).toBe(0);
+    });
+
+    it('el resumen cobra las promos y cuenta las personas', () => {
+      const resumen = resumenDelPedido([tipos[0], promo], { general: 1, '2x1': 3 });
+
+      expect(resumen.cantidad).toBe(4);
+      expect(resumen.total).toBe(24000);
+      expect(resumirTipos(resumen.items)).toBe('1 General · 2 Promo 2x1 (3 personas)');
+    });
+
+    it('el precio de una promo dice para cuántos es', () => {
+      const formatear = (p) => `$${p}`;
+
+      expect(precioDelTipo(promo, formatear)).toBe('$8000 cada 2');
+      expect(precioDelTipo(tipos[0], formatear)).toBe('$8000');
+      expect(precioDelTipo(tipos[2], formatear)).toBeNull();
+    });
+
+    it('las personas van de 1 a 10', () => {
+      expect(problemaConLosTipos([{ ...promo, personas: 11 }])).toBe('En "Promo 2x1" entran de 1 a 10 personas.');
+      expect(problemaConLosTipos([{ ...promo, personas: 0 }])).toBe('En "Promo 2x1" entran de 1 a 10 personas.');
+      expect(problemaConLosTipos([promo])).toBeNull();
+    });
   });
 });
 

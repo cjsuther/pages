@@ -555,6 +555,43 @@ describe('ComprarEntradas', () => {
       expect(screen.getByRole('button', { name: 'Confirmar reserva' })).toBeEnabled();
     });
 
+    describe('con una promo', () => {
+      const PROMO = { id: '2x1', nombre: 'Promo 2x1', precio: 8000, personas: 2, disponibles: 10, agotado: false };
+
+      it('dice para cuántos es el precio', () => {
+        conTipos({ tipos: [TIPOS[0], PROMO] });
+
+        expect(screen.getByText(/cada 2/)).toBeInTheDocument();
+      });
+
+      it('tres personas pagan dos promos y avisa que entra una más', () => {
+        conTipos({ tipos: [TIPOS[0], PROMO] });
+
+        fireEvent.change(screen.getByLabelText(/Promo 2x1/), { target: { value: '3' } });
+
+        expect(screen.getAllByText(/16\.000/).length).toBeGreaterThan(0);
+        expect(screen.getByText(/Por el mismo precio entra 1 persona más en Promo 2x1/)).toBeInTheDocument();
+      });
+
+      it('con plano, un lugar solo en la zona paga la promo y avisa que elija otro', () => {
+        conTipos({
+          tipos: [TIPOS[0], PROMO],
+          ocupados: [],
+          plano: {
+            ancho: 10, alto: 6,
+            elementos: [{ tipo: 'fila', nombre: 'A', desde: 1, butacas: 4, x: 0, y: 0, entrada: '2x1' }],
+          },
+        });
+
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Fila A, butaca 1' }));
+        expect(screen.getByText(/elegí otro lugar de esa zona/)).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Fila A, butaca 4' }));
+        expect(screen.queryByText(/elegí otro lugar de esa zona/)).not.toBeInTheDocument();
+        expect(screen.getByText('2 × Promo 2x1')).toBeInTheDocument();
+      });
+    });
+
     describe('con plano', () => {
       const PLANO = {
         ancho: 10,

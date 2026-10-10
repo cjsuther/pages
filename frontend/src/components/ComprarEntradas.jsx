@@ -4,7 +4,7 @@ import { formatearPrecio, opcionesDeCantidad } from '../utils/entradas';
 import { esEmailValido, sugerenciaDeEmail } from '../utils/email';
 import { resumirLugares } from '../utils/plano';
 import {
-  tiposPorLugar, pedidoDeLosLugares, resumenDelPedido, resumirTipos,
+  tiposPorLugar, pedidoDeLosLugares, resumenDelPedido, resumirTipos, precioDelTipo, lugaresSinCargo,
 } from '../utils/tiposDeEntrada';
 import { evento as eventoDePixel } from '../utils/metaPixel';
 import PlanoDeLugares from './PlanoDeLugares';
@@ -242,7 +242,7 @@ function ComprarEntradas({ evento, entradas, apiUrl, color = '#3B82F6', onCerrar
                 {tipos.map((t) => (
                   <li key={t.id}>
                     <strong className="text-tinta">{t.nombre}</strong>{' '}
-                    {Number(t.precio) > 0 ? formatearPrecio(t.precio, entradas.moneda) : 'sin costo'}
+                    {precioDelTipo(t, (p) => formatearPrecio(p, entradas.moneda)) || 'sin costo'}
                     {t.agotado && ' · agotado'}
                   </li>
                 ))}
@@ -361,7 +361,18 @@ function ComprarEntradas({ evento, entradas, apiUrl, color = '#3B82F6', onCerrar
           </div>
         )}
 
-        {resumen && resumen.items.length > 1 && (
+        {resumen && resumen.items.map((i) => {
+          const sobran = lugaresSinCargo(i.cantidad, i.personas);
+          if (sobran === 0 || !(i.precio > 0)) return null;
+          return (
+            <p key={`sobran-${i.id}`} className="text-sm text-tinta bg-amber-50 border border-amber-200 px-4 py-3">
+              Por el mismo precio {sobran === 1 ? 'entra 1 persona más' : `entran ${sobran} personas más`} en {i.nombre}
+              {conPlano ? ': elegí otro lugar de esa zona.' : '.'}
+            </p>
+          );
+        })}
+
+        {resumen && (resumen.items.length > 1 || resumen.items.some((i) => i.personas > 1)) && (
           <ul className="text-sm text-tinta-media space-y-1 border-t border-borde pt-4">
             {resumen.items.map((i) => (
               <li key={i.id} className="flex justify-between">
@@ -431,7 +442,7 @@ function SelectorDeTipos({ tipos, pedido, maximo, moneda, onCambiar }) {
             <label htmlFor={id} className="min-w-0">
               <span className="block font-bold text-tinta">{t.nombre}</span>
               <span className="block text-sm text-tinta-suave">
-                {Number(t.precio) > 0 ? formatearPrecio(t.precio, moneda) : 'Sin costo'}
+                {precioDelTipo(t, (p) => formatearPrecio(p, moneda)) || 'Sin costo'}
                 {!t.agotado && t.disponibles <= 10 && ` · quedan ${t.disponibles}`}
               </span>
             </label>

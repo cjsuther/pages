@@ -35,9 +35,59 @@ class TiposDeEntradaTest extends TestCase
 
         $this->assertTrue($r['ok']);
         $this->assertSame([
-            ['id' => 'general', 'nombre' => 'General', 'precio' => 8000.0, 'cupo' => null],
-            ['id' => 'jubilados', 'nombre' => 'Jubilados', 'precio' => 5000.56, 'cupo' => 20],
+            ['id' => 'general', 'nombre' => 'General', 'precio' => 8000.0, 'personas' => 1, 'cupo' => null],
+            ['id' => 'jubilados', 'nombre' => 'Jubilados', 'precio' => 5000.56, 'personas' => 1, 'cupo' => 20],
         ], $r['tipos']);
+    }
+
+    /** Una promo 2x1 es un tipo por el que entran dos. */
+    public function testUnTipoPuedeSerDeVariasPersonas()
+    {
+        $r = TiposDeEntrada::normalizar([
+            ['id' => '2x1', 'nombre' => 'Promo 2x1', 'precio' => 8000, 'personas' => '2', 'cupo' => 30],
+        ]);
+
+        $this->assertTrue($r['ok']);
+        $this->assertSame(2, $r['tipos'][0]['personas']);
+    }
+
+    public function testLasPersonasDeUnTipoVanDeUnoADiez()
+    {
+        foreach ([0, 11, -2] as $personas) {
+            $r = TiposDeEntrada::normalizar([['id' => 'p', 'nombre' => 'Promo', 'precio' => 1, 'personas' => $personas]]);
+
+            $this->assertFalse($r['ok']);
+            $this->assertSame('En "Promo" entran de 1 a 10 personas', $r['error']);
+        }
+    }
+
+    /** Los tipos guardados antes de las promos no dicen cuántos entran: es uno. */
+    public function testUnTipoSinPersonasEsDeUna()
+    {
+        $this->assertSame(1, TiposDeEntrada::personas(['id' => 'general', 'precio' => 8000]));
+        $this->assertSame(2, TiposDeEntrada::personas(['id' => '2x1', 'precio' => 8000, 'personas' => 2]));
+    }
+
+    /** Cada grupo que empieza paga la promo entera: 1 y 2 salen lo mismo, 3 son dos. */
+    public function testUnaPromoCobraCadaGrupoQueEmpieza()
+    {
+        $promo = ['precio' => 8000, 'personas' => 2];
+
+        $this->assertSame(8000.0, TiposDeEntrada::subtotal($promo + ['cantidad' => 1]));
+        $this->assertSame(8000.0, TiposDeEntrada::subtotal($promo + ['cantidad' => 2]));
+        $this->assertSame(16000.0, TiposDeEntrada::subtotal($promo + ['cantidad' => 3]));
+        $this->assertSame(24000.0, TiposDeEntrada::subtotal(['precio' => 8000, 'cantidad' => 3]));
+    }
+
+    public function testElResumenDiceLasPromosYLasPersonas()
+    {
+        $this->assertSame('2 General · 2 Promo 2x1 (3 personas)', TiposDeEntrada::resumir([
+            ['nombre' => 'General', 'cantidad' => 2, 'personas' => 1],
+            ['nombre' => 'Promo 2x1', 'cantidad' => 3, 'personas' => 2],
+        ]));
+        $this->assertSame('1 Promo 2x1 (1 persona)', TiposDeEntrada::resumir([
+            ['nombre' => 'Promo 2x1', 'cantidad' => 1, 'personas' => 2],
+        ]));
     }
 
     /** Un "Invitado" en 0 es un tipo válido: no hay que cobrar todas las entradas. */

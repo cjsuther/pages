@@ -206,6 +206,9 @@ class Entradas
     /**
      * Entradas tomadas de cada tipo, con la misma regla que ocupadas().
      *
+     * Se cuentan como el cupo del tipo: en promos. Tres personas en una 2x1
+     * son dos promos.
+     *
      * Sólo cuentan las compras con renglones por tipo: las que se hicieron
      * cuando el evento vendía a un solo precio no son de ningún tipo, y
      * siguen contando para la capacidad del evento.
@@ -215,7 +218,7 @@ class Entradas
     public static function ocupadasPorTipo($db, $linkId)
     {
         $stmt = $db->prepare("
-            SELECT i.tipo, COALESCE(SUM(i.cantidad), 0) AS cantidad
+            SELECT i.tipo, COALESCE(SUM(CEIL(i.cantidad / i.personas)), 0) AS cantidad
             FROM ticket_order_items i
             INNER JOIN ticket_orders o ON o.id = i.order_id
             WHERE o.link_id = ?
@@ -272,12 +275,12 @@ class Entradas
     /**
      * Qué tipos se llevó una orden. Vacío si el evento vendía a un solo precio.
      *
-     * @return array<array{tipo: string, nombre: string, precio: float, cantidad: int}>
+     * @return array<array{tipo: string, nombre: string, precio: float, personas: int, cantidad: int}>
      */
     public static function itemsDeLaOrden($db, $ordenId)
     {
         $stmt = $db->prepare('
-            SELECT tipo, nombre, precio_unitario, cantidad
+            SELECT tipo, nombre, precio_unitario, personas, cantidad
             FROM ticket_order_items
             WHERE order_id = ?
             ORDER BY id
@@ -291,7 +294,7 @@ class Entradas
     public static function itemsPorOrden($db, $linkId)
     {
         $stmt = $db->prepare('
-            SELECT i.order_id, i.tipo, i.nombre, i.precio_unitario, i.cantidad
+            SELECT i.order_id, i.tipo, i.nombre, i.precio_unitario, i.personas, i.cantidad
             FROM ticket_order_items i
             INNER JOIN ticket_orders o ON o.id = i.order_id
             WHERE o.link_id = ?
@@ -458,12 +461,11 @@ class Entradas
                 $precio = (float) $config['precio'];
                 $total = round($precio * $cantidad, 2);
             } else {
-                $total = round(array_sum(array_map(function ($i) {
-                    return $i['precio'] * $i['cantidad'];
-                }, $items)), 2);
-                // Con un solo tipo es su precio. Con varios, la columna dice el
+                $total = round(array_sum(array_map([TiposDeEntrada::class, 'subtotal'], $items)), 2);
+                // Con un solo tipo de una persona es su precio. Con varios, o
+                // con una promo, la columna dice lo que salió cada entrada en
                 // promedio: el detalle de verdad está en los renglones.
-                $precio = count($items) === 1 ? $items[0]['precio'] : round($total / $cantidad, 2);
+                $precio = count($items) === 1 && $items[0]['personas'] === 1 ? $items[0]['precio'] : round($total / $cantidad, 2);
             }
 
             // Lo que decide si hay cobro es el total, no el precio del evento:
@@ -513,12 +515,12 @@ class Entradas
 
             if ($items !== null) {
                 $conTipo = $db->prepare('
-                    INSERT INTO ticket_order_items (order_id, tipo, nombre, precio_unitario, cantidad)
-                    VALUES (?, ?, ?, ?, ?)
+                    INSERT INTO ticket_order_items (order_id, tipo, nombre, precio_unitario, personas, cantidad)
+                    VALUES (?, ?, ?, ?, ?, ?)
                 ');
 
                 foreach ($items as $item) {
-                    $conTipo->execute([$ordenId, $item['tipo'], $item['nombre'], $item['precio'], $item['cantidad']]);
+                    $conTipo->execute([$ordenId, $item['tipo'], $item['nombre'], $item['precio'], $item['personas'], $item['cantidad']]);
                 }
             }
 
@@ -902,11 +904,16 @@ class Entradas
 
                 foreach ($orden['items'] as $item) {
                     if (!isset($porTipo[$item['tipo']])) {
-                        $porTipo[$item['tipo']] = ['tipo' => $item['tipo'], 'nombre' => $item['nombre'], 'vendidas' => 0, 'recaudado' => 0.0];
+                        $porTipo[$item['tipo']] = [
+                            'tipo' => $item['tipo'], 'nombre' => $item['nombre'], 'personas_por_unidad' => $item['personas'],
+                            'vendidas' => 0, 'personas' => 0, 'recaudado' => 0.0,
+                        ];
                     }
 
-                    $porTipo[$item['tipo']]['vendidas'] += $item['cantidad'];
-                    $porTipo[$item['tipo']]['recaudado'] = round($porTipo[$item['tipo']]['recaudado'] + $item['precio'] * $item['cantidad'], 2);
+                    // vendidas va en promos, como el cupo; personas, en gente.
+                    $porTipo[$item['tipo']]['vendidas'] += TiposDeEntrada::unidades($item['cantidad'], $item['personas']);
+                    $porTipo[$item['tipo']]['personas'] += $item['cantidad'];
+                    $porTipo[$item['tipo']]['recaudado'] = round($porTipo[$item['tipo']]['recaudado'] + TiposDeEntrada::subtotal($item), 2);
                 }
 
                 // null es "no lo sabemos" —una venta anterior a que se guardara
@@ -1191,6 +1198,7 @@ class Entradas
             'tipo'     => (string) $fila['tipo'],
             'nombre'   => (string) $fila['nombre'],
             'precio'   => (float) $fila['precio_unitario'],
+            'personas' => isset($fila['personas']) ? (int) $fila['personas'] : 1,
             'cantidad' => (int) $fila['cantidad'],
         ];
     }
@@ -1200,16 +1208,19 @@ class Entradas
     {
         return array_map(function ($tipo) use ($ocupadasPorTipo, $disponibles) {
             $quedan = $disponibles;
+            $personas = TiposDeEntrada::personas($tipo);
 
+            // El cupo va en promos y lo que se elige son personas.
             if ($tipo['cupo'] !== null) {
                 $tomadas = isset($ocupadasPorTipo[$tipo['id']]) ? $ocupadasPorTipo[$tipo['id']] : 0;
-                $quedan = min($quedan, max(0, (int) $tipo['cupo'] - $tomadas));
+                $quedan = min($quedan, max(0, (int) $tipo['cupo'] - $tomadas) * $personas);
             }
 
             return [
                 'id'          => (string) $tipo['id'],
                 'nombre'      => $tipo['nombre'],
                 'precio'      => (float) $tipo['precio'],
+                'personas'    => $personas,
                 'disponibles' => $quedan,
                 'agotado'     => $quedan < 1,
             ];
@@ -1295,13 +1306,20 @@ class Entradas
                 continue;
             }
 
+            $personas = TiposDeEntrada::personas($tipo);
+
+            // El cupo va en promos: tres personas en una 2x1 toman dos.
             if ($tipo['cupo'] !== null) {
                 $quedan = (int) $tipo['cupo'] - (isset($ocupadas[$id]) ? $ocupadas[$id] : 0);
 
-                if ($pedido[$id] > $quedan) {
-                    return $quedan < 1
-                        ? "Se agotaron las entradas \"{$tipo['nombre']}\""
-                        : "Sólo quedan $quedan entradas \"{$tipo['nombre']}\"";
+                if (TiposDeEntrada::unidades($pedido[$id], $personas) > $quedan) {
+                    if ($quedan < 1) {
+                        return "Se agotaron las entradas \"{$tipo['nombre']}\"";
+                    }
+
+                    return $personas === 1
+                        ? "Sólo quedan $quedan entradas \"{$tipo['nombre']}\""
+                        : 'Sólo quedan ' . ($quedan * $personas) . " lugares en \"{$tipo['nombre']}\"";
                 }
             }
 
@@ -1309,6 +1327,7 @@ class Entradas
                 'tipo'     => $id,
                 'nombre'   => $tipo['nombre'],
                 'precio'   => round((float) $tipo['precio'], 2),
+                'personas' => $personas,
                 'cantidad' => $pedido[$id],
             ];
         }

@@ -4,11 +4,17 @@
  * Los tipos de entrada de un evento: varios precios, cada uno con su nombre.
  *
  *     [{"id": "general", "nombre": "General", "precio": 8000, "cupo": null},
- *      {"id": "jubilados", "nombre": "Jubilados", "precio": 5000, "cupo": 20}]
+ *      {"id": "jubilados", "nombre": "Jubilados", "precio": 5000, "cupo": 20},
+ *      {"id": "2x1", "nombre": "Promo 2x1", "precio": 8000, "personas": 2, "cupo": 30}]
  *
  * El id lo pone el editor y no cambia aunque el tipo se renombre: es lo que
  * nombra el plano en cada fila o mesa, y lo que guarda cada compra para que el
  * cupo del tipo se pueda contar.
+ *
+ * Un tipo de varias personas —una promo 2x1— cobra su precio por cada grupo
+ * que empieza: 1 o 2 entradas de la 2x1 salen lo mismo, 3 salen dos promos.
+ * Las entradas son siempre personas —lo que ocupa el evento y lo que cuenta
+ * la puerta—; el cupo del tipo, en cambio, se cuenta en promos.
  *
  * Sin tipos —null— el evento tiene un solo precio, como siempre.
  */
@@ -16,6 +22,7 @@ class TiposDeEntrada
 {
     const MAX_TIPOS = 20;
     const MAX_NOMBRE = 60;
+    const MAX_PERSONAS = 10;
 
     /** Lo mismo que acepta la columna de la compra. */
     const PATRON_ID = '/^[A-Za-z0-9_-]{1,20}$/';
@@ -53,6 +60,7 @@ class TiposDeEntrada
             $id = isset($crudo['id']) ? (string) $crudo['id'] : '';
             $nombre = isset($crudo['nombre']) ? trim((string) $crudo['nombre']) : '';
             $precio = isset($crudo['precio']) && $crudo['precio'] !== '' ? round((float) $crudo['precio'], 2) : 0.0;
+            $personas = isset($crudo['personas']) && $crudo['personas'] !== '' && $crudo['personas'] !== null ? (int) $crudo['personas'] : 1;
             $cupo = isset($crudo['cupo']) && $crudo['cupo'] !== '' && $crudo['cupo'] !== null ? (int) $crudo['cupo'] : null;
 
             if (!preg_match(self::PATRON_ID, $id)) {
@@ -71,6 +79,10 @@ class TiposDeEntrada
                 return self::mal("El precio de \"$nombre\" no puede ser negativo");
             }
 
+            if ($personas < 1 || $personas > self::MAX_PERSONAS) {
+                return self::mal("En \"$nombre\" entran de 1 a " . self::MAX_PERSONAS . ' personas');
+            }
+
             if ($cupo !== null && $cupo < 1) {
                 return self::mal("El cupo de \"$nombre\" tiene que ser al menos 1, o quedar vacío");
             }
@@ -84,7 +96,7 @@ class TiposDeEntrada
 
             $ids[$id] = true;
             $nombres[$clave] = true;
-            $limpios[] = ['id' => $id, 'nombre' => $nombre, 'precio' => $precio, 'cupo' => $cupo];
+            $limpios[] = ['id' => $id, 'nombre' => $nombre, 'precio' => $precio, 'personas' => $personas, 'cupo' => $cupo];
         }
 
         return ['ok' => true, 'error' => null, 'tipos' => $limpios];
@@ -163,11 +175,40 @@ class TiposDeEntrada
         return $resultado;
     }
 
-    /** "2 General · 1 Jubilados", para el mail y las listas. */
+    /** Cuántas personas entran con una del tipo: 2 en una promo 2x1. Los tipos guardados antes de las promos no lo dicen. */
+    public static function personas(array $tipo)
+    {
+        return isset($tipo['personas']) ? max(1, (int) $tipo['personas']) : 1;
+    }
+
+    /** Cuántas veces se cobra el precio: cada grupo que empieza paga entero. */
+    public static function unidades($cantidad, $personas)
+    {
+        return (int) ceil((int) $cantidad / max(1, (int) $personas));
+    }
+
+    /** Lo que sale un renglón de la compra: 3 entradas de una 2x1 son dos promos. */
+    public static function subtotal(array $item)
+    {
+        $personas = isset($item['personas']) ? $item['personas'] : 1;
+
+        return round(self::unidades($item['cantidad'], $personas) * (float) $item['precio'], 2);
+    }
+
+    /** "2 General · 1 Jubilados · 2 Promo 2x1 (4 personas)", para el mail y las listas. */
     public static function resumir(array $items)
     {
         return implode(' · ', array_map(function ($item) {
-            return (int) $item['cantidad'] . ' ' . $item['nombre'];
+            $personas = isset($item['personas']) ? (int) $item['personas'] : 1;
+
+            if ($personas <= 1) {
+                return (int) $item['cantidad'] . ' ' . $item['nombre'];
+            }
+
+            $cantidad = (int) $item['cantidad'];
+
+            return self::unidades($cantidad, $personas) . ' ' . $item['nombre']
+                . ' (' . $cantidad . ($cantidad === 1 ? ' persona)' : ' personas)');
         }, $items));
     }
 

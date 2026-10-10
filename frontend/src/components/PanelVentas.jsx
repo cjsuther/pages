@@ -190,7 +190,10 @@ function PanelVentas({ linkId, apiUrl, token, nombreEvento = '' }) {
           <ul className="text-sm space-y-1">
             {resumen.por_tipo.map((t) => (
               <li key={t.tipo} className="flex justify-between gap-4">
-                <span className="text-tinta">{t.vendidas} {t.nombre}</span>
+                <span className="text-tinta">
+                  {t.vendidas} {t.nombre}
+                  {t.personas_por_unidad > 1 && ` (${t.personas} ${t.personas === 1 ? 'persona' : 'personas'})`}
+                </span>
                 <span className="text-tinta-media">{formatearPrecio(t.recaudado)}</span>
               </li>
             ))}

@@ -395,10 +395,13 @@ class CheckoutHandler
             return null;
         }
 
+        // Una promo se cobra por promo: tres personas en una 2x1 son dos.
         return array_map(function ($item) use ($titulo) {
+            $personas = isset($item['personas']) ? $item['personas'] : 1;
+
             return [
                 'titulo'   => $titulo . ' — ' . $item['nombre'],
-                'cantidad' => $item['cantidad'],
+                'cantidad' => TiposDeEntrada::unidades($item['cantidad'], $personas),
                 'precio'   => $item['precio'],
             ];
         }, $cobrados);

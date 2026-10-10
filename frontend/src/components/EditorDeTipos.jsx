@@ -1,18 +1,19 @@
 import React from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { formatearPrecio } from '../utils/entradas';
-import { MAX_TIPOS, nuevoTipo } from '../utils/tiposDeEntrada';
+import { MAX_PERSONAS, MAX_TIPOS, nuevoTipo, personasDe, precioDelTipo } from '../utils/tiposDeEntrada';
 
 const CLASE_CAMPO = 'w-full px-3 py-2 bg-white border border-borde-fuerte text-tinta focus:border-verde-oscuro focus:outline-none';
 
 /**
- * Los tipos de entrada de un evento: nombre, precio y, si hace falta, cupo.
+ * Los tipos de entrada de un evento: nombre, precio, cuántos entran con cada
+ * una —2 en una promo 2x1— y, si hace falta, cupo.
  *
  * Borrar un tipo que ya vendió se puede: cada compra guardó el nombre y el
  * precio que pagó, así que lo vendido no cambia. Lo que deja de existir es la
  * opción de comprarlo.
  *
- * @param {Object<string, number>} vendidas Entradas ya tomadas de cada tipo.
+ * @param {Object<string, number>} vendidas Entradas ya tomadas de cada tipo, en promos si es una promo.
  */
 function EditorDeTipos({ tipos, onCambiar, vendidas = {} }) {
   const cambiar = (indice, cambios) => {
@@ -27,10 +28,12 @@ function EditorDeTipos({ tipos, onCambiar, vendidas = {} }) {
     <div className="space-y-3">
       {tipos.map((tipo, i) => {
         const tomadas = vendidas[tipo.id] || 0;
+        const esPromo = personasDe(tipo) > 1;
+        const precio = precioDelTipo(tipo, (p) => formatearPrecio(p));
 
         return (
           <div key={tipo.id} className="border border-borde bg-white p-3">
-            <div className="grid grid-cols-2 sm:grid-cols-[2fr_1fr_1fr_auto] gap-3 items-end">
+            <div className="grid grid-cols-2 sm:grid-cols-[2fr_1fr_1fr_1fr_auto] gap-3 items-end">
               <div className="col-span-2 sm:col-span-1">
                 <label htmlFor={`tipo-nombre-${tipo.id}`} className="block text-xs font-semibold text-tinta mb-1">Nombre</label>
                 <input
@@ -52,6 +55,18 @@ function EditorDeTipos({ tipos, onCambiar, vendidas = {} }) {
                   step="0.01"
                   value={tipo.precio}
                   onChange={(e) => cambiar(i, { precio: e.target.value === '' ? '' : Number(e.target.value) })}
+                  className={CLASE_CAMPO}
+                />
+              </div>
+              <div>
+                <label htmlFor={`tipo-personas-${tipo.id}`} className="block text-xs font-semibold text-tinta mb-1">Entran</label>
+                <input
+                  id={`tipo-personas-${tipo.id}`}
+                  type="number"
+                  min="1"
+                  max={MAX_PERSONAS}
+                  value={tipo.personas === undefined || tipo.personas === null ? 1 : tipo.personas}
+                  onChange={(e) => cambiar(i, { personas: e.target.value === '' ? '' : Number(e.target.value) })}
                   className={CLASE_CAMPO}
                 />
               </div>
@@ -80,8 +95,11 @@ function EditorDeTipos({ tipos, onCambiar, vendidas = {} }) {
             </div>
 
             <p className="text-xs text-tinta-suave mt-2">
-              {Number(tipo.precio) > 0 ? formatearPrecio(tipo.precio) : 'Sin costo'}
-              {tomadas > 0 && ` · ${tomadas} ${tomadas === 1 ? 'tomada' : 'tomadas'}: el cupo no puede ser menor`}
+              {precio || 'Sin costo'}
+              {esPromo && ' · uno solo paga la promo entera'}
+              {tomadas > 0 && (esPromo
+                ? ` · ${tomadas} ${tomadas === 1 ? 'promo tomada' : 'promos tomadas'}: el cupo no puede ser menor`
+                : ` · ${tomadas} ${tomadas === 1 ? 'tomada' : 'tomadas'}: el cupo no puede ser menor`)}
             </p>
           </div>
         );
@@ -100,6 +118,10 @@ function EditorDeTipos({ tipos, onCambiar, vendidas = {} }) {
       <p className="text-xs text-tinta-suave">
         El cupo de un tipo es aparte de la capacidad del evento: sirve para vender, por
         ejemplo, sólo 20 de jubilados. Vacío, el tipo se vende hasta llenar el evento.
+      </p>
+      <p className="text-xs text-tinta-suave">
+        Para una promo 2x1, poné el precio de la promo y que entran 2: cada promo ocupa dos
+        lugares del evento, y su cupo se cuenta en promos.
       </p>
     </div>
   );

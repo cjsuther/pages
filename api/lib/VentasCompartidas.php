@@ -89,14 +89,15 @@ class VentasCompartidas
     }
 
     /**
-     * Lo pagado de cada tipo, en el orden en que los cargó quien vende.
+     * Lo pagado de cada tipo, en el orden en que los cargó quien vende. Se
+     * cuenta como el cupo: una promo 2x1 vendida es una, aunque entren dos.
      *
      * @return array<array{nombre: string, precio: float, cupo: int|null, vendidas: int}>
      */
     private static function vendidasPorTipo($db, $linkId, array $tipos)
     {
         $stmt = $db->prepare("
-            SELECT i.tipo, COALESCE(SUM(i.cantidad), 0) AS vendidas
+            SELECT i.tipo, COALESCE(SUM(CEIL(i.cantidad / i.personas)), 0) AS vendidas
             FROM ticket_order_items i
             INNER JOIN ticket_orders o ON o.id = i.order_id
             WHERE o.link_id = ? AND o.estado = 'pagada'
@@ -114,6 +115,7 @@ class VentasCompartidas
             return [
                 'nombre'   => $tipo['nombre'],
                 'precio'   => (float) $tipo['precio'],
+                'personas' => TiposDeEntrada::personas($tipo),
                 'cupo'     => $tipo['cupo'] === null ? null : (int) $tipo['cupo'],
                 'vendidas' => isset($porTipo[$tipo['id']]) ? $porTipo[$tipo['id']] : 0,
             ];

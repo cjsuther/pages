@@ -319,6 +319,7 @@
         "tipo": "migration_tipos_de_entrada.sql",
         "nombre": "migration_tipos_de_entrada.sql",
         "precio_unitario": "migration_tipos_de_entrada.sql",
+        "personas": "migration_promos.sql",
         "cantidad": "migration_tipos_de_entrada.sql"
     },
     "ticket_order_lugares": {
