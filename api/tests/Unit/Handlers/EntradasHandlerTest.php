@@ -397,6 +397,9 @@ class EntradasHandlerTest extends HandlerTestCase
             'mp_payment_id' => '99', 'pagada_en' => '2026-08-16 20:00:00',
             'created_at' => '2026-08-16 19:58:00', 'vencida' => 0,
         ], $overrides)]);
+        // Dos veces: la venta no tiene renglones por tipo, así que el resumen
+        // mira si el evento tiene tipos, y después el handler lee la capacidad.
+        $this->db->onSelect('FROM event_ticketing WHERE link_id', [['capacidad' => 100]]);
         $this->db->onSelect('FROM event_ticketing WHERE link_id', [['capacidad' => 100]]);
     }
 

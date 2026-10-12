@@ -575,6 +575,32 @@ class TiposDeEntradaTest extends IntegracionTestCase
         ]);
     }
 
+    /**
+     * Lo vendido cuando el evento tenía un solo precio va al primer tipo, que
+     * es ese precio: si no, el desglose no suma lo mismo que el total.
+     */
+    public function testLoVendidoAntesDeLosTiposCuentaEnElPrimero()
+    {
+        $linkId = $this->evento($this->grupoId, ['text' => 'Noche de Tango']);
+        $this->assertStatus(200, $this->configurar($linkId, []));
+        $this->assertStatus(201, $this->comprar($linkId, ['cantidad' => 2]));
+
+        $this->assertStatus(200, $this->configurar($linkId, ['tipos' => [
+            ['id' => 'general', 'nombre' => 'General', 'precio' => 0],
+            ['id' => '2x1', 'nombre' => 'Promo 2x1', 'precio' => 0, 'personas' => 2],
+        ]]));
+        $this->assertStatus(201, $this->comprar($linkId, ['tipos' => ['2x1' => 2], 'email' => 'b@test.local']));
+
+        $ventas = EntradasHandler::ventas($this->db, $this->get(['link_id' => $linkId], $this->user($this->duenaId)))->body;
+        $porTipo = array_column($ventas['resumen']['por_tipo'], null, 'tipo');
+        $this->assertSame([2, 2], [$porTipo['general']['vendidas'], $porTipo['general']['personas']]);
+        $this->assertSame([1, 2], [$porTipo['2x1']['vendidas'], $porTipo['2x1']['personas']]);
+        $this->assertSame(4, $ventas['resumen']['vendidas']);
+
+        $compartida = VentasCompartidas::estado($this->db, $linkId)['venta'];
+        $this->assertSame([2, 1, 4], [$compartida['tipos'][0]['vendidas'], $compartida['tipos'][1]['vendidas'], $compartida['vendidas']]);
+    }
+
     /** Si el tipo se renombra o cambia de precio, la compra sigue diciendo lo que se pagó. */
     public function testLaCompraConservaElNombreYElPrecioDelMomento()
     {

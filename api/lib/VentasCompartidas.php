@@ -92,6 +92,9 @@ class VentasCompartidas
      * Lo pagado de cada tipo, en el orden en que los cargó quien vende. Se
      * cuenta como el cupo: una promo 2x1 vendida es una, aunque entren dos.
      *
+     * Lo vendido antes de que el evento tuviera tipos va al primero, que es
+     * el precio que tenía: si no, la suma de los tipos no daba el total.
+     *
      * @return array<array{nombre: string, precio: float, cupo: int|null, vendidas: int}>
      */
     private static function vendidasPorTipo($db, $linkId, array $tipos)
@@ -109,6 +112,20 @@ class VentasCompartidas
 
         foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $fila) {
             $porTipo[(string) $fila['tipo']] = (int) $fila['vendidas'];
+        }
+
+        $stmt = $db->prepare("
+            SELECT COALESCE(SUM(o.cantidad), 0)
+            FROM ticket_orders o
+            WHERE o.link_id = ? AND o.estado = 'pagada'
+              AND NOT EXISTS (SELECT 1 FROM ticket_order_items i WHERE i.order_id = o.id)
+        ");
+        $stmt->execute([(int) $linkId]);
+        $sinTipo = (int) $stmt->fetchColumn();
+
+        if ($sinTipo > 0) {
+            $primero = (string) $tipos[0]['id'];
+            $porTipo[$primero] = (isset($porTipo[$primero]) ? $porTipo[$primero] : 0) + $sinTipo;
         }
 
         return array_map(function ($tipo) use ($porTipo) {

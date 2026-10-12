@@ -861,6 +861,9 @@ class Entradas
         // Lo pagado de cada tipo. El nombre es el de la última compra: si el
         // tipo se renombró, se lee como se llama ahora.
         $porTipo = [];
+        // Lo pagado sin renglones por tipo: compras de cuando el evento vendía
+        // a un solo precio. Se suman al primer tipo después del recorrido.
+        $sinTipo = ['personas' => 0, 'recaudado' => 0.0];
 
         $vendidas = 0;
         $ingresadas = 0;
@@ -916,6 +919,11 @@ class Entradas
                     $porTipo[$item['tipo']]['recaudado'] = round($porTipo[$item['tipo']]['recaudado'] + TiposDeEntrada::subtotal($item), 2);
                 }
 
+                if ($orden['items'] === []) {
+                    $sinTipo['personas'] += (int) $orden['cantidad'];
+                    $sinTipo['recaudado'] += (float) $orden['total'];
+                }
+
                 // null es "no lo sabemos" —una venta anterior a que se guardara
                 // el desglose— y no es lo mismo que un cero, que sí sería una
                 // respuesta: Mercado Pago no cobró nada.
@@ -962,6 +970,8 @@ class Entradas
         }
         unset($orden);
 
+        $porTipo = self::conLoVendidoSinTipo($db, $linkId, $porTipo, $sinTipo);
+
         return [
             'ordenes' => $ordenes,
             'resumen' => [
@@ -1002,7 +1012,7 @@ class Entradas
                 // tomado el lugar: el pago se acredita igual, y quien organiza
                 // tiene que enterarse para reubicar a uno de los dos.
                 'lugares_en_conflicto' => $conflictos,
-                // Vacío si el evento nunca vendió por tipos.
+                // Vacío si el evento vende a un solo precio.
                 'por_tipo' => array_values($porTipo),
             ],
         ];
@@ -1189,6 +1199,42 @@ class Entradas
         $config['tipos'] = TiposDeEntrada::decodificar(isset($config['tipos']) ? $config['tipos'] : null);
 
         return $config;
+    }
+
+    /**
+     * Suma al primer tipo lo que se vendió antes de que el evento tuviera
+     * tipos. Al pasar a varios precios, el que había queda primero como
+     * "General": esas compras son de ese precio. Sin esto el desglose no
+     * cerraba con el total: dos entradas vendidas a precio único no
+     * aparecían en ningún tipo.
+     */
+    private static function conLoVendidoSinTipo($db, $linkId, array $porTipo, array $sinTipo)
+    {
+        if ($sinTipo['personas'] === 0) {
+            return $porTipo;
+        }
+
+        $config = self::configDelEvento($db, $linkId);
+
+        if ($config === null || $config['tipos'] === null) {
+            return $porTipo;
+        }
+
+        $primero = $config['tipos'][0];
+        $id = (string) $primero['id'];
+
+        if (!isset($porTipo[$id])) {
+            $porTipo[$id] = [
+                'tipo' => $id, 'nombre' => $primero['nombre'], 'personas_por_unidad' => TiposDeEntrada::personas($primero),
+                'vendidas' => 0, 'personas' => 0, 'recaudado' => 0.0,
+            ];
+        }
+
+        $porTipo[$id]['vendidas'] += $sinTipo['personas'];
+        $porTipo[$id]['personas'] += $sinTipo['personas'];
+        $porTipo[$id]['recaudado'] = round($porTipo[$id]['recaudado'] + $sinTipo['recaudado'], 2);
+
+        return $porTipo;
     }
 
     /** Un renglón de ticket_order_items, con sus tipos. */
