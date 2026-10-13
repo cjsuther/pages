@@ -4,7 +4,7 @@ import { formatearPrecio, opcionesDeCantidad } from '../utils/entradas';
 import { esEmailValido, sugerenciaDeEmail } from '../utils/email';
 import { resumirLugares } from '../utils/plano';
 import {
-  tiposPorLugar, pedidoDeLosLugares, resumenDelPedido, resumirTipos, precioDelTipo, lugaresSinCargo,
+  tiposPorLugar, pedidoDeLosLugares, resumenDelPedido, resumirTipos, precioDelTipo, lugaresSinCargo, personasDe,
 } from '../utils/tiposDeEntrada';
 import { evento as eventoDePixel } from '../utils/metaPixel';
 import PlanoDeLugares from './PlanoDeLugares';
@@ -456,7 +456,7 @@ function SelectorDeTipos({ tipos, pedido, maximo, moneda, onCambiar }) {
                 onChange={(e) => onCambiar(t.id, Number(e.target.value))}
                 className="px-3 py-2 bg-white border border-borde-fuerte text-tinta focus:border-verde-oscuro focus:outline-none"
               >
-                {Array.from({ length: Math.max(tope, propias) + 1 }, (_, n) => (
+                {opcionesDelTipo(personasDe(t), tope, propias).map((n) => (
                   <option key={n} value={n}>{n}</option>
                 ))}
               </select>
@@ -470,6 +470,17 @@ function SelectorDeTipos({ tipos, pedido, maximo, moneda, onCambiar }) {
       )}
     </fieldset>
   );
+}
+
+/**
+ * Las cantidades que ofrece un tipo, en personas. Una promo va de a grupos
+ * enteros —una 2x1 ofrece 0, 2, 4—: se paga entera, así que entra entera.
+ */
+function opcionesDelTipo(personas, tope, propias) {
+  const hasta = Math.max(Math.floor(tope / personas) * personas, propias);
+  const opciones = [];
+  for (let n = 0; n <= hasta; n += personas) opciones.push(n);
+  return opciones;
 }
 
 function Marco({ children, onCerrar, ancho = 'max-w-md' }) {

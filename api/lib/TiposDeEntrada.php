@@ -187,6 +187,30 @@ class TiposDeEntrada
         return (int) ceil((int) $cantidad / max(1, (int) $personas));
     }
 
+    /**
+     * El pedido sin plano, con cada promo completa: una 2x1 son dos personas
+     * aunque se pida una. Lo que se paga es la promo entera, así que entra el
+     * grupo entero; si no, la promo cobra dos y la puerta deja pasar a uno.
+     * Los ids que no son de ningún tipo quedan como vinieron: los rechaza
+     * quien arma los renglones.
+     *
+     * @param array<string, int> $pedido id de tipo => personas
+     * @return array<string, int>
+     */
+    public static function completarGrupos(array $pedido, array $tipos)
+    {
+        $porId = self::porId($tipos);
+
+        foreach ($pedido as $id => $cantidad) {
+            if (isset($porId[$id])) {
+                $personas = self::personas($porId[$id]);
+                $pedido[$id] = self::unidades($cantidad, $personas) * $personas;
+            }
+        }
+
+        return $pedido;
+    }
+
     /** Lo que sale un renglón de la compra: 3 entradas de una 2x1 son dos promos. */
     public static function subtotal(array $item)
     {

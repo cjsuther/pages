@@ -438,8 +438,12 @@ class TiposDeEntradaTest extends IntegracionTestCase
         ], $config));
     }
 
-    /** Tres personas en una 2x1 son dos promos: ocupan tres lugares y pagan dos. */
-    public function testUnaPromoOcupaLasPersonasYCobraLasPromos()
+    /**
+     * Sin plano, una promo pedida a medias entra entera: tres personas en una
+     * 2x1 son dos promos, y las dos promos son cuatro lugares. Si no, la promo
+     * cobraba por dos y la entrada dejaba pasar a uno.
+     */
+    public function testSinPlanoUnaPromoPedidaAMediasEntraEntera()
     {
         $linkId = $this->eventoConPromo();
         $this->preferenciaOk();
@@ -450,18 +454,65 @@ class TiposDeEntradaTest extends IntegracionTestCase
         $this->assertEquals(16000, $res->body['total']);
 
         $orden = $this->orden($res->body['codigo']);
-        $this->assertSame(3, (int) $orden['cantidad']);
-        $this->assertSame('5333.33', $orden['precio_unitario']);
+        $this->assertSame(4, (int) $orden['cantidad']);
+        $this->assertSame('4000.00', $orden['precio_unitario']);
 
         $item = $this->fila('SELECT i.personas, i.cantidad FROM ticket_order_items i INNER JOIN ticket_orders o ON o.id = i.order_id WHERE o.codigo = ?', [$res->body['codigo']]);
-        $this->assertSame(['2', '3'], [(string) $item['personas'], (string) $item['cantidad']]);
+        $this->assertSame(['2', '4'], [(string) $item['personas'], (string) $item['cantidad']]);
 
         $preferencia = $this->http->jsonDe('/checkout/preferences');
         $this->assertSame('Noche de Tango — Promo 2x1', $preferencia['items'][0]['title']);
         $this->assertSame(2, $preferencia['items'][0]['quantity']);
         $this->assertEquals(8000, $preferencia['items'][0]['unit_price']);
 
-        $this->assertSame(7, Entradas::disponibilidad($this->db, $linkId)['disponibles']);
+        $this->assertSame(6, Entradas::disponibilidad($this->db, $linkId)['disponibles']);
+    }
+
+    /** El caso que pasó en producción: una sola 2x1 pedida para una persona. */
+    public function testUnaPromoPedidaParaUnoSonDosEntradas()
+    {
+        $linkId = $this->eventoConPromo(['tipos' => [
+            ['id' => 't2', 'nombre' => '2 x $30.000', 'precio' => 30000, 'personas' => 2],
+        ]]);
+        $this->preferenciaOk();
+
+        $res = $this->comprar($linkId, ['tipos' => ['t2' => 1]]);
+
+        $this->assertStatus(201, $res);
+        $this->assertEquals(30000, $res->body['total']);
+        $this->assertSame(2, (int) $this->orden($res->body['codigo'])['cantidad']);
+        $this->assertSame(8, Entradas::disponibilidad($this->db, $linkId)['disponibles']);
+    }
+
+    /** Una pantalla vieja que sólo manda la cantidad también completa la promo. */
+    public function testConUnaSolaPromoYSoloLaCantidadTambienSeCompleta()
+    {
+        $linkId = $this->eventoConPromo(['tipos' => [
+            ['id' => '2x1', 'nombre' => 'Promo 2x1', 'precio' => 8000, 'personas' => 2],
+        ]]);
+        $this->preferenciaOk();
+
+        $res = $this->comprar($linkId, ['cantidad' => 1]);
+
+        $this->assertStatus(201, $res);
+        $this->assertSame(2, (int) $this->orden($res->body['codigo'])['cantidad']);
+    }
+
+    /** El grupo completo cuenta para el máximo por compra y para la capacidad. */
+    public function testElGrupoCompletoCuentaParaElMaximoYLaCapacidad()
+    {
+        $linkId = $this->eventoConPromo(['max_por_compra' => 3]);
+
+        $res = $this->comprar($linkId, ['tipos' => ['2x1' => 3]]);
+        $this->assertStatus(400, $res);
+        $this->assertSame('El máximo por compra es 3', $res->body['error']);
+
+        $this->assertStatus(200, $this->configurar($linkId, ['capacidad' => 1, 'tipos' => [
+            ['id' => '2x1', 'nombre' => 'Promo 2x1', 'precio' => 8000, 'personas' => 2],
+        ]]));
+        $res = $this->comprar($linkId, ['tipos' => ['2x1' => 1]]);
+        $this->assertStatus(400, $res);
+        $this->assertSame('Sólo quedan 1 entradas', $res->body['error']);
     }
 
     /** El cupo de una promo se cuenta en promos: con cupo 2, tres personas dejan sólo una más. */
@@ -527,16 +578,16 @@ class TiposDeEntradaTest extends IntegracionTestCase
             ['id' => '2x1', 'nombre' => 'Promo 2x1', 'precio' => 0, 'personas' => 2],
         ]]);
 
-        $codigo = $this->comprar($linkId, ['tipos' => ['2x1' => 3]])->body['codigo'];
+        $codigo = $this->comprar($linkId, ['tipos' => ['2x1' => 4]])->body['codigo'];
 
         $ventas = EntradasHandler::ventas($this->db, $this->get(['link_id' => $linkId], $this->user($this->duenaId)))->body;
         $this->assertSame([[
             'tipo' => '2x1', 'nombre' => 'Promo 2x1', 'personas_por_unidad' => 2,
-            'vendidas' => 2, 'personas' => 3, 'recaudado' => 0.0,
+            'vendidas' => 2, 'personas' => 4, 'recaudado' => 0.0,
         ]], $ventas['resumen']['por_tipo']);
-        $this->assertSame(3, $ventas['resumen']['vendidas']);
+        $this->assertSame(4, $ventas['resumen']['vendidas']);
 
-        $this->assertSame('2 Promo 2x1 (3 personas)', Puerta::lista($this->db, $linkId)['ordenes'][0]['tipos']);
+        $this->assertSame('2 Promo 2x1 (4 personas)', Puerta::lista($this->db, $linkId)['ordenes'][0]['tipos']);
         $this->assertNotEmpty($codigo);
     }
 

@@ -564,13 +564,17 @@ describe('ComprarEntradas', () => {
         expect(screen.getByText(/cada 2/)).toBeInTheDocument();
       });
 
-      it('tres personas pagan dos promos y avisa que entra una más', () => {
+      /** Sin plano la promo entra entera: no se puede pedir una 2x1 para uno. */
+      it('sin plano ofrece grupos enteros y dos promos son cuatro personas', () => {
         conTipos({ tipos: [TIPOS[0], PROMO] });
 
-        fireEvent.change(screen.getByLabelText(/Promo 2x1/), { target: { value: '3' } });
+        const selector = screen.getByLabelText(/Promo 2x1/);
+        expect(Array.from(selector.options).map((o) => o.value)).toEqual(['0', '2', '4', '6']);
+
+        fireEvent.change(selector, { target: { value: '4' } });
 
         expect(screen.getAllByText(/16\.000/).length).toBeGreaterThan(0);
-        expect(screen.getByText(/Por el mismo precio entra 1 persona más en Promo 2x1/)).toBeInTheDocument();
+        expect(screen.queryByText(/Por el mismo precio/)).not.toBeInTheDocument();
       });
 
       it('con plano, un lugar solo en la zona paga la promo y avisa que elija otro', () => {

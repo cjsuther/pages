@@ -420,6 +420,21 @@ class Entradas
             }
 
             $config = self::decodificada($config);
+
+            // Sin plano, una promo pedida a medias se completa: el grupo entra
+            // entero. Va antes del máximo y de la capacidad, que cuentan
+            // personas. Con plano no: ahí cada lugar lo elige quien compra.
+            if ($config['plano'] === null && $config['tipos'] !== null) {
+                if ($pedidoPorTipo === null && count($config['tipos']) === 1) {
+                    $pedidoPorTipo = [(string) $config['tipos'][0]['id'] => $cantidad];
+                }
+
+                if ($pedidoPorTipo !== null) {
+                    $pedidoPorTipo = TiposDeEntrada::completarGrupos($pedidoPorTipo, $config['tipos']);
+                    $cantidad = array_sum($pedidoPorTipo);
+                }
+            }
+
             $problemaDeLugares = self::problemaConLosLugares($db, $linkId, $config['plano'], $lugares);
 
             if ($problemaDeLugares !== null) {
