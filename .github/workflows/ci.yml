@@ -1,0 +1,129 @@
+# .github/workflows/ci.yml
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+env:
+  PHP_MIN_COVERAGE: 60      # subilo a medida que mejore
+  FE_MIN_COVERAGE: 50
+
+jobs:
+  api:
+    name: API
+    runs-on: ubuntu-latest
+    services:
+      mariadb:
+        image: mariadb:11.8
+        env:
+          # Los tests de integración se conectan como root sin contraseña
+          # (tests/Support/BaseDescartable.php) y crean sus propias bases.
+          MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: "1"
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s --health-timeout=5s --health-retries=5
+    defaults:
+      run:
+        working-directory: api
+    env:
+      # Sin estas dos, los tests levantan su propia MariaDB descartable.
+      RZ_TEST_DB_HOST: 127.0.0.1
+      RZ_TEST_DB_PORT: 3306
+      # Sin base, los tests de integración fallan en vez de saltearse.
+      RZ_EXIGIR_BASE: 1
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
+        with:
+          php-version: "8.3"
+          extensions: pdo, pdo_mysql, mbstring, gd, curl
+          coverage: pcov
+          tools: composer
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.composer/cache
+          key: composer-${{ hashFiles('api/composer.lock') }}
+      # También crea api/config.php desde config.example.php (bin/crear-config.php);
+      # los tests no lo usan: tests/bootstrap.php define sus propias constantes.
+      - run: composer install --no-interaction --prefer-dist
+      - name: Aplicar migraciones a la base de test
+        # database.sql y las migraciones de migraciones.txt (en la raíz, con
+        # rutas relativas a la raíz) sobre una base vacía, igual que los tests.
+        # Falla si una migración no aplica o si falta regenerar el esquema esperado.
+        run: |
+          php tests/esquema.php generar
+          git diff --exit-code tests/esquema-esperado.json
+      - name: Tests con cobertura
+        # Sin pcov.directory, pcov sólo mide api/lib (lo autodetecta) y el resto
+        # de la API cuenta como no cubierto.
+        run: php -d pcov.directory=$PWD vendor/bin/phpunit --coverage-clover coverage.xml --coverage-text
+      - name: Verificar umbral de cobertura
+        run: |
+          php -r '
+            $x = simplexml_load_file("coverage.xml");
+            $m = $x->project->metrics;
+            $pct = (int) $m["statements"] > 0 ? 100 * (int) $m["coveredstatements"] / (int) $m["statements"] : 0;
+            printf("Cobertura API: %.1f%% (mínimo %s%%)\n", $pct, getenv("PHP_MIN_COVERAGE"));
+            exit($pct >= (float) getenv("PHP_MIN_COVERAGE") ? 0 : 1);
+          '
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with: { name: api-coverage, path: api/coverage.xml }
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: Tests con cobertura
+        # Los reporters (text y json-summary) están en vite.config.js: test.coverage.reporter
+        run: npm run test:coverage
+      - name: Verificar umbral de cobertura
+        run: |
+          PCT=$(node -p "require('./coverage/coverage-summary.json').total.lines.pct")
+          echo "Cobertura frontend: $PCT% (mínimo $FE_MIN_COVERAGE%)"
+          node -e "process.exit($PCT >= $FE_MIN_COVERAGE ? 0 : 1)"
+      - run: npm run build
+
+  security:
+    name: Seguridad
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write   # para subir el SARIF a la pestaña Security
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Semgrep
+        # semgrep/semgrep-action está deprecada: se corre la CLI en su imagen.
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src semgrep/semgrep semgrep scan \
+            --config p/php \
+            --config p/react \
+            --config p/javascript \
+            --config p/secrets \
+            --config p/owasp-top-ten \
+            --exclude api/vendor --exclude frontend/node_modules \
+            --sarif --output semgrep.sarif --error
+      - uses: github/codeql-action/upload-sarif@ce5e7eeac396d720fe2d802714996c8ce561e311 # v3.39.0
+        if: always()
+        with: { sarif_file: semgrep.sarif }
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
+        with: { php-version: "8.3", tools: composer }
+      - run: cd api && composer install --no-interaction --prefer-dist && composer audit
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: { node-version: 20 }
+      # Sólo las dependencias que llegan al bundle: las de desarrollo (vitest,
+      # vite, tailwind) tienen avisos que piden subir de versión mayor.
+      - run: cd frontend && npm ci && npm audit --omit=dev --audit-level=high

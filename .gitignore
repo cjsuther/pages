@@ -37,3 +37,6 @@ frontend/coverage/
 
 # Caché de Python del generador de posteos
 __pycache__/
+
+# Cobertura de la API en CI (phpunit --coverage-clover)
+api/coverage.xml
