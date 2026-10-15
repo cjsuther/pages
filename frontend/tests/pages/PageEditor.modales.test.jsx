@@ -106,7 +106,7 @@ function instalarGoogleMaps() {
 
   window.google = {
     maps: {
-      places: { Autocomplete: vi.fn(crearAutocomplete) },
+      places: { Autocomplete: vi.fn(function () { return crearAutocomplete(); }) },
       event: { clearInstanceListeners: vi.fn() },
     },
   };

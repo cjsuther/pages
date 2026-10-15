@@ -42,7 +42,7 @@ function instalarGoogleMaps() {
 
   window.google = {
     maps: {
-      places: { Autocomplete: vi.fn(() => autocomplete) },
+      places: { Autocomplete: vi.fn(function () { return autocomplete; }) },
       event: { clearInstanceListeners: vi.fn() },
     },
   };
