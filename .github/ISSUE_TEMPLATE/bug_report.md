@@ -1,38 +1,38 @@
 ---
-name: Bug report
-about: Create a report to help us improve
+name: Error
+about: Algo no funciona como debería
 title: ''
 labels: ''
 assignees: ''
 
 ---
 
-**Describe the bug**
-A clear and concise description of what the bug is.
+<!-- Si el issue lo va a resolver Claude (etiqueta claude-ready), él sólo lee
+este texto: lo que no esté acá no lo sabe. Los comentarios no los lee. -->
 
-**To Reproduce**
-Steps to reproduce the behavior:
-1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
-4. See error
+**Qué pasa**
+Qué se ve y dónde. Un link real donde ocurre (por ejemplo `https://rezon.ar/evento/843`) ayuda más que cualquier descripción.
 
-**Expected behavior**
-A clear and concise description of what you expected to happen.
+**Cómo reproducirlo**
+1.
+2.
+3.
 
-**Screenshots**
-If applicable, add screenshots to help explain your problem.
+**Qué debería pasar**
+El resultado esperado, concreto. Si hay un límite o un número, ponelo (por ejemplo "máximo 600 KB").
 
-**Desktop (please complete the following information):**
- - OS: [e.g. iOS]
- - Browser [e.g. chrome, safari]
- - Version [e.g. 22]
+**Criterio de aceptación**
+- [ ] Cómo saber que quedó resuelto.
 
-**Smartphone (please complete the following information):**
- - Device: [e.g. iPhone6]
- - OS: [e.g. iOS8.1]
- - Browser [e.g. stock browser, safari]
- - Version [e.g. 22]
+**Fuera de alcance** (opcional)
+Lo que no hay que tocar.
 
-**Additional context**
-Add any other context about the problem here.
+**¿Toca alguna zona sensible?** (ver CLAUDE.md)
+- [ ] Pagos / Mercado Pago / comisiones
+- [ ] Entradas y QR / mails
+- [ ] Login / JWT
+- [ ] Notificaciones push
+- [ ] Importadores de agendas
+
+**Dónde** (si aplica)
+Navegador o celular, y si es rezon.ar, carcajada.rezon.ar o un dominio propio.
