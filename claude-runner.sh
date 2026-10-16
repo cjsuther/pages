@@ -12,7 +12,8 @@ set -euo pipefail
 export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin:$PATH"
 
 REPO="cjsuther/pages"            # owner/repo en GitHub
-REPO_DIR="$HOME/Work/claude/pages"  # clon local del repo
+# Clon propio del runner, no el de trabajo: cada corrida cambia de rama ahí.
+REPO_DIR="${REPO_DIR:-$HOME/Work/claude/pages-runner}"
 BASE_BRANCH="main"
 LABEL_READY="claude-ready"
 LABEL_WORKING="claude-working"
@@ -163,7 +164,7 @@ echo "Listo: $PR_URL"
 #   <key>ProgramArguments</key>
 #   <array>
 #     <string>/bin/bash</string>
-#     <string>/Users/USUARIO/Work/claude/pages/claude-runner.sh</string>
+#     <string>/Users/USUARIO/Work/claude/pages-runner/claude-runner.sh</string>
 #   </array>
 #   <key>StartInterval</key>
 #   <integer>300</integer>
