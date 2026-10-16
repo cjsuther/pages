@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { MapPin, X, Loader } from 'lucide-react';
 import { AuthContext } from '../App';
 import { useBloqueoDeScroll } from '../hooks/useBloqueoDeScroll';

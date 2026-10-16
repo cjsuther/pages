@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams } from 'react-router';
 import { Helmet } from 'react-helmet-async';
 import { AuthContext } from '../App';
 import { trackEvent } from '../utils/analytics';

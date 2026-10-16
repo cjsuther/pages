@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { Search, Bell, ChevronDown, ExternalLink, Users } from 'lucide-react';
 import { AuthContext } from '../App';
 import { Avatar, Boton, Campo, Cargando, Chip, Tarjeta, Vacio } from './ui';

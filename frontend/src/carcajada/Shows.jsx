@@ -1,5 +1,5 @@
 import React, { useContext, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { Plus, Loader2, Users, Star } from 'lucide-react';
 import { AuthContext } from '../App';
 import { Boton, Campo, Selector, Tarjeta, Rotulo, Aviso, Cargando, Chip } from '../components/ui';

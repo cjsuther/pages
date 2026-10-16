@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams } from 'react-router';
 import { Helmet } from 'react-helmet-async';
 import { Calendar, MapPin, Loader2, RefreshCw } from 'lucide-react';
 import PlanoDeLugares from '../components/PlanoDeLugares';

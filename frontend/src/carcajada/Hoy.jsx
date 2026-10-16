@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router';
 import { Helmet } from 'react-helmet-async';
 import { Instagram, Loader2, ChevronRight } from 'lucide-react';
 import { fechaLarga, urlDeInstagram, urlDeRezonar } from '../utils/carcajada';

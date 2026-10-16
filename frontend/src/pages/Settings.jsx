@@ -1,5 +1,5 @@
 import React, { useState, useContext } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { AuthContext } from '../App';
 import LocationSettings from '../components/LocationSettings';
 import FollowingManager from '../components/FollowingManager';
