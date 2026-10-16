@@ -90,12 +90,16 @@
         "~/.config/gh",
         "~/.aws",
         "~/.claude"
+      ],
+      "allowWrite": [
+        "~/claude-runner-cache"
       ]
     },
     "network": {
       "allowLocalBinding": true,
       "allowedDomains": [
         "github.com",
+        "api.github.com",
         "codeload.github.com",
         "objects.githubusercontent.com",
         "repo.packagist.org",

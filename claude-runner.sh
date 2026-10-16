@@ -132,6 +132,12 @@ DB_PORT=$(php -r '$s = stream_socket_server("tcp://127.0.0.1:0"); $n = stream_so
 for _ in $(seq 75); do nc -z 127.0.0.1 "$DB_PORT" 2>/dev/null && break; sleep 0.2; done
 export RZ_TEST_DB_HOST=127.0.0.1 RZ_TEST_DB_PORT="$DB_PORT"
 
+# Cachés de npm y composer propias del runner: el sandbox sólo deja escribir
+# ahí (allowWrite en claude-runner-permisos.json), no en ~/.npm ni en la caché
+# de composer de la Mac.
+mkdir -p "$HOME/claude-runner-cache/npm" "$HOME/claude-runner-cache/composer"
+export npm_config_cache="$HOME/claude-runner-cache/npm" COMPOSER_CACHE_DIR="$HOME/claude-runner-cache/composer"
+
 set +e
 claude -p "$PROMPT" < /dev/null \
   --setting-sources project \
