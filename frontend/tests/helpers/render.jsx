@@ -1,6 +1,6 @@
 import React from 'react';
 import { render } from '@testing-library/react';
-import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import { MemoryRouter, Routes, Route } from 'react-router';
 import { HelmetProvider } from 'react-helmet-async';
 import { vi } from 'vitest';
 import { AuthContext } from '../../src/App';
@@ -54,10 +54,7 @@ export function renderConProviders(ui, { auth = crearAuth(), route = '/', path =
   const resultado = render(
     <HelmetProvider>
       <AuthContext.Provider value={auth}>
-        <MemoryRouter
-          initialEntries={[route]}
-          future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
-        >
+        <MemoryRouter initialEntries={[route]}>
           {contenido}
         </MemoryRouter>
       </AuthContext.Provider>

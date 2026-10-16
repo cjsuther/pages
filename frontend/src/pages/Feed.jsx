@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router';
 import { AuthContext } from '../App';
 import Navigation from '../components/Navigation';
 import { Calendar, MapPin, ArrowUpDown } from 'lucide-react';

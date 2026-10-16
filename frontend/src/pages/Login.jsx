@@ -1,5 +1,5 @@
 import React, { useState, useContext, useEffect } from 'react';
-import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router';
 import { AuthContext } from '../App';
 import { Helmet } from 'react-helmet-async';
 import { PieDePagina } from '../components/Marco';
