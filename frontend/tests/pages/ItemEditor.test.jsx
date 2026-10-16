@@ -176,6 +176,58 @@ describe('ItemEditor', () => {
     });
 
     /**
+     * WhatsApp no muestra vistas previas de más de ~600 KB: el afiche de un
+     * evento se frena antes de subirlo (#6).
+     */
+    describe('imagen de un evento', () => {
+      const evento = () => ({
+        page: conItem({ text: 'Mi Evento', event_latitude: '-34.6', event_longitude: '-58.4' }, 'eventos'),
+      });
+
+      it('avisa y no sube una imagen de más de 600 KB', async () => {
+        const { llamadas } = await render(evento());
+
+        fireEvent.change(document.querySelector('input[type="file"]'), {
+          target: { files: [archivo({ nombre: 'afiche.png', tipo: 'image/png', bytes: 2202009 })] },
+        });
+
+        await waitFor(() => {
+          expect(window.alert).toHaveBeenCalledWith(
+            'La imagen pesa 2,1 MB; para eventos el máximo es 600 KB'
+          );
+        });
+        expect(llamadaA(llamadas, 'upload/image.php')).toBeNull();
+      });
+
+      it('sube una de 600 KB avisándole a la API que es de un evento', async () => {
+        const { llamadas } = await render(evento());
+
+        fireEvent.change(document.querySelector('input[type="file"]'), {
+          target: { files: [archivo({ bytes: 600 * 1024 })] },
+        });
+
+        await waitFor(() => {
+          expect(llamadaA(llamadas, 'upload/image.php')).not.toBeNull();
+        });
+        expect(llamadaA(llamadas, 'upload/image.php').options.body.get('destino')).toBe('evento');
+        expect(window.alert).not.toHaveBeenCalled();
+      });
+
+      it('una imagen de 1 MB en un item que no es evento se sigue subiendo', async () => {
+        const { llamadas } = await render();
+
+        fireEvent.change(document.querySelector('input[type="file"]'), {
+          target: { files: [archivo({ bytes: 1024 * 1024 })] },
+        });
+
+        await waitFor(() => {
+          expect(llamadaA(llamadas, 'upload/image.php')).not.toBeNull();
+        });
+        expect(llamadaA(llamadas, 'upload/image.php').options.body.get('destino')).toBeNull();
+      });
+    });
+
+    /**
      * El link de un evento y su texto viven en la solapa ENTRADAS: en un evento
      * son cómo se consiguen las entradas, y esa decisión está entera ahí.
      */

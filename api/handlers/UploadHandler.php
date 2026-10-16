@@ -17,6 +17,13 @@ class UploadHandler
 {
     const MAX_BYTES = 5242880; // 5 MB
 
+    /**
+     * Tope para el afiche de un evento. WhatsApp descarta las vistas previas
+     * de más de ~600 KB y muestra el ícono del sitio en su lugar: un evento
+     * con un PNG de 2 MB se compartía sin su imagen (#6).
+     */
+    const MAX_BYTES_EVENTO = 614400; // 600 KB
+
     /** Tipos aceptados y la extensión con la que se guarda cada uno. */
     private static $extensionPorTipoDetectado = [
         IMAGETYPE_JPEG => 'jpg',
@@ -55,6 +62,12 @@ class UploadHandler
 
         if (isset($file['size']) && $file['size'] > self::MAX_BYTES) {
             return Response::error(400, 'File size too large. Maximum 5MB allowed');
+        }
+
+        // El editor avisa que la imagen es el afiche de un evento; cualquier
+        // otro valor (o ninguno) es una imagen común con el tope general.
+        if ($req->formInput('destino') === 'evento' && isset($file['size']) && $file['size'] > self::MAX_BYTES_EVENTO) {
+            return Response::error(400, self::mensajeDeExceso($file['size'], self::MAX_BYTES_EVENTO));
         }
 
         $info = $storage->imageInfo(isset($file['tmp_name']) ? $file['tmp_name'] : '');
@@ -117,7 +130,8 @@ class UploadHandler
             return Response::error(400, 'No pudimos leer el archivo');
         }
 
-        $guardada = self::guardarBytes($bytes, $storage);
+        // El link siempre es para el afiche de un evento.
+        $guardada = self::guardarBytes($bytes, $storage, self::MAX_BYTES_EVENTO);
 
         if (!$guardada['ok']) {
             return Response::error(400, $guardada['error']);
@@ -147,9 +161,10 @@ class UploadHandler
      * api/uploads/ Apache ejecuta PHP, así que guardar con una extensión
      * elegida por el cliente sería ejecución remota de código.
      *
+     * @param int $maximo MAX_BYTES, o MAX_BYTES_EVENTO si es el afiche de un evento
      * @return array{ok: bool, url?: string, error?: string}
      */
-    public static function guardarBase64($contenido, FileStorage $storage = null)
+    public static function guardarBase64($contenido, FileStorage $storage = null, $maximo = self::MAX_BYTES)
     {
         $storage = $storage === null ? new FileStorage() : $storage;
 
@@ -159,16 +174,16 @@ class UploadHandler
             return ['ok' => false, 'error' => 'La imagen no está en base64 válido'];
         }
 
-        return self::guardarBytes($bytes, $storage);
+        return self::guardarBytes($bytes, $storage, $maximo);
     }
 
     /** Valida los bytes y los deja guardados. Único punto que escribe. */
-    private static function guardarBytes($bytes, FileStorage $storage = null)
+    private static function guardarBytes($bytes, FileStorage $storage = null, $maximo = self::MAX_BYTES)
     {
         $storage = $storage === null ? new FileStorage() : $storage;
 
-        if (strlen($bytes) > self::MAX_BYTES) {
-            return ['ok' => false, 'error' => 'La imagen pesa más de 5 MB'];
+        if (strlen($bytes) > $maximo) {
+            return ['ok' => false, 'error' => self::mensajeDeExceso(strlen($bytes), $maximo)];
         }
 
         $temporal = $storage->guardarTemporal($bytes);
@@ -240,9 +255,10 @@ class UploadHandler
      * enlace prestado deja el evento sin afiche el día que ese sitio cambia la
      * URL o se cae.
      *
+     * @param int $maximo MAX_BYTES, o MAX_BYTES_EVENTO si es el afiche de un evento
      * @return array{ok: bool, url?: string, error?: string}
      */
-    public static function guardarDesdeUrl($url, FileStorage $storage = null, HttpClient $http = null)
+    public static function guardarDesdeUrl($url, FileStorage $storage = null, HttpClient $http = null, $maximo = self::MAX_BYTES)
     {
         if (!self::direccionSegura($url)) {
             return ['ok' => false, 'error' => 'La dirección de la imagen no es una URL pública válida'];
@@ -257,7 +273,34 @@ class UploadHandler
 
         // Se reutiliza el mismo camino que el resto: lo que decide si esto es
         // una imagen son los bytes, no de dónde vinieron.
-        return self::guardarBytes($r['body'], $storage);
+        return self::guardarBytes($r['body'], $storage, $maximo);
+    }
+
+    /** Por qué se rechaza una imagen que pasa el tope que le corresponde. */
+    private static function mensajeDeExceso($bytes, $maximo)
+    {
+        if ($maximo === self::MAX_BYTES_EVENTO) {
+            return 'La imagen pesa ' . self::describirPeso($bytes) . '; para eventos el máximo es 600 KB';
+        }
+
+        return 'La imagen pesa más de 5 MB';
+    }
+
+    /**
+     * El peso como lo diría una persona: "601 KB", "2,1 MB".
+     *
+     * Los KB se redondean para arriba: una imagen apenas pasada del tope no
+     * puede decir que pesa justo el tope.
+     */
+    public static function describirPeso($bytes)
+    {
+        if ($bytes < 1048576) {
+            return (int) ceil($bytes / 1024) . ' KB';
+        }
+
+        $mb = round($bytes / 1048576, 1);
+
+        return str_replace('.', ',', (string) $mb) . ' MB';
     }
 
     /**

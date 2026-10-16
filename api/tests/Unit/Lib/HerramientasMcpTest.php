@@ -4,6 +4,7 @@ namespace Tests\Unit\Lib;
 
 use HerramientasMcp;
 use InvalidArgumentException;
+use Tests\Support\FakeHttpClient;
 use Tests\Support\HandlerTestCase;
 
 class HerramientasMcpTest extends HandlerTestCase
@@ -347,15 +348,69 @@ class HerramientasMcpTest extends HandlerTestCase
         $this->assertNotEmpty($urls, 'el evento tiene que quedar con la imagen subida');
     }
 
-    /** Sigue sirviendo apuntar a un afiche ya publicado en otro lado. */
+    /**
+     * Sigue sirviendo apuntar a un afiche ya publicado en otro lado, pero se
+     * descarga: es la única forma de comprobar que no pase de 600 KB (#6).
+     */
     public function testCrearUnEventoConLaUrlDeUnAficheYaPublicado()
     {
         $this->sePuedeCrearElEvento();
+        $http = (new FakeHttpClient())->responde('93.184.216.34', 200, $this->pngDeVerdad());
 
-        $r = $this->correr('crear_evento', $this->eventoConImagen(['imagen_url' => 'https://x/afiche.jpg']));
+        $r = $this->correrConRed('crear_evento', $this->eventoConImagen(['imagen_url' => 'https://93.184.216.34/afiche.jpg']), $http);
 
-        $this->assertTrue($r['ok']);
-        $this->assertContains('https://x/afiche.jpg', $this->db->paramsFor('INSERT INTO links'));
+        $this->assertTrue($r['ok'], json_encode($r['datos']));
+        $this->assertNotContains('https://93.184.216.34/afiche.jpg', $this->db->paramsFor('INSERT INTO links'));
+        $this->assertNotEmpty(array_filter($this->db->paramsFor('INSERT INTO links'), function ($v) {
+            return is_string($v) && strpos($v, '/uploads/') !== false;
+        }));
+    }
+
+    public function testUnAficheDeMasDe600KbPorUrlNoCreaElEvento()
+    {
+        $this->laPaginaEsSuya();
+        $this->db->onSelect('FROM link_groups WHERE page_id', [[20]]);
+        $this->geocodificacionQueAnda();
+        $http = (new FakeHttpClient())->responde('93.184.216.34', 200, str_repeat('a', \UploadHandler::MAX_BYTES_EVENTO + 1));
+
+        $r = $this->correrConRed('crear_evento', $this->eventoConImagen(['imagen_url' => 'https://93.184.216.34/afiche.png']), $http);
+
+        $this->assertFalse($r['ok']);
+        $this->assertStringContainsString('para eventos el máximo es 600 KB', $r['datos']['error']);
+        $this->assertSame(0, $this->db->countCalls('INSERT INTO links'));
+    }
+
+    public function testUnAficheDeMasDe600KbEnBase64NoCreaElEvento()
+    {
+        $this->laPaginaEsSuya();
+        $this->db->onSelect('FROM link_groups WHERE page_id', [[20]]);
+        $this->geocodificacionQueAnda();
+
+        $r = $this->correr(
+            'crear_evento',
+            $this->eventoConImagen(['imagen' => base64_encode(str_repeat('a', \UploadHandler::MAX_BYTES_EVENTO + 1))]),
+            $this->discoFalso()
+        );
+
+        $this->assertFalse($r['ok']);
+        $this->assertStringContainsString('para eventos el máximo es 600 KB', $r['datos']['error']);
+        $this->assertSame(0, $this->db->countCalls('INSERT INTO links'));
+    }
+
+    public function testActualizarConUnAficheDeMasDe600KbPorUrlNoCambiaNada()
+    {
+        $http = (new FakeHttpClient())->responde('93.184.216.34', 200, str_repeat('a', \UploadHandler::MAX_BYTES_EVENTO + 1));
+
+        $r = $this->correrConRed('actualizar_evento', ['evento_id' => 300, 'imagen_url' => 'https://93.184.216.34/afiche.png'], $http);
+
+        $this->assertFalse($r['ok']);
+        $this->assertStringContainsString('para eventos el máximo es 600 KB', $r['datos']['error']);
+        $this->assertSame(0, $this->db->countCalls('UPDATE links'));
+    }
+
+    private function correrConRed($nombre, array $args, FakeHttpClient $http)
+    {
+        return HerramientasMcp::ejecutar($this->db, $this->usuario, $nombre, $args, $this->discoFalso(), $http);
     }
 
     /** Si vienen las dos, gana la que se sube: es la de este momento. */
@@ -377,6 +432,7 @@ class HerramientasMcpTest extends HandlerTestCase
     {
         $this->laPaginaEsSuya();
         $this->db->onSelect('FROM link_groups WHERE page_id', [[20]]);
+        $this->geocodificacionQueAnda();
 
         $r = $this->correr(
             'crear_evento',

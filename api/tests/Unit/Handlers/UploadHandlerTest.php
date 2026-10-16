@@ -4,6 +4,7 @@ namespace Tests\Unit\Handlers;
 
 use FileStorage;
 use Request;
+use Tests\Support\FakeHttpClient;
 use Tests\Support\HandlerTestCase;
 use UploadHandler;
 
@@ -370,6 +371,105 @@ class UploadHandlerTest extends HandlerTestCase
         unlink($destino);
     }
 
+    // ============================================ imágenes de eventos (#6)
+
+    /**
+     * WhatsApp descarta las vistas previas de más de ~600 KB y muestra el
+     * ícono del sitio en lugar del afiche: para eventos el tope es ese.
+     */
+    public function testUnaImagenDeEventoDe600KbPasa()
+    {
+        $req = $this->peticionDeEvento($this->archivo(['size' => UploadHandler::MAX_BYTES_EVENTO]));
+
+        $this->assertStatus(200, UploadHandler::image($this->db, $req, $this->storage()));
+    }
+
+    public function testUnaImagenDeEventoDeUnByteMasSeRechaza()
+    {
+        $storage = $this->storage();
+        $req = $this->peticionDeEvento($this->archivo(['size' => UploadHandler::MAX_BYTES_EVENTO + 1]));
+
+        $res = UploadHandler::image($this->db, $req, $storage);
+
+        $this->assertError(400, $res, 'para eventos el máximo es 600 KB');
+        $this->assertNull($storage->destino, 'la imagen no se guarda');
+    }
+
+    public function testElMensajeDiceCuantoPesaLaImagen()
+    {
+        $req = $this->peticionDeEvento($this->archivo(['size' => 2202009]));
+
+        $res = UploadHandler::image($this->db, $req, $this->storage());
+
+        $this->assertError(400, $res, 'La imagen pesa 2,1 MB; para eventos el máximo es 600 KB');
+    }
+
+    /** Foto de perfil, fondo, logo: siguen con el límite de 5 MB. */
+    public function testOtraImagenDe1MbSiguePasando()
+    {
+        $req = $this->peticion($this->user(), $this->archivo(['size' => 1048576]));
+
+        $this->assertStatus(200, UploadHandler::image($this->db, $req, $this->storage()));
+    }
+
+    public function testUnDestinoDesconocidoUsaElLimiteGeneral()
+    {
+        $req = new Request('POST', [], [], $this->user(), ['image' => $this->archivo(['size' => 1048576])], [], ['destino' => 'perfil']);
+
+        $this->assertStatus(200, UploadHandler::image($this->db, $req, $this->storage()));
+    }
+
+    public function testEnBase64UnaImagenDeEventoGrandeSeRechaza()
+    {
+        $storage = $this->storage();
+        $bytes = str_repeat('a', UploadHandler::MAX_BYTES_EVENTO + 1);
+
+        $r = UploadHandler::guardarBase64(base64_encode($bytes), $storage, UploadHandler::MAX_BYTES_EVENTO);
+
+        $this->assertFalse($r['ok']);
+        $this->assertStringContainsString('para eventos el máximo es 600 KB', $r['error']);
+        $this->assertNull($storage->bytes, 'ni siquiera se escribe el temporal');
+    }
+
+    public function testEnBase64UnaImagenDeEventoChicaPasa()
+    {
+        $r = UploadHandler::guardarBase64(base64_encode($this->pngDeVerdad()), $this->storage(), UploadHandler::MAX_BYTES_EVENTO);
+
+        $this->assertTrue($r['ok']);
+    }
+
+    public function testDesdeUrlUnaImagenDeEventoGrandeSeRechaza()
+    {
+        $http = new FakeHttpClient();
+        $http->responde('93.184.216.34', 200, str_repeat('a', UploadHandler::MAX_BYTES_EVENTO + 1));
+
+        $r = UploadHandler::guardarDesdeUrl('https://93.184.216.34/afiche.png', $this->storage(), $http, UploadHandler::MAX_BYTES_EVENTO);
+
+        $this->assertFalse($r['ok']);
+        $this->assertStringContainsString('para eventos el máximo es 600 KB', $r['error']);
+    }
+
+    /** @dataProvider pesos */
+    public function testDescribirPeso($bytes, $esperado)
+    {
+        $this->assertSame($esperado, UploadHandler::describirPeso($bytes));
+    }
+
+    public function pesos()
+    {
+        return [
+            'apenas pasado' => [614401, '601 KB'],
+            'en KB' => [900 * 1024, '900 KB'],
+            'en MB' => [2202009, '2,1 MB'],
+            'MB redondo' => [3 * 1048576, '3 MB'],
+        ];
+    }
+
+    private function peticionDeEvento(array $file)
+    {
+        return new Request('POST', [], [], $this->user(), ['image' => $file], [], ['destino' => 'evento']);
+    }
+
     // ================================== subida con link de un solo uso
 
     private function permisoVigente(array $overrides = [])
@@ -455,6 +555,22 @@ class UploadHandlerTest extends HandlerTestCase
         $this->assertSame(0, $this->db->countCalls('UPDATE image_uploads'));
     }
 
+    /** El link de un solo uso siempre es para el afiche de un evento. */
+    public function testConTokenRechazaUnaImagenDeMasDe600Kb()
+    {
+        $this->permisoVigente();
+        $this->db->onSelect('SELECT 1 FROM links l', [[1]]);
+        $storage = $this->storage();
+        $storage->leido = str_repeat('a', UploadHandler::MAX_BYTES_EVENTO + 1);
+
+        $r = $this->subirConToken($storage);
+
+        $this->assertSame(400, $r->status);
+        $this->assertStringContainsString('para eventos el máximo es 600 KB', $r->body['error']);
+        $this->assertSame(0, $this->db->countCalls('UPDATE links'));
+        $this->assertSame(0, $this->db->countCalls('UPDATE image_uploads'));
+    }
+
     private function peticion($user, array $file)
     {
         return new Request('POST', [], [], $user, ['image' => $file]);
@@ -515,8 +631,15 @@ class FakeFileStorage extends FileStorage
     public $borrados = [];
 
     /** Bytes de una imagen de verdad: la validación los decodifica. */
+    /** Si se completa, leer() devuelve esto en lugar de la imagen de prueba. */
+    public $leido;
+
     public function leer($ruta)
     {
+        if ($this->leido !== null) {
+            return $this->leido;
+        }
+
         $im = imagecreatetruecolor(8, 8);
         ob_start();
         imagepng($im);
