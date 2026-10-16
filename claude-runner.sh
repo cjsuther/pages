@@ -48,6 +48,17 @@ if [[ -z "$(git config user.name)" || -z "$(git config user.email)" ]]; then
   exit 1
 fi
 
+# Con el lock tomado no hay otro runner trabajando: un issue que sigue en
+# claude-working quedó de una corrida que murió a mitad (reinicio, kill). Se
+# pasa a claude-failed; lo que haya dejado en el clon lo descarta el
+# checkout -f de más abajo.
+for TRABADO in $(gh issue list --repo "$REPO" --label "$LABEL_WORKING" --state open \
+                   --json number --jq '.[].number'); do
+  echo "Issue #$TRABADO quedó en $LABEL_WORKING de una corrida cortada, lo paso a $LABEL_FAILED."
+  gh issue edit "$TRABADO" --repo "$REPO" --remove-label "$LABEL_WORKING" --remove-label "$LABEL_READY" --add-label "$LABEL_FAILED"
+  gh issue comment "$TRABADO" --repo "$REPO" --body "⚠️ La corrida que tomó este issue se cortó antes de terminar (ver los logs del runner). Para reintentarlo, volvé a ponerle $LABEL_READY."
+done
+
 # Un issue por corrida: el más antiguo con claude-ready y sin claude-working
 NUM=$(gh issue list --repo "$REPO" --label "$LABEL_READY" --state open \
         --json number,labels --limit 50 \
