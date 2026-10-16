@@ -41,6 +41,13 @@ trap 'rm -rf "$LOCK"' EXIT
 
 cd "$REPO_DIR"
 
+# Sin nombre y email de git, Claude hace todo el trabajo y no puede commitear:
+# mejor no tomar el issue. Se configura una vez en el clon con git config.
+if [[ -z "$(git config user.name)" || -z "$(git config user.email)" ]]; then
+  echo "Falta git config user.name/user.email en $REPO_DIR, salgo." >&2
+  exit 1
+fi
+
 # Un issue por corrida: el más antiguo con claude-ready y sin claude-working
 NUM=$(gh issue list --repo "$REPO" --label "$LABEL_READY" --state open \
         --json number,labels --limit 50 \
@@ -57,9 +64,13 @@ echo "Tomando issue #$NUM: $TITLE"
 gh issue edit "$NUM" --repo "$REPO" --add-label "$LABEL_WORKING"
 gh issue comment "$NUM" --repo "$REPO" --body "🤖 Claude Code tomó este issue. Log: $(basename "$LOGFILE")"
 
-# Rama limpia desde main
+# Rama limpia desde main. Lo que haya quedado de una corrida anterior se
+# descarta: el clon es del runner, nadie trabaja a mano ahí (lo valioso ya
+# quedó guardado en un stash, ver más abajo). -fd no toca vendor/ ni
+# node_modules/ ni api/config.php, que están en .gitignore.
 git fetch origin "$BASE_BRANCH"
-git checkout -B "$BRANCH" "origin/$BASE_BRANCH"
+git checkout -f -B "$BRANCH" "origin/$BASE_BRANCH"
+git clean -fdq
 
 PROMPT=$(cat <<EOF
 Trabajá sobre el issue #$NUM del repo $REPO.
@@ -130,6 +141,11 @@ if [[ $STATUS -ne 0 ]] || git diff --quiet "origin/$BASE_BRANCH"..HEAD; then
 \`\`\`
 $SUMMARY
 \`\`\`"
+  # Si dejó cambios sin commitear, se guardan en un stash en vez de
+  # arrastrarlos a main (git stash list en el clon para recuperarlos).
+  if [[ -n "$(git status --porcelain)" ]]; then
+    git stash push --include-untracked -m "$BRANCH sin commitear $(date +%Y%m%d-%H%M%S)"
+  fi
   git checkout "$BASE_BRANCH"
   exit 0
 fi
