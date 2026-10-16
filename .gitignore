@@ -40,3 +40,6 @@ __pycache__/
 
 # Cobertura de la API en CI (phpunit --coverage-clover)
 api/coverage.xml
+
+# Configuración local de Claude Code (permisos de cada máquina)
+.claude/settings.local.json

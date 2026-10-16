@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # claude-runner.sh — toma issues con la etiqueta claude-ready y se los pasa a Claude Code.
 # Uso: ./claude-runner.sh   (ideal correrlo cada 5 min con launchd o cron en la Mac mini)
-# Requisitos: gh (autenticado), claude (Claude Code), git. Un worktree limpio en $REPO_DIR.
+# Requisitos: gh (autenticado), claude (Claude Code), git, php y mariadb (brew).
+# Un worktree limpio en $REPO_DIR.
 # Corre con el bash 3.2 de macOS y sin jq ni flock: el JSON se lee con el --jq de gh.
 
 set -euo pipefail
@@ -78,9 +79,41 @@ Si el issue es ambiguo o no se puede resolver con seguridad, no inventes: explic
 EOF
 )
 
+# Permisos: claude-runner-permisos.json (el de main recién bajado, no el de la
+# rama). Sólo se cargan esos y .claude/settings.json del proyecto: nunca el
+# settings.local.json ni el de usuario, que pueden traer bypassPermissions.
+# dontAsk rechaza todo lo que no esté en la lista. Y el sandbox (Seatbelt) vale
+# también para lo que ejecuten los tests: sin ~/.ssh, sin credenciales de gh y
+# con red sólo a GitHub, Packagist y npm. Así Claude no puede llegar al servidor
+# aunque un test haga shell_exec('ssh ...').
+PERMISOS=$(mktemp -t claude-runner-permisos)
+git show "origin/$BASE_BRANCH:claude-runner-permisos.json" > "$PERMISOS"
+
+# MariaDB para los tests de integración, levantada acá afuera: dentro del
+# sandbox mariadbd no arranca. Los tests la usan por RZ_TEST_DB_HOST/PORT, como
+# en el CI (root sin contraseña, sólo en 127.0.0.1). Ruta corta: el socket no
+# admite más de 103 caracteres.
+DB_DIR=$(mktemp -d /tmp/rz-runner-db.XXXXXX)
+limpiar() {
+  [[ -f "$DB_DIR/pid" ]] && kill "$(cat "$DB_DIR/pid")" 2>/dev/null && sleep 2
+  rm -rf "$LOCK" "$PERMISOS" "$DB_DIR"
+}
+trap limpiar EXIT
+
+mariadb-install-db --datadir="$DB_DIR/data" --auth-root-authentication-method=normal \
+  --skip-test-db > "$DB_DIR/install.log" 2>&1
+DB_PORT=$(php -r '$s = stream_socket_server("tcp://127.0.0.1:0"); $n = stream_socket_get_name($s, false); echo substr($n, strrpos($n, ":") + 1);')
+(cd "$DB_DIR" && mariadbd --no-defaults --datadir="$DB_DIR/data" \
+  --bind-address=127.0.0.1 --port="$DB_PORT" --socket=./s --pid-file=./pid --log-error=./error.log \
+  --innodb-buffer-pool-size=32M --innodb-log-file-size=8M --skip-log-bin > /dev/null 2>&1 &)
+for _ in $(seq 75); do nc -z 127.0.0.1 "$DB_PORT" 2>/dev/null && break; sleep 0.2; done
+export RZ_TEST_DB_HOST=127.0.0.1 RZ_TEST_DB_PORT="$DB_PORT"
+
 set +e
-claude -p "$PROMPT" \
-  --allowedTools "Bash,Read,Edit,Write,Grep,Glob" \
+claude -p "$PROMPT" < /dev/null \
+  --setting-sources project \
+  --settings "$PERMISOS" \
+  --permission-mode dontAsk \
   --max-turns 60 \
   --output-format text > "$LOGFILE" 2>&1
 STATUS=$?

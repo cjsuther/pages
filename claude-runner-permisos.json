@@ -1,0 +1,95 @@
+{
+  "env": {
+    "RZ_EXIGIR_BASE": "1"
+  },
+  "permissions": {
+    "allow": [
+      "Read",
+      "Grep",
+      "Glob",
+      "Edit",
+      "Write",
+      "Bash(git status *)",
+      "Bash(git status)",
+      "Bash(git diff *)",
+      "Bash(git diff)",
+      "Bash(git log *)",
+      "Bash(git show *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git rm *)",
+      "Bash(git mv *)",
+      "Bash(git restore *)",
+      "Bash(git grep *)",
+      "Bash(composer install *)",
+      "Bash(composer install)",
+      "Bash(composer dump-autoload *)",
+      "Bash(composer audit *)",
+      "Bash(composer audit)",
+      "Bash(vendor/bin/phpunit *)",
+      "Bash(vendor/bin/phpunit)",
+      "Bash(php tests/esquema.php *)",
+      "Bash(php -l *)",
+      "Bash(npm ci)",
+      "Bash(npm test *)",
+      "Bash(npm test)",
+      "Bash(npm run test:coverage)",
+      "Bash(npm run build)",
+      "Bash(npx vitest *)"
+    ],
+    "deny": [
+      "Bash(git push *)",
+      "Bash(git push)",
+      "Bash(git remote *)",
+      "Bash(git config *)",
+      "Bash(git -c *)",
+      "Bash(git credential *)",
+      "Bash(gh *)",
+      "Bash(ssh *)",
+      "Bash(scp *)",
+      "Bash(sftp *)",
+      "Bash(rsync *)",
+      "Bash(curl *)",
+      "Bash(wget *)",
+      "Bash(./deploy.sh *)",
+      "Bash(./deploy.sh)",
+      "Bash(bash *)",
+      "Bash(sh *)",
+      "Bash(zsh *)",
+      "Read(~/.ssh/**)",
+      "Read(~/.config/gh/**)",
+      "Read(~/.aws/**)",
+      "Read(~/.claude/**)",
+      "Edit(/.github/workflows/**)",
+      "Edit(/.claude/**)",
+      "Edit(/claude-runner.sh)",
+      "Edit(/claude-runner-permisos.json)",
+      "Edit(/deploy.sh)"
+    ]
+  },
+  "sandbox": {
+    "enabled": true,
+    "failIfUnavailable": true,
+    "allowUnsandboxedCommands": false,
+    "autoAllowBashIfSandboxed": false,
+    "filesystem": {
+      "denyRead": [
+        "~/.ssh",
+        "~/.config/gh",
+        "~/.aws",
+        "~/.claude"
+      ]
+    },
+    "network": {
+      "allowLocalBinding": true,
+      "allowedDomains": [
+        "github.com",
+        "codeload.github.com",
+        "objects.githubusercontent.com",
+        "repo.packagist.org",
+        "packagist.org",
+        "registry.npmjs.org"
+      ]
+    }
+  }
+}
