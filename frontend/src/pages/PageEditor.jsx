@@ -10,6 +10,7 @@ import PanelClientes from '../components/PanelClientes';
 import PixelDeMeta from '../components/PixelDeMeta';
 import { analizarEmbed, portadaDe } from '../utils/embeds';
 import { paleta } from '../utils/colores';
+import { MAX_BYTES, excesoImagenEvento } from '../utils/imagenes';
 import MiniaturaPlantilla from '../components/MiniaturaPlantilla';
 import Navigation from '../components/Navigation';
 import { ChevronLeft, ExternalLink } from 'lucide-react';
@@ -347,10 +348,17 @@ function PageEditor() {
     setPage((actual) => ({ ...actual, meta_pixel_id: data.page ? data.page.meta_pixel_id : valor }));
   };
 
-  const uploadImage = async (file) => {
-    const maxSize = 5 * 1024 * 1024;
-    if (file.size > maxSize) {
+  // esEvento: es el afiche de un evento, que tiene un tope menor para que
+  // WhatsApp lo muestre al compartir. La API lo valida igual.
+  const uploadImage = async (file, { esEvento = false } = {}) => {
+    if (file.size > MAX_BYTES) {
       alert('La imagen es muy grande. Máximo 5MB');
+      return null;
+    }
+
+    const exceso = esEvento ? excesoImagenEvento(file) : null;
+    if (exceso) {
+      alert(exceso);
       return null;
     }
 
@@ -362,6 +370,7 @@ function PageEditor() {
 
     const formData = new FormData();
     formData.append('image', file);
+    if (esEvento) formData.append('destino', 'evento');
 
     try {
       const response = await fetch(`${apiUrl}/upload/image.php`, {
@@ -411,7 +420,7 @@ function PageEditor() {
     if (!file) return;
 
     setUploadingLinkImage(true);
-    const url = await uploadImage(file);
+    const url = await uploadImage(file, { esEvento: selectedGroup?.type === 'eventos' });
     setUploadingLinkImage(false);
 
     if (url) {
@@ -1622,6 +1631,8 @@ function PageEditor() {
                     ? 'Sin portada, en la grilla se muestra el contenido tal como lo publica Instagram (máx 5MB)'
                     : selectedGroup.type === 'galeria' && tipoMedia === 'youtube'
                     ? 'Opcional: sin portada se usa la miniatura del video (máx 5MB)'
+                    : selectedGroup.type === 'eventos'
+                    ? 'Sube una imagen (máx 600 KB, para que se vea al compartir en WhatsApp)'
                     : 'Sube una imagen (máx 5MB)'}
                 </p>
               </div>

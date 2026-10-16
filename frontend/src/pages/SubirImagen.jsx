@@ -1,6 +1,7 @@
 import React, { useState, useContext } from 'react';
 import { useParams } from 'react-router-dom';
 import { AuthContext } from '../App';
+import { excesoImagenEvento } from '../utils/imagenes';
 
 /**
  * Página donde se suelta el archivo del afiche.
@@ -26,6 +27,13 @@ function SubirImagen() {
 
   const subir = async (archivo) => {
     if (!archivo) return;
+
+    // Se avisa antes de subir para no quemar el viaje; la API lo valida igual.
+    const exceso = excesoImagenEvento(archivo);
+    if (exceso) {
+      setError(exceso);
+      return;
+    }
 
     setSubiendo(true);
     setError(null);
@@ -97,7 +105,7 @@ function SubirImagen() {
             </label>
 
             <p className="text-xs text-tinta-suave mt-4">
-              JPG, PNG, GIF o WebP, hasta 5 MB. El link sirve una sola vez.
+              JPG, PNG, GIF o WebP, hasta 600 KB. El link sirve una sola vez.
             </p>
 
             {error && <p role="alert" className="text-sm text-red-700 mt-4">{error}</p>}

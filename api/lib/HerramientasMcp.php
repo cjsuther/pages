@@ -58,9 +58,13 @@ class HerramientasMcp
                         'imagen'      => [
                             'type' => 'string',
                             'description' => 'El afiche en base64 (o data URI). Se sube a Rezonar y queda alojado acá. '
-                                . 'Usá esto para subir una imagen; imagen_url es sólo para una que ya esté publicada en otro lado.',
+                                . 'Usá esto para subir una imagen; imagen_url es sólo para una que ya esté publicada en otro lado. '
+                                . 'Máximo 600 KB: si pesa más, WhatsApp no la muestra al compartir el evento.',
                         ],
-                        'imagen_url'  => ['type' => 'string', 'description' => 'URL absoluta de un afiche ya publicado'],
+                        'imagen_url'  => [
+                            'type' => 'string',
+                            'description' => 'URL absoluta de un afiche ya publicado; se descarga y se aloja en Rezonar. Máximo 600 KB.',
+                        ],
                         'url'         => ['type' => 'string', 'description' => 'Enlace de entradas o más info'],
                         'precio_desde' => ['type' => 'number', 'description' => 'Precio de referencia, sólo informativo'],
                     ],
@@ -80,8 +84,8 @@ class HerramientasMcp
                         'hora'        => ['type' => 'string', 'description' => 'HH:MM'],
                         'direccion'   => ['type' => 'string'],
                         'descripcion' => ['type' => 'string'],
-                        'imagen'      => ['type' => 'string', 'description' => 'Afiche nuevo en base64 (o data URI); reemplaza al anterior'],
-                        'imagen_url'  => ['type' => 'string'],
+                        'imagen'      => ['type' => 'string', 'description' => 'Afiche nuevo en base64 (o data URI); reemplaza al anterior. Máximo 600 KB'],
+                        'imagen_url'  => ['type' => 'string', 'description' => 'URL de un afiche ya publicado; se descarga y se aloja en Rezonar. Máximo 600 KB'],
                         'url'         => ['type' => 'string'],
                         'precio_desde' => ['type' => 'number'],
                     ],
@@ -96,7 +100,8 @@ class HerramientasMcp
                     . 'ejecutar. No me mandes el archivo como argumento —los argumentos son texto y una '
                     . 'imagen no entra ahí— ni me pases la ruta, porque el servidor no puede leer el disco '
                     . 'de quien te habla. Si no podés ejecutar comandos ni hacer pedidos HTTP, la respuesta '
-                    . 'trae además un link para que lo suba la persona. Sirve una sola vez y vence en media hora.',
+                    . 'trae además un link para que lo suba la persona. Sirve una sola vez y vence en media hora. '
+                    . 'La imagen puede pesar hasta 600 KB.',
                 'inputSchema' => [
                     'type' => 'object',
                     'properties' => [
@@ -168,7 +173,7 @@ class HerramientasMcp
      * @return array{ok: bool, datos: mixed}
      * @throws InvalidArgumentException si la herramienta no existe
      */
-    public static function ejecutar($db, array $usuario, $nombre, array $args, FileStorage $storage = null)
+    public static function ejecutar($db, array $usuario, $nombre, array $args, FileStorage $storage = null, HttpClient $http = null)
     {
         $metodos = [
             'listar_paginas'      => 'listarPaginas',
@@ -186,7 +191,7 @@ class HerramientasMcp
             throw new InvalidArgumentException("No existe la herramienta '$nombre'");
         }
 
-        return call_user_func([self::class, $metodos[$nombre]], $db, $usuario, $args, $storage);
+        return call_user_func([self::class, $metodos[$nombre]], $db, $usuario, $args, $storage, $http);
     }
 
     // ------------------------------------------------------------- páginas
@@ -229,7 +234,7 @@ class HerramientasMcp
 
     // ------------------------------------------------------------- eventos
 
-    private static function crearEvento($db, array $usuario, array $args, $storage = null)
+    private static function crearEvento($db, array $usuario, array $args, $storage = null, $http = null)
     {
         $pagina = self::pagina($db, $usuario, isset($args['pagina']) ? $args['pagina'] : '');
 
@@ -243,7 +248,7 @@ class HerramientasMcp
             return $coordenadas;
         }
 
-        $imagen = self::imagen($args, $storage);
+        $imagen = self::imagen($args, $storage, $http);
 
         if (!$imagen['ok']) {
             return $imagen;
@@ -270,7 +275,7 @@ class HerramientasMcp
         return self::desdeRespuesta($r, 'evento creado');
     }
 
-    private static function actualizarEvento($db, array $usuario, array $args, $storage = null)
+    private static function actualizarEvento($db, array $usuario, array $args, $storage = null, $http = null)
     {
         $eventoId = isset($args['evento_id']) ? (int) $args['evento_id'] : 0;
 
@@ -288,8 +293,8 @@ class HerramientasMcp
             $cuerpo['event_time'] = self::hora($args['hora']);
         }
 
-        if (isset($args['imagen'])) {
-            $imagen = self::imagen($args, $storage);
+        if (isset($args['imagen']) || !empty($args['imagen_url'])) {
+            $imagen = self::imagen($args, $storage, $http);
 
             if (!$imagen['ok']) {
                 return $imagen;
@@ -437,11 +442,21 @@ class HerramientasMcp
      * otro lado. Si vienen las dos, gana la que se sube: es la que la persona
      * eligió mandar en este momento.
      *
+     * Las dos pasan por el tope de 600 KB de los afiches (#6). Para poder
+     * comprobarlo, `imagen_url` también se descarga y se aloja acá: dejar el
+     * enlace ajeno sería confiar en un peso que el otro sitio puede cambiar.
+     *
      * @return array{ok: bool, url?: string|null, datos?: mixed}
      */
-    private static function imagen(array $args, $storage = null)
+    private static function imagen(array $args, $storage = null, $http = null)
     {
-        if (empty($args['imagen'])) {
+        if (!empty($args['imagen'])) {
+            $valor = $args['imagen'];
+            $esUrl = self::pareceUrl($valor);
+        } elseif (!empty($args['imagen_url'])) {
+            $valor = $args['imagen_url'];
+            $esUrl = true;
+        } else {
             return ['ok' => true, 'url' => isset($args['imagen_url']) ? $args['imagen_url'] : null, 'datos' => null];
         }
 
@@ -450,9 +465,9 @@ class HerramientasMcp
         // casos la imagen termina alojada en Rezonar, que es lo que importa:
         // un enlace prestado deja el evento sin afiche el día que ese sitio
         // cambie la URL.
-        $guardada = self::pareceUrl($args['imagen'])
-            ? UploadHandler::guardarDesdeUrl($args['imagen'], $storage)
-            : UploadHandler::guardarBase64($args['imagen'], $storage);
+        $guardada = $esUrl
+            ? UploadHandler::guardarDesdeUrl($valor, $storage, $http, UploadHandler::MAX_BYTES_EVENTO)
+            : UploadHandler::guardarBase64($valor, $storage, UploadHandler::MAX_BYTES_EVENTO);
 
         if (!$guardada['ok']) {
             return self::mal($guardada['error']);

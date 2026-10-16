@@ -429,6 +429,20 @@ describe('PageEditor — flujos de edición', () => {
       });
     });
 
+    /** El tope de 600 KB es sólo para afiches de eventos (#6). */
+    it('una foto de perfil de 1 MB se sigue subiendo con el límite general', async () => {
+      const { container, llamadas } = await render();
+
+      const inputs = container.querySelectorAll('input[type="file"]');
+      fireEvent.change(inputs[0], { target: { files: [archivo({ bytes: 1024 * 1024 })] } });
+
+      await waitFor(() => {
+        expect(llamadaA(llamadas, 'upload/image.php')).not.toBeNull();
+      });
+      expect(llamadaA(llamadas, 'upload/image.php').options.body.get('destino')).toBeNull();
+      expect(window.alert).not.toHaveBeenCalled();
+    });
+
     it('rechaza archivos de más de 5MB sin llamar a la API', async () => {
       const { container, llamadas } = await render();
 

@@ -6,6 +6,7 @@ import GooglePlacesAutocomplete from '../components/GooglePlacesAutocomplete';
 import PanelEntradas from '../components/PanelEntradas';
 import PanelVentas from '../components/PanelVentas';
 import { analizarEmbed, EJEMPLOS_EMBED } from '../utils/embeds';
+import { MAX_BYTES, excesoImagenEvento } from '../utils/imagenes';
 
 /**
  * Edición de un item (link, imagen o evento) en pantalla completa.
@@ -71,9 +72,18 @@ function ItemEditor() {
   };
 
   const uploadImage = async (file) => {
-    const maxSize = 5 * 1024 * 1024;
-    if (file.size > maxSize) {
+    const esEvento = group.type === 'eventos';
+
+    if (file.size > MAX_BYTES) {
       alert('La imagen es muy grande. Máximo 5MB');
+      return null;
+    }
+
+    // El afiche de un evento tiene un tope menor: más pesado, WhatsApp no lo
+    // muestra al compartir. La API lo valida igual.
+    const exceso = esEvento ? excesoImagenEvento(file) : null;
+    if (exceso) {
+      alert(exceso);
       return null;
     }
 
@@ -85,6 +95,7 @@ function ItemEditor() {
 
     const formData = new FormData();
     formData.append('image', file);
+    if (esEvento) formData.append('destino', 'evento');
 
     try {
       const response = await fetch(`${apiUrl}/upload/image.php`, {
@@ -461,6 +472,8 @@ function ItemEditor() {
                 ? 'Sin portada, en la grilla se muestra el contenido tal como lo publica Instagram (máx 5MB)'
                 : group.type === 'galeria' && tipoMedia === 'youtube'
                 ? 'Opcional: sin portada se usa la miniatura del video (máx 5MB)'
+                : group.type === 'eventos'
+                ? 'Sube una nueva imagen para reemplazar (máx 600 KB, para que se vea al compartir en WhatsApp)'
                 : 'Sube una nueva imagen para reemplazar (máx 5MB)'}
             </p>
           </div>
