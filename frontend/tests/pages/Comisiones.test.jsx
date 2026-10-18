@@ -65,7 +65,8 @@ describe('Comisiones', () => {
       montar();
 
       await screen.findByRole('heading', { name: 'Comisiones cobradas' });
-      expect(screen.getAllByText('Cobrado').length).toBeGreaterThan(0);
+      // El título está antes que los datos: hay que esperar el reporte.
+      expect((await screen.findAllByText('Cobrado')).length).toBeGreaterThan(0);
       expect(screen.getAllByText(/1\.050/).length).toBeGreaterThan(0);
     });
 
