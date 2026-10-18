@@ -16,6 +16,22 @@ class PushSender
     /** @var WebPush|null Se crea perezosamente: instanciarlo firma claves. */
     private $webPush = null;
 
+    /** @var array ['subject','publicKey','privateKey'] */
+    private $vapid;
+
+    /** @var array Opciones del cliente Guzzle (los tests pasan un 'handler' sin red). */
+    private $opcionesHttp;
+
+    /**
+     * @param array|null $vapid        Por defecto, las constantes VAPID_* de config.php
+     * @param array      $opcionesHttp Opciones para el cliente HTTP de la librería
+     */
+    public function __construct(?array $vapid = null, array $opcionesHttp = [])
+    {
+        $this->vapid = $vapid;
+        $this->opcionesHttp = $opcionesHttp;
+    }
+
     /**
      * El `sub` del JWT de VAPID tiene que ser una URL https real o un mailto
      * con dominio existente. FCM acepta cualquier cosa; APNs responde 403 sin
@@ -82,12 +98,12 @@ class PushSender
     {
         if ($this->webPush === null) {
             $this->webPush = new WebPush([
-                'VAPID' => [
+                'VAPID' => $this->vapid !== null ? $this->vapid : [
                     'subject'    => VAPID_SUBJECT,
                     'publicKey'  => VAPID_PUBLIC_KEY,
                     'privateKey' => VAPID_PRIVATE_KEY,
                 ],
-            ]);
+            ], [], 30, $this->opcionesHttp);
             // Menos firmas cuando se envía a muchos dispositivos.
             $this->webPush->setReuseVAPIDHeaders(true);
         }
@@ -108,6 +124,9 @@ class PushSender
                 'endpoint'  => $suscripcion['endpoint'],
                 'publicKey' => $suscripcion['p256dh_key'],
                 'authToken' => $suscripcion['auth_key'],
+                // Sin esto la librería usa aesgcm, el borrador viejo. aes128gcm
+                // es el estándar (RFC 8291) y lo soportan todos los navegadores.
+                'contentEncoding' => 'aes128gcm',
             ]),
             json_encode($payload, JSON_UNESCAPED_UNICODE)
         );
