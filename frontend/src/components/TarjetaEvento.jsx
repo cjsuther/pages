@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { MapPin, Clock, Navigation as Brujula } from 'lucide-react';
 import { cuandoEs, horaDe, localidadDe } from '../utils/eventos';
 import { Avatar } from './ui';

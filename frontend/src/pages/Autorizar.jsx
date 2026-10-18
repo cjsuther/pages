@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router';
 import { AuthContext } from '../App';
 import { DESTINO } from './Login';
 

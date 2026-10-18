@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link } from 'react-router';
 import { Check, Clock, X, Loader2, MapPin, Calendar } from 'lucide-react';
 import { formatearPrecio } from '../utils/entradas';
 import { evento } from '../utils/metaPixel';

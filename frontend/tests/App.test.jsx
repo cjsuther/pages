@@ -2,7 +2,7 @@ import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import App from '../src/App';
-import { mockFetch } from './helpers/api';
+import { mockFetch, cuerpoDe, llamadaA } from './helpers/api';
 
 describe('App', () => {
   beforeEach(() => {
@@ -191,6 +191,50 @@ describe('App', () => {
       render(<App />);
 
       expect(await screen.findByText('Evento no encontrado')).toBeInTheDocument();
+    });
+
+    it('/venta/:clave toma la clave de la dirección', async () => {
+      const { llamadas } = mockFetch({ 'public/venta.php': { status: 404, body: { error: 'Link vencido' } } });
+      window.history.pushState({}, '', '/venta/clave-123');
+
+      render(<App />);
+
+      expect(await screen.findByText('Link vencido')).toBeInTheDocument();
+      expect(cuerpoDe(llamadaA(llamadas, 'public/venta.php'))).toEqual({ clave: 'clave-123' });
+    });
+
+    it('sin sesión, el editor de un ítem redirige al login', async () => {
+      window.history.pushState({}, '', '/page/5/item/7');
+
+      render(<App />);
+
+      await waitFor(() => {
+        expect(window.location.pathname).toBe('/login');
+      });
+    });
+  });
+
+  describe('carcajada', () => {
+    it('sin sesión, /shows manda al login de carcajada', async () => {
+      window.history.pushState({}, '', '/shows?carcajada');
+
+      render(<App />);
+
+      await waitFor(() => {
+        expect(window.location.pathname).toBe('/login');
+      });
+      expect(screen.getByText('Carcajada')).toBeInTheDocument();
+    });
+
+    it('una ruta desconocida vuelve a la portada', async () => {
+      window.history.pushState({}, '', '/no-existe?carcajada');
+
+      render(<App />);
+
+      // La portada pide sesión, así que termina en el login.
+      await waitFor(() => {
+        expect(window.location.pathname).toBe('/login');
+      });
     });
   });
 

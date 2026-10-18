@@ -1,5 +1,5 @@
 import React, { useState, useContext } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams } from 'react-router';
 import { AuthContext } from '../App';
 import { excesoImagenEvento } from '../utils/imagenes';
 

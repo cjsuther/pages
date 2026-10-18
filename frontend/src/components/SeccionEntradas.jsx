@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 import { Check, AlertTriangle, Loader2, ExternalLink } from 'lucide-react';
 import { formatearPorcentaje } from '../utils/comisiones';
 import BuscadorDeVentas from './BuscadorDeVentas';

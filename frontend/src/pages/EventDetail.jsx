@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link } from 'react-router';
 import { Calendar, MapPin, ExternalLink, ArrowLeft } from 'lucide-react';
 import { AuthContext } from '../App';
 import BotonEntradas, { vendeEntradas } from '../components/BotonEntradas';

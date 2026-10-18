@@ -1,7 +1,7 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, fireEvent } from '@testing-library/react';
-import { MemoryRouter, Routes, Route, useNavigate } from 'react-router-dom';
+import { MemoryRouter, Routes, Route, useNavigate } from 'react-router';
 import { usePageTracking } from '../../src/hooks/usePageTracking';
 
 function Sonda() {

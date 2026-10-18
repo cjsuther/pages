@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { Bell, Compass, Globe2, AlertTriangle } from 'lucide-react';
 import { AuthContext } from '../App';
 import ActivarNotificaciones from './ActivarNotificaciones';
