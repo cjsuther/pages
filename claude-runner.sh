@@ -7,6 +7,14 @@
 
 set -euo pipefail
 
+# git checkout reescribe este archivo si cambió en main, y bash lo va leyendo
+# mientras corre: se ejecuta desde una copia.
+if [[ -z "${CLAUDE_RUNNER_COPIA:-}" ]]; then
+  COPIA=$(mktemp -t claude-runner)
+  cp "$0" "$COPIA"
+  CLAUDE_RUNNER_COPIA="$COPIA" exec /bin/bash "$COPIA" "$@"
+fi
+
 # launchd arranca con un PATH mínimo (/usr/bin:/bin:/usr/sbin:/sbin): gh viene
 # de Homebrew y claude de ~/.local/bin.
 export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin:$PATH"
@@ -37,7 +45,7 @@ if ! mkdir "$LOCK" 2>/dev/null; then
   mkdir "$LOCK" || { echo "Otro runner tomó el lock, salgo."; exit 0; }
 fi
 echo $$ > "$LOCK/pid"
-trap 'rm -rf "$LOCK"' EXIT
+trap 'rm -rf "$LOCK" "$CLAUDE_RUNNER_COPIA"' EXIT
 
 cd "$REPO_DIR"
 
@@ -119,7 +127,7 @@ git show "origin/$BASE_BRANCH:claude-runner-permisos.json" > "$PERMISOS"
 DB_DIR=$(mktemp -d /tmp/rz-runner-db.XXXXXX)
 limpiar() {
   [[ -f "$DB_DIR/pid" ]] && kill "$(cat "$DB_DIR/pid")" 2>/dev/null && sleep 2
-  rm -rf "$LOCK" "$PERMISOS" "$DB_DIR"
+  rm -rf "$LOCK" "$PERMISOS" "$DB_DIR" "$CLAUDE_RUNNER_COPIA"
 }
 trap limpiar EXIT
 
@@ -143,7 +151,7 @@ claude -p "$PROMPT" < /dev/null \
   --setting-sources project \
   --settings "$PERMISOS" \
   --permission-mode dontAsk \
-  --max-turns 60 \
+  --max-turns 150 \
   --output-format text > "$LOGFILE" 2>&1
 STATUS=$?
 set -e
