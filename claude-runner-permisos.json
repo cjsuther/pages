@@ -65,6 +65,8 @@
       "Bash(wget *)",
       "Bash(./deploy.sh *)",
       "Bash(./deploy.sh)",
+      "Bash(./deploy-auto.sh)",
+      "Bash(./deploy-auto.sh *)",
       "Bash(bash *)",
       "Bash(sh *)",
       "Bash(zsh *)",
@@ -76,7 +78,8 @@
       "Edit(/.claude/**)",
       "Edit(/claude-runner.sh)",
       "Edit(/claude-runner-permisos.json)",
-      "Edit(/deploy.sh)"
+      "Edit(/deploy.sh)",
+      "Edit(/deploy-auto.sh)"
     ]
   },
   "sandbox": {

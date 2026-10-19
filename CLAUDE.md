@@ -3,10 +3,11 @@
 Plataforma de eventos tipo linktree con venta de entradas (Mercado Pago), SSO, notificaciones push e integración MCP. Producción: rezon.ar y carcajada.rezon.ar (Hostinger, PHP 8.3, MariaDB 11.8). Dinero real de organizadores pasa por acá: cualquier cambio en cobros, entradas o QR es de alto riesgo.
 
 ## Estructura
-- `/frontend` — React 18 + React Router 6, Vite 6, TailwindCSS 3, lucide-react. Service worker en `frontend/public/sw.js` (push). Tests en `frontend/tests/`.
+- `/frontend` — React 18 + React Router 7, Vite 6, TailwindCSS 3, lucide-react. Service worker en `frontend/public/sw.js` (push). Tests en `frontend/tests/`.
 - `/api` — PHP sin framework (8.3 en producción; `composer.json` acepta >=7.4). Un archivo `.php` por endpoint (`api/public/`, `api/entradas/`, `api/pages/`…) que carga `bootstrap.php` y llama a un handler: `Api::run(['CompartirHandler', 'venta'])`. Handlers en `api/handlers/`, clases compartidas en `api/lib/` (autoload en `lib/autoload.php`). JWT propio para login (`api/JWT.php`).
 - `database.sql` y `migration_*.sql` — esquema base y migraciones sueltas, en la raíz del repo. El orden está en `migraciones.txt` (raíz), con rutas relativas a la raíz.
 - `deploy.sh` — tests, build del frontend, backup, diff de esquema, rsync/SSH. **Nunca lo ejecutes.**
+- `deploy-auto.sh` — corre `deploy.sh` solo cuando entra un commit a `main` con el CI en verde: **mergear un PR es desplegarlo a producción** en unos minutos. Por eso una migración nueva tiene que estar aplicada en producción antes de mergear (si no, `deploy.sh` frena el deploy).
 - Importadores de agendas (Boletería, Niceto, Colón, C Art Media, Movistar Arena; Eventbrite está desactivado) en `api/lib/importadores/`, registrados en `api/lib/Importaciones.php`. Corren por cron con `api/importar/diario.php`. No cambies su contrato de salida sin un test que lo cubra.
 
 ## Configuración y entorno
@@ -55,7 +56,7 @@ cd frontend && npm run build
 6. Resumen final de 5 líneas: qué cambió, qué riesgo ves, qué habría que verificar a mano en producción.
 
 ## Lo que NO hacer
-- No ejecutar `deploy.sh`, ni rsync, ni nada contra producción.
+- No ejecutar `deploy.sh` ni `deploy-auto.sh`, ni rsync, ni nada contra producción.
 - No hacer push ni crear PRs: eso lo hace el runner.
 - No modificar `main` directamente.
 - No instalar dependencias nuevas de Composer o npm sin justificarlo en el resumen.
