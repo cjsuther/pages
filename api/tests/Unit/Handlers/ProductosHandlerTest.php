@@ -568,6 +568,22 @@ class ProductosHandlerTest extends HandlerTestCase
         $this->assertSame([], $mailer->enviados);
     }
 
+    /** Justo el caso del botón: el cron agotó los intentos y el mail nunca salió. */
+    public function testReenviaAunqueElCronHayaAgotadoLosIntentos()
+    {
+        $mailer = new \Tests\Support\FakeMailer();
+        $nuncaSalio = ['mail_enviado_en' => null, 'mail_intentos' => 3, 'mail_error' => 'SMTP caído'];
+        $this->db->onSelect('WHERE o.codigo = ?', [$this->ordenDeLaBase($nuncaSalio)]);
+        $this->db->onSelect('FROM pages p WHERE p.id = ?', [['1' => 1]]);
+        $this->db->onSelect('WHERE o.codigo = ?', [$this->ordenDeLaBase($nuncaSalio)]);
+
+        $res = $this->reenviar('ABCDEF123456', 'default', $mailer);
+
+        $this->assertStatus(200, $res);
+        $this->assertCount(1, $mailer->enviados);
+        $this->assertTrue($this->db->ran('mail_error = NULL'));
+    }
+
     public function testSiFallaElCorreoSeAvisa()
     {
         $mailer = (new \Tests\Support\FakeMailer())->fallarCon('SMTP caído');

@@ -180,7 +180,7 @@ class ProductosHandler
             return Response::error(409, 'Sólo se puede reenviar el link de una compra pagada');
         }
 
-        $resultado = CorreoProductos::enviar($db, $orden['codigo'], $mailer, true);
+        $resultado = CorreoProductos::reenviarPorElOrganizador($db, $orden['codigo'], $mailer);
 
         if ($resultado['enviado']) {
             return Response::ok(['enviado' => true, 'mensaje' => 'Le reenviamos el link a ' . $orden['email']]);

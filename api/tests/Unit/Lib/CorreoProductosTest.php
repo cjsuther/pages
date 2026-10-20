@@ -147,6 +147,45 @@ class CorreoProductosTest extends TestCase
         $this->assertSame([], $mailer->enviados);
     }
 
+    /** El SMTP falló en los tres intentos del cron: el botón del panel igual manda. */
+    public function testElReenvioDelOrganizadorMandaConLosIntentosAgotados()
+    {
+        $this->hayOrden(['mail_intentos' => 3]);
+        $mailer = new FakeMailer();
+
+        $r = CorreoProductos::reenviarPorElOrganizador($this->db, self::CODIGO, $mailer);
+
+        $this->assertTrue($r['enviado']);
+        $this->assertCount(1, $mailer->enviados);
+        $this->assertTrue($this->db->ran('SET mail_enviado_en = NOW(), mail_intentos = mail_intentos + 1, mail_error = NULL'));
+    }
+
+    public function testElReenvioDelOrganizadorRespetaElMinimoEntreEnvios()
+    {
+        $this->hayOrden(['mail_enviado_en' => date('Y-m-d H:i:s')]);
+        $mailer = new FakeMailer();
+
+        $r = CorreoProductos::reenviarPorElOrganizador($this->db, self::CODIGO, $mailer);
+
+        $this->assertSame('se envió hace instantes', $r['motivo']);
+        $this->assertSame([], $mailer->enviados);
+    }
+
+    /**
+     * El reenvío del formulario público (un gratis pedido otra vez) lo puede
+     * disparar cualquiera: ese sigue sin pasar de los intentos.
+     */
+    public function testElReenvioPublicoNoPasaDeLosIntentos()
+    {
+        $this->hayOrden(['mail_intentos' => 3]);
+        $mailer = new FakeMailer();
+
+        $r = CorreoProductos::enviar($this->db, self::CODIGO, $mailer, true);
+
+        $this->assertSame('se agotaron los reintentos', $r['motivo']);
+        $this->assertSame([], $mailer->enviados);
+    }
+
     public function testElCronReintentaLasPendientes()
     {
         $this->db->onSelect('FROM product_orders WHERE estado', [['codigo' => self::CODIGO]]);

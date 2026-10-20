@@ -33,6 +33,26 @@ class CorreoProductos
      */
     public static function enviar($db, $codigo, $mailer = null, $reenviar = false)
     {
+        return self::mandar($db, $codigo, $mailer, $reenviar, false);
+    }
+
+    /**
+     * El botón "Reenviar link" del panel de ventas.
+     *
+     * A diferencia del reenvío público, no mira MAX_INTENTOS: es justo para
+     * cuando el cron se cansó de reintentar y quien compró nunca recibió el
+     * link. Lo puede apretar sólo quien administra la página, con sesión. El
+     * mínimo entre reenvíos sigue valiendo si el mail ya había salido.
+     *
+     * @return array{enviado: bool, motivo: string}
+     */
+    public static function reenviarPorElOrganizador($db, $codigo, $mailer = null)
+    {
+        return self::mandar($db, $codigo, $mailer, true, true);
+    }
+
+    private static function mandar($db, $codigo, $mailer, $reenviar, $porElOrganizador)
+    {
         $orden = OrdenesDeProductos::orden($db, $codigo);
 
         if ($orden === null) {
@@ -51,7 +71,7 @@ class CorreoProductos
             if (strtotime($orden['mail_enviado_en']) > time() - self::MINUTOS_ENTRE_REENVIOS * 60) {
                 return ['enviado' => false, 'motivo' => 'se envió hace instantes'];
             }
-        } elseif ((int) $orden['mail_intentos'] >= self::MAX_INTENTOS) {
+        } elseif (!$porElOrganizador && (int) $orden['mail_intentos'] >= self::MAX_INTENTOS) {
             return ['enviado' => false, 'motivo' => 'se agotaron los reintentos'];
         }
 

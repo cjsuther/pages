@@ -75,26 +75,32 @@ function PanelVentasProductos({ linkId = null, pageId = null, apiUrl, token, nom
   const exportar = async () => {
     // Con la cabecera de sesión no puede ser un enlace directo: se trae el
     // archivo y se descarga desde memoria.
-    const r = await fetch(
-      `${apiUrl}/productos/ventas.php?${filtro}&formato=excel&nombre=${encodeURIComponent(nombre)}`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
+    setAviso(null);
 
-    if (!r.ok) {
-      setAviso({ tipo: 'error', texto: 'No pudimos generar el archivo' });
-      return;
+    try {
+      const r = await fetch(
+        `${apiUrl}/productos/ventas.php?${filtro}&formato=excel&nombre=${encodeURIComponent(nombre)}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      if (!r.ok) {
+        setAviso({ tipo: 'error', texto: 'No pudimos generar el archivo' });
+        return;
+      }
+
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const enlace = document.createElement('a');
+
+      enlace.href = url;
+      enlace.download = nombreDelExcel(nombre);
+      document.body.appendChild(enlace);
+      enlace.click();
+      document.body.removeChild(enlace);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setAviso({ tipo: 'error', texto: 'No pudimos conectarnos al servidor' });
     }
-
-    const blob = await r.blob();
-    const url = URL.createObjectURL(blob);
-    const enlace = document.createElement('a');
-
-    enlace.href = url;
-    enlace.download = nombreDelExcel(nombre);
-    document.body.appendChild(enlace);
-    enlace.click();
-    document.body.removeChild(enlace);
-    URL.revokeObjectURL(url);
   };
 
   const reenviar = async (orden) => {
