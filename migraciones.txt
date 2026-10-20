@@ -43,3 +43,4 @@ migration_carcajada_invitados.sql
 migration_tipos_de_entrada.sql
 migration_promos.sql
 migration_productos_digitales.sql
+migration_ordenes_de_productos.sql
