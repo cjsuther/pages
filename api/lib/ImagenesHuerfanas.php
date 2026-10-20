@@ -29,6 +29,9 @@ class ImagenesHuerfanas
      */
     const HORAS_DE_GRACIA = 48;
 
+    /** Dentro de uploads/: lo que no es público ni es una imagen. */
+    const CARPETA_PRIVADA = 'privado';
+
     /**
      * Dónde puede estar en uso una imagen.
      *
@@ -113,6 +116,13 @@ class ImagenesHuerfanas
                 continue;
             }
 
+            // Lo de uploads/privado/ no es una imagen ni la referencia
+            // ninguna de las columnas de arriba: para esta cuenta, todo eso
+            // estaría "sin usar". Son los archivos de los productos digitales.
+            if (strpos($nombre, '/') !== false || $nombre === self::CARPETA_PRIVADA) {
+                continue;
+            }
+
             if (isset($enUso[$nombre]) || $modificado > $limite) {
                 continue;
             }
@@ -121,5 +131,29 @@ class ImagenesHuerfanas
         }
 
         return $huerfanas;
+    }
+
+    /**
+     * Los archivos sueltos de un directorio, con su fecha de modificación.
+     *
+     * Sólo el primer nivel y sólo archivos: las carpetas —uploads/privado/,
+     * con los productos digitales— no se recorren nunca.
+     *
+     * @return array nombre => timestamp de modificación
+     */
+    public static function listar($directorio)
+    {
+        $directorio = rtrim($directorio, '/') . '/';
+        $archivos = [];
+
+        foreach (@scandir($directorio) ?: [] as $nombre) {
+            $ruta = $directorio . $nombre;
+
+            if (is_file($ruta)) {
+                $archivos[$nombre] = filemtime($ruta);
+            }
+        }
+
+        return $archivos;
     }
 }

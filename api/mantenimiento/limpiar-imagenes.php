@@ -35,19 +35,9 @@ $directorio = dirname(__DIR__) . '/uploads/';
 $database = new Database();
 $db = $database->connect();
 
-/** Lo que hay en el disco, con su fecha de modificación. */
+/** Lo que hay en el disco, con su fecha de modificación. Nunca entra a uploads/privado/. */
 $listar = function () use ($directorio) {
-    $archivos = [];
-
-    foreach (scandir($directorio) ?: [] as $nombre) {
-        $ruta = $directorio . $nombre;
-
-        if (is_file($ruta)) {
-            $archivos[$nombre] = filemtime($ruta);
-        }
-    }
-
-    return $archivos;
+    return ImagenesHuerfanas::listar($directorio);
 };
 
 $huerfanas = ImagenesHuerfanas::huerfanas($db, $listar);

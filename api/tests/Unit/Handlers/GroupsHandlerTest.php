@@ -3,6 +3,8 @@
 namespace Tests\Unit\Handlers;
 
 use GroupsHandler;
+use ProductosDigitales;
+use Tests\Support\FakeDisco;
 use Tests\Support\HandlerTestCase;
 
 class GroupsHandlerTest extends HandlerTestCase
@@ -294,6 +296,89 @@ class GroupsHandlerTest extends HandlerTestCase
         $res = GroupsHandler::detail($this->db, $this->delete(['id' => '5'], $this->user()));
 
         $this->assertError(500, $res, 'Server error: fallo');
+    }
+
+    // =================================================== productos digitales
+
+    public function testSePuedeCrearUnGrupoDeProductos()
+    {
+        $this->autorizarPagina();
+        $this->db->onInsert('INSERT INTO link_groups', 20);
+
+        $res = GroupsHandler::index($this->db, $this->post(
+            ['page_id' => 3, 'title' => 'Tienda', 'type' => 'productos'],
+            $this->user()
+        ));
+
+        $this->assertStatus(201, $res);
+        $this->assertSame('productos', $this->db->paramsFor('INSERT INTO link_groups')[2]);
+    }
+
+    /** @dataProvider cambiosDeTipoProhibidos */
+    public function testUnGrupoNoPuedeEntrarNiSalirDeProductos($actual, $nuevo)
+    {
+        $this->autorizarGrupo();
+        $this->db->onSelect('SELECT type FROM link_groups', [['type' => $actual]]);
+
+        $res = GroupsHandler::detail($this->db, $this->put(['type' => $nuevo], $this->user(), ['id' => '5']));
+
+        $this->assertError(400, $res, 'productos digitales');
+        $this->assertNoWrites();
+    }
+
+    public function cambiosDeTipoProhibidos()
+    {
+        return [
+            'productos a links' => ['productos', 'links'],
+            'links a productos' => ['links', 'productos'],
+            'eventos a productos' => ['eventos', 'productos'],
+        ];
+    }
+
+    public function testUnGrupoDeProductosPuedeCambiarDeTitulo()
+    {
+        $this->autorizarGrupo();
+        $this->db->onSelect('SELECT type FROM link_groups', [['type' => 'productos']]);
+
+        $res = GroupsHandler::detail($this->db, $this->put(['title' => 'Tienda', 'type' => 'productos'], $this->user(), ['id' => '5']));
+
+        $this->assertStatus(200, $res);
+    }
+
+    public function testUnTipoDesconocidoNoSeGuardaAlEditar()
+    {
+        $this->autorizarGrupo();
+
+        $res = GroupsHandler::detail($this->db, $this->put(['type' => 'redes'], $this->user(), ['id' => '5']));
+
+        $this->assertError(400, $res, 'Tipo de grupo desconocido');
+        $this->assertNoWrites();
+    }
+
+    public function testBorrarUnGrupoBorraLosArchivosDeSusProductos()
+    {
+        $disco = new FakeDisco();
+        $rutas = ['productos/' . str_repeat('a', 32), 'productos/' . str_repeat('b', 32)];
+        $this->autorizarGrupo();
+        $this->db->onSelect('dp.archivo_ruta IS NOT NULL', array_map(function ($r) { return [$r]; }, $rutas));
+        $this->db->onWrite('DELETE FROM link_groups', 1);
+
+        $res = GroupsHandler::detail($this->db, $this->delete(['id' => '5'], $this->user()), $disco);
+
+        $this->assertStatus(200, $res);
+        $this->assertSame(array_map([ProductosDigitales::class, 'rutaEnDisco'], $rutas), $disco->borrados);
+    }
+
+    public function testSiFallaElBorradoDelGrupoLosArchivosQuedan()
+    {
+        $disco = new FakeDisco();
+        $this->autorizarGrupo();
+        $this->db->onSelect('dp.archivo_ruta IS NOT NULL', [['productos/' . str_repeat('a', 32)]]);
+        $this->db->failOn('DELETE FROM link_groups', 'fallo');
+
+        GroupsHandler::detail($this->db, $this->delete(['id' => '5'], $this->user()), $disco);
+
+        $this->assertSame([], $disco->borrados);
     }
 
     // ------------------------------------------------------------- ayudantes

@@ -168,4 +168,77 @@ class ImagenesHuerfanasTest extends HandlerTestCase
 
         $this->assertSame([], ImagenesHuerfanas::huerfanas($this->db, $this->enDisco([])));
     }
+
+    // ---------------------------------------------------- uploads/privado/
+
+    /**
+     * Los archivos de los productos digitales no los referencia ninguna de
+     * las columnas de imágenes: para esta cuenta estarían todos "sin usar".
+     * El listado del disco no tiene que entrar nunca a uploads/privado/.
+     */
+    public function testElListadoNoEntraALaCarpetaPrivada()
+    {
+        $uploads = $this->uploadsDePrueba();
+
+        $listado = ImagenesHuerfanas::listar($uploads);
+
+        $this->assertSame(['afiche.jpg'], array_keys($listado));
+
+        $this->borrarUploadsDePrueba($uploads);
+    }
+
+    /** De punta a punta: un producto viejo y sin referencias no se borra. */
+    public function testUnProductoDigitalViejoNoSeBorra()
+    {
+        $this->seUsan();
+        $uploads = $this->uploadsDePrueba();
+        $listar = function () use ($uploads) {
+            return ImagenesHuerfanas::listar($uploads);
+        };
+
+        $r = ImagenesHuerfanas::huerfanas($this->db, $listar, time() + 365 * 86400);
+
+        $this->assertSame(['afiche.jpg'], $r);
+
+        $this->borrarUploadsDePrueba($uploads);
+    }
+
+    /** Aunque alguien cambie el listado, la carpeta y lo de adentro quedan afuera. */
+    public function testLaCarpetaPrivadaNoSeConsideraNuncaUnaImagen()
+    {
+        $this->seUsan();
+
+        $r = ImagenesHuerfanas::huerfanas($this->db, $this->enDisco([
+            'privado' => $this->viejo(),
+            'privado/productos/' . str_repeat('a', 32) => $this->viejo(),
+        ]));
+
+        $this->assertSame([], $r);
+    }
+
+    /** uploads/ con una imagen suelta y un producto en privado/productos/. */
+    private function uploadsDePrueba()
+    {
+        $uploads = sys_get_temp_dir() . '/rezonar-uploads-' . uniqid();
+        mkdir($uploads . '/privado/productos', 0755, true);
+        file_put_contents($uploads . '/afiche.jpg', 'x');
+        file_put_contents($uploads . '/privado/.htaccess', 'Require all denied');
+        file_put_contents($uploads . '/privado/productos/' . str_repeat('a', 32), 'pdf');
+
+        foreach (['/afiche.jpg', '/privado/productos/' . str_repeat('a', 32)] as $archivo) {
+            touch($uploads . $archivo, $this->viejo());
+        }
+
+        return $uploads;
+    }
+
+    private function borrarUploadsDePrueba($uploads)
+    {
+        unlink($uploads . '/privado/productos/' . str_repeat('a', 32));
+        unlink($uploads . '/privado/.htaccess');
+        unlink($uploads . '/afiche.jpg');
+        rmdir($uploads . '/privado/productos');
+        rmdir($uploads . '/privado');
+        rmdir($uploads);
+    }
 }

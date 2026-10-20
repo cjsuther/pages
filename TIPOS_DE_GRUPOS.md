@@ -148,6 +148,39 @@ URL: https://evento.com/registro
 Imagen: workshop-react.jpg
 ```
 
+## Tipo 4: Productos digitales (`productos`)
+
+Archivos que se venden (o se regalan) para descargar: un PDF, plantillas, un pack de fotos, un audio.
+
+> **Estado:** parte 1 de 3 (#17). El organizador carga los productos desde el editor, pero el grupo
+> **todavía no se muestra en la página pública ni se puede comprar**. `PublicHandler` y las cinco
+> plantillas lo dejan afuera a propósito. La compra y la descarga son la parte 2; la galería pública
+> y la lista de ventas, la parte 3.
+
+### Campos
+- **Título** (`links.text`) y **descripción** (`links.description`)
+- **Imagen** (`links.image_url`), igual que en la galería
+- **Precio** (`digital_products.precio`, en pesos): 0 = gratis
+- **Archivo**: uno solo, de hasta 50 MB. Si son varios, un ZIP.
+
+La URL de un producto queda vacía, como la de los eventos. Lo propio del producto vive en la tabla
+`digital_products` (una fila por link, con `ON DELETE CASCADE`).
+
+### Dónde queda el archivo
+- En `api/uploads/privado/productos/`, con un nombre aleatorio y sin extensión. El nombre original se
+  guarda en `digital_products.archivo_nombre` y es con el que se va a descargar.
+- Dentro de `uploads/` porque `deploy.sh` lo excluye del rsync con `--delete`: otra carpeta de `api/`
+  se borraría en cada deploy.
+- La carpeta tiene un `.htaccess` con `Require all denied` que escribe el propio código antes de
+  guardar el primer archivo (no se puede desplegar: `uploads/` está excluido). Ninguna URL lo sirve.
+- El limpiador de imágenes (`api/mantenimiento/limpiar-imagenes.php`) no entra a `uploads/privado/`.
+- Borrar un producto, su grupo o su página borra también el archivo del disco. Reemplazarlo borra el
+  anterior.
+
+### Restricciones
+- Un grupo de productos no puede cambiar de tipo, ni otro grupo pasar a serlo.
+- Si la página no tiene Mercado Pago conectado y el precio es mayor que 0, el editor lo avisa.
+
 ## Características Comunes
 
 ### En el Editor
@@ -222,7 +255,26 @@ Body (Eventos):
   "event_address": "Av. Principal 123",
   "event_address_link": "https://maps.google.com/..."
 }
+
+Body (Productos digitales):
+{
+  "group_id": 4,
+  "url": "",
+  "text": "Guía de viaje",
+  "description": "...",
+  "image_url": "...",
+  "precio": 2500
+}
 ```
+
+### Subir el archivo de un producto
+```
+POST /api/productos/archivo.php?link_id=10
+Content-Type: multipart/form-data, campo "archivo"
+```
+Hasta 50 MB y de cualquier tipo. Responde con el producto (`archivo_nombre`, `archivo_bytes`,
+`archivo_tipo`); la ruta en disco no sale nunca de la API. Si el archivo pasa el máximo, responde 413
+con un mensaje que lo dice.
 
 ## Mejores Prácticas
 

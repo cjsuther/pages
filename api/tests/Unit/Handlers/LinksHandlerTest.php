@@ -4,6 +4,8 @@ namespace Tests\Unit\Handlers;
 
 use LinksHandler;
 use Notificador;
+use ProductosDigitales;
+use Tests\Support\FakeDisco;
 use Tests\Support\HandlerTestCase;
 
 class LinksHandlerTest extends HandlerTestCase
@@ -666,5 +668,189 @@ class LinksHandlerTest extends HandlerTestCase
         $params = $this->db->paramsFor('UPDATE links SET');
         $this->assertContains('-31.4', $params);
         $this->assertContains('-64.2', $params);
+    }
+
+    // ===================================================== productos digitales
+
+    private function grupoDeProductos()
+    {
+        $this->autorizarGrupo();
+        $this->db->onSelect('SELECT id, type FROM link_groups', [['id' => 7, 'type' => 'productos']]);
+        $this->db->onInsert('INSERT INTO links', 55);
+    }
+
+    public function testCrearUnProductoGuardaElLinkYSuPrecio()
+    {
+        $this->grupoDeProductos();
+        $this->db->onSelect('LEFT JOIN digital_products', [['id' => 55, 'text' => 'Guía', 'precio' => '2500.00']]);
+
+        $res = LinksHandler::index($this->db, $this->post([
+            'group_id' => 7, 'url' => '', 'text' => 'Guía', 'description' => 'Una guía',
+            'image_url' => 'https://rezon.ar/api/uploads/tapa.jpg', 'precio' => '2500',
+        ], $this->user()));
+
+        $this->assertStatus(201, $res);
+        $this->assertSame('2500.00', $res->body['link']['precio']);
+        $this->assertSame([55, 2500.0], $this->db->paramsFor('INSERT INTO digital_products'));
+        $this->assertTrue($this->db->committed);
+
+        $link = $this->db->paramsFor('INSERT INTO links');
+        $this->assertSame([7, '', 'Guía', 'https://rezon.ar/api/uploads/tapa.jpg', 'Una guía', 0], $link);
+    }
+
+    /** Un producto no lleva a ninguna parte: la URL queda vacía, como en los eventos. */
+    public function testUnProductoNoGuardaUrl()
+    {
+        $this->grupoDeProductos();
+
+        LinksHandler::index($this->db, $this->post(
+            ['group_id' => 7, 'url' => 'https://otro.sitio', 'text' => 'Guía'],
+            $this->user()
+        ));
+
+        $this->assertSame('', $this->db->paramsFor('INSERT INTO links')[1]);
+    }
+
+    public function testUnProductoSinPrecioEsGratis()
+    {
+        $this->grupoDeProductos();
+
+        LinksHandler::index($this->db, $this->post(['group_id' => 7, 'url' => '', 'text' => 'Guía'], $this->user()));
+
+        $this->assertSame([55, 0.0], $this->db->paramsFor('INSERT INTO digital_products'));
+    }
+
+    public function testUnProductoConPrecioInvalidoNoSeCrea()
+    {
+        $this->grupoDeProductos();
+
+        $res = LinksHandler::index($this->db, $this->post(
+            ['group_id' => 7, 'url' => '', 'text' => 'Guía', 'precio' => '-10'],
+            $this->user()
+        ));
+
+        $this->assertError(400, $res, 'precio');
+        $this->assertNoWrites();
+    }
+
+    /** Sin su fila de producto, el link quedaría a medias: se deshace todo. */
+    public function testSiFallaLaFilaDelProductoNoQuedaElLinkSuelto()
+    {
+        $this->grupoDeProductos();
+        $this->db->failOn('INSERT INTO digital_products', 'sin conexión');
+
+        $res = LinksHandler::index($this->db, $this->post(['group_id' => 7, 'url' => '', 'text' => 'Guía'], $this->user()));
+
+        $this->assertStatus(500, $res);
+        $this->assertTrue($this->db->rolledBack);
+        $this->assertFalse($this->db->committed);
+    }
+
+    /** A un producto no se le avisa a los seguidores: todavía no se ve. */
+    public function testCrearUnProductoNoNotificaANadie()
+    {
+        $this->grupoDeProductos();
+
+        LinksHandler::index($this->db, $this->post(['group_id' => 7, 'url' => '', 'text' => 'Guía'], $this->user()));
+
+        $this->assertSame(0, $this->db->countCalls('page_followers'));
+    }
+
+    private function esProducto()
+    {
+        $this->autorizarLink();
+        $this->db->onSelect('SELECT l.id, lg.type', [['id' => 5, 'type' => 'productos']]);
+    }
+
+    public function testEditarElPrecioDeUnProducto()
+    {
+        $this->esProducto();
+        $this->db->onSelect('LEFT JOIN digital_products', [['id' => 5, 'precio' => '900.00']]);
+
+        $res = LinksHandler::detail($this->db, $this->put(['precio' => '900'], $this->user(), ['id' => '5']));
+
+        $this->assertStatus(200, $res);
+        $this->assertSame('900.00', $res->body['link']['precio']);
+        $this->assertSame([5, 900.0], $this->db->paramsFor('INSERT INTO digital_products'));
+        $this->assertSame(0, $this->db->countCalls('UPDATE links SET'), 'sólo cambió el precio');
+    }
+
+    public function testEditarTituloYPrecioDeUnProducto()
+    {
+        $this->esProducto();
+
+        LinksHandler::detail($this->db, $this->put(
+            ['text' => 'Guía 2', 'description' => 'Nueva', 'precio' => 0],
+            $this->user(),
+            ['id' => '5']
+        ));
+
+        $this->assertSame(['Guía 2', 'Nueva', 5], $this->db->paramsFor('UPDATE links SET'));
+        $this->assertSame([5, 0.0], $this->db->paramsFor('INSERT INTO digital_products'));
+    }
+
+    public function testUnPrecioInvalidoNoCambiaNada()
+    {
+        $this->esProducto();
+
+        $res = LinksHandler::detail($this->db, $this->put(
+            ['text' => 'Guía', 'precio' => 'mucho'],
+            $this->user(),
+            ['id' => '5']
+        ));
+
+        $this->assertError(400, $res, 'precio');
+        $this->assertNoWrites();
+    }
+
+    /** En un link común "precio" no significa nada y no se guarda en ningún lado. */
+    public function testEnUnLinkComunElPrecioSeIgnora()
+    {
+        $this->autorizarLink();
+        $this->db->onSelect('SELECT l.id, lg.type', [['id' => 5, 'type' => 'links']]);
+
+        $res = LinksHandler::detail($this->db, $this->put(['precio' => 100], $this->user(), ['id' => '5']));
+
+        $this->assertError(400, $res, 'No fields to update');
+        $this->assertSame(0, $this->db->countCalls('digital_products'));
+    }
+
+    public function testBorrarUnProductoBorraSuArchivo()
+    {
+        $disco = new FakeDisco();
+        $ruta = 'productos/' . str_repeat('c', 32);
+        $this->autorizarLink();
+        $this->db->onSelect('SELECT * FROM digital_products WHERE link_id', [['link_id' => 5, 'archivo_ruta' => $ruta]]);
+        $this->db->onWrite('DELETE FROM links', 1);
+
+        $res = LinksHandler::detail($this->db, $this->delete(['id' => '5'], $this->user()), $disco);
+
+        $this->assertStatus(200, $res);
+        $this->assertSame([ProductosDigitales::rutaEnDisco($ruta)], $disco->borrados);
+    }
+
+    public function testBorrarUnProductoSinArchivoNoBorraNadaDelDisco()
+    {
+        $disco = new FakeDisco();
+        $this->autorizarLink();
+        $this->db->onSelect('SELECT * FROM digital_products WHERE link_id', [['link_id' => 5, 'archivo_ruta' => null]]);
+
+        LinksHandler::detail($this->db, $this->delete(['id' => '5'], $this->user()), $disco);
+
+        $this->assertSame([], $disco->borrados);
+    }
+
+    /** Si la base no lo borró, el archivo tiene que seguir ahí. */
+    public function testSiFallaElBorradoElArchivoQueda()
+    {
+        $disco = new FakeDisco();
+        $this->autorizarLink();
+        $this->db->onSelect('SELECT * FROM digital_products WHERE link_id', [['link_id' => 5, 'archivo_ruta' => 'productos/' . str_repeat('c', 32)]]);
+        $this->db->failOn('DELETE FROM links', 'bloqueada');
+
+        $res = LinksHandler::detail($this->db, $this->delete(['id' => '5'], $this->user()), $disco);
+
+        $this->assertStatus(500, $res);
+        $this->assertSame([], $disco->borrados);
     }
 }

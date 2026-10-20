@@ -93,6 +93,10 @@ class LinksHandler
                 }
             }
 
+            if ($group && $group['type'] === 'productos') {
+                return self::crearProducto($db, $req);
+            }
+
             $stmt = $db->prepare('INSERT INTO links (group_id, url, url_text, embed_url, text, image_url, description, position, event_date, event_time, event_address, event_latitude, event_longitude, event_maps_url, precio_desde) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
             $stmt->execute([
                 $req->input('group_id'),
@@ -137,9 +141,52 @@ class LinksHandler
         }
     }
 
+    const ERROR_PRECIO = 'El precio tiene que ser un número igual o mayor que 0';
+
+    /**
+     * Alta de un producto digital: el link y su fila de producto, juntos.
+     *
+     * El archivo no viene acá: se sube después a productos/archivo.php, que
+     * necesita el id del producto. La URL queda vacía, como en los eventos:
+     * un producto no lleva a ninguna parte, se compra.
+     */
+    private static function crearProducto($db, Request $req)
+    {
+        $precio = ProductosDigitales::precio($req->input('precio'));
+
+        if ($precio === null) {
+            return Response::error(400, self::ERROR_PRECIO);
+        }
+
+        $db->beginTransaction();
+
+        try {
+            $stmt = $db->prepare('INSERT INTO links (group_id, url, text, image_url, description, position) VALUES (?, ?, ?, ?, ?, ?)');
+            $stmt->execute([
+                $req->input('group_id'),
+                '',
+                $req->input('text'),
+                self::valorONull($req->input('image_url')),
+                $req->input('description'),
+                $req->input('position', 0),
+            ]);
+
+            $linkId = $db->lastInsertId();
+            ProductosDigitales::guardarPrecio($db, $linkId, $precio);
+
+            $db->commit();
+        } catch (Exception $e) {
+            $db->rollBack();
+
+            return Response::serverError($e->getMessage());
+        }
+
+        return Response::created(['link' => ProductosDigitales::linkConProducto($db, $linkId)]);
+    }
+
     // ----------------------------------------------------------------- detail
 
-    public static function detail($db, Request $req)
+    public static function detail($db, Request $req, ?FileStorage $storage = null)
     {
         $linkId = (int) $req->param('id');
 
@@ -156,7 +203,7 @@ class LinksHandler
         }
 
         if ($req->method === 'DELETE') {
-            return self::destroy($db, $req, $linkId);
+            return self::destroy($db, $req, $linkId, $storage === null ? new FileStorage() : $storage);
         }
 
         return Response::methodNotAllowed();
@@ -185,25 +232,48 @@ class LinksHandler
                 }
             }
 
+            $esProducto = $linkData && $linkData['type'] === 'productos';
+            $precio = null;
+
+            if ($esProducto && $req->has('precio')) {
+                $precio = ProductosDigitales::precio($req->input('precio'));
+
+                if ($precio === null) {
+                    return Response::error(400, self::ERROR_PRECIO);
+                }
+            }
+
             list($fields, $values) = self::camposAActualizar($req);
 
-            if (empty($fields)) {
+            // A un producto se le puede cambiar sólo el precio, que no es
+            // una columna de links.
+            if (empty($fields) && $precio === null) {
                 return Response::error(400, 'No fields to update');
             }
 
-            $values[] = $linkId;
-            $stmt = $db->prepare('UPDATE links SET ' . implode(', ', $fields) . ' WHERE id = ?');
-            $stmt->execute($values);
+            if (!empty($fields)) {
+                $values[] = $linkId;
+                $stmt = $db->prepare('UPDATE links SET ' . implode(', ', $fields) . ' WHERE id = ?');
+                $stmt->execute($values);
 
-            // Lo que se toca a mano queda congelado: el importador diario
-            // actualiza el resto pero no vuelve a pisar esto. Sin la marca,
-            // corregir el título de un show importado duraría hasta la
-            // madrugada siguiente.
-            Importador::marcarEditados($db, $linkId, self::nombresDeCampos($fields));
+                // Lo que se toca a mano queda congelado: el importador diario
+                // actualiza el resto pero no vuelve a pisar esto. Sin la marca,
+                // corregir el título de un show importado duraría hasta la
+                // madrugada siguiente.
+                Importador::marcarEditados($db, $linkId, self::nombresDeCampos($fields));
+            }
+
+            if ($precio !== null) {
+                ProductosDigitales::guardarPrecio($db, $linkId, $precio);
+            }
 
             // Si el evento vende, su registro guarda el título y la fecha
             // nuevos: son los que se van a ver si algún día se borra.
             Clientes::actualizarEvento($db, $linkId);
+
+            if ($esProducto) {
+                return Response::ok(['link' => ProductosDigitales::linkConProducto($db, $linkId)]);
+            }
 
             $stmt = $db->prepare('SELECT * FROM links WHERE id = ?');
             $stmt->execute([$linkId]);
@@ -216,11 +286,23 @@ class LinksHandler
         }
     }
 
-    private static function destroy($db, Request $req, $linkId)
+    private static function destroy($db, Request $req, $linkId, FileStorage $storage)
     {
         try {
             if (!PageAccess::canManageLink($db, $linkId, $req->userId())) {
                 return Response::notFound('Link not found');
+            }
+
+            // Si es un producto, su archivo se va con él. La fila se borra
+            // sola (ON DELETE CASCADE); el disco no.
+            $producto = ProductosDigitales::delLink($db, $linkId);
+
+            if ($producto !== null) {
+                $motivo = ProductosDigitales::motivoParaNoBorrar($db, $linkId);
+
+                if ($motivo !== null) {
+                    return Response::error(409, $motivo);
+                }
             }
 
             // Las compras sobreviven al evento colgadas de su registro. Se
@@ -230,6 +312,10 @@ class LinksHandler
 
             $stmt = $db->prepare('DELETE FROM links WHERE id = ?');
             $stmt->execute([$linkId]);
+
+            if ($producto !== null && !empty($producto['archivo_ruta'])) {
+                ProductosDigitales::borrarArchivos([$producto['archivo_ruta']], $storage);
+            }
 
             return Response::ok(['message' => 'Link deleted successfully']);
 

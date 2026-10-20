@@ -108,6 +108,7 @@ require_once __DIR__ . '/Support/FakeStatement.php';
 require_once __DIR__ . '/Support/FakeHttpClient.php';
 require_once __DIR__ . '/Support/FakePushSender.php';
 require_once __DIR__ . '/Support/FakeMailer.php';
+require_once __DIR__ . '/Support/FakeDisco.php';
 require_once __DIR__ . '/Support/HandlerTestCase.php';
 require_once __DIR__ . '/Support/BaseDescartable.php';
 require_once __DIR__ . '/Support/Esquema.php';

@@ -14,6 +14,15 @@ class PublicHandler
     const LIMITE_RESULTADOS_BUSQUEDA = 10;
     const DIAS_RANGO_EVENTOS = 30;
 
+    /**
+     * Los grupos que se muestran en la página pública.
+     *
+     * Es una lista de los que sí, y no de los que no, para que un tipo nuevo
+     * no se publique solo: las plantillas dibujan como links todo lo que no
+     * reconocen. Productos digitales todavía no se muestra (#17).
+     */
+    const TIPOS_PUBLICOS = ['links', 'galeria', 'eventos'];
+
     // ------------------------------------------------------------------- page
 
     /** Página pública completa, tal como la consume el frontend y el index.php de OG tags. */
@@ -48,7 +57,9 @@ class PublicHandler
 
             $stmt = $db->prepare('SELECT * FROM link_groups WHERE page_id = ? ORDER BY position, id');
             $stmt->execute([$page['id']]);
-            $groups = $stmt->fetchAll();
+            $groups = array_values(array_filter($stmt->fetchAll(), function ($group) {
+                return in_array($group['type'], self::TIPOS_PUBLICOS, true);
+            }));
 
             foreach ($groups as &$group) {
                 if ($group['type'] == 'eventos') {
