@@ -227,4 +227,48 @@ describe('ItemEditor — productos digitales', () => {
       expect(await screen.findByText(/Para cobrar tenés que conectar Mercado Pago/)).toBeInTheDocument();
     });
   });
+
+  // #19: como un evento, un producto tiene sus ventas en otra pestaña.
+  describe('pestañas', () => {
+    const ventas = {
+      ordenes: [{
+        id: 1, codigo: 'AAAABBBBCCCC', nombre: 'Ana', email: 'ana@test.local', telefono: null,
+        total: 2500, moneda: 'ARS', estado: 'pagada', creado_en: '2026-10-01 10:00:00',
+        descargas: 1, primera_descarga_en: '2026-10-02 09:00:00', producto: 'Guía de viaje',
+        producto_borrado: false, link_id: 100,
+      }],
+      resumen: { pagadas: 1, recaudado: 2500, descargaron: 1 },
+    };
+
+    it('tiene Datos y Ventas, y empieza en Datos', async () => {
+      await render();
+
+      const nav = screen.getByRole('navigation', { name: 'Secciones del producto' });
+      expect(nav).toHaveTextContent('Datos');
+      expect(nav).toHaveTextContent('Ventas');
+      expect(nav).not.toHaveTextContent('Entradas');
+      expect(screen.getByLabelText('Título')).toBeInTheDocument();
+    });
+
+    it('Ventas muestra las ventas del producto con la columna Descargó', async () => {
+      const mock = mockFetch({
+        'pages/detail.php': { page: pagina() },
+        'entradas/credenciales.php': { cobros: { configurado: false } },
+        'productos/ventas.php': ventas,
+      });
+      renderConProviders(<ItemEditor />, {
+        auth: crearAuth({ token: 'tok-123', user: usuarioDePrueba() }),
+        route: '/page/5/item/100',
+        path: '/page/:id/item/:linkId',
+      });
+      await screen.findByRole('button', { name: 'Guardar' });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Ventas' }));
+
+      expect(await screen.findByText('Sí · 1 vez')).toBeInTheDocument();
+      expect(screen.getByRole('columnheader', { name: 'Descargó' })).toBeInTheDocument();
+      expect(screen.queryByLabelText('Título')).not.toBeInTheDocument();
+      expect(mock.llamadas.find((l) => l.url.includes('productos/ventas.php')).url).toContain('link_id=100');
+    });
+  });
 });
