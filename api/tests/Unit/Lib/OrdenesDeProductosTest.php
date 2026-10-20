@@ -247,4 +247,20 @@ class OrdenesDeProductosTest extends TestCase
         $this->assertNull(OrdenesDeProductos::token(['token_cifrado' => 'basura']));
         $this->assertNull(OrdenesDeProductos::token([]));
     }
+
+    // ---------------------------------------------------------------- ventas
+
+    public function testLaColumnaDescargoDiceCuantasVeces()
+    {
+        $this->assertSame('No', OrdenesDeProductos::descripcionDeDescargas(['descargas' => 0]));
+        $this->assertSame('Sí · 1 vez', OrdenesDeProductos::descripcionDeDescargas(['descargas' => '1']));
+        $this->assertSame('Sí · 4 veces', OrdenesDeProductos::descripcionDeDescargas(['descargas' => 4]));
+    }
+
+    public function testLasVentasSoloSeFiltranPorProductoOPorPagina()
+    {
+        $this->expectException(\InvalidArgumentException::class);
+
+        OrdenesDeProductos::ventas($this->db, 'grupo', 1);
+    }
 }

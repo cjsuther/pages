@@ -7,16 +7,17 @@ import SeccionRedes from '../components/SeccionRedes';
 import SeccionEntradas from '../components/SeccionEntradas';
 import PanelMetricas from '../components/PanelMetricas';
 import PanelClientes from '../components/PanelClientes';
+import PanelVentasProductos from '../components/PanelVentasProductos';
 import PixelDeMeta from '../components/PixelDeMeta';
 import ArchivoDeProducto from '../components/ArchivoDeProducto';
 import AvisoMercadoPago from '../components/AvisoMercadoPago';
-import { describirPrecio, excesoArchivoProducto, subirArchivoDeProducto } from '../utils/productos';
+import { describirPrecio, esOculto, excesoArchivoProducto, subirArchivoDeProducto } from '../utils/productos';
 import { analizarEmbed, portadaDe } from '../utils/embeds';
 import { paleta } from '../utils/colores';
 import { MAX_BYTES, excesoImagenEvento } from '../utils/imagenes';
 import MiniaturaPlantilla from '../components/MiniaturaPlantilla';
 import Navigation from '../components/Navigation';
-import { ChevronLeft, ExternalLink } from 'lucide-react';
+import { ChevronLeft, ExternalLink, EyeOff } from 'lucide-react';
 
 /**
  * Los colores que se manejan desde el administrador, y qué pinta cada uno.
@@ -60,6 +61,7 @@ const SECCIONES = [
   { clave: 'redes',     etiqueta: 'Redes sociales' },
   { clave: 'entradas',  etiqueta: 'Entradas' },
   { clave: 'clientes',  etiqueta: 'Clientes' },
+  { clave: 'productos', etiqueta: 'Ventas de productos' },
   { clave: 'metricas',  etiqueta: 'Métricas' },
   { clave: 'admins',    etiqueta: 'Administradores', soloDueno: true },
 ];
@@ -1079,6 +1081,19 @@ function PageEditor() {
           <PanelClientes pageId={id} apiUrl={apiUrl} token={token} slug={page.url_slug} />
         )}
 
+        {/* Las de todos los productos, también los borrados: el link de un
+            producto borrado ya no existe y su pestaña Ventas tampoco. */}
+        {seccion === 'productos' && (
+          <div className="bg-white border border-borde rounded-2xl p-6 sm:p-8 mb-8">
+            <h2 className="text-2xl font-bold mb-2 tracking-tight">Ventas de productos</h2>
+            <p className="text-sm text-tinta-suave mb-6">
+              Las ventas de todos los productos digitales de la página, incluidos los que ya
+              borraste, y quién ya descargó su archivo.
+            </p>
+            <PanelVentasProductos pageId={id} apiUrl={apiUrl} token={token} nombre={page.url_slug} />
+          </div>
+        )}
+
         {seccion === 'metricas' && (
           <>
             <PanelMetricas pageId={id} slug={page.url_slug} />
@@ -1223,7 +1238,7 @@ function PageEditor() {
                   <li>
                     <strong className="text-tinta-media">Productos digitales —</strong> archivos
                     para vender o regalar: un PDF, plantillas, un pack de fotos, un audio.
-                    Por ahora se cargan acá y todavía no se muestran en tu página.
+                    Se compran desde tu página y el link de descarga llega por mail.
                   </li>
                 </ul>
                 <p className="text-xs text-tinta-suave mt-3">
@@ -1353,7 +1368,9 @@ function PageEditor() {
                             ) : (
                             <div
                               key={link.id}
-                              className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 p-3 bg-papel-hueso rounded-xl border border-borde hover:bg-papel-hueso"
+                              className={`flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 p-3 bg-papel-hueso rounded-xl border border-borde hover:bg-papel-hueso ${
+                                group.type === 'productos' && esOculto(link.oculto) ? 'opacity-60' : ''
+                              }`}
                             >
                               {portadaDe(link) && (
                                 <img
@@ -1382,6 +1399,12 @@ function PageEditor() {
                                     {describirPrecio(link.precio)}
                                     {' · '}
                                     {link.archivo_nombre || <span className="text-red-700">Sin archivo</span>}
+                                  </p>
+                                )}
+                                {group.type === 'productos' && esOculto(link.oculto) && (
+                                  <p className="text-xs text-tinta-suave mt-1 inline-flex items-center gap-1">
+                                    <EyeOff className="w-3.5 h-3.5" aria-hidden="true" />
+                                    Oculto: no se muestra en tu página
                                   </p>
                                 )}
                                 {link.event_due == '1' && (
@@ -1499,7 +1522,7 @@ function PageEditor() {
                   {newGroup.type === 'links' && 'Lista de enlaces con descripción'}
                   {newGroup.type === 'galeria' && 'Cuadrícula de imágenes'}
                   {newGroup.type === 'eventos' && 'Eventos con fecha, hora y ubicación'}
-                  {newGroup.type === 'productos' && 'Archivos para vender o regalar. Todavía no se muestran en tu página.'}
+                  {newGroup.type === 'productos' && 'Archivos para vender o regalar desde tu página. El link de descarga llega por mail.'}
                 </p>
               </div>
               <div className="flex gap-3 pt-4">

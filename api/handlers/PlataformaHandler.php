@@ -39,15 +39,61 @@ class PlataformaHandler
 
         list($where, $params) = self::rango($req);
 
+        // Entradas y productos digitales se cobran igual (misma comisión, mismo
+        // Mercado Pago) pero viven en tablas distintas. Se consulta cada una
+        // por su lado y se suman acá: las consultas de entradas quedan como
+        // estaban, y sus números no pueden cambiar por sumar productos.
+        $porTipo = [];
+        $meses = [];
+        $paginas = [];
+        $revisar = [];
+
+        foreach (self::FUENTES as $tipo => $fuente) {
+            $porTipo[$tipo] = self::resumen($db, $fuente, $where, $params);
+            $meses[$tipo] = self::porMes($db, $fuente, $where, $params);
+            $paginas[$tipo] = self::porPagina($db, $fuente, $where, $params);
+            $revisar[$tipo] = self::sinCobrar($db, $fuente, $where, $params);
+        }
+
         return Response::ok([
-            'desde'   => $req->param('desde', ''),
-            'hasta'   => $req->param('hasta', ''),
-            'resumen' => self::resumen($db, $where, $params),
-            'meses'   => self::porMes($db, $where, $params),
-            'paginas' => self::porPagina($db, $where, $params),
-            'revisar' => self::sinCobrar($db, $where, $params),
+            'desde'    => $req->param('desde', ''),
+            'hasta'    => $req->param('hasta', ''),
+            'resumen'  => self::numeros(self::sumar(array_values($porTipo))),
+            'por_tipo' => $porTipo,
+            'meses'    => self::juntar($meses, 'mes', 'mes'),
+            'paginas'  => self::juntar($paginas, 'id', 'cobrada'),
+            'revisar'  => self::juntarRevisar($revisar),
         ]);
     }
+
+    /**
+     * De dónde sale cada tipo de venta. Las claves son las de por_tipo.
+     *
+     * Un producto borrado ya no tiene link: su página sale de la foto que
+     * guarda digital_products. Lo mismo su nombre.
+     */
+    const FUENTES = [
+        'entradas' => [
+            'tabla' => 'ticket_orders',
+            'item'  => 'l.text',
+            'joins' => '
+            INNER JOIN links l ON l.id = o.link_id
+            INNER JOIN link_groups lg ON lg.id = l.group_id
+            INNER JOIN pages p ON p.id = lg.page_id',
+        ],
+        'productos' => [
+            'tabla' => 'product_orders',
+            'item'  => 'COALESCE(l.text, dp.titulo)',
+            'joins' => '
+            INNER JOIN digital_products dp ON dp.id = o.product_id
+            LEFT JOIN links l ON l.id = dp.link_id
+            LEFT JOIN link_groups lg ON lg.id = l.group_id
+            INNER JOIN pages p ON p.id = COALESCE(lg.page_id, dp.page_id)',
+        ],
+    ];
+
+    /** Lo que se suma de una fila. */
+    const SUMABLES = ['ventas', 'recaudado', 'pedida', 'cobrada', 'sin_dato'];
 
     // ------------------------------------------------------------- internos
 
@@ -92,19 +138,20 @@ class PlataformaHandler
             COALESCE(SUM(CASE WHEN o.mp_comision_cobrada IS NULL THEN 1 ELSE 0 END), 0) AS sin_dato';
     }
 
-    private static function resumen($db, $where, array $params)
+    private static function resumen($db, array $fuente, $where, array $params)
     {
-        $stmt = $db->prepare('SELECT ' . self::SUMAS() . " FROM ticket_orders o WHERE $where");
+        $stmt = $db->prepare('SELECT ' . self::SUMAS() . " FROM {$fuente['tabla']} o WHERE $where");
         $stmt->execute($params);
+        $fila = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        return self::numeros($stmt->fetch(PDO::FETCH_ASSOC));
+        return self::numeros($fila ?: self::ceros());
     }
 
-    private static function porMes($db, $where, array $params)
+    private static function porMes($db, array $fuente, $where, array $params)
     {
         $stmt = $db->prepare("
             SELECT DATE_FORMAT(o.pagada_en, '%Y-%m') AS mes, " . self::SUMAS() . "
-            FROM ticket_orders o
+            FROM {$fuente['tabla']} o
             WHERE $where AND o.pagada_en IS NOT NULL
             GROUP BY mes
             ORDER BY mes DESC
@@ -114,14 +161,12 @@ class PlataformaHandler
         return array_map([self::class, 'numeros'], $stmt->fetchAll(PDO::FETCH_ASSOC));
     }
 
-    private static function porPagina($db, $where, array $params)
+    private static function porPagina($db, array $fuente, $where, array $params)
     {
         $stmt = $db->prepare('
             SELECT p.id, p.title, p.url_slug, ' . self::SUMAS() . "
-            FROM ticket_orders o
-            INNER JOIN links l ON l.id = o.link_id
-            INNER JOIN link_groups lg ON lg.id = l.group_id
-            INNER JOIN pages p ON p.id = lg.page_id
+            FROM {$fuente['tabla']} o
+            {$fuente['joins']}
             WHERE $where
             GROUP BY p.id, p.title, p.url_slug
             ORDER BY cobrada DESC
@@ -138,16 +183,14 @@ class PlataformaHandler
      * y no entró, y casi siempre significa que esa página no conectó su cuenta
      * por OAuth.
      */
-    private static function sinCobrar($db, $where, array $params)
+    private static function sinCobrar($db, array $fuente, $where, array $params)
     {
         $stmt = $db->prepare("
             SELECT o.codigo, o.pagada_en, o.total, o.comision AS pedida,
                    o.mp_comision_cobrada AS cobrada,
-                   l.text AS evento, p.title AS pagina, p.url_slug
-            FROM ticket_orders o
-            INNER JOIN links l ON l.id = o.link_id
-            INNER JOIN link_groups lg ON lg.id = l.group_id
-            INNER JOIN pages p ON p.id = lg.page_id
+                   {$fuente['item']} AS evento, p.title AS pagina, p.url_slug
+            FROM {$fuente['tabla']} o
+            {$fuente['joins']}
             WHERE $where
               AND o.mp_comision_cobrada IS NOT NULL
               AND o.mp_comision_cobrada < o.comision
@@ -165,6 +208,83 @@ class PlataformaHandler
         }
 
         return $filas;
+    }
+
+    private static function ceros()
+    {
+        return array_fill_keys(self::SUMABLES, 0);
+    }
+
+    /** Suma las columnas sumables de varias filas. */
+    private static function sumar(array $filas)
+    {
+        $total = self::ceros();
+
+        foreach ($filas as $fila) {
+            foreach (self::SUMABLES as $columna) {
+                $total[$columna] += isset($fila[$columna]) ? $fila[$columna] : 0;
+            }
+        }
+
+        return $total;
+    }
+
+    /**
+     * Junta las filas de entradas y de productos que comparten clave (el mes,
+     * la página), sumándolas. Cada fila lleva también cuántas de sus ventas
+     * son de productos, para distinguirlas en el detalle.
+     *
+     * @param array  $porTipo tipo => filas
+     * @param string $clave   la columna que identifica la fila
+     * @param string $orden   la columna por la que se ordena, de mayor a menor
+     */
+    private static function juntar(array $porTipo, $clave, $orden)
+    {
+        $juntas = [];
+
+        foreach ($porTipo as $tipo => $filas) {
+            foreach ($filas as $fila) {
+                $k = (string) $fila[$clave];
+
+                if (!isset($juntas[$k])) {
+                    $juntas[$k] = array_merge($fila, self::ceros(), ['ventas_productos' => 0]);
+                }
+
+                foreach (self::SUMABLES as $columna) {
+                    $juntas[$k][$columna] += $fila[$columna];
+                }
+
+                if ($tipo === 'productos') {
+                    $juntas[$k]['ventas_productos'] += $fila['ventas'];
+                }
+            }
+        }
+
+        $juntas = array_map([self::class, 'numeros'], array_values($juntas));
+
+        usort($juntas, function ($a, $b) use ($orden) {
+            return $b[$orden] <=> $a[$orden];
+        });
+
+        return $juntas;
+    }
+
+    /** La lista a revisar de los dos tipos, la más reciente primero, con el mismo tope. */
+    private static function juntarRevisar(array $porTipo)
+    {
+        $filas = [];
+
+        foreach ($porTipo as $tipo => $deEseTipo) {
+            foreach ($deEseTipo as $fila) {
+                $filas[] = $fila + ['tipo' => $tipo === 'productos' ? 'producto' : 'entrada'];
+            }
+        }
+
+        usort($filas, function ($a, $b) {
+            return strcmp((string) $b['pagada_en'], (string) $a['pagada_en']);
+        });
+
+        return array_slice($filas, 0, self::LIMITE_REVISAR);
     }
 
     /** MySQL devuelve todo como texto; el frontend hace cuentas con esto. */

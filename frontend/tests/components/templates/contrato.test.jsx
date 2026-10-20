@@ -89,25 +89,90 @@ describe.each(PLANTILLAS)('%s', (nombre, Plantilla) => {
   // Las páginas se ven siempre en formato mobile, también en una pantalla
   // grande: por el teléfono entra casi todo el mundo, y así una página no se
   // ve de dos maneras distintas.
-  // Los productos digitales todavía no se venden (#17). La API no los manda a
-  // la página pública, pero si alguna vez llegaran, ninguna plantilla los
-  // tiene que dibujar: las cinco tratan como links lo que no reconocen.
+  // Los productos digitales se ven en las cinco (#19), con el mismo componente
+  // y el estilo de cada una. Con varios, de a uno como un carrusel.
   describe('productos digitales', () => {
-    it('no muestra un grupo de productos aunque llegue', () => {
+    const producto = (overrides = {}) => ({
+      id: 400,
+      text: 'Guía secreta',
+      description: 'Todo lo que hay que saber',
+      image_url: 'https://img/guia.jpg',
+      precio: 2500,
+      archivo_nombre: 'guia.pdf',
+      archivo_bytes: 2 * 1024 * 1024,
+      ...overrides,
+    });
+
+    const conProductos = (productos) => pagina({
+      groups: [
+        { id: 40, title: 'Tienda', type: 'productos', links: productos },
+        grupoDeLinks([link()]),
+      ],
+    });
+
+    it('muestra el grupo con su producto entero', () => {
+      renderConProviders(<Plantilla page={conProductos([producto()])} />);
+
+      expect(screen.getByText('Tienda')).toBeInTheDocument();
+      expect(screen.getByText('Guía secreta')).toBeInTheDocument();
+      expect(screen.getByText('Todo lo que hay que saber')).toBeInTheDocument();
+      expect(screen.getByAltText('Guía secreta')).toHaveAttribute('src', 'https://img/guia.jpg');
+      expect(screen.getByText(/2\.500/)).toBeInTheDocument();
+      expect(screen.getByText('guia.pdf')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Comprar/ })).toBeInTheDocument();
+      expect(screen.getByText('Mis Links')).toBeInTheDocument();
+    });
+
+    it('un producto gratis dice Gratis y se descarga gratis', () => {
+      renderConProviders(<Plantilla page={conProductos([producto({ precio: 0 })])} />);
+
+      expect(screen.getByText('Gratis')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Descargar gratis/ })).toBeInTheDocument();
+    });
+
+    it('con un solo producto no hay flechas ni puntos', () => {
+      renderConProviders(<Plantilla page={conProductos([producto()])} />);
+
+      expect(screen.queryByRole('button', { name: 'Producto siguiente' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Ver producto/ })).not.toBeInTheDocument();
+    });
+
+    it('con varios se recorren de a uno con flechas y puntos', () => {
       renderConProviders(
-        <Plantilla
-          page={pagina({
-            groups: [
-              { id: 40, title: 'Tienda', type: 'productos', links: [link({ id: 400, text: 'Guía secreta', url: '' })] },
-              grupoDeLinks([link()]),
-            ],
-          })}
-        />
+        <Plantilla page={conProductos([producto(), producto({ id: 401, text: 'Mapa' }), producto({ id: 402, text: 'Pack' })])} />
       );
 
-      expect(screen.queryByText('Tienda')).not.toBeInTheDocument();
-      expect(screen.queryByText('Guía secreta')).not.toBeInTheDocument();
-      expect(screen.getByText('Mis Links')).toBeInTheDocument();
+      expect(screen.getByRole('region', { name: 'Tienda' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Producto anterior' })).toBeDisabled();
+      expect(screen.getAllByRole('button', { name: /Ver producto/ })).toHaveLength(3);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Producto siguiente' }));
+
+      expect(screen.getByRole('button', { name: 'Ver producto 2 de 3' })).toHaveAttribute('aria-current', 'true');
+      expect(screen.getByRole('button', { name: 'Producto anterior' })).toBeEnabled();
+    });
+
+    it('el botón abre el formulario de compra', () => {
+      renderConProviders(<Plantilla page={conProductos([producto()])} />);
+
+      fireEvent.click(screen.getByRole('button', { name: /Comprar/ }));
+
+      expect(screen.getByLabelText('NOMBRE Y APELLIDO')).toBeInTheDocument();
+      expect(screen.getByLabelText('EMAIL')).toBeInTheDocument();
+      expect(screen.getByLabelText('TELÉFONO (OPCIONAL)')).toBeInTheDocument();
+    });
+
+    it('la tarjeta sale de la paleta de la página', () => {
+      const { container } = renderConProviders(
+        <Plantilla page={{ ...conProductos([producto()]), card_color: '#00ff00' }} />
+      );
+
+      const tarjeta = container.querySelector('article');
+      expect(tarjeta.getAttribute('style')).toContain('rgb(0, 255, 0)');
+    });
+
+    it('un grupo de productos vacío no rompe', () => {
+      expect(() => renderConProviders(<Plantilla page={conProductos([])} />)).not.toThrow();
     });
   });
 

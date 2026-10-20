@@ -991,6 +991,231 @@ class ComprasDeProductosTest extends IntegracionTestCase
         $this->assertStatus(201, $this->comprar($linkId, ['nombre' => str_repeat('ñ', 150)]));
     }
 
+    // ========================================================= ventas (#19)
+
+    private function ventas(array $query, $userId = null)
+    {
+        return ProductosHandler::ventas($this->db, $this->get($query, $this->user($userId ?: $this->duenaId)));
+    }
+
+    public function testElOrganizadorVeQuienDescargoYCuantasVeces()
+    {
+        $linkId = $this->producto();
+        [$codigo, $token] = $this->compraPagada($linkId);
+
+        $antes = $this->ventas(['link_id' => $linkId]);
+        $this->assertStatus(200, $antes);
+        $this->assertSame(0, $antes->body['ordenes'][0]['descargas']);
+        $this->assertNull($antes->body['ordenes'][0]['primera_descarga_en']);
+        $this->assertSame(['pagadas' => 1, 'recaudado' => 2500.0, 'descargaron' => 0], $antes->body['resumen']);
+
+        $this->descargar($token);
+        $despues = $this->ventas(['link_id' => $linkId]);
+
+        $venta = $despues->body['ordenes'][0];
+        $this->assertSame($codigo, $venta['codigo']);
+        $this->assertSame('ana@test.local', $venta['email']);
+        $this->assertSame(1, $venta['descargas']);
+        $this->assertNotNull($venta['primera_descarga_en']);
+        $this->assertSame(1, $despues->body['resumen']['descargaron']);
+
+        // Ni el token ni el link de descarga, en ninguna forma.
+        $json = json_encode($despues->body);
+        $this->assertStringNotContainsString($token, $json);
+        $this->assertStringNotContainsString(hash('sha256', $token), $json);
+        $this->assertStringNotContainsString('descarga#', $json);
+    }
+
+    /** Las ventas de un producto son sólo las suyas. */
+    public function testLasVentasDeUnProductoNoMezclanLasDeOtro()
+    {
+        $guia = $this->producto();
+        $mapa = $this->producto('0.00', 'Mapa');
+        $this->compraPagada($guia);
+        $this->comprar($mapa, ['email' => 'beto@test.local']);
+
+        $this->assertSame(['Guía de viaje'], array_column($this->ventas(['link_id' => $guia])->body['ordenes'], 'producto'));
+        $this->assertSame(['Mapa'], array_column($this->ventas(['link_id' => $mapa])->body['ordenes'], 'producto'));
+        $this->assertCount(2, $this->ventas(['page_id' => $this->paginaId])->body['ordenes']);
+    }
+
+    public function testOtraPersonaSinAccesoRecibe403EnLasVentas()
+    {
+        $linkId = $this->producto();
+        $this->compraPagada($linkId);
+        $otra = $this->usuario('otra@test.local', 'Otra');
+
+        $this->assertStatus(403, $this->ventas(['link_id' => $linkId], $otra));
+        $this->assertStatus(403, $this->ventas(['page_id' => $this->paginaId], $otra));
+        $this->assertStatus(403, $this->ventas(['page_id' => $this->paginaId, 'formato' => 'excel'], $otra));
+    }
+
+    /** Un administrador aceptado de la página sí las ve. */
+    public function testUnAdministradorDeLaPaginaVeLasVentas()
+    {
+        $linkId = $this->producto();
+        $this->compraPagada($linkId);
+        $admin = $this->usuario('admin@test.local', 'Admin');
+        $this->insertar('page_admins', ['page_id' => $this->paginaId, 'user_id' => $admin, 'status' => 'accepted', 'invited_by' => $this->duenaId]);
+
+        $this->assertStatus(200, $this->ventas(['link_id' => $linkId], $admin));
+    }
+
+    /** El producto borrado ya no tiene link: sus ventas siguen en la vista de la página. */
+    public function testLaVistaPorPaginaMuestraLasVentasDeUnProductoBorrado()
+    {
+        $linkId = $this->producto();
+        [$codigo] = $this->compraPagada($linkId);
+        LinksHandler::detail($this->db, $this->delete(['id' => $linkId], $this->user($this->duenaId)), $this->disco);
+
+        $res = $this->ventas(['page_id' => $this->paginaId]);
+
+        $this->assertStatus(200, $res);
+        $this->assertCount(1, $res->body['ordenes']);
+        $venta = $res->body['ordenes'][0];
+        $this->assertSame($codigo, $venta['codigo']);
+        $this->assertSame('Guía de viaje', $venta['producto']);
+        $this->assertTrue($venta['producto_borrado']);
+        $this->assertNull($venta['link_id']);
+        $this->assertSame(1, $res->body['resumen']['pagadas']);
+
+        // Y la de otra página no ve nada.
+        $otra = $this->usuario('otra@test.local', 'Otra');
+        $suPagina = $this->pagina($otra, 'otra-sala', 'Otra Sala');
+        $this->assertSame([], $this->ventas(['page_id' => $suPagina], $otra)->body['ordenes']);
+    }
+
+    public function testElReenvioMandaElMismoLinkDeLaCompra()
+    {
+        $linkId = $this->producto();
+        [$codigo, $token] = $this->compraPagada($linkId);
+        $this->db->exec('UPDATE product_orders SET mail_enviado_en = NOW() - INTERVAL 1 HOUR');
+        $mailer = new FakeMailer();
+
+        $res = ProductosHandler::reenviar($this->db, $this->post(['codigo' => $codigo], $this->user($this->duenaId)), $mailer);
+
+        $this->assertStatus(200, $res);
+        $this->assertCount(1, $mailer->enviados);
+        $this->assertStringContainsString('/descarga#' . $token, $mailer->enviados[0]['html']);
+        $this->assertStringNotContainsString($token, json_encode($res->body));
+        $this->assertSame(1, $this->cantidadDeOrdenes());
+
+        // Recién mandado, no se vuelve a mandar.
+        $this->assertStatus(429, ProductosHandler::reenviar($this->db, $this->post(['codigo' => $codigo], $this->user($this->duenaId)), $mailer));
+        $this->assertCount(1, $mailer->enviados);
+    }
+
+    public function testElReenvioFuncionaConElProductoBorradoYNoParaOtraPersona()
+    {
+        $linkId = $this->producto();
+        [$codigo] = $this->compraPagada($linkId);
+        LinksHandler::detail($this->db, $this->delete(['id' => $linkId], $this->user($this->duenaId)), $this->disco);
+        $this->db->exec('UPDATE product_orders SET mail_enviado_en = NOW() - INTERVAL 1 HOUR');
+        $otra = $this->usuario('otra@test.local', 'Otra');
+        $mailer = new FakeMailer();
+
+        $ajena = ProductosHandler::reenviar($this->db, $this->post(['codigo' => $codigo], $this->user($otra, 'otra@test.local')), $mailer);
+        $propia = ProductosHandler::reenviar($this->db, $this->post(['codigo' => $codigo], $this->user($this->duenaId)), $mailer);
+
+        $this->assertStatus(403, $ajena);
+        $this->assertStatus(200, $propia);
+        $this->assertCount(1, $mailer->enviados);
+    }
+
+    public function testUnaCompraSinPagarNoSeReenvia()
+    {
+        $this->conectarPorOAuth();
+        $this->preferenciaOk();
+        $codigo = $this->comprar($this->producto())->body['codigo'];
+
+        $res = ProductosHandler::reenviar($this->db, $this->post(['codigo' => $codigo], $this->user($this->duenaId)), $this->mailer);
+
+        $this->assertStatus(409, $res);
+        $this->assertSame([], $this->mailer->enviados);
+    }
+
+    // ============================================= comisiones de la plataforma
+
+    private function comisiones()
+    {
+        $plataforma = $this->valor("SELECT id FROM users WHERE email = 'plataforma@test'")
+            ?: $this->usuario('plataforma@test', 'Plataforma');
+        \Plataforma::olvidar();
+
+        return \PlataformaHandler::comisiones($this->db, $this->get([], $this->user($plataforma, 'plataforma@test')));
+    }
+
+    /** Una entrada vendida y cobrada, con su comisión. */
+    private function entradaPagada()
+    {
+        $eventoId = $this->evento($this->grupo($this->paginaId, 'eventos', 'Fechas'));
+        $this->assertStatus(200, EntradasHandler::config($this->db, $this->post(
+            ['activo' => 1, 'capacidad' => 10, 'precio' => 10000, 'max_por_compra' => 10],
+            $this->user($this->duenaId),
+            ['link_id' => $eventoId]
+        )));
+        $this->preferenciaOk();
+        $codigo = CheckoutHandler::comprar($this->db, $this->post([
+            'link_id' => $eventoId, 'nombre' => 'Ana', 'email' => 'ana@test.local', 'cantidad' => 1,
+        ]), $this->http, $this->mailer)->body['codigo'];
+        \Entradas::acreditarPago($this->db, $codigo, '999001', 'approved', ['comision_plataforma' => 150.0]);
+
+        return $codigo;
+    }
+
+    public function testElReporteDeComisionesSumaLosProductosSinCambiarLasEntradas()
+    {
+        $this->conectarPorOAuth();
+        $this->entradaPagada();
+
+        $soloEntradas = $this->comisiones();
+        $this->assertStatus(200, $soloEntradas);
+
+        $linkId = $this->producto();
+        $this->preferenciaOk();
+        $codigoProducto = $this->comprar($linkId)->body['codigo'];
+        $this->pagoDeMercadoPago($codigoProducto, 2500.0);
+        $this->aviso($codigoProducto);
+        // Un producto gratis no tiene comisión: no entra en el reporte.
+        $this->comprar($this->producto('0.00', 'Gratis'), ['email' => 'beto@test.local']);
+
+        $conProductos = $this->comisiones();
+
+        $this->assertSame($soloEntradas->body['por_tipo']['entradas'], $conProductos->body['por_tipo']['entradas']);
+        $this->assertSame($soloEntradas->body['resumen'], $conProductos->body['por_tipo']['entradas']);
+        $this->assertSame(1, $conProductos->body['por_tipo']['productos']['ventas']);
+        $this->assertSame(2500.0, $conProductos->body['por_tipo']['productos']['recaudado']);
+        $this->assertSame(37.5, $conProductos->body['por_tipo']['productos']['cobrada']);
+        $this->assertSame(2, $conProductos->body['resumen']['ventas']);
+        $this->assertSame(12500.0, $conProductos->body['resumen']['recaudado']);
+
+        $this->assertCount(1, $conProductos->body['paginas']);
+        $this->assertSame(2, $conProductos->body['paginas'][0]['ventas']);
+        $this->assertSame(1, $conProductos->body['paginas'][0]['ventas_productos']);
+        $this->assertSame(1, $conProductos->body['meses'][0]['ventas_productos']);
+    }
+
+    /** Un producto borrado sigue sumando en su página, y lo cobrado de menos se ve. */
+    public function testElReporteVeElProductoBorradoYLoQueSeCobroDeMenos()
+    {
+        $linkId = $this->producto();
+        $this->conectarPorOAuth();
+        $this->preferenciaOk();
+        $codigo = $this->comprar($linkId)->body['codigo'];
+        $this->pagoDeMercadoPago($codigo, 2500.0, 'approved', ['fee_details' => []]);
+        $this->aviso($codigo);
+        $this->db->exec('UPDATE product_orders SET mp_comision_cobrada = 0');
+        LinksHandler::detail($this->db, $this->delete(['id' => $linkId], $this->user($this->duenaId)), $this->disco);
+
+        $res = $this->comisiones();
+
+        $this->assertSame('La Sala', $res->body['paginas'][0]['title']);
+        $this->assertCount(1, $res->body['revisar']);
+        $this->assertSame('producto', $res->body['revisar'][0]['tipo']);
+        $this->assertSame('Guía de viaje', $res->body['revisar'][0]['evento']);
+        $this->assertSame($codigo, $res->body['revisar'][0]['codigo']);
+    }
+
     // ================================================================= mail
 
     /** Si el SMTP estaba caído al pagar, el cron lo reintenta. */

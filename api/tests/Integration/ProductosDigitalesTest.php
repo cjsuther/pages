@@ -253,18 +253,40 @@ class ProductosDigitalesTest extends IntegracionTestCase
         $this->assertSame([], $this->disco->movidos);
     }
 
-    /** Todavía no se vende: el grupo no tiene que aparecer en la página pública. */
-    public function testLaPaginaPublicaNoMuestraLosProductos()
+    /**
+     * La página pública muestra los productos en venta (#19): con archivo, ni
+     * ocultos ni borrados. Y de cada uno, nunca la ruta del archivo en disco.
+     */
+    public function testLaPaginaPublicaMuestraSoloLosProductosEnVentaYSinLaRuta()
     {
-        $this->crear();
-        $linksId = $this->grupo($this->paginaId, 'links', 'Mis links');
-        $this->insertar('links', ['group_id' => $linksId, 'url' => 'https://ejemplo.com', 'text' => 'Un link', 'position' => 0]);
+        $visible = $this->crear(['text' => 'Visible', 'precio' => '1500'])->body['link']['id'];
+        $this->assertStatus(200, $this->subir($visible, 'visible.pdf', 2048));
+
+        $oculto = $this->crear(['text' => 'Oculto'])->body['link']['id'];
+        $this->subir($oculto, 'oculto.pdf');
+        LinksHandler::detail($this->db, $this->put(['oculto' => true], $this->user($this->duenaId), ['id' => $oculto]));
+
+        $this->crear(['text' => 'Sin archivo']);
+
+        $borrado = $this->crear(['text' => 'Borrado'])->body['link']['id'];
+        $this->subir($borrado, 'borrado.pdf');
+        LinksHandler::detail($this->db, $this->delete(['id' => $borrado], $this->user($this->duenaId)), $this->disco);
 
         $res = PublicHandler::page($this->db, $this->get(['slug' => 'la-sala']));
 
         $this->assertStatus(200, $res);
-        $this->assertSame(['Mis links'], array_column($res->body['page']['groups'], 'title'));
-        $this->assertStringNotContainsString('Guía de viaje', json_encode($res->body));
+        $this->assertSame(['Tienda'], array_column($res->body['page']['groups'], 'title'));
+        $productos = $res->body['page']['groups'][0]['links'];
+        $this->assertSame(['Visible'], array_column($productos, 'text'));
+        $this->assertSame(1500.0, $productos[0]['precio']);
+        $this->assertSame('visible.pdf', $productos[0]['archivo_nombre']);
+        $this->assertSame(2048, $productos[0]['archivo_bytes']);
+        $this->assertSame('Todo lo que hay que saber', $productos[0]['description']);
+
+        $ruta = $this->valor('SELECT archivo_ruta FROM digital_products WHERE link_id = ?', [$visible]);
+        $json = json_encode($res->body);
+        $this->assertStringNotContainsString('archivo_ruta', $json);
+        $this->assertStringNotContainsString(basename($ruta), $json);
     }
 
     // ============================================================ ayudantes

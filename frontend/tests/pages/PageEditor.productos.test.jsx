@@ -92,7 +92,7 @@ describe('PageEditor — productos digitales', () => {
       fireEvent.change(within(modal).getAllByRole('textbox')[0], { target: { value: 'Tienda' } });
       fireEvent.change(within(modal).getByRole('combobox'), { target: { value: 'productos' } });
 
-      expect(within(modal).getByText(/Todavía no se muestran en tu página/)).toBeInTheDocument();
+      expect(within(modal).getByText(/Archivos para vender o regalar desde tu página/)).toBeInTheDocument();
 
       fireEvent.click(within(modal).getByRole('button', { name: 'Crear' }));
 
@@ -118,6 +118,48 @@ describe('PageEditor — productos digitales', () => {
 
       expect(screen.getByText(/\$ 2\.500/)).toHaveTextContent('guia.pdf');
       expect(screen.getByText(/Gratis/)).toHaveTextContent('Sin archivo');
+    });
+
+    it('un producto oculto se distingue en la lista', async () => {
+      await render({
+        page: pagina([grupoDeProductos([
+          { id: 1, text: 'Guía', precio: '2500.00', archivo_nombre: 'guia.pdf', oculto: '1', position: 0 },
+          { id: 2, text: 'Mapa', precio: '0.00', archivo_nombre: 'mapa.pdf', oculto: '0', position: 1 },
+        ])]),
+      });
+
+      expect(screen.getAllByText(/Oculto: no se muestra en tu página/)).toHaveLength(1);
+      const guia = screen.getByRole('link', { name: 'Guía' }).closest('div.flex');
+      expect(guia).toHaveTextContent('Oculto');
+      expect(screen.getByRole('link', { name: 'Mapa' }).closest('div.flex')).not.toHaveTextContent('Oculto');
+    });
+  });
+
+  describe('ventas de la página', () => {
+    it('la sección muestra las ventas de todos los productos, también los borrados', async () => {
+      const mock = mockFetch({
+        'pages/detail.php': { page: pagina([grupoDeProductos()]) },
+        'admins/index.php': { admins: [] },
+        'collaborations/index.php': { pending: [], collaborations: [] },
+        'notifications/index.php': { notifications: [], unread_count: 0 },
+        'productos/ventas.php': {
+          ordenes: [{
+            id: 1, codigo: 'AAAABBBBCCCC', nombre: 'Ana', email: 'ana@test.local', telefono: null,
+            total: 2500, moneda: 'ARS', estado: 'pagada', creado_en: '2026-10-01 10:00:00',
+            descargas: 0, primera_descarga_en: null, producto: 'Pack viejo', producto_borrado: true, link_id: null,
+          }],
+          resumen: { pagadas: 1, recaudado: 2500, descargaron: 0 },
+        },
+      });
+      renderConProviders(<PageEditor />, {
+        auth: crearAuth({ token: 'tok-123', user: usuarioDePrueba() }),
+        route: '/page/5?s=productos',
+        path: '/page/:id',
+      });
+
+      expect(await screen.findByText('Pack viejo')).toBeInTheDocument();
+      expect(screen.getByText('Producto borrado')).toBeInTheDocument();
+      expect(llamadaA(mock.llamadas, 'productos/ventas.php').url).toContain('page_id=5');
     });
   });
 

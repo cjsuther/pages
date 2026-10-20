@@ -56,6 +56,7 @@ class PlataformaHandlerTest extends HandlerTestCase
         PlataformaHandler::comisiones($this->db, $this->get([], $this->user(9)));
 
         $this->assertSame(0, $this->db->countCalls('FROM ticket_orders'));
+        $this->assertSame(0, $this->db->countCalls('FROM product_orders'));
     }
 
     public function testLaPlataformaSiLoVe()
@@ -155,5 +156,139 @@ class PlataformaHandlerTest extends HandlerTestCase
 
         $sql = $this->db->callsFor('o.mp_comision_cobrada <')[0]['sql'];
         $this->assertStringContainsString('o.mp_comision_cobrada IS NOT NULL', $sql);
+    }
+
+    // ------------------------------------------------- productos digitales
+
+    private function hayVentasDeProductos(array $resumen = [])
+    {
+        $this->db->onSelect('FROM product_orders o WHERE', [array_merge([
+            'ventas' => 2, 'recaudado' => '5000.00', 'pedida' => '75.00',
+            'cobrada' => '50.00', 'sin_dato' => 1,
+        ], $resumen)]);
+    }
+
+    /** Sin ventas de productos, el reporte es el mismo de siempre. */
+    public function testSinProductosLosNumerosDeEntradasNoCambian()
+    {
+        $this->esLaPlataforma();
+        $this->hayVentas();
+
+        $res = PlataformaHandler::comisiones($this->db, $this->get([], $this->user(9)));
+
+        $this->assertSame(3, $res->body['resumen']['ventas']);
+        $this->assertSame(70000.0, $res->body['resumen']['recaudado']);
+        $this->assertSame(1050.0, $res->body['resumen']['cobrada']);
+        $this->assertSame($res->body['resumen'], $res->body['por_tipo']['entradas']);
+        $this->assertSame(0, $res->body['por_tipo']['productos']['ventas']);
+    }
+
+    public function testElTotalSumaEntradasYProductosYLosDistingue()
+    {
+        $this->esLaPlataforma();
+        $this->hayVentas();
+        $this->hayVentasDeProductos();
+
+        $res = PlataformaHandler::comisiones($this->db, $this->get([], $this->user(9)));
+
+        $this->assertSame(5, $res->body['resumen']['ventas']);
+        $this->assertSame(75000.0, $res->body['resumen']['recaudado']);
+        $this->assertSame(1125.0, $res->body['resumen']['pedida']);
+        $this->assertSame(1100.0, $res->body['resumen']['cobrada']);
+        $this->assertSame(25.0, $res->body['resumen']['diferencia']);
+        $this->assertSame(1, $res->body['resumen']['sin_dato']);
+
+        // Lo de entradas, igual que sin productos.
+        $this->assertSame(3, $res->body['por_tipo']['entradas']['ventas']);
+        $this->assertSame(70000.0, $res->body['por_tipo']['entradas']['recaudado']);
+        $this->assertSame(1050.0, $res->body['por_tipo']['entradas']['cobrada']);
+        $this->assertSame(2, $res->body['por_tipo']['productos']['ventas']);
+        $this->assertSame(5000.0, $res->body['por_tipo']['productos']['recaudado']);
+    }
+
+    /** Los productos se miran con el mismo criterio y el mismo rango que las entradas. */
+    public function testLosProductosUsanElMismoFiltro()
+    {
+        $this->esLaPlataforma();
+        $this->hayVentas();
+        $this->hayVentasDeProductos();
+
+        PlataformaHandler::comisiones($this->db,
+            $this->get(['desde' => '2026-09-01', 'hasta' => '2026-09-30'], $this->user(9)));
+
+        $llamada = $this->db->callsFor('FROM product_orders o WHERE')[0];
+        $this->assertStringContainsString("o.estado = 'pagada'", $llamada['sql']);
+        $this->assertStringContainsString('o.total > 0', $llamada['sql']);
+        $this->assertSame(['2026-09-01', '2026-09-30'], $llamada['params']);
+    }
+
+    public function testLosMesesYLasPaginasSumanLosDosTiposSinPerderElDetalle()
+    {
+        $this->esLaPlataforma();
+        $fila = function ($extra) {
+            return array_merge(['ventas' => 1, 'recaudado' => '1000.00', 'pedida' => '15.00', 'cobrada' => '15.00', 'sin_dato' => 0], $extra);
+        };
+        $this->db->onSelect('FROM ticket_orders o WHERE', [$fila([])]);
+        $this->db->onSelect("FROM ticket_orders o WHERE o.estado = 'pagada' AND o.total > 0 AND o.pagada_en IS NOT NULL", [
+            $fila(['mes' => '2026-09']),
+        ]);
+        $this->db->onSelect('FROM ticket_orders o INNER JOIN links', [
+            $fila(['id' => 1, 'title' => 'La Sala', 'url_slug' => 'la-sala']),
+        ]);
+        $this->db->onSelect('FROM product_orders o WHERE', [$fila([])]);
+        $this->db->onSelect("FROM product_orders o WHERE o.estado = 'pagada' AND o.total > 0 AND o.pagada_en IS NOT NULL", [
+            $fila(['mes' => '2026-09']),
+            $fila(['mes' => '2026-10']),
+        ]);
+        $this->db->onSelect('FROM product_orders o INNER JOIN digital_products', [
+            $fila(['id' => 1, 'title' => 'La Sala', 'url_slug' => 'la-sala']),
+            $fila(['id' => 2, 'title' => 'Otra', 'url_slug' => 'otra', 'cobrada' => '99.00']),
+        ]);
+
+        $res = PlataformaHandler::comisiones($this->db, $this->get([], $this->user(9)));
+
+        $this->assertSame(['2026-10', '2026-09'], array_column($res->body['meses'], 'mes'));
+        $this->assertSame([1, 2], array_column($res->body['meses'], 'ventas'));
+        $this->assertSame([1, 1], array_column($res->body['meses'], 'ventas_productos'));
+
+        $this->assertSame([2, 1], array_column($res->body['paginas'], 'id'), 'ordenadas por lo cobrado');
+        $laSala = $res->body['paginas'][1];
+        $this->assertSame(2, $laSala['ventas']);
+        $this->assertSame(1, $laSala['ventas_productos']);
+        $this->assertSame(2000.0, $laSala['recaudado']);
+    }
+
+    /** Un producto borrado se reconoce por la foto: su página y su título. */
+    public function testLosProductosSeBuscanPorLaFotoSiSeBorraronElLink()
+    {
+        $this->esLaPlataforma();
+        $this->hayVentas();
+
+        PlataformaHandler::comisiones($this->db, $this->get([], $this->user(9)));
+
+        $sql = $this->db->callsFor('FROM product_orders o INNER JOIN digital_products')[0]['sql'];
+        $this->assertStringContainsString('LEFT JOIN links l ON l.id = dp.link_id', $sql);
+        $this->assertStringContainsString('COALESCE(lg.page_id, dp.page_id)', $sql);
+    }
+
+    public function testLaListaARevisarDiceSiEsEntradaOProducto()
+    {
+        $this->esLaPlataforma();
+        $this->hayVentas();
+        $this->db->onSelect('FROM ticket_orders o INNER JOIN links l ON l.id = o.link_id INNER JOIN link_groups lg ON lg.id = l.group_id INNER JOIN pages p ON p.id = lg.page_id WHERE', []);
+        $this->db->onSelect('o.mp_comision_cobrada <', [[
+            'codigo' => 'AAA', 'pagada_en' => '2026-09-01 10:00:00', 'total' => '1000.00', 'pedida' => '15.00',
+            'cobrada' => '0.00', 'evento' => 'Show', 'pagina' => 'La Sala', 'url_slug' => 'la-sala',
+        ]]);
+        $this->db->onSelect('o.mp_comision_cobrada <', [[
+            'codigo' => 'BBB', 'pagada_en' => '2026-09-05 10:00:00', 'total' => '2500.00', 'pedida' => '37.50',
+            'cobrada' => '0.00', 'evento' => 'Guía', 'pagina' => 'La Sala', 'url_slug' => 'la-sala',
+        ]]);
+
+        $res = PlataformaHandler::comisiones($this->db, $this->get([], $this->user(9)));
+
+        $this->assertSame(['BBB', 'AAA'], array_column($res->body['revisar'], 'codigo'));
+        $this->assertSame(['producto', 'entrada'], array_column($res->body['revisar'], 'tipo'));
+        $this->assertSame(2500.0, $res->body['revisar'][0]['total']);
     }
 }
