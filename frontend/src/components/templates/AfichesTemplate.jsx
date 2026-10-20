@@ -8,9 +8,10 @@ import RedesSociales from '../RedesSociales';
 import BotonEntradas, { vendeEntradas } from '../BotonEntradas';
 import PrecioEvento from '../PrecioEvento';
 import RezonarBadge from '../RezonarBadge';
-import GaleriaProductos from '../GaleriaProductos';
+import DetalleProducto, { BotonComprar, tarjetaQueAbre } from '../DetalleProducto';
 import { MiniaturaGaleria, VisorGaleria } from '../MediaGaleria';
 import { textoSobre, paleta } from '../../utils/colores';
+import { describirPrecio } from '../../utils/productos';
 import { CLASES_ALREDEDOR, CLASES_CAJA, estiloDeAlrededor, estiloDeCaja, gruposPublicos } from '../../utils/plantillas';
 import { ExternalLink } from 'lucide-react';
 
@@ -25,6 +26,7 @@ import { ExternalLink } from 'lucide-react';
 function AfichesTemplate({ page }) {
   const [modalImage, setModalImage] = useState(null);
   const [modalEvent, setModalEvent] = useState(null);
+  const [modalProducto, setModalProducto] = useState(null);
   const backgroundColor = page.background_color || '#f3f4f6';
   const textColor = page.text_color || '#111827';
   const primaryColor = page.primary_color || '#3b82f6';
@@ -33,18 +35,6 @@ function AfichesTemplate({ page }) {
   // Los colores por rol. Las cinco plantillas leen de acá para que el mismo
   // control pinte lo mismo en todas.
   const colores = paleta(page);
-
-  // La tarjeta acompaña al fondo elegido en vez de imponer un blanco fijo, y
-  // el texto es siempre el color elegido: como la tarjeta ya no trae color
-  // propio, no hay forma de que la tipografía quede invisible encima.
-  const fondoTarjeta = colores.tarjeta;
-  const bordeTarjeta = colores.bordeTarjeta;
-
-  const tarjetaStyle = {
-    color: textColor,
-    ...(fondoTarjeta && { backgroundColor: fondoTarjeta }),
-    ...(bordeTarjeta && { border: `1px solid ${bordeTarjeta}` }),
-  };
 
   // El detalle del evento sale de la misma paleta que la página. Estaba fijo
   // en blanco con texto negro: sobre una página oscura era un recuadro ajeno,
@@ -180,17 +170,40 @@ function AfichesTemplate({ page }) {
                   ))}
                 </div>
               ) : group.type === 'productos' ? (
-                // El marco de color, como los afiches, pero con el cuerpo en la
-                // superficie de tarjetas: el botón se pinta con el acento y
-                // sobre un marco del mismo color desaparecería.
-                <GaleriaProductos
-                  productos={group.links || []}
-                  titulo={group.title}
-                  colores={colores}
-                  claseTarjeta="rounded-2xl overflow-hidden shadow-lg"
-                  estiloTarjeta={{ ...tarjetaStyle, border: `8px solid ${marco}` }}
-                  claseImagen="w-full aspect-[1080/1350] object-cover"
-                />
+                // El afiche de los eventos, con el precio en lugar de la fecha.
+                // El botón de comprar no va con el color de botones: por
+                // defecto es el acento, el mismo del marco, y desaparecería.
+                // Va invertido, con el color que se lee sobre el marco.
+                <div className="grid grid-cols-1 gap-4">
+                  {(group.links || []).map((producto, i, productos) => (
+                    <div
+                      key={producto.id}
+                      {...tarjetaQueAbre(() => setModalProducto({ productos, inicial: i }))}
+                      aria-label={producto.text}
+                      className="rounded-2xl p-2 shadow-lg transition hover:-translate-y-0.5 cursor-pointer relative"
+                      style={estiloMarco}
+                    >
+                      {producto.image_url && (
+                        <img
+                          src={producto.image_url}
+                          alt={producto.text}
+                          className="w-full aspect-[1080/1350] object-cover rounded-xl"
+                        />
+                      )}
+                      <h3 className="font-black uppercase tracking-wide text-center text-sm px-1 pt-2">{producto.text}</h3>
+                      <p className="opacity-80 text-center text-xs px-1">{describirPrecio(producto.precio)}</p>
+                      <div className="flex justify-center pt-2 pb-1">
+                        <BotonComprar
+                          producto={producto}
+                          colores={colores}
+                          fondo={estiloMarco.color}
+                          onComprar={() => setModalProducto({ productos, inicial: i, comprar: true })}
+                          className="px-4 py-1.5 rounded-full text-xs uppercase tracking-wide"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
               ) : (
                 <div className="grid grid-cols-1 gap-4">
                   {group.links?.map((link) => (
@@ -362,6 +375,15 @@ function AfichesTemplate({ page }) {
             </div>
           </div>
         </div>
+      )}
+
+      {modalProducto && (
+        <DetalleProducto
+          {...modalProducto}
+          colores={colores}
+          modalStyle={modalStyle}
+          onCerrar={() => setModalProducto(null)}
+        />
       )}
     </div>
   );
