@@ -16,6 +16,21 @@ import { borde, alrededor } from './colores';
 export const ANCHO_COLUMNA = 'max-w-[580px]';
 
 /**
+ * Los tipos de grupo que una plantilla sabe dibujar.
+ *
+ * Las plantillas dibujan como lista de links todo lo que no es galería ni
+ * eventos, así que un tipo nuevo se publicaría solo, y mal. Los productos
+ * digitales todavía no se muestran (#17): la API ya no los manda a la página
+ * pública, y esto es la segunda llave.
+ */
+const TIPOS_PUBLICOS = ['links', 'galeria', 'eventos'];
+
+/** Los grupos de una página que se muestran en público. */
+export function gruposPublicos(grupos) {
+  return (grupos || []).filter((g) => TIPOS_PUBLICOS.includes(g.type || 'links'));
+}
+
+/**
  * Clases de la caja donde vive el contenido.
  *
  * Hasta 640px la caja es la pantalla: ocupa todo el ancho, sin margen ni

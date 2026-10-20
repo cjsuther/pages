@@ -10,7 +10,7 @@ import PrecioEvento from '../PrecioEvento';
 import RezonarBadge from '../RezonarBadge';
 import { MiniaturaGaleria, VisorGaleria } from '../MediaGaleria';
 import { textoSobre, paleta } from '../../utils/colores';
-import { CLASES_ALREDEDOR, CLASES_CAJA, estiloDeAlrededor, estiloDeCaja } from '../../utils/plantillas';
+import { CLASES_ALREDEDOR, CLASES_CAJA, estiloDeAlrededor, estiloDeCaja, gruposPublicos } from '../../utils/plantillas';
 import { localidadDe } from '../../utils/eventos';
 import { ExternalLink } from 'lucide-react';
 
@@ -88,7 +88,7 @@ function CondensedTemplate({ page }) {
         </header>
 
         <div className="space-y-6 md:space-y-8">
-          {page.groups?.map((group) => (
+          {gruposPublicos(page.groups).map((group) => (
             <section key={group.id}>
               {group.title && (
                 <div className="mb-3 md:mb-4">

@@ -89,6 +89,28 @@ describe.each(PLANTILLAS)('%s', (nombre, Plantilla) => {
   // Las páginas se ven siempre en formato mobile, también en una pantalla
   // grande: por el teléfono entra casi todo el mundo, y así una página no se
   // ve de dos maneras distintas.
+  // Los productos digitales todavía no se venden (#17). La API no los manda a
+  // la página pública, pero si alguna vez llegaran, ninguna plantilla los
+  // tiene que dibujar: las cinco tratan como links lo que no reconocen.
+  describe('productos digitales', () => {
+    it('no muestra un grupo de productos aunque llegue', () => {
+      renderConProviders(
+        <Plantilla
+          page={pagina({
+            groups: [
+              { id: 40, title: 'Tienda', type: 'productos', links: [link({ id: 400, text: 'Guía secreta', url: '' })] },
+              grupoDeLinks([link()]),
+            ],
+          })}
+        />
+      );
+
+      expect(screen.queryByText('Tienda')).not.toBeInTheDocument();
+      expect(screen.queryByText('Guía secreta')).not.toBeInTheDocument();
+      expect(screen.getByText('Mis Links')).toBeInTheDocument();
+    });
+  });
+
   describe('formato mobile', () => {
     it('la columna no se ensancha en una pantalla grande', () => {
       const { container } = renderConProviders(<Plantilla page={pagina()} />);
