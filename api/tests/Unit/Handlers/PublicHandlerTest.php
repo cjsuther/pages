@@ -82,25 +82,77 @@ class PublicHandlerTest extends HandlerTestCase
         $this->assertSame('Un link', $res->body['page']['groups'][0]['links'][0]['text']);
     }
 
-    /**
-     * Los productos digitales todavía no se venden (#17): el grupo no puede
-     * llegar a la página pública, donde las plantillas lo dibujarían como una
-     * lista de links.
-     */
-    public function testLaPaginaPublicaNoMuestraLosGruposDeProductos()
+    // ------------------------------------------------------------ productos
+
+    /** Una página con un grupo de productos y uno de links. */
+    private function paginaConProductos(array $productos)
     {
         $this->db->onSelect('FROM pages WHERE url_slug = ?', [['id' => 5]]);
         $this->db->onSelect('FROM link_groups WHERE page_id = ?', [
             ['id' => 10, 'type' => 'productos', 'title' => 'Tienda'],
             ['id' => 11, 'type' => 'links', 'title' => 'Links'],
         ]);
+        $this->db->onSelect('INNER JOIN digital_products dp ON dp.link_id = l.id', $productos);
         $this->db->onSelect('FROM links WHERE group_id = ? ORDER BY position', [['id' => 100, 'text' => 'Un link']]);
 
-        $res = PublicHandler::page($this->db, $this->get(['slug' => 'mi-pagina']));
+        return PublicHandler::page($this->db, $this->get(['slug' => 'mi-pagina']));
+    }
 
-        $this->assertSame(['Links'], array_column($res->body['page']['groups'], 'title'));
-        $this->assertSame([[\Fechas::hoy(), 11]], array_column($this->db->callsFor('FROM links WHERE group_id'), 'params'));
-        $this->assertSame(0, $this->db->countCalls('digital_products'));
+    private function productoDeLaBase(array $extra = [])
+    {
+        return array_merge([
+            'id' => 400, 'group_id' => 10, 'text' => 'Guía', 'description' => 'Todo lo que hay que saber',
+            'image_url' => 'https://img/tapa.jpg', 'url' => '', 'position' => 0, 'precio' => '2500.00', 'oculto' => '0',
+            'archivo_nombre' => 'guia.pdf', 'archivo_bytes' => '1048576', 'archivo_tipo' => 'application/pdf',
+        ], $extra);
+    }
+
+    public function testLaPaginaPublicaMuestraLosGruposDeProductos()
+    {
+        $res = $this->paginaConProductos([$this->productoDeLaBase()]);
+
+        $this->assertStatus(200, $res);
+        $this->assertSame(['Tienda', 'Links'], array_column($res->body['page']['groups'], 'title'));
+
+        $producto = $res->body['page']['groups'][0]['links'][0];
+        $this->assertSame(400, $producto['id']);
+        $this->assertSame('Guía', $producto['text']);
+        $this->assertSame('Todo lo que hay que saber', $producto['description']);
+        $this->assertSame('https://img/tapa.jpg', $producto['image_url']);
+        $this->assertSame(2500.0, $producto['precio']);
+        $this->assertSame('guia.pdf', $producto['archivo_nombre']);
+        $this->assertSame(1048576, $producto['archivo_bytes']);
+    }
+
+    /** Los productos se leen con el filtro de los que están en venta, no con uno propio. */
+    public function testLosProductosSalenDelFiltroDeLosQueEstanEnVenta()
+    {
+        $this->paginaConProductos([]);
+
+        $llamada = $this->db->callsFor('INNER JOIN digital_products dp ON dp.link_id = l.id')[0];
+        $this->assertStringContainsString(\ProductosDigitales::CONDICION_EN_VENTA, $llamada['sql']);
+        $this->assertSame([10], $llamada['params']);
+        $this->assertStringNotContainsString('archivo_ruta,', $llamada['sql']);
+    }
+
+    /**
+     * Aunque la consulta trajera la ruta del archivo (o cualquier otra columna
+     * que se agregue a links), la respuesta pública sólo lleva lo que se ve.
+     */
+    public function testLaRespuestaPublicaNuncaLlevaLaRutaDelArchivo()
+    {
+        $res = $this->paginaConProductos([$this->productoDeLaBase([
+            'archivo_ruta' => 'productos/' . str_repeat('a', 32),
+            'link_original' => 99,
+        ])]);
+
+        $json = json_encode($res->body);
+        $this->assertStringNotContainsString('archivo_ruta', $json);
+        $this->assertStringNotContainsString(str_repeat('a', 32), $json);
+        $this->assertSame(
+            ['id', 'group_id', 'text', 'description', 'image_url', 'position', 'precio', 'archivo_nombre', 'archivo_bytes'],
+            array_keys($res->body['page']['groups'][0]['links'][0])
+        );
     }
 
     public function testPageDevuelveCeroSeguidoresSiNoHayFilas()

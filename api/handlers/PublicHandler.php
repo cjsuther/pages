@@ -19,9 +19,16 @@ class PublicHandler
      *
      * Es una lista de los que sí, y no de los que no, para que un tipo nuevo
      * no se publique solo: las plantillas dibujan como links todo lo que no
-     * reconocen. Productos digitales todavía no se muestra (#17).
+     * reconocen.
      */
-    const TIPOS_PUBLICOS = ['links', 'galeria', 'eventos'];
+    const TIPOS_PUBLICOS = ['links', 'galeria', 'eventos', 'productos'];
+
+    /**
+     * Lo único que sale de un producto en la página pública. Es una lista de
+     * lo que sí: la ruta del archivo en disco no puede salir nunca, tampoco
+     * si mañana se agrega una columna a links o a digital_products.
+     */
+    const CAMPOS_DE_PRODUCTO = ['id', 'group_id', 'text', 'description', 'image_url', 'position', 'precio', 'archivo_nombre', 'archivo_bytes'];
 
     // ------------------------------------------------------------------- page
 
@@ -65,6 +72,8 @@ class PublicHandler
                 if ($group['type'] == 'eventos') {
                     $group['links'] = self::eventosVigentes($db, $group['id']);
                     $group['collaborated_events'] = self::eventosColaborados($db, $group['id']);
+                } elseif ($group['type'] == 'productos') {
+                    $group['links'] = self::productosEnVenta($db, $group['id']);
                 } else {
                     $stmt = $db->prepare("
                         SELECT *, (event_date IS NOT NULL AND event_date < ?) as event_due
@@ -89,6 +98,30 @@ class PublicHandler
         } catch (Exception $e) {
             return Response::serverError($e->getMessage());
         }
+    }
+
+    /**
+     * Los productos de un grupo que se pueden comprar: ni ocultos, ni
+     * borrados, ni sin archivo (ProductosDigitales::CONDICION_EN_VENTA).
+     */
+    private static function productosEnVenta($db, $groupId)
+    {
+        $productos = [];
+
+        foreach (ProductosDigitales::publicosDelGrupo($db, $groupId) as $fila) {
+            $producto = [];
+
+            foreach (self::CAMPOS_DE_PRODUCTO as $campo) {
+                $producto[$campo] = isset($fila[$campo]) ? $fila[$campo] : null;
+            }
+
+            $producto['id'] = (int) $producto['id'];
+            $producto['precio'] = round((float) $producto['precio'], 2);
+            $producto['archivo_bytes'] = $producto['archivo_bytes'] === null ? null : (int) $producto['archivo_bytes'];
+            $productos[] = $producto;
+        }
+
+        return $productos;
     }
 
     /** La página pública sólo muestra eventos futuros. */
