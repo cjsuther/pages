@@ -946,6 +946,12 @@ class PagesHandlerTest extends HandlerTestCase
         $this->assertTrue(PagesHandler::esReservado('compra'));
     }
 
+    /** /producto/:id es el link para compartir un producto (#27). */
+    public function testElSlugDelLinkDeUnProductoEstaReservado()
+    {
+        $this->assertTrue(PagesHandler::esReservado('producto'));
+    }
+
     public function testDeleteDevuelve500SiLaBaseFalla()
     {
         $this->db->failOn('DELETE FROM pages', 'clave foránea');

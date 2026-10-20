@@ -19,6 +19,8 @@ class PagesHandler
         'asistentes', 'precios',
         // Pantallas del comprador de productos digitales (#18).
         'descarga', 'compra',
+        // El link para compartir un producto, /producto/:id (#27).
+        'producto',
     ];
 
     private static $defaults = [
