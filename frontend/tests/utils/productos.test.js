@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import {
   MAX_BYTES_PRODUCTO,
+  esOculto,
   comprarProducto,
   describirPrecio,
   esPago,
@@ -171,5 +172,12 @@ describe('productos digitales', () => {
       expect(gruposPublicos([{ id: 1 }])).toHaveLength(1);
       expect(gruposPublicos(undefined)).toEqual([]);
     });
+  });
+});
+
+describe('esOculto', () => {
+  it('acepta lo que devuelve la API y lo que guarda el editor', () => {
+    expect([1, '1', true, 'true'].map(esOculto)).toEqual([true, true, true, true]);
+    expect([0, '0', false, null, undefined, ''].map(esOculto)).toEqual([false, false, false, false, false, false]);
   });
 });

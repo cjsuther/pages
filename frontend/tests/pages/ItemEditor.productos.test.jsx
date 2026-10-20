@@ -168,6 +168,34 @@ describe('ItemEditor — productos digitales', () => {
     expect(cuerpo.precio).toBe('2500');
   });
 
+  describe('oculto', () => {
+    it('explica qué hace ocultarlo', async () => {
+      await render();
+
+      expect(screen.getByLabelText(/^Oculto/)).not.toBeChecked();
+      expect(screen.getByText(
+        'Oculto: no se muestra y no acepta pedidos nuevos. Quienes ya compraron pueden seguir descargando.'
+      )).toBeInTheDocument();
+    });
+
+    it('un producto oculto llega marcado', async () => {
+      await render({ item: producto({ oculto: '1' }) });
+
+      expect(screen.getByLabelText(/^Oculto/)).toBeChecked();
+    });
+
+    it('al guardar manda si está oculto', async () => {
+      const { llamadas } = await render();
+
+      fireEvent.click(screen.getByLabelText(/^Oculto/));
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+
+      expect(await screen.findByText('Editor de la página')).toBeInTheDocument();
+      const cuerpo = cuerpoDe(llamadas.find((l) => l.url.includes('links/detail.php') && l.options.method === 'PUT'));
+      expect(cuerpo.oculto).toBe(true);
+    });
+  });
+
   describe('aviso de Mercado Pago', () => {
     it('con precio y sin Mercado Pago conectado, avisa', async () => {
       await render({ item: producto({ precio: '1500.00' }) });

@@ -46,6 +46,18 @@ describe('Descarga', () => {
     expect(screen.getByRole('button', { name: /Descargar/ })).toBeInTheDocument();
   });
 
+  /** Un producto borrado sigue descargándose: sin imagen ni página, con su título. */
+  it('funciona con un producto borrado, sin imagen ni página', async () => {
+    await montar(`#${TOKEN}`, {
+      'public/descarga.php': { producto: { ...PRODUCTO, imagen: null, pagina: null, url_slug: null } },
+    });
+
+    expect(screen.getByRole('heading', { name: 'Guía de viaje' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Descargar/ })).toBeInTheDocument();
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Volver a/)).not.toBeInTheDocument();
+  });
+
   /** El token va en el cuerpo de un POST, nunca en una URL que llegue al servidor. */
   it('le pide los datos a la API mandando el token por POST', async () => {
     const { llamadas } = await montar(`#${TOKEN}`, { 'public/descarga.php': { producto: PRODUCTO } });

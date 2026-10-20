@@ -114,3 +114,11 @@ export async function subirArchivoDeProducto({ apiUrl, token, linkId, file }) {
 
   return data.link;
 }
+
+/**
+ * Si un producto está oculto. La API lo devuelve como 0/1 (a veces como
+ * texto) y el editor lo guarda como booleano.
+ */
+export function esOculto(valor) {
+  return valor === true || valor === 1 || valor === '1' || valor === 'true';
+}
