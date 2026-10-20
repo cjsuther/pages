@@ -8,15 +8,17 @@ import RedesSociales from '../RedesSociales';
 import BotonEntradas, { vendeEntradas } from '../BotonEntradas';
 import PrecioEvento from '../PrecioEvento';
 import RezonarBadge from '../RezonarBadge';
-import GaleriaProductos from '../GaleriaProductos';
+import DetalleProducto, { BotonComprar, tarjetaQueAbre } from '../DetalleProducto';
 import { MiniaturaGaleria, VisorGaleria } from '../MediaGaleria';
 import { textoSobre, paleta } from '../../utils/colores';
+import { describirPrecio } from '../../utils/productos';
 import { CLASES_ALREDEDOR, CLASES_CAJA, estiloDeAlrededor, estiloDeCaja, gruposPublicos } from '../../utils/plantillas';
 import { ExternalLink } from 'lucide-react';
 
 function CardsTemplate({ page }) {
   const [modalImage, setModalImage] = useState(null);
   const [modalEvent, setModalEvent] = useState(null);
+  const [modalProducto, setModalProducto] = useState(null);
   const backgroundColor = page.background_color || '#f3f4f6';
   const textColor = page.text_color || '#111827';
   const primaryColor = page.primary_color || '#3b82f6';
@@ -163,14 +165,34 @@ function CardsTemplate({ page }) {
                   ))}
                 </div>
               ) : group.type === 'productos' ? (
-                <GaleriaProductos
-                  productos={group.links || []}
-                  titulo={group.title}
-                  colores={colores}
-                  claseTarjeta="rounded-lg overflow-hidden shadow-md"
-                  estiloTarjeta={tarjetaStyle}
-                  claseImagen="w-full aspect-square object-cover"
-                />
+                // Como los eventos, con el precio en lugar de la fecha.
+                <div className="grid grid-cols-2 gap-6">
+                  {(group.links || []).map((producto, i, productos) => (
+                    <div
+                      key={producto.id}
+                      {...tarjetaQueAbre(() => setModalProducto({ productos, inicial: i }))}
+                      aria-label={producto.text}
+                      className="rounded-lg p-4 sm:p-6 shadow-md hover:shadow-xl transition cursor-pointer relative"
+                      style={tarjetaStyle}
+                    >
+                      {producto.image_url && (
+                        <img
+                          src={producto.image_url}
+                          alt={producto.text}
+                          className="w-full aspect-[1080/1350] object-cover rounded-lg mb-4"
+                        />
+                      )}
+                      <h3 className="font-bold text-base sm:text-xl mb-2">{producto.text}</h3>
+                      <p className="opacity-60">{describirPrecio(producto.precio)}</p>
+                      <BotonComprar
+                        producto={producto}
+                        colores={colores}
+                        onComprar={() => setModalProducto({ productos, inicial: i, comprar: true })}
+                        className="mt-3 w-full px-3 py-1.5 rounded-lg text-xs sm:text-sm"
+                      />
+                    </div>
+                  ))}
+                </div>
               ) : (
                 <div className="grid grid-cols-1 gap-6">
                   {group.links?.map((link) => (
@@ -340,6 +362,15 @@ function CardsTemplate({ page }) {
             </div>
           </div>
         </div>
+      )}
+
+      {modalProducto && (
+        <DetalleProducto
+          {...modalProducto}
+          colores={colores}
+          modalStyle={modalStyle}
+          onCerrar={() => setModalProducto(null)}
+        />
       )}
     </div>
   );

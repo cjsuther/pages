@@ -89,8 +89,9 @@ describe.each(PLANTILLAS)('%s', (nombre, Plantilla) => {
   // Las páginas se ven siempre en formato mobile, también en una pantalla
   // grande: por el teléfono entra casi todo el mundo, y así una página no se
   // ve de dos maneras distintas.
-  // Los productos digitales se ven en las cinco (#19), con el mismo componente
-  // y el estilo de cada una. Con varios, de a uno como un carrusel.
+  // Los productos digitales se ven en las cinco (#19) igual que los eventos de
+  // cada una, con el precio en lugar de la fecha (#26). Se pasa de uno a otro
+  // sólo en el detalle.
   describe('productos digitales', () => {
     const producto = (overrides = {}) => ({
       id: 400,
@@ -110,65 +111,152 @@ describe.each(PLANTILLAS)('%s', (nombre, Plantilla) => {
       ],
     });
 
-    it('muestra el grupo con su producto entero', () => {
-      renderConProviders(<Plantilla page={conProductos([producto()])} />);
+    const varios = () => [producto(), producto({ id: 401, text: 'Mapa' }), producto({ id: 402, text: 'Pack', precio: 0 })];
+
+    /** Una página con un evento y un producto, para comparar cómo se ven. */
+    const conEventoYProducto = (overrides = {}) => pagina({
+      groups: [
+        { id: 20, title: 'Agenda', type: 'eventos', links: [evento({ image_url: 'https://img/evento.jpg' })], collaborated_events: [] },
+        { id: 40, title: 'Tienda', type: 'productos', links: [producto()] },
+      ],
+      ...overrides,
+    });
+
+    const tarjetaDe = (nombre) => screen.getByRole('button', { name: nombre });
+    const tarjetaDelEvento = () => screen.getByAltText('Mi Evento').parentElement;
+    const elDetalle = () => screen.getAllByRole('dialog').find((d) => d.getAttribute('aria-label'));
+
+    it('muestra el grupo con la imagen, el título y el precio de cada producto', () => {
+      renderConProviders(<Plantilla page={conProductos(varios())} />);
 
       expect(screen.getByText('Tienda')).toBeInTheDocument();
-      expect(screen.getByText('Guía secreta')).toBeInTheDocument();
-      expect(screen.getByText('Todo lo que hay que saber')).toBeInTheDocument();
-      expect(screen.getByAltText('Guía secreta')).toHaveAttribute('src', 'https://img/guia.jpg');
-      expect(screen.getByText(/2\.500/)).toBeInTheDocument();
-      expect(screen.getByText('guia.pdf')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /Comprar/ })).toBeInTheDocument();
+      const tarjeta = tarjetaDe('Guía secreta');
+      expect(within(tarjeta).getByAltText('Guía secreta')).toHaveAttribute('src', 'https://img/guia.jpg');
+      expect(within(tarjeta).getByText('Guía secreta')).toBeInTheDocument();
+      expect(within(tarjeta).getByText('$ 2.500')).toBeInTheDocument();
+      expect(within(tarjetaDe('Pack')).getByText('Gratis')).toBeInTheDocument();
       expect(screen.getByText('Mis Links')).toBeInTheDocument();
     });
 
-    it('un producto gratis dice Gratis y se descarga gratis', () => {
-      renderConProviders(<Plantilla page={conProductos([producto({ precio: 0 })])} />);
+    it('no es un carrusel: se ven todos a la vez y sin flechas', () => {
+      renderConProviders(<Plantilla page={conProductos(varios())} />);
 
-      expect(screen.getByText('Gratis')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /Descargar gratis/ })).toBeInTheDocument();
+      expect(tarjetaDe('Guía secreta')).toBeInTheDocument();
+      expect(tarjetaDe('Mapa')).toBeInTheDocument();
+      expect(tarjetaDe('Pack')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Producto siguiente' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('region')).not.toBeInTheDocument();
     });
 
-    it('con un solo producto no hay flechas ni puntos', () => {
+    it('la grilla y la tarjeta son las de los eventos de la plantilla', () => {
+      renderConProviders(<Plantilla page={conEventoYProducto()} />);
+
+      const delEvento = tarjetaDelEvento();
+      const delProducto = tarjetaDe('Guía secreta');
+
+      expect(delProducto.className).toBe(delEvento.className);
+      expect(delProducto.getAttribute('style')).toBe(delEvento.getAttribute('style'));
+      expect(delProducto.parentElement.className).toBe(delEvento.parentElement.className);
+      expect(within(delProducto).getByRole('img').className).toBe(screen.getByAltText('Mi Evento').className);
+      expect(within(delProducto).getByText('Guía secreta').className).toBe(screen.getByText('Mi Evento').className);
+    });
+
+    it('sin el enlace directo de los eventos, y la descripción queda para el detalle', () => {
       renderConProviders(<Plantilla page={conProductos([producto()])} />);
 
+      const tarjeta = tarjetaDe('Guía secreta');
+      expect(within(tarjeta).queryByRole('link')).not.toBeInTheDocument();
+      expect(within(tarjeta).queryByText('Todo lo que hay que saber')).not.toBeInTheDocument();
+    });
+
+    it('la tarjeta sale de la paleta de la página', () => {
+      renderConProviders(<Plantilla page={{ ...conProductos([producto()]), card_color: '#00ff00' }} />);
+
+      expect(tarjetaDe('Guía secreta').getAttribute('style')).toContain('rgb(0, 255, 0)');
+    });
+
+    it('tocar un producto abre su detalle, y desde ahí se pasa al siguiente', () => {
+      renderConProviders(<Plantilla page={conProductos(varios())} />);
+
+      fireEvent.click(tarjetaDe('Mapa'));
+
+      expect(elDetalle()).toHaveAttribute('aria-label', 'Mapa');
+      const segundo = within(elDetalle()).getByRole('group', { name: '2 de 3' });
+      expect(within(segundo).getByText('Todo lo que hay que saber')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Ver producto 2 de 3' })).toHaveAttribute('aria-current', 'true');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Producto siguiente' }));
+      expect(elDetalle()).toHaveAttribute('aria-label', 'Pack');
+
+      fireEvent.keyDown(document, { key: 'ArrowLeft' });
+      fireEvent.keyDown(document, { key: 'ArrowLeft' });
+      expect(elDetalle()).toHaveAttribute('aria-label', 'Guía secreta');
+
+      fireEvent.keyDown(document, { key: 'Escape' });
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    it('la tarjeta se abre con el teclado', () => {
+      renderConProviders(<Plantilla page={conProductos([producto()])} />);
+      const tarjeta = tarjetaDe('Guía secreta');
+
+      expect(tarjeta).toHaveAttribute('tabindex', '0');
+      fireEvent.keyDown(tarjeta, { key: 'Enter' });
+
+      expect(elDetalle()).toHaveAttribute('aria-label', 'Guía secreta');
+    });
+
+    it('el detalle tiene el marco del detalle de un evento', () => {
+      const { unmount } = renderConProviders(<Plantilla page={conEventoYProducto()} />);
+      fireEvent.click(tarjetaDelEvento());
+      const cajaDelEvento = screen.getByRole('heading', { level: 2, name: 'Mi Evento' }).parentElement;
+      const delEvento = {
+        caja: cajaDelEvento.className,
+        estilo: cajaDelEvento.getAttribute('style'),
+        fondo: cajaDelEvento.parentElement.parentElement.className,
+      };
+      unmount();
+
+      renderConProviders(<Plantilla page={conEventoYProducto()} />);
+      fireEvent.click(tarjetaDe('Guía secreta'));
+      const cajaDelProducto = elDetalle().firstElementChild;
+
+      expect(cajaDelProducto.className).toBe(delEvento.caja);
+      expect(cajaDelProducto.getAttribute('style')).toBe(delEvento.estilo);
+      expect(elDetalle().parentElement.className).toBe(delEvento.fondo);
+    });
+
+    it('con un solo producto, el detalle no tiene flechas ni puntos', () => {
+      renderConProviders(<Plantilla page={conProductos([producto()])} />);
+
+      fireEvent.click(tarjetaDe('Guía secreta'));
+
+      expect(elDetalle()).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Producto siguiente' })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /Ver producto/ })).not.toBeInTheDocument();
     });
 
-    it('con varios se recorren de a uno con flechas y puntos', () => {
-      renderConProviders(
-        <Plantilla page={conProductos([producto(), producto({ id: 401, text: 'Mapa' }), producto({ id: 402, text: 'Pack' })])} />
-      );
+    it('el botón de la tarjeta abre el formulario de compra sin pasar por el detalle', () => {
+      renderConProviders(<Plantilla page={conProductos(varios())} />);
 
-      expect(screen.getByRole('region', { name: 'Tienda' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Producto anterior' })).toBeDisabled();
-      expect(screen.getAllByRole('button', { name: /Ver producto/ })).toHaveLength(3);
+      fireEvent.click(within(tarjetaDe('Mapa')).getByRole('button', { name: 'Comprar' }));
 
-      fireEvent.click(screen.getByRole('button', { name: 'Producto siguiente' }));
-
-      expect(screen.getByRole('button', { name: 'Ver producto 2 de 3' })).toHaveAttribute('aria-current', 'true');
-      expect(screen.getByRole('button', { name: 'Producto anterior' })).toBeEnabled();
-    });
-
-    it('el botón abre el formulario de compra', () => {
-      renderConProviders(<Plantilla page={conProductos([producto()])} />);
-
-      fireEvent.click(screen.getByRole('button', { name: /Comprar/ }));
-
+      expect(screen.getAllByRole('dialog')).toHaveLength(1);
+      expect(screen.getByText(/Mapa · \$ 2\.500/)).toBeInTheDocument();
       expect(screen.getByLabelText('NOMBRE Y APELLIDO')).toBeInTheDocument();
       expect(screen.getByLabelText('EMAIL')).toBeInTheDocument();
       expect(screen.getByLabelText('TELÉFONO (OPCIONAL)')).toBeInTheDocument();
     });
 
-    it('la tarjeta sale de la paleta de la página', () => {
-      const { container } = renderConProviders(
-        <Plantilla page={{ ...conProductos([producto()]), card_color: '#00ff00' }} />
-      );
+    it('uno gratis se descarga gratis, desde la tarjeta y desde el detalle', () => {
+      renderConProviders(<Plantilla page={conProductos([producto({ precio: 0 })])} />);
 
-      const tarjeta = container.querySelector('article');
-      expect(tarjeta.getAttribute('style')).toContain('rgb(0, 255, 0)');
+      expect(within(tarjetaDe('Guía secreta')).getByRole('button', { name: 'Descargar gratis' })).toBeInTheDocument();
+
+      fireEvent.click(tarjetaDe('Guía secreta'));
+      fireEvent.click(within(elDetalle()).getByRole('button', { name: 'Descargar gratis' }));
+
+      expect(screen.getByText('PEDIR EL LINK')).toBeInTheDocument();
     });
 
     it('un grupo de productos vacío no rompe', () => {

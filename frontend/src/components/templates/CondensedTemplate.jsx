@@ -8,9 +8,10 @@ import RedesSociales from '../RedesSociales';
 import BotonEntradas, { vendeEntradas } from '../BotonEntradas';
 import PrecioEvento from '../PrecioEvento';
 import RezonarBadge from '../RezonarBadge';
-import GaleriaProductos from '../GaleriaProductos';
+import DetalleProducto, { BotonComprar, tarjetaQueAbre } from '../DetalleProducto';
 import { MiniaturaGaleria, VisorGaleria } from '../MediaGaleria';
 import { textoSobre, paleta } from '../../utils/colores';
+import { describirPrecio } from '../../utils/productos';
 import { CLASES_ALREDEDOR, CLASES_CAJA, estiloDeAlrededor, estiloDeCaja, gruposPublicos } from '../../utils/plantillas';
 import { localidadDe } from '../../utils/eventos';
 import { ExternalLink } from 'lucide-react';
@@ -18,6 +19,7 @@ import { ExternalLink } from 'lucide-react';
 function CondensedTemplate({ page }) {
   const [modalImage, setModalImage] = useState(null);
   const [modalEvent, setModalEvent] = useState(null);
+  const [modalProducto, setModalProducto] = useState(null);
   const backgroundColor = page.background_color || '#ffffff';
   const textColor = page.text_color || '#000000';
   const primaryColor = page.primary_color || '#3b82f6';
@@ -181,16 +183,39 @@ function CondensedTemplate({ page }) {
                   ))}
                 </div>
               ) : group.type === 'productos' ? (
-                // La píldora no alcanza para precio, archivo y botón: va una
-                // tarjeta con las mismas esquinas redondeadas, compacta.
-                <GaleriaProductos
-                  productos={group.links || []}
-                  titulo={group.title}
-                  colores={colores}
-                  claseTarjeta="rounded-3xl overflow-hidden shadow-md"
-                  estiloTarjeta={{ ...estiloPildora, color: textColor }}
-                  claseImagen="w-full h-40 object-cover"
-                />
+                // La píldora de los eventos, con el precio en lugar de la fecha
+                // y, donde iba el enlace directo, el botón de comprar: en la
+                // píldora no entra el texto, así que va el ícono con su nombre.
+                <div className="space-y-2">
+                  {(group.links || []).map((producto, i, productos) => (
+                    <div
+                      key={producto.id}
+                      {...tarjetaQueAbre(() => setModalProducto({ productos, inicial: i }))}
+                      aria-label={producto.text}
+                      className={`${CLASES_PILDORA} cursor-pointer`}
+                      style={estiloPildora}
+                    >
+                      {producto.image_url && (
+                        <img
+                          src={producto.image_url}
+                          alt={producto.text}
+                          className="absolute left-2 w-12 h-12 object-cover rounded-full"
+                        />
+                      )}
+                      <div className="flex-1 min-w-0 text-center">
+                        <div className="font-semibold">{producto.text}</div>
+                        <div className="text-sm opacity-70">{describirPrecio(producto.precio)}</div>
+                      </div>
+                      <BotonComprar
+                        producto={producto}
+                        colores={colores}
+                        onComprar={() => setModalProducto({ productos, inicial: i, comprar: true })}
+                        className="absolute right-3 p-2 rounded-full shadow-md hover:scale-110"
+                        soloIcono
+                      />
+                    </div>
+                  ))}
+                </div>
               ) : (
                 <div className="space-y-3">
                   {group.links?.map((link) => (
@@ -363,6 +388,16 @@ function CondensedTemplate({ page }) {
             </div>
           </div>
         </div>
+      )}
+
+      {modalProducto && (
+        <DetalleProducto
+          {...modalProducto}
+          colores={colores}
+          modalStyle={modalStyle}
+          claseCaja="rounded-lg p-6 md:p-8"
+          onCerrar={() => setModalProducto(null)}
+        />
       )}
     </div>
   );
