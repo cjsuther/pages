@@ -180,6 +180,16 @@ describe('PanelVentasProductos', () => {
       expect(tokenDe(llamada)).toBe('Bearer tok-123');
       global.fetch = anterior;
     });
+
+    it('sin conexión lo avisa', async () => {
+      montar();
+      await screen.findByText('Ana Compradora');
+      global.fetch = vi.fn(() => Promise.reject(new Error('red')));
+
+      fireEvent.click(screen.getByRole('button', { name: /Exportar Excel/ }));
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('No pudimos conectarnos al servidor');
+    });
   });
 
   describe('reenviar el link', () => {
