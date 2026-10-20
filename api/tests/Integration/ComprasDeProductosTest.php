@@ -1134,6 +1134,88 @@ class ComprasDeProductosTest extends IntegracionTestCase
         $this->assertSame([], $this->mailer->enviados);
     }
 
+    // ============================================= comisiones de la plataforma
+
+    private function comisiones()
+    {
+        $plataforma = $this->valor("SELECT id FROM users WHERE email = 'plataforma@test'")
+            ?: $this->usuario('plataforma@test', 'Plataforma');
+        \Plataforma::olvidar();
+
+        return \PlataformaHandler::comisiones($this->db, $this->get([], $this->user($plataforma, 'plataforma@test')));
+    }
+
+    /** Una entrada vendida y cobrada, con su comisión. */
+    private function entradaPagada()
+    {
+        $eventoId = $this->evento($this->grupo($this->paginaId, 'eventos', 'Fechas'));
+        $this->assertStatus(200, EntradasHandler::config($this->db, $this->post(
+            ['activo' => 1, 'capacidad' => 10, 'precio' => 10000, 'max_por_compra' => 10],
+            $this->user($this->duenaId),
+            ['link_id' => $eventoId]
+        )));
+        $this->preferenciaOk();
+        $codigo = CheckoutHandler::comprar($this->db, $this->post([
+            'link_id' => $eventoId, 'nombre' => 'Ana', 'email' => 'ana@test.local', 'cantidad' => 1,
+        ]), $this->http, $this->mailer)->body['codigo'];
+        \Entradas::acreditarPago($this->db, $codigo, '999001', 'approved', ['comision_plataforma' => 150.0]);
+
+        return $codigo;
+    }
+
+    public function testElReporteDeComisionesSumaLosProductosSinCambiarLasEntradas()
+    {
+        $this->conectarPorOAuth();
+        $this->entradaPagada();
+
+        $soloEntradas = $this->comisiones();
+        $this->assertStatus(200, $soloEntradas);
+
+        $linkId = $this->producto();
+        $this->preferenciaOk();
+        $codigoProducto = $this->comprar($linkId)->body['codigo'];
+        $this->pagoDeMercadoPago($codigoProducto, 2500.0);
+        $this->aviso($codigoProducto);
+        // Un producto gratis no tiene comisión: no entra en el reporte.
+        $this->comprar($this->producto('0.00', 'Gratis'), ['email' => 'beto@test.local']);
+
+        $conProductos = $this->comisiones();
+
+        $this->assertSame($soloEntradas->body['por_tipo']['entradas'], $conProductos->body['por_tipo']['entradas']);
+        $this->assertSame($soloEntradas->body['resumen'], $conProductos->body['por_tipo']['entradas']);
+        $this->assertSame(1, $conProductos->body['por_tipo']['productos']['ventas']);
+        $this->assertSame(2500.0, $conProductos->body['por_tipo']['productos']['recaudado']);
+        $this->assertSame(37.5, $conProductos->body['por_tipo']['productos']['cobrada']);
+        $this->assertSame(2, $conProductos->body['resumen']['ventas']);
+        $this->assertSame(12500.0, $conProductos->body['resumen']['recaudado']);
+
+        $this->assertCount(1, $conProductos->body['paginas']);
+        $this->assertSame(2, $conProductos->body['paginas'][0]['ventas']);
+        $this->assertSame(1, $conProductos->body['paginas'][0]['ventas_productos']);
+        $this->assertSame(1, $conProductos->body['meses'][0]['ventas_productos']);
+    }
+
+    /** Un producto borrado sigue sumando en su página, y lo cobrado de menos se ve. */
+    public function testElReporteVeElProductoBorradoYLoQueSeCobroDeMenos()
+    {
+        $linkId = $this->producto();
+        $this->conectarPorOAuth();
+        $this->preferenciaOk();
+        $codigo = $this->comprar($linkId)->body['codigo'];
+        $this->pagoDeMercadoPago($codigo, 2500.0, 'approved', ['fee_details' => []]);
+        $this->aviso($codigo);
+        $this->db->exec('UPDATE product_orders SET mp_comision_cobrada = 0');
+        LinksHandler::detail($this->db, $this->delete(['id' => $linkId], $this->user($this->duenaId)), $this->disco);
+
+        $res = $this->comisiones();
+
+        $this->assertSame('La Sala', $res->body['paginas'][0]['title']);
+        $this->assertCount(1, $res->body['revisar']);
+        $this->assertSame('producto', $res->body['revisar'][0]['tipo']);
+        $this->assertSame('Guía de viaje', $res->body['revisar'][0]['evento']);
+        $this->assertSame($codigo, $res->body['revisar'][0]['codigo']);
+    }
+
     // ================================================================= mail
 
     /** Si el SMTP estaba caído al pagar, el cron lo reintenta. */
