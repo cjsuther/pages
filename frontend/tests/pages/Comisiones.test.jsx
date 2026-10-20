@@ -124,6 +124,59 @@ describe('Comisiones', () => {
     });
   });
 
+  describe('productos digitales', () => {
+    const conProductos = () => reporte({
+      resumen: { ventas: 5, recaudado: 75000, pedida: 1125, cobrada: 1125, diferencia: 0, sin_dato: 0 },
+      por_tipo: {
+        entradas: { ventas: 3, recaudado: 70000, pedida: 1050, cobrada: 1050, diferencia: 0, sin_dato: 0 },
+        productos: { ventas: 2, recaudado: 5000, pedida: 75, cobrada: 75, diferencia: 0, sin_dato: 0 },
+      },
+      paginas: [{
+        id: 26, title: 'El Ferro eventos', url_slug: 'elferro', ventas_productos: 2,
+        ventas: 5, recaudado: 75000, pedida: 1125, cobrada: 1125, diferencia: 0,
+      }],
+    });
+
+    it('separa lo de entradas de lo de productos', async () => {
+      montar({ datos: conProductos() });
+
+      expect(await screen.findByText('Entradas y productos')).toBeInTheDocument();
+      expect(screen.getByText('Productos digitales')).toBeInTheDocument();
+      // Lo de entradas, tal cual: 70.000 recaudados.
+      expect(screen.getAllByText(/70\.000/).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/5\.000/).length).toBeGreaterThan(0);
+    });
+
+    it('dice cuántas ventas de una página son de productos', async () => {
+      montar({ datos: conProductos() });
+
+      expect(await screen.findByText(/\(2 productos\)/)).toBeInTheDocument();
+    });
+
+    it('en la lista a revisar dice si es entrada o producto', async () => {
+      montar({
+        datos: reporte({
+          revisar: [
+            { codigo: 'A', tipo: 'producto', pagada_en: '2026-09-08 10:00:00', total: 2500, pedida: 37.5, cobrada: 0, evento: 'Guía', pagina: 'El Ferro' },
+            { codigo: 'B', tipo: 'entrada', pagada_en: '2026-09-07 10:00:00', total: 20000, pedida: 300, cobrada: 0, evento: 'Peluferro', pagina: 'El Ferro' },
+          ],
+        }),
+      });
+
+      expect(await screen.findByText('Guía')).toBeInTheDocument();
+      expect(screen.getByText('Producto')).toBeInTheDocument();
+      expect(screen.getByText('Entrada')).toBeInTheDocument();
+    });
+
+    /** Una API de antes, sin por_tipo, se sigue viendo como siempre. */
+    it('sin el desglose por tipo no muestra la tabla', async () => {
+      montar();
+
+      await screen.findByText('septiembre 2026');
+      expect(screen.queryByText('Entradas y productos')).not.toBeInTheDocument();
+    });
+  });
+
   describe('rango de fechas', () => {
     it('pide el reporte filtrado', async () => {
       const { llamadas } = montar();

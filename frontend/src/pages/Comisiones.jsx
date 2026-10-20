@@ -93,8 +93,8 @@ function Comisiones() {
         <Rotulo>Plataforma</Rotulo>
         <h1 className="mt-3 text-3xl sm:text-4xl font-bold tracking-tight">Comisiones cobradas</h1>
         <p className="mt-3 text-tinta-media max-w-2xl">
-          Lo que Mercado Pago descontó para Rezonar en cada venta de entradas, sobre todas las
-          páginas.
+          Lo que Mercado Pago descontó para Rezonar en cada venta de entradas y de productos
+          digitales, sobre todas las páginas.
         </p>
       </header>
 
@@ -169,13 +169,29 @@ function Comisiones() {
             </Aviso>
           )}
 
+          {datos.por_tipo && (
+            <Seccion titulo="Entradas y productos">
+              <Tabla
+                columnas={['Tipo', 'Ventas', 'Recaudado', 'Cobrado', 'Sin cobrar']}
+                filas={TIPOS.map(({ clave, nombre }) => {
+                  const t = datos.por_tipo[clave] || {};
+                  return {
+                    clave,
+                    celdas: [nombre, t.ventas || 0, formatearPrecio(t.recaudado),
+                             formatearPrecio(t.cobrada), t.diferencia || 0],
+                  };
+                })}
+              />
+            </Seccion>
+          )}
+
           <Seccion titulo="Por mes" vacio="Todavía no hay ventas con comisión.">
             {datos.meses.length > 0 && (
               <Tabla
                 columnas={['Mes', 'Ventas', 'Recaudado', 'Cobrado', 'Sin cobrar']}
                 filas={datos.meses.map((m) => ({
                   clave: m.mes,
-                  celdas: [mesLegible(m.mes), m.ventas, formatearPrecio(m.recaudado),
+                  celdas: [mesLegible(m.mes), <Ventas fila={m} />, formatearPrecio(m.recaudado),
                            formatearPrecio(m.cobrada), m.diferencia],
                 }))}
               />
@@ -198,7 +214,7 @@ function Comisiones() {
                       {p.title}
                       <ExternalLink className="w-3 h-3 opacity-50" />
                     </a>,
-                    p.ventas, formatearPrecio(p.recaudado), formatearPrecio(p.cobrada), p.diferencia,
+                    <Ventas fila={p} />, formatearPrecio(p.recaudado), formatearPrecio(p.cobrada), p.diferencia,
                   ],
                 }))}
               />
@@ -208,11 +224,11 @@ function Comisiones() {
           {datos.revisar.length > 0 && (
             <Seccion titulo="Ventas donde no se cobró la comisión">
               <Tabla
-                columnas={['Fecha', 'Página', 'Evento', 'Venta', 'Se pidió', 'Se cobró']}
+                columnas={['Fecha', 'Página', 'Tipo', 'Qué se vendió', 'Venta', 'Se pidió', 'Se cobró']}
                 filas={datos.revisar.map((v) => ({
                   clave: v.codigo,
                   celdas: [
-                    fechaCorta(v.pagada_en), v.pagina, v.evento,
+                    fechaCorta(v.pagada_en), v.pagina, v.tipo === 'producto' ? 'Producto' : 'Entrada', v.evento,
                     formatearPrecio(v.total), formatearPrecio(v.pedida), formatearPrecio(v.cobrada),
                   ],
                 }))}
@@ -222,6 +238,26 @@ function Comisiones() {
         </div>
       )}
     </Marco>
+  );
+}
+
+/** Las dos fuentes de comisión, en el orden en que se muestran. */
+const TIPOS = [
+  { clave: 'entradas', nombre: 'Entradas' },
+  { clave: 'productos', nombre: 'Productos digitales' },
+];
+
+/** Las ventas de una fila, aclarando cuántas son de productos si hay alguna. */
+function Ventas({ fila }) {
+  const productos = Number(fila.ventas_productos) || 0;
+
+  if (productos === 0) return fila.ventas;
+
+  return (
+    <>
+      {fila.ventas}
+      <span className="text-tinta-suave"> ({productos} {productos === 1 ? 'producto' : 'productos'})</span>
+    </>
   );
 }
 
