@@ -150,7 +150,12 @@ class Cobros
         return $renovado['credenciales']['access_token'];
     }
 
-    /** Access token de la página dueña de un evento. */
+    /**
+     * Access token de la página dueña de un evento.
+     *
+     * Sirve para cualquier link de la página —también un producto digital—:
+     * lo único que se mira es a qué página pertenece, no de qué tipo es.
+     */
     public static function tokenDelEvento($db, $linkId, $http = null)
     {
         $pageId = self::pageIdDelEvento($db, $linkId);
@@ -158,7 +163,7 @@ class Cobros
         return $pageId === null ? null : self::tokenDe($db, $pageId, $http);
     }
 
-    /** true si el evento pertenece a una página que puede repartir comisión. */
+    /** true si el evento (o el producto) pertenece a una página que puede repartir comisión. */
     public static function eventoAdmiteSplit($db, $linkId)
     {
         $pageId = self::pageIdDelEvento($db, $linkId);

@@ -68,12 +68,26 @@ try {
 
 $resultado['entradas_enviadas'] = $correos['enviados'];
 
+// Lo mismo con los links de descarga de los productos digitales.
+$descargas = ['enviados' => 0, 'fallidos' => 0];
+
+try {
+    if (Mailer::disponible()) {
+        $descargas = CorreoProductos::enviarPendientes($db);
+    }
+} catch (Throwable $e) {
+    $descargas['fallidos']++;
+}
+
+$resultado['descargas_enviadas'] = $descargas['enviados'];
+
 if ($esCli) {
     echo "Encolados:  {$resultado['encolados']}\n";
     echo "Enviados:   {$resultado['enviados']}\n";
     echo "Fallidos:   {$resultado['fallidos']}\n";
     echo "Expiradas:  {$resultado['expiradas']}\n";
     echo "Entradas:   {$correos['enviados']} enviadas, {$correos['fallidos']} fallidas\n";
+    echo "Descargas:  {$descargas['enviados']} enviadas, {$descargas['fallidos']} fallidas\n";
     if ($error) {
         echo "ERROR: $error\n";
         exit(1);

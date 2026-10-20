@@ -1,8 +1,8 @@
 <?php
 
 /**
- * Repasa las reservas sin pago registrado y le pregunta a Mercado Pago si
- * alguna se pagó.
+ * Repasa las reservas sin pago registrado —de entradas y de productos
+ * digitales— y le pregunta a Mercado Pago si alguna se pagó.
  *
  * Existe porque el aviso de pago es un mensaje, y un mensaje puede no llegar.
  * Cuando eso pasa nadie se entera: la orden vence sola, el comprador ve
@@ -49,6 +49,22 @@ foreach ($codigos as $codigo) {
     }
 }
 
+// Las órdenes de productos digitales pendientes, con la misma red: no hay un
+// cron aparte porque en Hostinger cada cron se configura a mano.
+$codigosDeProductos = OrdenesDeProductos::sinConciliar($db);
+
+foreach ($codigosDeProductos as $codigo) {
+    $r = CompraProductoHandler::conciliar($db, $codigo);
+
+    if ($r['revisada']) {
+        $revisadas++;
+    }
+
+    if ($r['acreditada']) {
+        $acreditadas[] = $codigo;
+    }
+}
+
 // Segunda pasada: ventas ya acreditadas a las que les falta el desglose de
 // comisiones. No mueve estados, sólo completa números que no teníamos.
 $completadas = 0;
@@ -60,7 +76,7 @@ foreach (Entradas::pagadasSinDesglose($db) as $venta) {
 }
 
 $resumen = [
-    'candidatas'  => count($codigos),
+    'candidatas'  => count($codigos) + count($codigosDeProductos),
     'revisadas'   => $revisadas,
     'acreditadas' => $acreditadas,
     'desgloses'   => $completadas,

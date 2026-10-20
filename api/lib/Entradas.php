@@ -1495,7 +1495,13 @@ class Entradas
         return array_keys(array_filter($veces, function ($n) { return $n > 1; }));
     }
 
-    private static function validarComprador(array $datos)
+    /**
+     * Qué tiene de malo lo que cargó el comprador, o null si está bien.
+     *
+     * Pública porque los productos digitales piden lo mismo: nombre, email y
+     * teléfono opcional (con cantidad 1, que es lo que vale una compra suya).
+     */
+    public static function validarComprador(array $datos)
     {
         $nombre = isset($datos['nombre']) ? trim($datos['nombre']) : '';
         $email = isset($datos['email']) ? trim($datos['email']) : '';
@@ -1526,10 +1532,25 @@ class Entradas
         return null;
     }
 
-    /** Código público aleatorio, verificando que no exista. */
-    private static function codigoLibre($db)
+    /**
+     * Código público aleatorio, verificando que no exista.
+     *
+     * Lo usan también las órdenes de productos: el mismo formato en las dos
+     * tablas, cada una verificando contra la suya. La consulta sale de una
+     * lista cerrada y no de interpolar el nombre de la tabla.
+     */
+    public static function codigoLibre($db, $tabla = 'ticket_orders')
     {
-        $stmt = $db->prepare('SELECT 1 FROM ticket_orders WHERE codigo = ?');
+        $consultas = [
+            'ticket_orders'  => 'SELECT 1 FROM ticket_orders WHERE codigo = ?',
+            'product_orders' => 'SELECT 1 FROM product_orders WHERE codigo = ?',
+        ];
+
+        if (!isset($consultas[$tabla])) {
+            throw new InvalidArgumentException('Tabla de órdenes desconocida');
+        }
+
+        $stmt = $db->prepare($consultas[$tabla]);
 
         for ($intento = 0; $intento < 5; $intento++) {
             $codigo = strtoupper(bin2hex(random_bytes(6)));
