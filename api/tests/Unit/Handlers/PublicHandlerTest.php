@@ -329,6 +329,99 @@ class PublicHandlerTest extends HandlerTestCase
         }
     }
 
+    // =============================================================== producto
+
+    private function productoConPagina(array $extra = [])
+    {
+        return $this->productoDeLaBase(array_merge([
+            'page_title' => 'La Sala', 'page_slug' => 'la-sala', 'page_image' => 'https://img/logo.jpg',
+            'primary_color' => '#ff8800', 'secondary_color' => null, 'card_color' => null, 'title_color' => null,
+            'background_color' => '#111111', 'text_color' => '#eeeeee', 'template' => 'cards',
+            'background_image' => 'https://img/fondo.jpg',
+        ], $extra));
+    }
+
+    public function testProductoRechazaMetodosDistintosDeGet()
+    {
+        $this->assertStatus(405, PublicHandler::producto($this->db, $this->post(['id' => 400])));
+    }
+
+    /** @dataProvider idsInvalidos */
+    public function testProductoExigeUnIdValido($id)
+    {
+        $this->assertError(400, PublicHandler::producto($this->db, $this->get(['id' => $id])), 'ID de producto requerido');
+        $this->assertSame(0, $this->db->countCalls('FROM links l'));
+    }
+
+    public static function idsInvalidos()
+    {
+        return ['vacío' => [''], 'cero' => ['0'], 'negativo' => ['-4'], 'texto' => ['abc']];
+    }
+
+    /**
+     * Uno que no existe, oculto, borrado o sin archivo: la consulta no lo
+     * trae y la respuesta es la misma, sin nada que diga cuál era.
+     */
+    public function testProductoQueNoEstaEnVentaDa404SinDetalles()
+    {
+        $res = PublicHandler::producto($this->db, $this->get(['id' => '400']));
+
+        $this->assertError(404, $res, 'Este producto ya no está disponible.');
+        $this->assertSame(['error'], array_keys($res->body));
+    }
+
+    public function testProductoUsaElFiltroDeLosQueEstanEnVenta()
+    {
+        PublicHandler::producto($this->db, $this->get(['id' => '400']));
+
+        $llamada = $this->db->callsFor('INNER JOIN digital_products dp ON dp.link_id = l.id')[0];
+        $this->assertStringContainsString(\ProductosDigitales::CONDICION_EN_VENTA, $llamada['sql']);
+        $this->assertStringContainsString("lg.type = 'productos'", $llamada['sql']);
+        $this->assertSame([400], $llamada['params']);
+    }
+
+    public function testProductoDevuelveElProductoConSuPaginaYSusColores()
+    {
+        $this->db->onSelect('INNER JOIN digital_products dp ON dp.link_id = l.id', [$this->productoConPagina()]);
+
+        $res = PublicHandler::producto($this->db, $this->get(['id' => '400']));
+
+        $this->assertStatus(200, $res);
+        $producto = $res->body['producto'];
+        $this->assertSame(400, $producto['id']);
+        $this->assertSame('Guía', $producto['text']);
+        $this->assertSame(2500.0, $producto['precio']);
+        $this->assertSame('guia.pdf', $producto['archivo_nombre']);
+        $this->assertSame(1048576, $producto['archivo_bytes']);
+        $this->assertSame('La Sala', $producto['page_title']);
+        $this->assertSame('la-sala', $producto['page_slug']);
+        $this->assertSame('#ff8800', $producto['primary_color']);
+        $this->assertSame('#111111', $producto['background_color']);
+    }
+
+    /**
+     * Aunque la consulta trajera la ruta del archivo, el estado o datos de
+     * ventas, la respuesta sólo lleva las dos listas cerradas.
+     */
+    public function testProductoNuncaLlevaLaRutaNiDatosDeVentas()
+    {
+        $this->db->onSelect('INNER JOIN digital_products dp ON dp.link_id = l.id', [$this->productoConPagina([
+            'archivo_ruta' => 'productos/' . str_repeat('b', 32),
+            'token_hash' => 'secreto', 'ventas' => 12, 'oculto' => '0', 'user_id' => 9, 'page_id' => 5,
+        ])]);
+
+        $res = PublicHandler::producto($this->db, $this->get(['id' => '400']));
+
+        $json = json_encode($res->body);
+        $this->assertStringNotContainsString('archivo_ruta', $json);
+        $this->assertStringNotContainsString(str_repeat('b', 32), $json);
+        $this->assertStringNotContainsString('secreto', $json);
+        $this->assertSame(
+            array_merge(PublicHandler::CAMPOS_DE_PRODUCTO, PublicHandler::CAMPOS_DE_PAGINA_DEL_PRODUCTO),
+            array_keys($res->body['producto'])
+        );
+    }
+
     // ================================================================= events
 
     public function testEventsUsaElRangoPorDefectoDeTreintaDias()

@@ -30,6 +30,17 @@ class PublicHandler
      */
     const CAMPOS_DE_PRODUCTO = ['id', 'group_id', 'text', 'description', 'image_url', 'position', 'precio', 'archivo_nombre', 'archivo_bytes'];
 
+    /**
+     * Lo que sale de la página junto a un producto con link propio: con qué
+     * nombre y a dónde volver, y sus colores. También es una lista de lo que
+     * sí, por lo mismo que la de arriba.
+     */
+    const CAMPOS_DE_PAGINA_DEL_PRODUCTO = [
+        'page_title', 'page_slug', 'page_image',
+        'primary_color', 'secondary_color', 'card_color', 'title_color',
+        'background_color', 'text_color', 'template', 'background_image',
+    ];
+
     // ------------------------------------------------------------------- page
 
     /** Página pública completa, tal como la consume el frontend y el index.php de OG tags. */
@@ -109,19 +120,26 @@ class PublicHandler
         $productos = [];
 
         foreach (ProductosDigitales::publicosDelGrupo($db, $groupId) as $fila) {
-            $producto = [];
-
-            foreach (self::CAMPOS_DE_PRODUCTO as $campo) {
-                $producto[$campo] = isset($fila[$campo]) ? $fila[$campo] : null;
-            }
-
-            $producto['id'] = (int) $producto['id'];
-            $producto['precio'] = round((float) $producto['precio'], 2);
-            $producto['archivo_bytes'] = $producto['archivo_bytes'] === null ? null : (int) $producto['archivo_bytes'];
-            $productos[] = $producto;
+            $productos[] = self::productoPublico($fila);
         }
 
         return $productos;
+    }
+
+    /** Una fila de producto reducida a CAMPOS_DE_PRODUCTO, con los tipos que espera el frontend. */
+    private static function productoPublico(array $fila)
+    {
+        $producto = [];
+
+        foreach (self::CAMPOS_DE_PRODUCTO as $campo) {
+            $producto[$campo] = isset($fila[$campo]) ? $fila[$campo] : null;
+        }
+
+        $producto['id'] = (int) $producto['id'];
+        $producto['precio'] = round((float) $producto['precio'], 2);
+        $producto['archivo_bytes'] = $producto['archivo_bytes'] === null ? null : (int) $producto['archivo_bytes'];
+
+        return $producto;
     }
 
     /** La página pública sólo muestra eventos futuros. */
@@ -267,6 +285,63 @@ class PublicHandler
         }
 
         return Response::ok(['event' => self::completarEvento($db, $event)]);
+    }
+
+    // --------------------------------------------------------------- producto
+
+    /**
+     * Un producto digital por el id de su link, para /producto/:id: el link
+     * que el organizador comparte por WhatsApp o redes.
+     *
+     * Sólo si está en venta (ProductosDigitales::CONDICION_EN_VENTA). Uno que
+     * no existe, oculto, borrado o sin archivo da el mismo 404 con el mismo
+     * mensaje: desde afuera no se distingue cuál de todos es.
+     */
+    public static function producto($db, Request $req)
+    {
+        if ($req->method !== 'GET') {
+            return Response::methodNotAllowed();
+        }
+
+        $id = (int) $req->param('id');
+
+        if ($id <= 0) {
+            return Response::error(400, 'ID de producto requerido');
+        }
+
+        $stmt = $db->prepare('
+            SELECT l.*, ' . ProductosDigitales::COLUMNAS_PUBLICAS . ',
+                p.title as page_title,
+                p.url_slug as page_slug,
+                p.profile_image as page_image,
+                p.primary_color,
+                p.secondary_color,
+                p.card_color,
+                p.title_color,
+                p.background_color,
+                p.text_color,
+                p.template,
+                p.background_image
+            FROM links l
+            INNER JOIN digital_products dp ON dp.link_id = l.id
+            INNER JOIN link_groups lg ON lg.id = l.group_id
+            INNER JOIN pages p ON p.id = lg.page_id
+            WHERE l.id = ? AND lg.type = \'productos\' AND ' . ProductosDigitales::CONDICION_EN_VENTA . '
+        ');
+        $stmt->execute([$id]);
+        $fila = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$fila) {
+            return Response::notFound(ProductosDigitales::MENSAJE_NO_DISPONIBLE);
+        }
+
+        $producto = self::productoPublico($fila);
+
+        foreach (self::CAMPOS_DE_PAGINA_DEL_PRODUCTO as $campo) {
+            $producto[$campo] = isset($fila[$campo]) ? $fila[$campo] : null;
+        }
+
+        return Response::ok(['producto' => $producto]);
     }
 
     // ----------------------------------------------------------------- events
