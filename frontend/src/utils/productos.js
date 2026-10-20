@@ -30,6 +30,64 @@ export function describirPrecio(precio) {
 }
 
 /**
+ * Dónde se guarda el link de descarga de una compra mientras el comprador
+ * paga en Mercado Pago, para ofrecerle la descarga apenas vuelve sin ponerlo
+ * en ninguna URL. La clave es el código de la orden, que no es una credencial.
+ */
+const claveDeDescarga = (codigo) => `rz_descarga_${codigo}`;
+
+/** Guarda el token de una compra. En modo privado localStorage puede fallar: no es grave. */
+export function guardarTokenDeDescarga(codigo, token) {
+  try {
+    window.localStorage.setItem(claveDeDescarga(codigo), token);
+  } catch (e) {
+    // Sin dónde guardarlo, el link igual llega por mail.
+  }
+}
+
+/** El token guardado de una compra, o null (otro dispositivo, modo privado). */
+export function tokenDeDescarga(codigo) {
+  try {
+    const token = window.localStorage.getItem(claveDeDescarga(codigo));
+    return token && /^[a-f0-9]{64}$/.test(token) ? token : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+/** El token de la dirección de /descarga: va después del #, que no llega al servidor. */
+export function tokenDelHash(hash) {
+  const token = String(hash || '').replace(/^#/, '');
+  return /^[a-f0-9]{64}$/.test(token) ? token : null;
+}
+
+/**
+ * Pide un producto: crea la orden y, si es pago, devuelve a dónde ir a pagar.
+ *
+ * El token se guarda antes de devolver, o sea antes de salir a Mercado Pago:
+ * al volver a /compra/:codigo la pantalla lo busca para ofrecer la descarga.
+ * Un producto gratis no trae token: el link llega por mail.
+ */
+export async function comprarProducto({ apiUrl, linkId, nombre, email, telefono }) {
+  const r = await fetch(`${apiUrl}/public/comprar-producto.php`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ link_id: linkId, nombre, email, telefono }),
+  });
+  const data = await r.json().catch(() => ({}));
+
+  if (!r.ok) {
+    throw new Error(data.error || 'No pudimos iniciar la compra');
+  }
+
+  if (data.token && data.codigo) {
+    guardarTokenDeDescarga(data.codigo, data.token);
+  }
+
+  return data;
+}
+
+/**
  * Sube el archivo de un producto que ya existe.
  *
  * Devuelve el producto actualizado, o tira un Error con lo que hay que

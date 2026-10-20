@@ -18,6 +18,8 @@ import VentaEnVivo from './pages/VentaEnVivo';
 import PublicPage from './pages/PublicPage';
 import EventDetail from './pages/EventDetail';
 import EstadoOrden from './pages/EstadoOrden';
+import EstadoCompra from './pages/EstadoCompra';
+import Descarga from './pages/Descarga';
 import Autorizar from './pages/Autorizar';
 import SubirImagen from './pages/SubirImagen';
 import { paginaDelDominio } from './utils/dominio';
@@ -118,6 +120,10 @@ function App() {
             <Route path="/page/:id/item/:linkId" element={token ? <ItemEditor /> : <Navigate to="/login" />} />
             <Route path="/evento/:id" element={<EventDetail />} />
             <Route path="/entrada/:codigo" element={<EstadoOrden apiUrl={API_URL} />} />
+            {/* Productos digitales: la vuelta de Mercado Pago y el link del
+                mail, que lleva el token después del #. */}
+            <Route path="/compra/:codigo" element={<EstadoCompra apiUrl={API_URL} />} />
+            <Route path="/descarga" element={<Descarga apiUrl={API_URL} />} />
             <Route path="/puerta" element={<Puerta apiUrl={API_URL} />} />
             {/* La clave va en la dirección: es lo que le permite a WhatsApp
                 mostrar el afiche del evento al compartir el link. Sin clave
