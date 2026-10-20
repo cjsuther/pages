@@ -1536,25 +1536,26 @@ class Entradas
      * Código público aleatorio, verificando que no exista.
      *
      * Lo usan también las órdenes de productos: el mismo formato en las dos
-     * tablas, cada una verificando contra la suya. La consulta sale de una
-     * lista cerrada y no de interpolar el nombre de la tabla.
+     * tablas, y un código no se repite entre ellas —una entrada y un producto
+     * nunca comparten código—, así que se verifica contra las dos sea cual
+     * sea la tabla. $tabla queda por compatibilidad y se valida contra una
+     * lista cerrada.
      */
     public static function codigoLibre($db, $tabla = 'ticket_orders')
     {
-        $consultas = [
-            'ticket_orders'  => 'SELECT 1 FROM ticket_orders WHERE codigo = ?',
-            'product_orders' => 'SELECT 1 FROM product_orders WHERE codigo = ?',
-        ];
-
-        if (!isset($consultas[$tabla])) {
+        if (!in_array($tabla, ['ticket_orders', 'product_orders'], true)) {
             throw new InvalidArgumentException('Tabla de órdenes desconocida');
         }
 
-        $stmt = $db->prepare($consultas[$tabla]);
+        $stmt = $db->prepare('
+            SELECT 1 FROM ticket_orders WHERE codigo = ?
+            UNION ALL
+            SELECT 1 FROM product_orders WHERE codigo = ?
+        ');
 
         for ($intento = 0; $intento < 5; $intento++) {
             $codigo = strtoupper(bin2hex(random_bytes(6)));
-            $stmt->execute([$codigo]);
+            $stmt->execute([$codigo, $codigo]);
 
             if ($stmt->fetchColumn() === false) {
                 return $codigo;
