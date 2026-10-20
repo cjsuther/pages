@@ -15,6 +15,24 @@ export const GA_MEASUREMENT_ID = import.meta.env.VITE_GA_MEASUREMENT_ID || '';
 
 const URL_TAG = 'https://www.googletagmanager.com/gtag/js?id=';
 
+/**
+ * La URL que se le informa a Google: sin lo que va después del #.
+ *
+ * Detrás del # viajan credenciales: el token de /descarga#<token> y las
+ * claves de /puerta# y /venta#. Están ahí justamente para que no lleguen a
+ * ningún servidor, y gtag, si no se le dice otra cosa, manda
+ * document.location entero con cada vista y cada evento. Por eso se fija esta
+ * en la configuración y se vuelve a fijar (con `set`) en cada vista: los
+ * eventos que salen después la toman de ahí.
+ */
+export function urlSinHash() {
+  if (typeof window === 'undefined' || !window.location) return '';
+
+  const { origin, pathname, search } = window.location;
+
+  return `${origin}${pathname}${search}`;
+}
+
 /** Sin propiedad no se mide: en desarrollo y en los tests no hay ninguna. */
 function seMide() {
   return GA_MEASUREMENT_ID !== '' && typeof window.gtag === 'function';
@@ -48,7 +66,7 @@ export function iniciarAnalytics() {
   window.gtag = function gtag() { window.dataLayer.push(arguments); };
 
   window.gtag('js', new Date());
-  window.gtag('config', GA_MEASUREMENT_ID, { send_page_view: false });
+  window.gtag('config', GA_MEASUREMENT_ID, { send_page_view: false, page_location: urlSinHash() });
 
   return true;
 }
@@ -64,10 +82,14 @@ export function iniciarAnalytics() {
 export const pageview = (url, title) => {
   if (!seMide()) return;
 
+  const ubicacion = urlSinHash();
+
+  // Para los eventos que salgan desde esta pantalla (trackEvent).
+  window.gtag('set', { page_location: ubicacion });
   window.gtag('event', 'page_view', {
     page_path: url,
     page_title: title,
-    page_location: window.location.href,
+    page_location: ubicacion,
   });
 };
 
