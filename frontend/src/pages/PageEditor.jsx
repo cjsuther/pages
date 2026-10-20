@@ -8,6 +8,9 @@ import SeccionEntradas from '../components/SeccionEntradas';
 import PanelMetricas from '../components/PanelMetricas';
 import PanelClientes from '../components/PanelClientes';
 import PixelDeMeta from '../components/PixelDeMeta';
+import ArchivoDeProducto from '../components/ArchivoDeProducto';
+import AvisoMercadoPago from '../components/AvisoMercadoPago';
+import { describirPrecio, excesoArchivoProducto, subirArchivoDeProducto } from '../utils/productos';
 import { analizarEmbed, portadaDe } from '../utils/embeds';
 import { paleta } from '../utils/colores';
 import { MAX_BYTES, excesoImagenEvento } from '../utils/imagenes';
@@ -98,6 +101,10 @@ function PageEditor() {
     event_maps_url: ''
   });
   const [uploadingLinkImage, setUploadingLinkImage] = useState(false);
+  // El archivo de un producto nuevo se elige en el formulario, pero se sube
+  // después de crear el producto: la subida necesita su id.
+  const [archivoNuevo, setArchivoNuevo] = useState(null);
+  const [subiendoArchivo, setSubiendoArchivo] = useState(false);
 
   // Collaborations state
   const [pendingCollaborations, setPendingCollaborations] = useState([]);
@@ -512,6 +519,18 @@ function PageEditor() {
       }
     }
 
+    const esProducto = selectedGroup.type === 'productos';
+    const cuerpo = esProducto
+      ? {
+          group_id: selectedGroup.id,
+          url: '',
+          text: newLink.text,
+          description: newLink.description,
+          image_url: newLink.image_url,
+          precio: newLink.precio ?? '',
+        }
+      : { ...newLink, group_id: selectedGroup.id };
+
     try {
       setGlobalLoading(true);
       const response = await fetch(`${apiUrl}/links/index.php`, {
@@ -520,9 +539,18 @@ function PageEditor() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ ...newLink, group_id: selectedGroup.id })
+        body: JSON.stringify(cuerpo)
       });
+      if (!response.ok && esProducto) {
+        const data = await response.json().catch(() => ({}));
+        alert(data.error || 'No se pudo crear el producto');
+      }
       if (response.ok) {
+        if (esProducto && archivoNuevo) {
+          const data = await response.json();
+          await subirArchivoNuevo(data.link.id);
+        }
+        setArchivoNuevo(null);
         setShowLinkModal(false);
         setNewLink({
           url: '',
@@ -546,6 +574,30 @@ function PageEditor() {
     } finally {
       setGlobalLoading(false);
     }
+  };
+
+  /**
+   * Sube el archivo del producto recién creado. Si falla, el producto ya
+   * existe: se avisa y se puede subir desde Editar, sin cargar todo de nuevo.
+   */
+  const subirArchivoNuevo = async (linkId) => {
+    setSubiendoArchivo(true);
+    try {
+      await subirArchivoDeProducto({ apiUrl, token, linkId, file: archivoNuevo });
+    } catch (err) {
+      alert(`El producto se creó, pero el archivo no se pudo subir: ${err.message} Podés subirlo desde Editar.`);
+    } finally {
+      setSubiendoArchivo(false);
+    }
+  };
+
+  const elegirArchivoNuevo = (file) => {
+    const exceso = excesoArchivoProducto(file);
+    if (exceso) {
+      alert(exceso);
+      return;
+    }
+    setArchivoNuevo(file);
   };
 
   const deleteLink = async (linkId) => {
@@ -1168,6 +1220,11 @@ function PageEditor() {
                     imágenes, videos de YouTube y contenido de Instagram, que se abren
                     en grande.
                   </li>
+                  <li>
+                    <strong className="text-tinta-media">Productos digitales —</strong> archivos
+                    para vender o regalar: un PDF, plantillas, un pack de fotos, un audio.
+                    Por ahora se cargan acá y todavía no se muestran en tu página.
+                  </li>
                 </ul>
                 <p className="text-xs text-tinta-suave mt-3">
                   El tipo se elige al crear el grupo y conviene acertarlo: un evento cargado
@@ -1196,6 +1253,7 @@ function PageEditor() {
                             }`}>
                             {group.type === 'galeria' ? 'Galería' :
                               group.type === 'eventos' ? 'Eventos' :
+                                group.type === 'productos' ? 'Productos digitales' :
                                   'Links'}
                           </span>
                         </div>
@@ -1234,6 +1292,7 @@ function PageEditor() {
                             >
                               {group.type === 'galeria' ? '+ Contenido' :
                                 group.type === 'eventos' ? '+ Evento' :
+                                  group.type === 'productos' ? '+ Producto' :
                                   '+ Link'}
                             </button>
                             <button
@@ -1317,6 +1376,13 @@ function PageEditor() {
                                 )}
                                 {link.description && (
                                   <p className="text-sm text-tinta-suave">{link.description}</p>
+                                )}
+                                {group.type === 'productos' && (
+                                  <p className="text-xs text-tinta-media mt-1">
+                                    {describirPrecio(link.precio)}
+                                    {' · '}
+                                    {link.archivo_nombre || <span className="text-red-700">Sin archivo</span>}
+                                  </p>
                                 )}
                                 {link.event_due == '1' && (
                                   <p className="text-sm text-red-600 font-semibold mt-1">¡Evento vencido!</p>
@@ -1427,11 +1493,13 @@ function PageEditor() {
                   <option value="links">Links</option>
                   <option value="galeria">Galería</option>
                   <option value="eventos">Eventos</option>
+                  <option value="productos">Productos digitales</option>
                 </select>
                 <p className="text-xs text-tinta-suave mt-2">
                   {newGroup.type === 'links' && 'Lista de enlaces con descripción'}
                   {newGroup.type === 'galeria' && 'Cuadrícula de imágenes'}
                   {newGroup.type === 'eventos' && 'Eventos con fecha, hora y ubicación'}
+                  {newGroup.type === 'productos' && 'Archivos para vender o regalar. Todavía no se muestran en tu página.'}
                 </p>
               </div>
               <div className="flex gap-3 pt-4">
@@ -1496,16 +1564,22 @@ function PageEditor() {
         <div className="fixed inset-0 bg-tinta/40 backdrop-blur-sm flex items-start justify-center p-4 z-50 overflow-y-auto">
           <div className="bg-white border border-borde max-w-lg w-full p-10 my-8">
             <h2 className="text-3xl font-bold mb-8 text-tinta">
-              {selectedGroup.type === 'galeria' ? 'Nuevo contenido' : selectedGroup.type === 'eventos' ? 'Nuevo evento' : 'Nuevo link'}
+              {selectedGroup.type === 'galeria' ? 'Nuevo contenido'
+                : selectedGroup.type === 'eventos' ? 'Nuevo evento'
+                : selectedGroup.type === 'productos' ? 'Nuevo producto'
+                : 'Nuevo link'}
             </h2>
             <form onSubmit={createLink} className="space-y-6">
               {selectedGroup.type !== 'galeria' && (
                 <>
                   <div>
-                    <label className="block text-sm font-semibold text-tinta mb-1.5">
-                      {selectedGroup.type === 'eventos' ? 'Nombre del evento' : 'Texto'}
+                    <label htmlFor="nuevo-texto" className="block text-sm font-semibold text-tinta mb-1.5">
+                      {selectedGroup.type === 'eventos' ? 'Nombre del evento'
+                        : selectedGroup.type === 'productos' ? 'Título'
+                        : 'Texto'}
                     </label>
                     <input
+                      id="nuevo-texto"
                       type="text"
                       value={newLink.text}
                       onChange={(e) => setNewLink({ ...newLink, text: e.target.value })}
@@ -1513,7 +1587,7 @@ function PageEditor() {
                       required
                     />
                   </div>
-                  {selectedGroup.type === 'eventos' ? (
+                  {selectedGroup.type === 'productos' ? null : selectedGroup.type === 'eventos' ? (
                     <div className="grid grid-cols-2 gap-4 items-end">
                       <div>
                         <label className="block text-sm font-semibold text-tinta mb-1.5">URL (opcional)</label>
@@ -1737,12 +1811,44 @@ function PageEditor() {
                   />
                 </div>
               )}
+
+              {selectedGroup.type === 'productos' && (
+                <>
+                  <div>
+                    <label htmlFor="nuevo-precio-producto" className="block text-sm font-semibold text-tinta mb-1.5">
+                      Precio
+                    </label>
+                    <input
+                      id="nuevo-precio-producto"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={newLink.precio ?? ''}
+                      onChange={(e) => setNewLink({ ...newLink, precio: e.target.value })}
+                      placeholder="0"
+                      className="w-full px-4 py-3 rounded-xl bg-white border border-borde-fuerte text-tinta placeholder-tinta-suave focus:border-verde-oscuro focus:outline-none transition-colors"
+                    />
+                    <p className="text-xs text-tinta-suave mt-1">En pesos. 0 = gratis.</p>
+                  </div>
+
+                  <AvisoMercadoPago pageId={id} apiUrl={apiUrl} token={token} precio={newLink.precio} />
+
+                  <ArchivoDeProducto
+                    archivo={archivoNuevo ? { nombre: archivoNuevo.name, bytes: archivoNuevo.size } : null}
+                    subiendo={subiendoArchivo}
+                    onElegir={elegirArchivoNuevo}
+                  />
+                </>
+              )}
+
               <div className="flex gap-3 pt-4">
                 <button
                   type="button"
+                  disabled={subiendoArchivo}
                   onClick={() => {
                     setShowLinkModal(false);
                     setSelectedGroup(null);
+                    setArchivoNuevo(null);
                     setNewLink({
                       url: '',
                       text: '',
@@ -1756,13 +1862,14 @@ function PageEditor() {
                       event_maps_url: ''
                     });
                   }}
-                  className="flex-1 px-4 py-3 border border-borde-fuerte text-tinta hover:bg-papel-hueso transition font-bold"
+                  className="flex-1 px-4 py-3 border border-borde-fuerte text-tinta hover:bg-papel-hueso transition font-bold disabled:opacity-50"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 bg-verde text-verde-tinta px-4 py-3 font-bold hover:bg-verde-oscuro hover:text-tinta transition"
+                  disabled={subiendoArchivo}
+                  className="flex-1 bg-verde text-verde-tinta px-4 py-3 font-bold hover:bg-verde-oscuro hover:text-tinta transition disabled:opacity-50"
                 >
                   Crear
                 </button>

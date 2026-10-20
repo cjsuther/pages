@@ -5,8 +5,11 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import GooglePlacesAutocomplete from '../components/GooglePlacesAutocomplete';
 import PanelEntradas from '../components/PanelEntradas';
 import PanelVentas from '../components/PanelVentas';
+import ArchivoDeProducto from '../components/ArchivoDeProducto';
+import AvisoMercadoPago from '../components/AvisoMercadoPago';
 import { analizarEmbed, EJEMPLOS_EMBED } from '../utils/embeds';
 import { MAX_BYTES, excesoImagenEvento } from '../utils/imagenes';
+import { subirArchivoDeProducto } from '../utils/productos';
 
 /**
  * Edición de un item (link, imagen o evento) en pantalla completa.
@@ -28,6 +31,8 @@ function ItemEditor() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [subiendoArchivo, setSubiendoArchivo] = useState(false);
+  const [errorArchivo, setErrorArchivo] = useState('');
   // Tab activo cuando el item es un evento: datos | entradas | ventas.
   const [tab, setTab] = useState('datos');
   // Qué es este item de galería: imagen, youtube o instagram. Se deduce de la
@@ -122,6 +127,29 @@ function ItemEditor() {
     setUploadingImage(false);
 
     if (url) setItem({ ...item, image_url: url });
+  };
+
+  /**
+   * El archivo de un producto se sube apenas se elige: el producto ya existe,
+   * y así el guardar del formulario no queda esperando 50 MB. Al reemplazarlo,
+   * la API borra el anterior.
+   */
+  const subirArchivo = async (file) => {
+    setErrorArchivo('');
+    setSubiendoArchivo(true);
+    try {
+      const actualizado = await subirArchivoDeProducto({ apiUrl, token, linkId: item.id, file });
+      setItem((actual) => ({
+        ...actual,
+        archivo_nombre: actualizado.archivo_nombre,
+        archivo_bytes: actualizado.archivo_bytes,
+        archivo_tipo: actualizado.archivo_tipo,
+      }));
+    } catch (err) {
+      setErrorArchivo(err.message);
+    } finally {
+      setSubiendoArchivo(false);
+    }
   };
 
   const handlePlaceSelect = (placeData) => {
@@ -288,7 +316,10 @@ function ItemEditor() {
     );
   }
 
-  const queEs = group.type === 'galeria' ? 'contenido' : group.type === 'eventos' ? 'evento' : 'link';
+  const queEs = group.type === 'galeria' ? 'contenido'
+    : group.type === 'eventos' ? 'evento'
+    : group.type === 'productos' ? 'producto'
+    : 'link';
 
   return (
     <div className="min-h-screen bg-white text-tinta">
@@ -362,10 +393,11 @@ function ItemEditor() {
           {group.type !== 'galeria' && (
             <>
               <div>
-                <label className="block text-sm font-semibold text-tinta mb-1.5">
-                  {group.type === 'eventos' ? 'Nombre del evento' : 'Texto'}
+                <label htmlFor="texto-del-item" className="block text-sm font-semibold text-tinta mb-1.5">
+                  {group.type === 'eventos' ? 'Nombre del evento' : group.type === 'productos' ? 'Título' : 'Texto'}
                 </label>
                 <input
+                  id="texto-del-item"
                   type="text"
                   value={item.text || ''}
                   onChange={(e) => setItem({ ...item, text: e.target.value })}
@@ -373,7 +405,8 @@ function ItemEditor() {
                   required
                 />
               </div>
-              {group.type === 'eventos' ? null : (
+              {/* Un producto no lleva a ninguna parte: se compra. */}
+              {group.type === 'eventos' || group.type === 'productos' ? null : (
                 <div>
                   <label className="block text-sm font-semibold text-tinta mb-1.5">URL</label>
                   <input
@@ -579,6 +612,36 @@ function ItemEditor() {
             </div>
           )}
 
+          {group.type === 'productos' && (
+            <>
+              <div>
+                <label htmlFor="precio-producto" className="block text-sm font-semibold text-tinta mb-1.5">
+                  Precio
+                </label>
+                <input
+                  id="precio-producto"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={item.precio ?? ''}
+                  onChange={(e) => setItem({ ...item, precio: e.target.value })}
+                  placeholder="0"
+                  className="w-full px-4 py-3 rounded-xl bg-white border border-borde-fuerte text-tinta placeholder-tinta-suave focus:border-verde-oscuro focus:outline-none transition-colors"
+                />
+                <p className="text-xs text-tinta-suave mt-1">En pesos. 0 = gratis.</p>
+              </div>
+
+              <AvisoMercadoPago pageId={id} apiUrl={apiUrl} token={token} precio={item.precio} />
+
+              <ArchivoDeProducto
+                archivo={item.archivo_nombre ? { nombre: item.archivo_nombre, bytes: item.archivo_bytes } : null}
+                subiendo={subiendoArchivo}
+                onElegir={subirArchivo}
+                error={errorArchivo}
+              />
+            </>
+          )}
+
           {group.type === 'eventos' && (
             <div className="border-t border-borde-fuerte pt-6">
               <label className="block text-sm font-semibold text-tinta mb-1.5">Colaboradores</label>
@@ -655,9 +718,11 @@ function ItemEditor() {
             >
               Cancelar
             </button>
+            {/* Salir mientras sube cortaría la subida a la mitad. */}
             <button
               type="submit"
-              className="flex-1 bg-verde text-verde-tinta px-4 py-3 font-bold hover:bg-verde-oscuro hover:text-tinta transition"
+              disabled={subiendoArchivo}
+              className="flex-1 bg-verde text-verde-tinta px-4 py-3 font-bold hover:bg-verde-oscuro hover:text-tinta transition disabled:opacity-50"
             >
               Guardar
             </button>
