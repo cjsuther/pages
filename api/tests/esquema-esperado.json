@@ -55,6 +55,17 @@
         "created_at": "migration_carcajada.sql",
         "updated_at": "migration_carcajada.sql"
     },
+    "digital_products": {
+        "id": "migration_productos_digitales.sql",
+        "link_id": "migration_productos_digitales.sql",
+        "precio": "migration_productos_digitales.sql",
+        "archivo_ruta": "migration_productos_digitales.sql",
+        "archivo_nombre": "migration_productos_digitales.sql",
+        "archivo_bytes": "migration_productos_digitales.sql",
+        "archivo_tipo": "migration_productos_digitales.sql",
+        "creado_en": "migration_productos_digitales.sql",
+        "actualizado_en": "migration_productos_digitales.sql"
+    },
     "event_access_links": {
         "id": "migration_links_de_evento.sql",
         "link_id": "migration_links_de_evento.sql",
