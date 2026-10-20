@@ -1,10 +1,13 @@
-import React, { useContext, useRef, useState } from 'react';
+import React, { useContext, useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Download, FileText, ShoppingBag } from 'lucide-react';
 import { AuthContext } from '../App';
 import ComprarProducto from './ComprarProducto';
 import { describirPrecio, esPago } from '../utils/productos';
 import { describirPeso } from '../utils/imagenes';
 import { textoSobre } from '../utils/colores';
+
+/** Si no llega scrollend, cuánto se espera para volver a seguir el scroll. */
+const MS_DE_RESPALDO = 1000;
 
 /** Si la persona pidió menos movimiento en su sistema. */
 export function prefiereMenosMovimiento() {
@@ -37,10 +40,36 @@ function GaleriaProductos({
   const [actual, setActual] = useState(0);
   const [comprando, setComprando] = useState(null);
 
-  if (productos.length === 0) return null;
+  // Adónde va el desplazamiento suave que pidieron las flechas, los puntos o
+  // el teclado. Mientras anima, el scroll pasa por posiciones que redondean al
+  // producto anterior: hasta que llega, manda el destino y no el scroll.
+  const pendiente = useRef(null);
+  const respaldo = useRef(null);
+
+  const soltar = () => {
+    pendiente.current = null;
+    clearTimeout(respaldo.current);
+  };
 
   const varios = productos.length > 1;
+
+  useEffect(() => {
+    const el = pista.current;
+    if (!el) return undefined;
+
+    el.addEventListener('scrollend', soltar);
+    return () => {
+      el.removeEventListener('scrollend', soltar);
+      clearTimeout(respaldo.current);
+    };
+    // soltar sólo toca refs: no hace falta volver a suscribirse en cada render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [varios]);
+
+  if (productos.length === 0) return null;
+
   const ultimo = productos.length - 1;
+  const desde = () => (pendiente.current ?? actual);
 
   const ir = (indice) => {
     const destino = Math.max(0, Math.min(ultimo, indice));
@@ -49,6 +78,10 @@ function GaleriaProductos({
     setActual(destino);
 
     if (el && typeof el.scrollTo === 'function') {
+      pendiente.current = destino;
+      clearTimeout(respaldo.current);
+      // No todos los navegadores emiten scrollend.
+      respaldo.current = setTimeout(soltar, MS_DE_RESPALDO);
       el.scrollTo({
         left: destino * el.clientWidth,
         behavior: prefiereMenosMovimiento() ? 'auto' : 'smooth',
@@ -61,6 +94,11 @@ function GaleriaProductos({
     const el = pista.current;
     if (!el || !el.clientWidth) return;
 
+    if (pendiente.current !== null) {
+      if (Math.abs(el.scrollLeft - pendiente.current * el.clientWidth) >= 1) return;
+      soltar();
+    }
+
     const indice = Math.round(el.scrollLeft / el.clientWidth);
     if (indice !== actual && indice >= 0 && indice <= ultimo) setActual(indice);
   };
@@ -68,10 +106,10 @@ function GaleriaProductos({
   const alApretarTecla = (e) => {
     if (e.key === 'ArrowRight') {
       e.preventDefault();
-      ir(actual + 1);
+      ir(desde() + 1);
     } else if (e.key === 'ArrowLeft') {
       e.preventDefault();
-      ir(actual - 1);
+      ir(desde() - 1);
     }
   };
 
@@ -118,7 +156,7 @@ function GaleriaProductos({
           <div className="flex items-center justify-center gap-4 mt-4">
             <button
               type="button"
-              onClick={() => ir(actual - 1)}
+              onClick={() => ir(desde() - 1)}
               disabled={actual === 0}
               aria-label="Producto anterior"
               className={botonFlecha}
@@ -146,7 +184,7 @@ function GaleriaProductos({
 
             <button
               type="button"
-              onClick={() => ir(actual + 1)}
+              onClick={() => ir(desde() + 1)}
               disabled={actual === ultimo}
               aria-label="Producto siguiente"
               className={botonFlecha}

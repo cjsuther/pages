@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { screen, fireEvent, within } from '@testing-library/react';
+import { act, screen, fireEvent, within } from '@testing-library/react';
 import GaleriaProductos from '../../src/components/GaleriaProductos';
 import { renderConProviders } from '../helpers/render';
 import { mockFetch, llamadaA, cuerpoDe } from '../helpers/api';
@@ -129,6 +129,80 @@ describe('GaleriaProductos', () => {
       fireEvent.scroll(pista);
 
       expect(punto(3)).toHaveAttribute('aria-current', 'true');
+    });
+
+    /** Mientras anima, el scroll pasa por posiciones que redondean al anterior. */
+    describe('mientras se desliza solo', () => {
+      const desplazarA = (pista, scrollLeft) => {
+        pista.scrollLeft = scrollLeft;
+        fireEvent.scroll(pista);
+      };
+
+      it('un scroll intermedio no pisa el destino', () => {
+        const { container } = montar();
+        const pista = pistaCon(container);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Producto siguiente' }));
+        desplazarA(pista, 100);
+
+        expect(punto(2)).toHaveAttribute('aria-current', 'true');
+        expect(screen.getByRole('button', { name: 'Producto anterior' })).toBeEnabled();
+      });
+
+      it('dos clics seguidos en siguiente avanzan dos', () => {
+        const { container } = montar();
+        const pista = pistaCon(container);
+        const siguiente = screen.getByRole('button', { name: 'Producto siguiente' });
+
+        fireEvent.click(siguiente);
+        desplazarA(pista, 100);
+        fireEvent.click(siguiente);
+        desplazarA(pista, 200);
+
+        expect(pista.scrollTo).toHaveBeenLastCalledWith({ left: 600, behavior: 'smooth' });
+        expect(punto(3)).toHaveAttribute('aria-current', 'true');
+      });
+
+      it('al llegar al destino, deslizar con el dedo vuelve a mover los puntos', () => {
+        const { container } = montar();
+        const pista = pistaCon(container);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Producto siguiente' }));
+        desplazarA(pista, 300);
+        desplazarA(pista, 610);
+
+        expect(punto(3)).toHaveAttribute('aria-current', 'true');
+      });
+
+      it('con scrollend también se da por llegado', () => {
+        const { container } = montar();
+        const pista = pistaCon(container);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Producto siguiente' }));
+        desplazarA(pista, 100);
+        fireEvent(pista, new Event('scrollend'));
+        desplazarA(pista, 0);
+
+        expect(punto(1)).toHaveAttribute('aria-current', 'true');
+      });
+
+      /** No todos los navegadores emiten scrollend. */
+      it('sin scrollend, se suelta solo al rato', () => {
+        vi.useFakeTimers();
+        try {
+          const { container } = montar();
+          const pista = pistaCon(container);
+
+          fireEvent.click(screen.getByRole('button', { name: 'Producto siguiente' }));
+          desplazarA(pista, 100);
+          act(() => { vi.advanceTimersByTime(2000); });
+          desplazarA(pista, 0);
+
+          expect(punto(1)).toHaveAttribute('aria-current', 'true');
+        } finally {
+          vi.useRealTimers();
+        }
+      });
     });
 
     it('desliza con scroll-snap, sin librería', () => {
