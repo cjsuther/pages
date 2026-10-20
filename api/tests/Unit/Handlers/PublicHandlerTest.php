@@ -82,6 +82,27 @@ class PublicHandlerTest extends HandlerTestCase
         $this->assertSame('Un link', $res->body['page']['groups'][0]['links'][0]['text']);
     }
 
+    /**
+     * Los productos digitales todavía no se venden (#17): el grupo no puede
+     * llegar a la página pública, donde las plantillas lo dibujarían como una
+     * lista de links.
+     */
+    public function testLaPaginaPublicaNoMuestraLosGruposDeProductos()
+    {
+        $this->db->onSelect('FROM pages WHERE url_slug = ?', [['id' => 5]]);
+        $this->db->onSelect('FROM link_groups WHERE page_id = ?', [
+            ['id' => 10, 'type' => 'productos', 'title' => 'Tienda'],
+            ['id' => 11, 'type' => 'links', 'title' => 'Links'],
+        ]);
+        $this->db->onSelect('FROM links WHERE group_id = ? ORDER BY position', [['id' => 100, 'text' => 'Un link']]);
+
+        $res = PublicHandler::page($this->db, $this->get(['slug' => 'mi-pagina']));
+
+        $this->assertSame(['Links'], array_column($res->body['page']['groups'], 'title'));
+        $this->assertSame([[\Fechas::hoy(), 11]], array_column($this->db->callsFor('FROM links WHERE group_id'), 'params'));
+        $this->assertSame(0, $this->db->countCalls('digital_products'));
+    }
+
     public function testPageDevuelveCeroSeguidoresSiNoHayFilas()
     {
         $this->db->onSelect('FROM pages WHERE url_slug = ?', [['id' => 5]]);

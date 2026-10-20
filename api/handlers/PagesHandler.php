@@ -224,7 +224,7 @@ class PagesHandler
 
     // ----------------------------------------------------------------- detail
 
-    public static function detail($db, Request $req)
+    public static function detail($db, Request $req, ?FileStorage $storage = null)
     {
         $pageId = (int) $req->param('id');
 
@@ -241,7 +241,7 @@ class PagesHandler
         }
 
         if ($req->method === 'DELETE') {
-            return self::destroy($db, $req, $pageId);
+            return self::destroy($db, $req, $pageId, $storage === null ? new FileStorage() : $storage);
         }
 
         return Response::methodNotAllowed();
@@ -271,6 +271,8 @@ class PagesHandler
                 if ($group['type'] == 'eventos') {
                     $group['links'] = self::linksDeEvento($db, $group['id']);
                     $group['collaborated_events'] = self::eventosColaborados($db, $group['id']);
+                } elseif ($group['type'] == 'productos') {
+                    $group['links'] = ProductosDigitales::delGrupo($db, $group['id']);
                 } else {
                     $stmt = $db->prepare("SELECT *, (event_date <> '0000-00-00' AND event_date < CURDATE()) as event_due FROM links WHERE group_id = ? ORDER BY position, id");
                     $stmt->execute([$group['id']]);
@@ -440,19 +442,25 @@ class PagesHandler
     }
 
     /** Borrar es exclusivo del dueño: un administrador aceptado no puede. */
-    private static function destroy($db, Request $req, $pageId)
+    private static function destroy($db, Request $req, $pageId, FileStorage $storage)
     {
         if (!$req->user) {
             return Response::unauthorized();
         }
 
         try {
+            // Los archivos de sus productos se van con ella. Se leen antes:
+            // después del DELETE ya no hay filas que digan dónde están.
+            $archivos = ProductosDigitales::rutasDeLaPagina($db, $pageId);
+
             $stmt = $db->prepare('DELETE FROM pages WHERE id = ? AND user_id = ?');
             $stmt->execute([$pageId, $req->userId()]);
 
             if ($stmt->rowCount() === 0) {
                 return Response::notFound('Page not found');
             }
+
+            ProductosDigitales::borrarArchivos($archivos, $storage);
 
             return Response::ok(['message' => 'Page deleted successfully']);
 

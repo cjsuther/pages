@@ -10,7 +10,7 @@ import PrecioEvento from '../PrecioEvento';
 import RezonarBadge from '../RezonarBadge';
 import { MiniaturaGaleria, VisorGaleria } from '../MediaGaleria';
 import { textoSobre, paleta } from '../../utils/colores';
-import { CLASES_ALREDEDOR, CLASES_CAJA, estiloDeAlrededor, estiloDeCaja } from '../../utils/plantillas';
+import { CLASES_ALREDEDOR, CLASES_CAJA, estiloDeAlrededor, estiloDeCaja, gruposPublicos } from '../../utils/plantillas';
 import { ExternalLink } from 'lucide-react';
 
 /**
@@ -100,7 +100,7 @@ function AfichesTemplate({ page }) {
         </div>
 
         <div className="space-y-12">
-          {page.groups?.map((group) => (
+          {gruposPublicos(page.groups).map((group) => (
             <div key={group.id}>
               <div className="mb-8">
                 <h2 className="text-3xl font-bold text-center" style={{ color: colores.titulo }}>{group.title}</h2>

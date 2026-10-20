@@ -14,7 +14,7 @@ class GroupsHandler
      * Se valida acá y no sólo en la base: con el ENUM alcanza para que no
      * entre basura, pero el error de MySQL no le dice nada a quien lo lee.
      */
-    public static $tiposValidos = ['links', 'galeria', 'eventos'];
+    public static $tiposValidos = ['links', 'galeria', 'eventos', 'productos'];
 
     private static $updatableFields = ['title', 'type', 'position'];
 
@@ -68,7 +68,7 @@ class GroupsHandler
 
     // ----------------------------------------------------------------- detail
 
-    public static function detail($db, Request $req)
+    public static function detail($db, Request $req, ?FileStorage $storage = null)
     {
         $groupId = (int) $req->param('id');
 
@@ -85,7 +85,7 @@ class GroupsHandler
         }
 
         if ($req->method === 'DELETE') {
-            return self::destroy($db, $req, $groupId);
+            return self::destroy($db, $req, $groupId, $storage === null ? new FileStorage() : $storage);
         }
 
         return Response::methodNotAllowed();
@@ -96,6 +96,14 @@ class GroupsHandler
         try {
             if (!PageAccess::canManageGroup($db, $groupId, $req->userId())) {
                 return Response::notFound('Group not found');
+            }
+
+            if ($req->has('type')) {
+                $error = self::validarCambioDeTipo($db, $groupId, $req->input('type'));
+
+                if ($error !== null) {
+                    return $error;
+                }
             }
 
             $fields = [];
@@ -128,7 +136,7 @@ class GroupsHandler
         }
     }
 
-    private static function destroy($db, Request $req, $groupId)
+    private static function destroy($db, Request $req, $groupId, FileStorage $storage)
     {
         try {
             if (!PageAccess::canManageGroup($db, $groupId, $req->userId())) {
@@ -138,8 +146,14 @@ class GroupsHandler
             // Borrar el grupo borra sus eventos: lo mismo que al borrar uno.
             Clientes::actualizarEventosDelGrupo($db, $groupId);
 
+            // Y sus productos, con sus archivos. Las rutas se leen antes,
+            // porque después del DELETE ya no hay filas que las digan.
+            $archivos = ProductosDigitales::rutasDelGrupo($db, $groupId);
+
             $stmt = $db->prepare('DELETE FROM link_groups WHERE id = ?');
             $stmt->execute([$groupId]);
+
+            ProductosDigitales::borrarArchivos($archivos, $storage);
 
             return Response::ok(['message' => 'Group deleted successfully']);
 
@@ -148,4 +162,29 @@ class GroupsHandler
         }
     }
 
+    /**
+     * Un grupo puede cambiar de tipo, salvo de o hacia productos.
+     *
+     * Un producto es un link con su fila de precio y archivo: convertir el
+     * grupo en links dejaría los productos publicados como links vacíos, y
+     * convertir links en productos dejaría productos sin precio ni archivo.
+     *
+     * @return Response|null
+     */
+    private static function validarCambioDeTipo($db, $groupId, $tipo)
+    {
+        if (!in_array($tipo, self::$tiposValidos, true)) {
+            return Response::error(400, 'Tipo de grupo desconocido: ' . $tipo);
+        }
+
+        $stmt = $db->prepare('SELECT type FROM link_groups WHERE id = ?');
+        $stmt->execute([$groupId]);
+        $actual = $stmt->fetchColumn();
+
+        if ($actual !== $tipo && ($actual === 'productos' || $tipo === 'productos')) {
+            return Response::error(400, 'Un grupo de productos digitales no puede cambiar de tipo, ni otro grupo pasar a serlo');
+        }
+
+        return null;
+    }
 }

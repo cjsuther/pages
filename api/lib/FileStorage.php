@@ -85,4 +85,34 @@ class FileStorage
             unlink($ruta);
         }
     }
+
+    public function existe($ruta)
+    {
+        return file_exists($ruta);
+    }
+
+    /** @return bool */
+    public function escribir($ruta, $contenido)
+    {
+        return @file_put_contents($ruta, $contenido) !== false;
+    }
+
+    /**
+     * El tipo MIME que se detecta mirando los bytes, o null si no se pudo.
+     *
+     * Es sólo un dato para mostrar: lo que manda el navegador en $_FILES lo
+     * elige el cliente y no vale ni para eso.
+     *
+     * @return string|null
+     */
+    public function tipoMime($ruta)
+    {
+        if (!class_exists('finfo')) {
+            return null;
+        }
+
+        $tipo = @(new finfo(FILEINFO_MIME_TYPE))->file($ruta);
+
+        return is_string($tipo) && $tipo !== '' ? $tipo : null;
+    }
 }

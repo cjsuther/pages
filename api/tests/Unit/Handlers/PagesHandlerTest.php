@@ -4,6 +4,8 @@ namespace Tests\Unit\Handlers;
 
 use PagesHandler;
 use Plataforma;
+use ProductosDigitales;
+use Tests\Support\FakeDisco;
 use Tests\Support\HandlerTestCase;
 
 class PagesHandlerTest extends HandlerTestCase
@@ -967,6 +969,67 @@ class PagesHandlerTest extends HandlerTestCase
         foreach (['artistas', 'asistentes'] as $ruta) {
             $this->assertTrue(PagesHandler::esReservado($ruta), "Falta reservar /$ruta");
         }
+    }
+
+    // ==================================================== productos digitales
+
+    public function testVerTraeLosProductosConSuPrecioYSuArchivo()
+    {
+        $this->autorizarPagina();
+        $this->db->onSelect('SELECT * FROM pages WHERE id = ?', [['id' => 5]]);
+        $this->db->onSelect('SELECT * FROM link_groups WHERE page_id = ?', [
+            ['id' => 10, 'type' => 'productos', 'title' => 'Tienda'],
+        ]);
+        $this->db->onSelect('LEFT JOIN digital_products dp', [[
+            'id' => 100, 'text' => 'Guía', 'precio' => '1500.00',
+            'archivo_nombre' => 'guia.pdf', 'archivo_bytes' => 2048, 'archivo_tipo' => 'application/pdf',
+        ]]);
+
+        $res = PagesHandler::detail($this->db, $this->get(['id' => '5'], $this->user()));
+
+        $producto = $res->body['page']['groups'][0]['links'][0];
+        $this->assertSame('1500.00', $producto['precio']);
+        $this->assertSame('guia.pdf', $producto['archivo_nombre']);
+        $this->assertSame([10], $this->db->paramsFor('LEFT JOIN digital_products dp'));
+    }
+
+    /** La ruta en disco no le sirve al editor y no tiene por qué salir. */
+    public function testVerNoExponeLaRutaDelArchivo()
+    {
+        $this->autorizarPagina();
+        $this->db->onSelect('SELECT * FROM pages WHERE id = ?', [['id' => 5]]);
+        $this->db->onSelect('SELECT * FROM link_groups WHERE page_id = ?', [['id' => 10, 'type' => 'productos']]);
+
+        PagesHandler::detail($this->db, $this->get(['id' => '5'], $this->user()));
+
+        $sql = $this->db->callsFor('LEFT JOIN digital_products dp')[0]['sql'];
+        $this->assertStringNotContainsString('archivo_ruta', $sql);
+        $this->assertStringNotContainsString('dp.*', $sql);
+    }
+
+    public function testBorrarLaPaginaBorraLosArchivosDeSusProductos()
+    {
+        $disco = new FakeDisco();
+        $ruta = 'productos/' . str_repeat('d', 32);
+        $this->db->onSelect('WHERE lg.page_id = ? AND dp.archivo_ruta', [[$ruta]]);
+        $this->db->onWrite('DELETE FROM pages', 1);
+
+        $res = PagesHandler::detail($this->db, $this->delete(['id' => '5'], $this->user(9)), $disco);
+
+        $this->assertStatus(200, $res);
+        $this->assertSame([ProductosDigitales::rutaEnDisco($ruta)], $disco->borrados);
+    }
+
+    /** Un administrador no borra la página, y tampoco sus archivos. */
+    public function testSiNoSeBorroLaPaginaLosArchivosQuedan()
+    {
+        $disco = new FakeDisco();
+        $this->db->onSelect('WHERE lg.page_id = ? AND dp.archivo_ruta', [['productos/' . str_repeat('d', 32)]]);
+        $this->db->onWrite('DELETE FROM pages', 0);
+
+        PagesHandler::detail($this->db, $this->delete(['id' => '5'], $this->user(9)), $disco);
+
+        $this->assertSame([], $disco->borrados);
     }
 
     // ------------------------------------------------------------- ayudantes
