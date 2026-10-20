@@ -312,6 +312,272 @@ class ProductosHandlerTest extends HandlerTestCase
         $this->assertNotContains(ProductosDigitales::raiz() . 'productos/' . str_repeat('a', 32), $this->disco->borrados);
     }
 
+    // ============================================================ ventas
+
+    private function venta(array $extra = [])
+    {
+        return array_merge([
+            'id' => 7, 'codigo' => 'ABCDEF123456', 'nombre' => 'Ana', 'email' => 'ana@test.local',
+            'telefono' => null, 'total' => '2500.00', 'estado' => 'pagada',
+            'creado_en' => '2026-10-01 10:00:00', 'pagada_en' => '2026-10-01 10:05:00',
+            'descargas' => '0', 'primera_descarga_en' => null, 'ultima_descarga_en' => null,
+            'producto_id' => 3, 'link_id' => 5, 'producto' => 'Guía', 'producto_borrado_en' => null,
+        ], $extra);
+    }
+
+    private function verVentas(array $query, $user = 'default')
+    {
+        return ProductosHandler::ventas($this->db, $this->get($query, $user === 'default' ? $this->user() : $user));
+    }
+
+    public function testLasVentasExigenSesion()
+    {
+        $this->assertError(401, $this->verVentas(['link_id' => 5], null));
+    }
+
+    public function testLasVentasSoloSeLeen()
+    {
+        $res = ProductosHandler::ventas($this->db, $this->post([], $this->user(), ['link_id' => 5]));
+
+        $this->assertError(405, $res);
+    }
+
+    public function testLasVentasPidenUnProductoOUnaPagina()
+    {
+        $this->assertError(400, $this->verVentas([]), 'link_id o page_id');
+    }
+
+    /** Otra persona, sin acceso a la página, no ve nombres ni emails de nadie. */
+    public function testSinAccesoAlProductoLasVentasDan403()
+    {
+        $res = $this->verVentas(['link_id' => 5]);
+
+        $this->assertError(403, $res);
+        $this->assertSame(0, $this->db->countCalls('FROM product_orders'));
+    }
+
+    public function testSinAccesoALaPaginaLasVentasDan403()
+    {
+        $res = $this->verVentas(['page_id' => 9]);
+
+        $this->assertError(403, $res);
+        $this->assertSame(0, $this->db->countCalls('FROM product_orders'));
+    }
+
+    public function testUnLinkQueNoEsProductoNoTieneVentasDeProducto()
+    {
+        $this->autorizarLink();
+        $this->db->onSelect('SELECT lg.type', [['type' => 'eventos']]);
+
+        $this->assertError(400, $this->verVentas(['link_id' => 5]));
+    }
+
+    public function testLasVentasDeUnProductoTraenLasDescargasYLosTotales()
+    {
+        $this->autorizarLink();
+        $this->db->onSelect('SELECT lg.type', [['type' => 'productos']]);
+        $this->db->onSelect('WHERE dp.link_id = ?', [
+            $this->venta(['id' => 9, 'descargas' => '3', 'primera_descarga_en' => '2026-10-02 08:00:00']),
+            $this->venta(['id' => 8, 'total' => '1000.00']),
+            $this->venta(['id' => 7, 'estado' => 'cancelada', 'pagada_en' => null]),
+        ]);
+
+        $res = $this->verVentas(['link_id' => 5]);
+
+        $this->assertStatus(200, $res);
+        $this->assertSame([5], $this->db->paramsFor('WHERE dp.link_id = ?'));
+        $this->assertSame(['pagadas' => 2, 'recaudado' => 3500.0, 'descargaron' => 1], $res->body['resumen']);
+        $primera = $res->body['ordenes'][0];
+        $this->assertSame(3, $primera['descargas']);
+        $this->assertSame('2026-10-02 08:00:00', $primera['primera_descarga_en']);
+        $this->assertSame(2500.0, $primera['total']);
+        $this->assertFalse($primera['producto_borrado']);
+    }
+
+    /** Una pendiente cuyo plazo pasó se ve vencida, como en el resto. */
+    public function testUnaPendienteViejaSeVeVencida()
+    {
+        $this->autorizarLink();
+        $this->db->onSelect('SELECT lg.type', [['type' => 'productos']]);
+        $this->db->onSelect('WHERE dp.link_id = ?', [
+            $this->venta(['estado' => 'pendiente', 'pagada_en' => null, 'creado_en' => '2020-01-01 00:00:00']),
+        ]);
+
+        $res = $this->verVentas(['link_id' => 5]);
+
+        $this->assertSame('vencida', $res->body['ordenes'][0]['estado']);
+        $this->assertSame(0, $res->body['resumen']['pagadas']);
+    }
+
+    /** Ni el token ni el link de descarga: lo de la lista lo ve cualquier administrador. */
+    public function testLasVentasNuncaLlevanElTokenNiElLink()
+    {
+        $this->autorizarLink();
+        $this->db->onSelect('SELECT lg.type', [['type' => 'productos']]);
+        $this->db->onSelect('WHERE dp.link_id = ?', [$this->venta([
+            'token_hash' => str_repeat('b', 64), 'token_cifrado' => 'cifrado-secreto', 'ip' => '198.51.100.7',
+        ])]);
+
+        $res = $this->verVentas(['link_id' => 5]);
+
+        $json = json_encode($res->body);
+        $this->assertStringNotContainsString('token', $json);
+        $this->assertStringNotContainsString('cifrado-secreto', $json);
+        $this->assertStringNotContainsString('/descarga', $json);
+        $this->assertStringNotContainsString('198.51.100.7', $json);
+        $sql = $this->db->callsFor('WHERE dp.link_id = ?')[0]['sql'];
+        $this->assertStringNotContainsString('token', $sql);
+        $this->assertStringNotContainsString('o.*', $sql);
+    }
+
+    /** Por página el permiso es sobre la página: el link de un producto borrado no existe. */
+    public function testLasVentasDeLaPaginaIncluyenLosProductosBorrados()
+    {
+        $this->db->onSelect('FROM pages p WHERE p.id = ?', [['1' => 1]]);
+        $this->db->onSelect('WHERE dp.page_id = ?', [
+            $this->venta(['link_id' => null, 'producto' => 'Pack viejo', 'producto_borrado_en' => '2026-09-01 00:00:00']),
+        ]);
+
+        $res = $this->verVentas(['page_id' => 9]);
+
+        $this->assertStatus(200, $res);
+        $this->assertSame([9], $this->db->paramsFor('WHERE dp.page_id = ?'));
+        $this->assertSame(0, $this->db->countCalls('FROM links l JOIN link_groups lg'));
+        $venta = $res->body['ordenes'][0];
+        $this->assertSame('Pack viejo', $venta['producto']);
+        $this->assertTrue($venta['producto_borrado']);
+        $this->assertNull($venta['link_id']);
+    }
+
+    public function testLasVentasSeExportanAExcel()
+    {
+        $this->db->onSelect('FROM pages p WHERE p.id = ?', [['1' => 1]]);
+        $this->db->onSelect('WHERE dp.page_id = ?', [$this->venta(['descargas' => '2'])]);
+
+        $res = $this->verVentas(['page_id' => 9, 'formato' => 'excel', 'nombre' => 'La Sala']);
+
+        $this->assertStatus(200, $res);
+        $this->assertStringContainsString('ventas-la-sala.xlsx', implode("\n", $res->headers));
+        $hoja = $this->hojaDelExcel($res->raw);
+        $this->assertStringContainsString('Descargó', $hoja);
+        $this->assertStringContainsString('Sí · 2 veces', $hoja);
+        $this->assertStringContainsString('ana@test.local', $hoja);
+    }
+
+    private function hojaDelExcel($contenido)
+    {
+        $ruta = tempnam(sys_get_temp_dir(), 'test');
+        file_put_contents($ruta, $contenido);
+
+        $zip = new \ZipArchive();
+        $this->assertTrue($zip->open($ruta) === true, 'el archivo tiene que ser un zip válido');
+        $xml = $zip->getFromName('xl/worksheets/sheet1.xml');
+        $zip->close();
+        unlink($ruta);
+
+        $this->assertNotFalse($xml);
+
+        return $xml;
+    }
+
+    // =========================================================== reenviar
+
+    private function reenviar($codigo = 'ABCDEF123456', $user = 'default', $mailer = null)
+    {
+        return ProductosHandler::reenviar(
+            $this->db,
+            $this->post(['codigo' => $codigo], $user === 'default' ? $this->user() : $user),
+            $mailer
+        );
+    }
+
+    private function ordenDeLaBase(array $extra = [])
+    {
+        return array_merge([
+            'id' => 7, 'codigo' => 'ABCDEF123456', 'estado' => 'pagada', 'nombre' => 'Ana',
+            'email' => 'ana@test.local', 'producto' => 'Guía', 'pagina' => 'La Sala', 'pagina_id' => 9,
+            'token_cifrado' => \Cripto::cifrar(str_repeat('c', 64)), 'mail_enviado_en' => '2026-01-01 00:00:00',
+            'mail_intentos' => 1, 'archivo_nombre' => 'guia.pdf', 'producto_imagen' => null, 'email_contacto' => null,
+        ], $extra);
+    }
+
+    public function testReenviarExigeSesionYPost()
+    {
+        $this->assertError(401, $this->reenviar('ABCDEF123456', null));
+        $this->assertError(405, ProductosHandler::reenviar($this->db, $this->get(['codigo' => 'X'], $this->user())));
+        $this->assertError(400, $this->reenviar(''));
+    }
+
+    public function testReenviarUnaCompraQueNoExisteDa404()
+    {
+        $this->assertError(404, $this->reenviar());
+    }
+
+    public function testSinAccesoALaPaginaNoSeReenvia()
+    {
+        $mailer = new \Tests\Support\FakeMailer();
+        $this->db->onSelect('WHERE o.codigo = ?', [$this->ordenDeLaBase()]);
+
+        $res = $this->reenviar('ABCDEF123456', 'default', $mailer);
+
+        $this->assertError(403, $res);
+        $this->assertSame([], $mailer->enviados);
+        $this->assertSame([9, 1, 1], $this->db->paramsFor('FROM pages p WHERE p.id = ?'));
+    }
+
+    public function testUnaCompraSinPagarNoSeReenvia()
+    {
+        $mailer = new \Tests\Support\FakeMailer();
+        $this->db->onSelect('WHERE o.codigo = ?', [$this->ordenDeLaBase(['estado' => 'pendiente'])]);
+        $this->db->onSelect('FROM pages p WHERE p.id = ?', [['1' => 1]]);
+
+        $this->assertError(409, $this->reenviar('ABCDEF123456', 'default', $mailer));
+        $this->assertSame([], $mailer->enviados);
+    }
+
+    /** El mismo link de siempre, sacado de token_cifrado: no se genera otro. */
+    public function testReenviaElMismoLinkDeLaCompra()
+    {
+        $mailer = new \Tests\Support\FakeMailer();
+        $this->db->onSelect('WHERE o.codigo = ?', [$this->ordenDeLaBase()]);
+        $this->db->onSelect('FROM pages p WHERE p.id = ?', [['1' => 1]]);
+        $this->db->onSelect('WHERE o.codigo = ?', [$this->ordenDeLaBase()]);
+
+        $res = $this->reenviar('ABCDEF123456', 'default', $mailer);
+
+        $this->assertStatus(200, $res);
+        $this->assertTrue($res->body['enviado']);
+        $this->assertCount(1, $mailer->enviados);
+        $this->assertSame('ana@test.local', $mailer->enviados[0]['para']);
+        $this->assertStringContainsString('/descarga#' . str_repeat('c', 64), $mailer->enviados[0]['html']);
+        $this->assertStringNotContainsString(str_repeat('c', 64), json_encode($res->body));
+        $this->assertFalse($this->db->ran('INSERT INTO product_orders'));
+        $this->assertFalse($this->db->ran('token_hash ='));
+    }
+
+    /** El mínimo entre reenvíos vale también para el botón del panel. */
+    public function testRecienEnviadoNoSeReenviaDeNuevo()
+    {
+        $mailer = new \Tests\Support\FakeMailer();
+        $recien = ['mail_enviado_en' => date('Y-m-d H:i:s')];
+        $this->db->onSelect('WHERE o.codigo = ?', [$this->ordenDeLaBase($recien)]);
+        $this->db->onSelect('FROM pages p WHERE p.id = ?', [['1' => 1]]);
+        $this->db->onSelect('WHERE o.codigo = ?', [$this->ordenDeLaBase($recien)]);
+
+        $this->assertError(429, $this->reenviar('ABCDEF123456', 'default', $mailer));
+        $this->assertSame([], $mailer->enviados);
+    }
+
+    public function testSiFallaElCorreoSeAvisa()
+    {
+        $mailer = (new \Tests\Support\FakeMailer())->fallarCon('SMTP caído');
+        $this->db->onSelect('WHERE o.codigo = ?', [$this->ordenDeLaBase()]);
+        $this->db->onSelect('FROM pages p WHERE p.id = ?', [['1' => 1]]);
+        $this->db->onSelect('WHERE o.codigo = ?', [$this->ordenDeLaBase()]);
+
+        $this->assertError(502, $this->reenviar('ABCDEF123456', 'default', $mailer), 'SMTP caído');
+    }
+
     // ========================================================== ayudantes
 
     private function subir(array $archivo, $user = 'default')

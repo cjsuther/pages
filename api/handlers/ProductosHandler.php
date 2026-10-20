@@ -88,6 +88,121 @@ class ProductosHandler
         return Response::ok(['link' => ProductosDigitales::linkConProducto($db, $linkId)]);
     }
 
+    // ------------------------------------------------------------------ ventas
+
+    /**
+     * Las ventas de un producto (?link_id=N) o de todos los productos de una
+     * página (?page_id=N), los borrados incluidos. Con ?formato=excel baja el
+     * Excel.
+     *
+     * Por página el permiso se mira sobre la página y no sobre el link: el
+     * link de un producto borrado ya no existe.
+     *
+     * Son datos de contacto de terceros: sólo los ve quien administra la
+     * página. El token y el link de descarga no salen nunca.
+     */
+    public static function ventas($db, Request $req)
+    {
+        if (!$req->user) {
+            return Response::unauthorized();
+        }
+
+        if ($req->method !== 'GET') {
+            return Response::methodNotAllowed();
+        }
+
+        $linkId = (int) $req->param('link_id');
+        $pageId = (int) $req->param('page_id');
+
+        if ($linkId) {
+            if (!PageAccess::canManageLink($db, $linkId, $req->userId())) {
+                return Response::error(403, 'No podés ver las ventas de este producto');
+            }
+
+            if (!self::esProducto($db, $linkId)) {
+                return Response::error(400, 'Ese item no es un producto digital');
+            }
+
+            $ventas = OrdenesDeProductos::ventas($db, 'link', $linkId);
+        } elseif ($pageId) {
+            if (!PageAccess::canManage($db, $pageId, $req->userId())) {
+                return Response::error(403, 'No podés ver las ventas de esta página');
+            }
+
+            $ventas = OrdenesDeProductos::ventas($db, 'pagina', $pageId);
+        } else {
+            return Response::error(400, 'link_id o page_id requerido');
+        }
+
+        if ($req->param('formato') === 'excel') {
+            return Response::raw(200, OrdenesDeProductos::excel($ventas['ordenes']),
+                Excel::cabeceras(self::nombreDelExcel($req->param('nombre', ''))));
+        }
+
+        return Response::ok($ventas);
+    }
+
+    /**
+     * Le vuelve a mandar el mail con el link a quien compró.
+     *
+     * Usa el mismo link de siempre (token_cifrado): no genera otro. Y respeta
+     * el mínimo entre reenvíos de CorreoProductos, para que el botón no sirva
+     * para llenarle la casilla a nadie.
+     */
+    public static function reenviar($db, Request $req, $mailer = null)
+    {
+        if (!$req->user) {
+            return Response::unauthorized();
+        }
+
+        if ($req->method !== 'POST') {
+            return Response::methodNotAllowed();
+        }
+
+        $codigo = trim((string) $req->input('codigo'));
+
+        if ($codigo === '') {
+            return Response::error(400, 'codigo requerido');
+        }
+
+        $orden = OrdenesDeProductos::orden($db, $codigo);
+
+        if ($orden === null) {
+            return Response::notFound('No encontramos esa compra');
+        }
+
+        // Por la página y no por el link: el producto puede estar borrado.
+        if (empty($orden['pagina_id']) || !PageAccess::canManage($db, (int) $orden['pagina_id'], $req->userId())) {
+            return Response::error(403, 'No podés reenviar compras de esta página');
+        }
+
+        if ($orden['estado'] !== 'pagada') {
+            return Response::error(409, 'Sólo se puede reenviar el link de una compra pagada');
+        }
+
+        $resultado = CorreoProductos::enviar($db, $orden['codigo'], $mailer, true);
+
+        if ($resultado['enviado']) {
+            return Response::ok(['enviado' => true, 'mensaje' => 'Le reenviamos el link a ' . $orden['email']]);
+        }
+
+        if ($resultado['motivo'] === 'se envió hace instantes') {
+            return Response::error(429, 'El link se mandó hace instantes. Probá de nuevo en unos minutos.');
+        }
+
+        return Response::error(502, 'No pudimos mandar el mail: ' . $resultado['motivo']);
+    }
+
+    /** "ventas-guia-de-viaje.xlsx", como el de las entradas. */
+    private static function nombreDelExcel($nombre)
+    {
+        $limpio = strtolower(trim((string) $nombre));
+        $limpio = strtr($limpio, ['á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ñ' => 'n']);
+        $limpio = trim(preg_replace('/[^a-z0-9]+/', '-', $limpio), '-');
+
+        return 'ventas' . ($limpio === '' ? '-productos' : '-' . substr($limpio, 0, 60)) . '.xlsx';
+    }
+
     private static function esProducto($db, $linkId)
     {
         $stmt = $db->prepare('

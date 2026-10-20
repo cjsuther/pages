@@ -319,6 +319,142 @@ class OrdenesDeProductos
         return hash('sha256', (string) $token);
     }
 
+    // ---------------------------------------------------------------- ventas
+
+    /**
+     * Las ventas de un producto (por su link) o de todos los productos de una
+     * página, los borrados incluidos, con los totales de arriba.
+     *
+     * Las de una página se buscan por la foto de digital_products (page_id):
+     * el link de un producto borrado ya no existe.
+     *
+     * Lo que sale es para quien administra la página: datos de contacto sí,
+     * pero nunca el token ni nada con lo que se pueda descargar.
+     *
+     * @param string $alcance 'link' o 'pagina'
+     * @return array{ordenes: array, resumen: array}
+     */
+    public static function ventas($db, $alcance, $id)
+    {
+        $filtros = [
+            'link'   => 'dp.link_id = ?',
+            'pagina' => 'dp.page_id = ?',
+        ];
+
+        if (!isset($filtros[$alcance])) {
+            throw new InvalidArgumentException('Alcance de ventas desconocido');
+        }
+
+        $stmt = $db->prepare('
+            SELECT o.id, o.codigo, o.nombre, o.email, o.telefono, o.total, o.estado,
+                   o.creado_en, o.pagada_en, o.descargas, o.primera_descarga_en, o.ultima_descarga_en,
+                   dp.id AS producto_id, dp.link_id, COALESCE(l.text, dp.titulo) AS producto,
+                   dp.borrado_en AS producto_borrado_en
+            FROM product_orders o
+            INNER JOIN digital_products dp ON dp.id = o.product_id
+            LEFT JOIN links l ON l.id = dp.link_id
+            WHERE ' . $filtros[$alcance] . '
+            ORDER BY o.id DESC
+        ');
+        $stmt->execute([(int) $id]);
+
+        $ordenes = array_map([self::class, 'venta'], $stmt->fetchAll(PDO::FETCH_ASSOC));
+
+        return ['ordenes' => $ordenes, 'resumen' => self::resumenDeVentas($ordenes)];
+    }
+
+    /** Una fila de la lista de ventas, con los tipos que espera el frontend. */
+    private static function venta(array $fila)
+    {
+        return [
+            'id'                  => (int) $fila['id'],
+            'codigo'              => $fila['codigo'],
+            'nombre'              => $fila['nombre'],
+            'email'               => $fila['email'],
+            'telefono'            => $fila['telefono'],
+            'total'               => round((float) $fila['total'], 2),
+            'moneda'              => 'ARS',
+            'estado'              => self::estaVencida($fila) ? 'vencida' : $fila['estado'],
+            'creado_en'           => $fila['creado_en'],
+            'pagada_en'           => $fila['pagada_en'],
+            'descargas'           => (int) $fila['descargas'],
+            'primera_descarga_en' => $fila['primera_descarga_en'],
+            'ultima_descarga_en'  => $fila['ultima_descarga_en'],
+            'producto_id'         => (int) $fila['producto_id'],
+            'link_id'             => $fila['link_id'] === null ? null : (int) $fila['link_id'],
+            'producto'            => $fila['producto'],
+            'producto_borrado'    => !empty($fila['producto_borrado_en']),
+        ];
+    }
+
+    /** Ventas pagadas, lo recaudado con ellas y cuántas ya se descargaron. */
+    private static function resumenDeVentas(array $ordenes)
+    {
+        $resumen = ['pagadas' => 0, 'recaudado' => 0.0, 'descargaron' => 0];
+
+        foreach ($ordenes as $o) {
+            if ($o['estado'] !== 'pagada') {
+                continue;
+            }
+
+            $resumen['pagadas']++;
+            $resumen['recaudado'] += $o['total'];
+
+            if ($o['descargas'] > 0) {
+                $resumen['descargaron']++;
+            }
+        }
+
+        $resumen['recaudado'] = round($resumen['recaudado'], 2);
+
+        return $resumen;
+    }
+
+    /**
+     * Las ventas en un archivo de Excel, con la columna de descargas.
+     *
+     * @return string el contenido del .xlsx
+     */
+    public static function excel(array $ordenes)
+    {
+        $filas = [];
+
+        foreach ($ordenes as $o) {
+            $filas[] = [
+                $o['codigo'],
+                $o['producto'] . ($o['producto_borrado'] ? ' (borrado)' : ''),
+                $o['nombre'],
+                $o['email'],
+                $o['telefono'],
+                (float) $o['total'],
+                $o['estado'],
+                $o['creado_en'],
+                self::descripcionDeDescargas($o),
+                (int) $o['descargas'],
+                $o['primera_descarga_en'],
+            ];
+        }
+
+        return Excel::tabla(
+            ['Código', 'Producto', 'Nombre', 'Email', 'Teléfono', 'Total', 'Estado', 'Fecha',
+             'Descargó', 'Descargas', 'Primera descarga'],
+            $filas,
+            'Ventas'
+        );
+    }
+
+    /** "No", o "Sí · 1 vez" / "Sí · 3 veces". */
+    public static function descripcionDeDescargas(array $orden)
+    {
+        $veces = (int) $orden['descargas'];
+
+        if ($veces <= 0) {
+            return 'No';
+        }
+
+        return 'Sí · ' . $veces . ($veces === 1 ? ' vez' : ' veces');
+    }
+
     // ---------------------------------------------------------------- pagos
 
     /**
