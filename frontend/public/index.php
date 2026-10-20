@@ -43,6 +43,30 @@ function buscarEvento($apiUrl, $id) {
 }
 
 /**
+ * Un producto digital de la API, sólo si está en venta: uno oculto, borrado o
+ * sin archivo da 404 y la vista previa queda la genérica.
+ */
+function buscarProducto($apiUrl, $id) {
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $apiUrl . '/api/public/producto.php?id=' . urlencode($id));
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($httpCode === 200 && $response) {
+        $data = json_decode($response, true);
+        if (isset($data['producto'])) {
+            return $data['producto'];
+        }
+    }
+
+    return null;
+}
+
+/**
  * El evento detrás de un link de venta compartido.
  *
  * Es lo que hace que mandar el link por WhatsApp muestre el afiche y la fecha
@@ -101,9 +125,19 @@ function buscarPagina($apiUrl, $clave, $valor) {
 $segmentos = array_values($pathSegments);
 $evento = null;
 $venta = null;
+$producto = null;
+// /producto/<id> se resuelve acá aunque el producto no esté en venta: si no,
+// "producto" caería abajo como slug de página. Sin producto queda la vista
+// previa genérica.
+$esLinkDeProducto = count($segmentos) === 2 && $segmentos[0] === 'producto' && ctype_digit($segmentos[1]);
 
 if (count($segmentos) === 2 && $segmentos[0] === 'evento' && ctype_digit($segmentos[1])) {
     $evento = buscarEvento($apiUrl, $segmentos[1]);
+}
+
+// /producto/<id>: el link que el organizador comparte de un producto digital.
+if ($esLinkDeProducto) {
+    $producto = buscarProducto($apiUrl, $segmentos[1]);
 }
 
 // /venta/<clave>: el link que se comparte para seguir cómo viene la venta.
@@ -111,8 +145,8 @@ if (count($segmentos) === 2 && $segmentos[0] === 'venta' && preg_match('/^[a-f0-
     $venta = buscarVentaCompartida($apiUrl, $segmentos[1]);
 }
 
-if ($venta || $evento) {
-    // El evento ya trae todo: no hace falta buscar la página.
+if ($venta || $evento || $esLinkDeProducto) {
+    // El evento y el producto ya traen todo: no hace falta buscar la página.
 } elseif ($esDominioPropio && count($pathSegments) === 0) {
     $pageData = buscarPagina($apiUrl, 'dominio', $hostPelado);
 
@@ -166,6 +200,19 @@ if ($venta) {
         ? htmlspecialchars(unaLinea($evento['description']))
         : 'Mirá los detalles y reservá tu lugar.';
     $ogImage = !empty($evento['image_url']) ? htmlspecialchars($evento['image_url']) : '';
+} elseif ($producto) {
+    $title = htmlspecialchars(unaLinea($producto['text']))
+        . (!empty($producto['page_title']) ? ' | ' . htmlspecialchars(unaLinea($producto['page_title'])) : ' | Rezonar');
+
+    // Sin descripción, el precio: es lo que más dice de un producto. Mismo
+    // formato que en la página ("Gratis" o "$ 2.500").
+    $precio = isset($producto['precio']) ? (float) $producto['precio'] : 0.0;
+    $textoPrecio = $precio > 0
+        ? '$ ' . number_format($precio, floor($precio) == $precio ? 0 : 2, ',', '.')
+        : 'Gratis';
+    $descripcion = unaLinea($producto['description'] ?? '');
+    $description = htmlspecialchars($descripcion !== '' ? $descripcion : $textoPrecio);
+    $ogImage = !empty($producto['image_url']) ? htmlspecialchars($producto['image_url']) : '';
 } else {
 $title = $pageData ? htmlspecialchars($pageData['title']) . ' | Rezonar' : 'Rezonar - Crea tu Espacio, Comparte Eventos, Conecta';
 $description = $pageData && $pageData['description']
