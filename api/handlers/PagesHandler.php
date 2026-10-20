@@ -451,21 +451,29 @@ class PagesHandler
         }
 
         try {
-            $motivo = ProductosDigitales::motivoParaNoBorrarPagina($db, $pageId, $req->userId());
+            $db->beginTransaction();
 
-            if ($motivo !== null) {
-                return Response::error(409, $motivo);
-            }
+            try {
+                // Sus productos: los que tienen órdenes se quedan, con su
+                // archivo si alguien puede descargarlo; el resto se va. Se
+                // preparan antes porque el DELETE se lleva los links.
+                $archivos = ProductosDigitales::soltar($db, 'pagina', $pageId);
 
-            // Los archivos de sus productos se van con ella. Se leen antes:
-            // después del DELETE ya no hay filas que digan dónde están.
-            $archivos = ProductosDigitales::rutasDeLaPagina($db, $pageId);
+                $stmt = $db->prepare('DELETE FROM pages WHERE id = ? AND user_id = ?');
+                $stmt->execute([$pageId, $req->userId()]);
 
-            $stmt = $db->prepare('DELETE FROM pages WHERE id = ? AND user_id = ?');
-            $stmt->execute([$pageId, $req->userId()]);
+                // No era suya (o no existe): se deshace lo de los productos.
+                if ($stmt->rowCount() === 0) {
+                    $db->rollBack();
 
-            if ($stmt->rowCount() === 0) {
-                return Response::notFound('Page not found');
+                    return Response::notFound('Page not found');
+                }
+
+                $db->commit();
+            } catch (Exception $e) {
+                $db->rollBack();
+
+                throw $e;
             }
 
             ProductosDigitales::borrarArchivos($archivos, $storage);

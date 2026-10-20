@@ -77,13 +77,18 @@ class ProductosDigitalesTest extends IntegracionTestCase
         $this->insertar('digital_products', ['link_id' => $linkId]);
     }
 
-    public function testBorrarElLinkBorraLaFilaDelProducto()
+    /**
+     * Desde #18 la base ya no borra el producto con el link: le deja link_id
+     * en null, para que sus ventas sobrevivan. Quien borra la fila de un
+     * producto sin órdenes es la API (ProductosDigitales::soltar).
+     */
+    public function testBorrarElLinkDejaLaFilaDelProductoSinLink()
     {
         $linkId = $this->producto();
 
         $this->db->prepare('DELETE FROM links WHERE id = ?')->execute([$linkId]);
 
-        $this->assertSame(0, (int) $this->valor('SELECT COUNT(*) FROM digital_products'));
+        $this->assertSame(1, (int) $this->valor('SELECT COUNT(*) FROM digital_products WHERE link_id IS NULL'));
     }
 
     /** La migración se puede volver a correr sin romper nada. */

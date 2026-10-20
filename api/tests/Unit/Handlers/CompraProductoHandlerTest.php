@@ -36,10 +36,11 @@ class CompraProductoHandlerTest extends HandlerTestCase
 
     // ------------------------------------------------------------- fixtures
 
-    private function hayProducto($precio = '2500.00')
+    private function hayProducto($precio = '2500.00', $oculto = 0)
     {
         $this->db->onSelect('lg.type = "productos"', [[
             'id' => 300, 'text' => 'Guía de viaje', 'image_url' => null, 'page_id' => 5,
+            'producto_id' => 40, 'oculto' => $oculto, 'borrado_en' => null,
             'precio' => $precio, 'archivo_ruta' => self::RUTA,
             'archivo_nombre' => 'guía.pdf', 'archivo_bytes' => 2048,
         ]]);
@@ -83,7 +84,7 @@ class CompraProductoHandlerTest extends HandlerTestCase
     private function ordenBase(array $overrides = [])
     {
         return array_merge([
-            'id' => 7, 'codigo' => self::CODIGO, 'link_id' => 300,
+            'id' => 7, 'codigo' => self::CODIGO, 'product_id' => 40, 'link_id' => 300, 'pagina_id' => 5,
             'nombre' => 'Ana Gómez', 'email' => 'ana@example.com',
             'total' => '2500.00', 'estado' => 'pendiente',
             'creado_en' => date('Y-m-d H:i:s'),
@@ -250,6 +251,167 @@ class CompraProductoHandlerTest extends HandlerTestCase
         $this->assertError(400, CompraProductoHandler::comprar($this->db, new Request('POST', ['nombre' => 'x'])));
     }
 
+    // ------------------------------------------------------ oculto / borrado
+
+    public function testUnProductoOcultoNoAceptaPedidosPagos()
+    {
+        $this->hayProducto('2500.00', 1);
+        $this->hayCredencialesDeCobro('oauth', 2);
+        $http = $this->httpQueCreaLaPreferencia();
+
+        $r = CompraProductoHandler::comprar($this->db, $this->pedido(), $http);
+
+        $this->assertError(409, $r, 'ya no está disponible');
+        $this->assertNoWrites();
+        $this->assertSame([], $http->llamadas);
+    }
+
+    public function testUnProductoOcultoNoAceptaPedidosGratis()
+    {
+        $this->hayProducto('0.00', 1);
+        $mailer = new FakeMailer();
+
+        $r = CompraProductoHandler::comprar($this->db, $this->pedido(), null, $mailer);
+
+        $this->assertError(409, $r, 'ya no está disponible');
+        $this->assertNoWrites();
+        $this->assertSame([], $mailer->enviados);
+    }
+
+    /** Un pedido desde una página vieja, de un producto que se borró con ventas. */
+    public function testUnProductoBorradoNoAceptaPedidos()
+    {
+        $this->db->onSelect('WHERE link_original = ?', [[1]]);
+
+        $r = CompraProductoHandler::comprar($this->db, $this->pedido());
+
+        $this->assertError(409, $r, 'ya no está disponible');
+        $this->assertNoWrites();
+    }
+
+    /** Ocultar no frena lo ya pedido: una pendiente se acredita igual. */
+    public function testUnaOrdenDeUnProductoOcultoOBorradoSeAcredita()
+    {
+        // pagina_id viene de la foto del producto: el link puede no existir.
+        $this->hayOrden(['link_id' => null, 'producto' => 'Guía (borrada)']);
+        $this->db->onSelect('FROM page_payment_settings WHERE page_id', [[
+            'page_id' => 5, 'access_token_cifrado' => Cripto::cifrar(self::TOKEN_MP), 'refresh_token_cifrado' => null,
+            'conectado_por' => 'oauth', 'token_expira_en' => date('Y-m-d H:i:s', time() + 86400 * 180),
+        ]]);
+        $this->db->onSelect('SELECT estado FROM product_orders WHERE codigo', [['pendiente']]);
+        $this->db->onWrite("SET estado = 'pagada'", 1);
+        $this->hayOrden(['estado' => 'pagada', 'link_id' => null, 'producto' => 'Guía (borrada)']);
+        $mailer = new FakeMailer();
+
+        $r = CompraProductoHandler::aviso($this->db, $this->avisoDe('555'), $this->httpConPago(), $mailer);
+
+        $this->assertSame('pago acreditado', $r->body['motivo']);
+        $this->assertSame([5], $this->db->paramsFor('FROM page_payment_settings WHERE page_id'));
+        $this->assertFalse($this->db->ran('SELECT lg.page_id'));
+        $this->assertStringContainsString('Guía (borrada)', $mailer->enviados[0]['asunto']);
+    }
+
+    /** Sin página (se borró con sus credenciales) no hay a quién preguntarle. */
+    public function testSinPaginaElAvisoNoSePuedeVerificar()
+    {
+        $this->hayOrden(['link_id' => null, 'pagina_id' => null]);
+
+        $r = CompraProductoHandler::aviso($this->db, $this->avisoDe('555'), $this->httpConPago());
+
+        $this->assertSame('la página no tiene credenciales', $r->body['motivo']);
+        $this->assertNoWrites();
+    }
+
+    // ---------------------------------------------------------------- largos
+
+    /**
+     * @dataProvider camposLargos
+     */
+    public function testUnCampoMasLargoQueSuColumnaDa400($campo, $valor, $texto)
+    {
+        $this->hayProducto();
+
+        $r = CompraProductoHandler::comprar($this->db, $this->pedido([$campo => $valor]));
+
+        $this->assertError(400, $r, $texto);
+        $this->assertNoWrites();
+    }
+
+    public static function camposLargos()
+    {
+        return [
+            'nombre'   => ['nombre', str_repeat('ñ', 151), 'hasta 150'],
+            'email'    => ['email', str_repeat('a', 250) . '@example.com', 'hasta 255'],
+            'telefono' => ['telefono', str_repeat('1', 51), 'hasta 50'],
+        ];
+    }
+
+    /** En el límite justo sí entra (y cuenta caracteres, no bytes). */
+    public function testUnNombreDe150CaracteresEntra()
+    {
+        $this->hayProducto('0.00');
+
+        $r = CompraProductoHandler::comprar($this->db, $this->pedido(['nombre' => str_repeat('ñ', 150)]), null, new FakeMailer());
+
+        $this->assertStatus(201, $r);
+    }
+
+    // --------------------------------------------------------------- gratis
+
+    /** Cinco por hora por IP, tres por email: después, 429 y ni orden ni mail. */
+    public function testDemasiadosPedidosGratisDan429()
+    {
+        $this->hayProducto('0.00');
+        $this->db->onSelect('WHERE email = ? AND total = 0', [[0]]);
+        $this->db->onSelect('WHERE ip = ? AND total = 0', [[5]]);
+        $mailer = new FakeMailer();
+        $req = $this->pedido();
+        $req->ip = '203.0.113.9';
+
+        $r = CompraProductoHandler::comprar($this->db, $req, null, $mailer);
+
+        $this->assertError(429, $r, 'demasiados pedidos');
+        $this->assertFalse($this->db->ran('INSERT INTO product_orders'));
+        $this->assertSame([], $mailer->enviados);
+        $this->assertSame(['203.0.113.9'], $this->db->paramsFor('WHERE ip = ?'));
+    }
+
+    public function testDemasiadosPedidosGratisDelMismoEmailDan429()
+    {
+        $this->hayProducto('0.00');
+        $this->db->onSelect('WHERE email = ? AND total = 0', [[3]]);
+
+        $r = CompraProductoHandler::comprar($this->db, $this->pedido(['email' => 'ANA@example.com']), null, new FakeMailer());
+
+        $this->assertError(429, $r);
+        $this->assertSame(['ana@example.com'], $this->db->paramsFor('WHERE email = ? AND total = 0'));
+    }
+
+    public function testLaOrdenGratisGuardaLaIp()
+    {
+        $this->hayProducto('0.00');
+        $req = $this->pedido();
+        $req->ip = '203.0.113.9';
+
+        CompraProductoHandler::comprar($this->db, $req, null, new FakeMailer());
+
+        $this->assertSame('203.0.113.9', $this->db->paramsFor('INSERT INTO product_orders')[10]);
+        $this->assertSame(40, $this->db->paramsFor('INSERT INTO product_orders')[1]);
+    }
+
+    /** Una IP que no es IP no se guarda ni se cuenta. */
+    public function testUnaIpInvalidaSeIgnora()
+    {
+        $this->hayProducto('0.00');
+        $req = $this->pedido();
+        $req->ip = 'no-es-una-ip';
+
+        CompraProductoHandler::comprar($this->db, $req, null, new FakeMailer());
+
+        $this->assertNull($this->db->paramsFor('INSERT INTO product_orders')[10]);
+        $this->assertFalse($this->db->ran('WHERE ip = ?'));
+    }
+
     // --------------------------------------------------------------- gratis
 
     public function testUnProductoGratisQuedaPagadoSinMercadoPagoYMandaElMail()
@@ -282,7 +444,7 @@ class CompraProductoHandlerTest extends HandlerTestCase
     public function testPedirloDosVecesReenviaElMailSinCrearOtraOrden()
     {
         $this->hayProducto('0.00');
-        $this->db->onSelect('WHERE link_id = ? AND email = ?', [[self::CODIGO]]);
+        $this->db->onSelect('WHERE product_id = ? AND email = ?', [[self::CODIGO]]);
         $this->hayOrden(['estado' => 'pagada', 'total' => '0.00', 'mail_enviado_en' => '2020-01-01 00:00:00', 'mail_intentos' => 1]);
         $mailer = new FakeMailer();
 
@@ -369,6 +531,44 @@ class CompraProductoHandlerTest extends HandlerTestCase
 
         $this->assertStatus(200, $r);
         $this->assertSame('orden inexistente', $r->body['motivo']);
+    }
+
+    /** En productos la referencia tiene que venir: un pago sin ella no acredita. */
+    public function testUnPagoSinReferenciaNoSeAcredita()
+    {
+        $this->hayOrden();
+        $this->hayCredencialesDeCobro();
+
+        $r = CompraProductoHandler::aviso($this->db, $this->avisoDe('555'), $this->httpConPago(['external_reference' => null]));
+
+        $this->assertSame('el pago es de otra orden', $r->body['motivo']);
+        $this->assertNoWrites();
+    }
+
+    public function testUnPagoSinMontoNoSeAcredita()
+    {
+        $this->hayOrden();
+        $this->hayCredencialesDeCobro();
+
+        $r = CompraProductoHandler::aviso($this->db, $this->avisoDe('555'), $this->httpConPago(['transaction_amount' => null]));
+
+        $this->assertSame('el monto no coincide con la orden', $r->body['motivo']);
+        $this->assertNoWrites();
+    }
+
+    public function testConciliarExigeReferenciaYMonto()
+    {
+        $this->hayOrden();
+        $this->hayCredencialesDeCobro();
+        $http = (new FakeHttpClient())->responde('/v1/payments/search', 200, ['results' => [[
+            'id' => 777, 'status' => 'approved', 'external_reference' => self::CODIGO,
+        ]]]);
+
+        $r = CompraProductoHandler::conciliar($this->db, self::CODIGO, $http);
+
+        $this->assertFalse($r['acreditada']);
+        $this->assertSame('el monto no coincide con la orden', $r['motivo']);
+        $this->assertNoWrites();
     }
 
     public function testSiNoSePudoConsultarElPagoSePideReintento()
@@ -481,6 +681,47 @@ class CompraProductoHandlerTest extends HandlerTestCase
         $r = CompraProductoHandler::orden($this->db, new Request('GET', [], ['codigo' => self::CODIGO]), new FakeHttpClient());
 
         $this->assertSame('vencida', $r->body['orden']['estado']);
+    }
+
+    /** Fuera de la ventana de la conciliación, mirar la orden no le pregunta a Mercado Pago. */
+    public function testUnaOrdenViejaNoSeConciliaAlMirarla()
+    {
+        $vieja = date('Y-m-d H:i:s', time() - (OrdenesDeProductos::DIAS_A_CONCILIAR + 1) * 86400);
+        $this->hayOrden(['estado' => 'rechazada', 'creado_en' => $vieja]);
+        $this->hayCredencialesDeCobro();
+        $http = new FakeHttpClient();
+
+        $r = CompraProductoHandler::orden($this->db, new Request('GET', [], ['codigo' => self::CODIGO]), $http);
+
+        $this->assertSame('rechazada', $r->body['orden']['estado']);
+        $this->assertSame([], $http->llamadas);
+    }
+
+    public function testUnaOrdenDentroDeLaVentanaSiSeConcilia()
+    {
+        $this->hayOrden(['estado' => 'rechazada', 'creado_en' => date('Y-m-d H:i:s', time() - 86400)], 2);
+        $this->hayCredencialesDeCobro();
+        $http = new FakeHttpClient();
+
+        CompraProductoHandler::orden($this->db, new Request('GET', [], ['codigo' => self::CODIGO]), $http);
+
+        $this->assertNotSame([], $http->llamadas);
+    }
+
+    /** La pantalla de descarga funciona con el producto borrado: título de la foto, sin imagen ni página. */
+    public function testLaDescargaDeUnProductoBorradoMuestraSuTitulo()
+    {
+        $this->db->onSelect('WHERE o.token_hash = ?', [$this->ordenBase([
+            'estado' => 'pagada', 'link_id' => null, 'producto' => 'Guía guardada',
+            'producto_imagen' => null, 'pagina' => null, 'url_slug' => null,
+        ])]);
+
+        $r = CompraProductoHandler::descarga($this->db, new Request('POST', ['token' => $this->token]));
+
+        $this->assertStatus(200, $r);
+        $this->assertSame('Guía guardada', $r->body['producto']['titulo']);
+        $this->assertNull($r->body['producto']['imagen']);
+        $this->assertNull($r->body['producto']['url_slug']);
     }
 
     public function testUnaOrdenInexistenteDa404()

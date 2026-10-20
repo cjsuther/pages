@@ -61,7 +61,8 @@ class ComprasDeProductosTest extends IntegracionTestCase
         ]);
         $ruta = ProductosDigitales::rutaNueva();
         $this->insertar('digital_products', [
-            'link_id' => $linkId, 'precio' => $precio, 'archivo_ruta' => $ruta,
+            'link_id' => $linkId, 'titulo' => $titulo, 'page_id' => $this->paginaId,
+            'precio' => $precio, 'archivo_ruta' => $ruta,
             'archivo_nombre' => 'guía.pdf', 'archivo_bytes' => strlen($contenido), 'archivo_tipo' => 'application/pdf',
         ]);
         $this->disco->archivos[ProductosDigitales::rutaEnDisco($ruta)] = $contenido;
@@ -173,7 +174,7 @@ class ComprasDeProductosTest extends IntegracionTestCase
         $this->assertArrayHasKey('product_orders', $esquema);
 
         foreach ([
-            'codigo', 'link_id', 'nombre', 'email', 'telefono', 'total', 'comision', 'comision_porcentaje',
+            'codigo', 'product_id', 'nombre', 'email', 'telefono', 'ip', 'total', 'comision', 'comision_porcentaje',
             'mp_comision_cobrada', 'estado', 'mp_preference_id', 'mp_payment_id', 'pagada_en',
             'token_hash', 'token_cifrado', 'descargas', 'primera_descarga_en', 'ultima_descarga_en',
             'mail_enviado_en', 'mail_intentos', 'mail_error', 'creado_en',
@@ -597,43 +598,397 @@ class ComprasDeProductosTest extends IntegracionTestCase
 
     // ============================================================== borrado
 
-    public function testNoSePuedeBorrarUnProductoConVentasPagadas()
+    /**
+     * Un producto con una venta pagada y otra pendiente (otro comprador, que
+     * quedó en el checkout de Mercado Pago).
+     *
+     * @return array{linkId: int, pagada: array, pendiente: array, ruta: string}
+     */
+    private function productoConPagadaYPendiente()
     {
         $linkId = $this->producto();
-        $this->compraPagada($linkId);
+        [$codigoPagada, $tokenPagada] = $this->compraPagada($linkId);
 
-        $res = LinksHandler::detail($this->db, $this->delete(['id' => $linkId], $this->user($this->duenaId)), $this->disco);
+        $this->preferenciaOk();
+        $pendiente = $this->comprar($linkId, ['nombre' => 'Beto Pendiente', 'email' => 'beto@test.local']);
+        $this->assertStatus(201, $pendiente);
 
-        $this->assertStatus(409, $res);
-        $this->assertStringContainsString('ventas', $res->body['error']);
-        $this->assertSame(1, (int) $this->valor('SELECT COUNT(*) FROM links WHERE id = ?', [$linkId]));
-        $this->assertSame([], $this->disco->borrados);
+        return [
+            'linkId'    => $linkId,
+            'pagada'    => ['codigo' => $codigoPagada, 'token' => $tokenPagada],
+            'pendiente' => ['codigo' => $pendiente->body['codigo'], 'token' => $pendiente->body['token']],
+            'ruta'      => $this->valor('SELECT archivo_ruta FROM digital_products WHERE link_id = ?', [$linkId]),
+        ];
     }
 
-    /** Lo que nunca se pagó no frena el borrado: se va con el producto. */
-    public function testUnProductoConOrdenesSinPagarSePuedeBorrar()
+    /** Lo que tiene que quedar en pie después de borrar el producto por cualquier camino. */
+    private function assertLoVendidoSobrevive(array $caso)
+    {
+        $this->assertSame(2, $this->cantidadDeOrdenes());
+        $this->assertSame('pagada', $this->orden($caso['pagada']['codigo'])['estado']);
+        $this->assertSame('pendiente', $this->orden($caso['pendiente']['codigo'])['estado']);
+
+        $producto = $this->fila('SELECT * FROM digital_products');
+        $this->assertNotFalse($producto);
+        $this->assertNull($producto['link_id']);
+        $this->assertNotNull($producto['borrado_en']);
+        $this->assertSame((int) $caso['linkId'], (int) $producto['link_original']);
+        $this->assertSame('Guía de viaje', $producto['titulo']);
+        $this->assertSame($caso['ruta'], $producto['archivo_ruta']);
+
+        // El archivo sigue en disco y quien pagó lo baja.
+        $this->assertSame([], $this->disco->borrados);
+        $res = $this->descargar($caso['pagada']['token']);
+        $this->assertStatus(200, $res);
+        $this->assertSame('PDF de la guía', $this->disco->archivos[$res->archivo]);
+
+        // La pantalla de descarga funciona sin el link: el título sale de la foto.
+        $pantalla = CompraProductoHandler::descarga($this->db, $this->post(['token' => $caso['pagada']['token']]));
+        $this->assertStatus(200, $pantalla);
+        $this->assertSame('Guía de viaje', $pantalla->body['producto']['titulo']);
+        $this->assertNull($pantalla->body['producto']['imagen']);
+
+        // Y no acepta pedidos nuevos.
+        $nuevo = $this->comprar($caso['linkId'], ['email' => 'carla@test.local']);
+        $this->assertStatus(409, $nuevo);
+        $this->assertStringContainsString('ya no está disponible', $nuevo->body['error']);
+        $this->assertSame(2, $this->cantidadDeOrdenes());
+    }
+
+    /** La pendiente se acredita después con el aviso de Mercado Pago, y descarga. */
+    private function assertLaPendienteSeAcreditaPorAviso(array $caso)
+    {
+        $codigo = $caso['pendiente']['codigo'];
+        $this->pagoDeMercadoPago($codigo, 2500.0, 'approved', ['id' => 555002]);
+        $mails = count($this->mailer->enviados);
+
+        $r = $this->aviso($codigo, '555002');
+
+        $this->assertSame('pago acreditado', $r->body['motivo']);
+        $this->assertSame('pagada', $this->orden($codigo)['estado']);
+        $this->assertCount($mails + 1, $this->mailer->enviados);
+        $this->assertStringContainsString('Guía de viaje', end($this->mailer->enviados)['asunto']);
+        $this->assertStatus(200, $this->descargar($caso['pendiente']['token']));
+
+        // Y la pantalla de vuelta muestra el producto borrado.
+        $vuelta = CompraProductoHandler::orden($this->db, new Request('GET', [], ['codigo' => $codigo]), $this->http);
+        $this->assertSame('pagada', $vuelta->body['orden']['estado']);
+        $this->assertSame('Guía de viaje', $vuelta->body['orden']['producto']);
+    }
+
+    public function testBorrarUnProductoConVentasConservaOrdenesFilaYArchivo()
+    {
+        $caso = $this->productoConPagadaYPendiente();
+
+        $res = LinksHandler::detail($this->db, $this->delete(['id' => $caso['linkId']], $this->user($this->duenaId)), $this->disco);
+
+        $this->assertStatus(200, $res);
+        $this->assertSame(0, (int) $this->valor('SELECT COUNT(*) FROM links WHERE id = ?', [$caso['linkId']]));
+        $this->assertLoVendidoSobrevive($caso);
+        $this->assertLaPendienteSeAcreditaPorAviso($caso);
+    }
+
+    public function testBorrarElGrupoDeUnProductoConVentasConservaLoVendido()
+    {
+        $caso = $this->productoConPagadaYPendiente();
+
+        $res = \GroupsHandler::detail($this->db, $this->delete(['id' => $this->grupoId], $this->user($this->duenaId)), $this->disco);
+
+        $this->assertStatus(200, $res);
+        $this->assertSame(0, (int) $this->valor('SELECT COUNT(*) FROM link_groups WHERE id = ?', [$this->grupoId]));
+        $this->assertLoVendidoSobrevive($caso);
+        $this->assertSame((int) $this->paginaId, (int) $this->valor('SELECT page_id FROM digital_products'));
+        $this->assertLaPendienteSeAcreditaPorAviso($caso);
+    }
+
+    /**
+     * Borrar la página entera también conserva lo vendido. Lo que no se puede
+     * es verificar un pago con Mercado Pago: sus credenciales se borran con
+     * la página (page_payment_settings, ON DELETE CASCADE). La pendiente queda
+     * guardada y se puede acreditar a mano (acreditarPago); el aviso no rompe.
+     */
+    public function testBorrarLaPaginaDeUnProductoConVentasConservaLoVendido()
+    {
+        $caso = $this->productoConPagadaYPendiente();
+
+        $res = \PagesHandler::detail($this->db, $this->delete(['id' => $this->paginaId], $this->user($this->duenaId)), $this->disco);
+
+        $this->assertStatus(200, $res);
+        $this->assertSame(0, (int) $this->valor('SELECT COUNT(*) FROM pages WHERE id = ?', [$this->paginaId]));
+        $this->assertLoVendidoSobrevive($caso);
+        $this->assertNull($this->valor('SELECT page_id FROM digital_products'));
+
+        $codigo = $caso['pendiente']['codigo'];
+        $this->pagoDeMercadoPago($codigo, 2500.0, 'approved', ['id' => 555002]);
+        $aviso = $this->aviso($codigo, '555002');
+        $this->assertStatus(200, $aviso);
+        $this->assertSame('la página no tiene credenciales', $aviso->body['motivo']);
+
+        $r = OrdenesDeProductos::acreditarPago($this->db, $codigo, '555002', 'approved');
+        $this->assertTrue($r['acreditada']);
+        $this->assertSame(['enviado' => true, 'motivo' => 'link enviado'], CorreoProductos::enviar($this->db, $codigo, $this->mailer));
+        $this->assertStatus(200, $this->descargar($caso['pendiente']['token']));
+    }
+
+    /** Un producto sin ninguna orden se borra entero, con su archivo. */
+    public function testUnProductoSinOrdenesSeBorraConSuArchivo()
     {
         $linkId = $this->producto();
-        $this->conectarPorOAuth();
-        $this->preferenciaOk();
-        $this->comprar($linkId);
+        $ruta = $this->valor('SELECT archivo_ruta FROM digital_products WHERE link_id = ?', [$linkId]);
 
         $res = LinksHandler::detail($this->db, $this->delete(['id' => $linkId], $this->user($this->duenaId)), $this->disco);
 
         $this->assertStatus(200, $res);
-        $this->assertSame(0, $this->cantidadDeOrdenes());
+        $this->assertSame(0, (int) $this->valor('SELECT COUNT(*) FROM digital_products'));
+        $this->assertSame([ProductosDigitales::rutaEnDisco($ruta)], $this->disco->borrados);
     }
 
-    public function testNoSePuedeBorrarElGrupoNiLaPaginaDeUnProductoVendido()
+    /** En un grupo con productos vendidos y sin vender, cada uno sigue su regla. */
+    public function testElGrupoBorraLosProductosSinOrdenesYConservaLosVendidos()
     {
-        $this->compraPagada($this->producto());
+        $vendido = $this->producto();
+        $this->compraPagada($vendido);
+        $sinVender = $this->producto('100.00', 'Otro');
+        $rutaSinVender = $this->valor('SELECT archivo_ruta FROM digital_products WHERE link_id = ?', [$sinVender]);
 
-        $grupo = \GroupsHandler::detail($this->db, $this->delete(['id' => $this->grupoId], $this->user($this->duenaId)), $this->disco);
-        $pagina = \PagesHandler::detail($this->db, $this->delete(['id' => $this->paginaId], $this->user($this->duenaId)), $this->disco);
+        $res = \GroupsHandler::detail($this->db, $this->delete(['id' => $this->grupoId], $this->user($this->duenaId)), $this->disco);
 
-        $this->assertStatus(409, $grupo);
-        $this->assertStatus(409, $pagina);
+        $this->assertStatus(200, $res);
+        $this->assertSame(1, (int) $this->valor('SELECT COUNT(*) FROM digital_products'));
+        $this->assertSame('Guía de viaje', $this->valor('SELECT titulo FROM digital_products'));
+        $this->assertSame([ProductosDigitales::rutaEnDisco($rutaSinVender)], $this->disco->borrados);
+    }
+
+    /** Si sólo hay órdenes canceladas nadie puede descargar: la fila queda, el archivo no. */
+    public function testConSoloOrdenesCanceladasSeBorraElArchivoPeroNoLaOrden()
+    {
+        $linkId = $this->producto();
+        $this->conectarPorOAuth();
+        // Sin preferencia: falla Mercado Pago y la orden queda cancelada.
+        $this->assertStatus(502, $this->comprar($linkId));
+        $ruta = $this->valor('SELECT archivo_ruta FROM digital_products WHERE link_id = ?', [$linkId]);
+
+        $res = LinksHandler::detail($this->db, $this->delete(['id' => $linkId], $this->user($this->duenaId)), $this->disco);
+
+        $this->assertStatus(200, $res);
         $this->assertSame(1, $this->cantidadDeOrdenes());
+        $this->assertNull($this->valor('SELECT archivo_ruta FROM digital_products'));
+        $this->assertSame([ProductosDigitales::rutaEnDisco($ruta)], $this->disco->borrados);
+    }
+
+    /** La base tampoco deja borrar a mano un producto con órdenes, ni en cascada. */
+    public function testLaBaseNoBorraUnProductoConOrdenes()
+    {
+        $linkId = $this->producto();
+        $this->compraPagada($linkId);
+
+        // Borrar el link a mano (sin la API) no se lleva ni la fila ni la orden.
+        $this->db->prepare('DELETE FROM links WHERE id = ?')->execute([$linkId]);
+        $this->assertSame(1, $this->cantidadDeOrdenes());
+        $this->assertSame(1, (int) $this->valor('SELECT COUNT(*) FROM digital_products'));
+
+        $this->expectException(\PDOException::class);
+        $this->db->exec('DELETE FROM digital_products');
+    }
+
+    /** Lo que borró otra persona no se toca: ni la página ni sus productos. */
+    public function testOtraPersonaNoBorraLaPaginaNiSusProductos()
+    {
+        $linkId = $this->producto();
+        $otra = $this->usuario('otra@test.local', 'Otra');
+
+        $res = \PagesHandler::detail($this->db, $this->delete(['id' => $this->paginaId], $this->user($otra, 'otra@test.local')), $this->disco);
+
+        $this->assertStatus(404, $res);
+        $this->assertSame((int) $linkId, (int) $this->valor('SELECT link_id FROM digital_products'));
+        $this->assertSame([], $this->disco->borrados);
+    }
+
+    // =============================================================== oculto
+
+    private function ocultar($linkId, $oculto = true)
+    {
+        return LinksHandler::detail($this->db, $this->put(['oculto' => $oculto], $this->user($this->duenaId), ['id' => $linkId]));
+    }
+
+    public function testUnProductoOcultoNoAceptaPedidosNuevos()
+    {
+        $pago = $this->producto();
+        $gratis = $this->producto('0.00', 'Gratis');
+        $this->conectarPorOAuth();
+
+        $this->assertStatus(200, $this->ocultar($pago));
+        $this->assertStatus(200, $this->ocultar($gratis));
+        $this->assertSame('1', (string) $this->valor('SELECT oculto FROM digital_products WHERE link_id = ?', [$pago]));
+
+        foreach ([$pago, $gratis] as $linkId) {
+            $res = $this->comprar($linkId);
+            $this->assertStatus(409, $res);
+            $this->assertSame('Este producto ya no está disponible.', $res->body['error']);
+        }
+
+        $this->assertSame(0, $this->cantidadDeOrdenes());
+        $this->assertSame([], $this->mailer->enviados);
+        $this->assertSame([], $this->http->llamadas);
+
+        // Al volver a mostrarlo, acepta pedidos otra vez.
+        $this->assertStatus(200, $this->ocultar($gratis, false));
+        $this->assertStatus(201, $this->comprar($gratis));
+    }
+
+    /** Ocultar no le quita nada a quien ya compró ni a quien está pagando. */
+    public function testOcultarNoFrenaLoYaPedido()
+    {
+        $caso = $this->productoConPagadaYPendiente();
+
+        $this->assertStatus(200, $this->ocultar($caso['linkId']));
+
+        $this->assertStatus(200, $this->descargar($caso['pagada']['token']));
+        $this->pagoDeMercadoPago($caso['pendiente']['codigo'], 2500.0, 'approved', ['id' => 555002]);
+        $this->assertSame('pago acreditado', $this->aviso($caso['pendiente']['codigo'], '555002')->body['motivo']);
+        $this->assertStatus(200, $this->descargar($caso['pendiente']['token']));
+    }
+
+    /** El editor ve si está oculto, y la página pública (parte 3) lo deja afuera. */
+    public function testElEditorVeElOcultoYLosPublicosNoLoIncluyen()
+    {
+        $visible = $this->producto();
+        $oculto = $this->producto('100.00', 'Oculto');
+        $this->ocultar($oculto);
+
+        $editor = ProductosDigitales::delGrupo($this->db, $this->grupoId);
+        $publicos = ProductosDigitales::publicosDelGrupo($this->db, $this->grupoId);
+
+        $this->assertSame(['0', '1'], array_map(function ($p) { return (string) $p['oculto']; }, $editor));
+        $this->assertSame([(int) $visible], array_map(function ($p) { return (int) $p['id']; }, $publicos));
+        $this->assertArrayNotHasKey('archivo_ruta', $publicos[0]);
+    }
+
+    /** El título queda copiado en el producto al crearlo y al editarlo. */
+    public function testElTituloYLaPaginaQuedanCopiadosEnElProducto()
+    {
+        $res = LinksHandler::index($this->db, $this->post([
+            'group_id' => $this->grupoId, 'url' => 'x', 'text' => 'Pack de fotos', 'precio' => '900',
+        ], $this->user($this->duenaId)));
+        $this->assertStatus(201, $res);
+        $linkId = $res->body['link']['id'];
+
+        $this->assertSame('Pack de fotos', $this->valor('SELECT titulo FROM digital_products WHERE link_id = ?', [$linkId]));
+        $this->assertSame((int) $this->paginaId, (int) $this->valor('SELECT page_id FROM digital_products WHERE link_id = ?', [$linkId]));
+
+        LinksHandler::detail($this->db, $this->put(['text' => 'Pack de fotos 2'], $this->user($this->duenaId), ['id' => $linkId]));
+        $this->assertSame('Pack de fotos 2', $this->valor('SELECT titulo FROM digital_products WHERE link_id = ?', [$linkId]));
+    }
+
+    // ======================================================= límite gratis
+
+    private function pedirGratisDesde($linkId, $email, $ip)
+    {
+        $req = $this->post(['link_id' => $linkId, 'nombre' => 'Ana', 'email' => $email]);
+        $req->ip = $ip;
+
+        return CompraProductoHandler::comprar($this->db, $req, $this->http, $this->mailer);
+    }
+
+    public function testCincoPedidosGratisPorHoraPorIp()
+    {
+        $a = $this->producto('0.00', 'A');
+        $b = $this->producto('0.00', 'B');
+
+        for ($i = 1; $i <= 5; $i++) {
+            $this->assertStatus(201, $this->pedirGratisDesde($i % 2 ? $a : $b, "persona$i@test.local", '198.51.100.7'));
+        }
+
+        $res = $this->pedirGratisDesde($a, 'persona6@test.local', '198.51.100.7');
+        $this->assertStatus(429, $res);
+        $this->assertStringContainsString('demasiados pedidos', $res->body['error']);
+        $this->assertSame(5, $this->cantidadDeOrdenes());
+        $this->assertCount(5, $this->mailer->enviados);
+
+        // Otra IP sigue pudiendo.
+        $this->assertStatus(201, $this->pedirGratisDesde($a, 'persona6@test.local', '198.51.100.8'));
+
+        // Y lo de hace más de una hora no cuenta.
+        $this->db->exec('UPDATE product_orders SET creado_en = NOW() - INTERVAL 2 HOUR');
+        $this->assertStatus(201, $this->pedirGratisDesde($a, 'persona7@test.local', '198.51.100.7'));
+    }
+
+    public function testTresPedidosGratisPorHoraPorEmailEntreTodosLosProductos()
+    {
+        $productos = [$this->producto('0.00', 'A'), $this->producto('0.00', 'B'), $this->producto('0.00', 'C'), $this->producto('0.00', 'D')];
+
+        foreach (array_slice($productos, 0, 3) as $i => $linkId) {
+            $this->assertStatus(201, $this->pedirGratisDesde($linkId, 'ana@test.local', '198.51.100.' . $i));
+        }
+
+        $res = $this->pedirGratisDesde($productos[3], 'ANA@test.local ', '198.51.100.9');
+        $this->assertStatus(429, $res);
+        $this->assertSame(3, $this->cantidadDeOrdenes());
+        $this->assertSame(3, (int) $this->valor("SELECT COUNT(*) FROM product_orders WHERE email = 'ana@test.local'"));
+        $this->assertSame('198.51.100.0', $this->valor('SELECT ip FROM product_orders ORDER BY id LIMIT 1'));
+    }
+
+    // ============================================== conciliación / códigos
+
+    /** Una rechazada cuyo segundo intento aprobado no avisó se acredita en la conciliación. */
+    public function testLaConciliacionAcreditaUnaRechazadaConUnAprobadoPosterior()
+    {
+        $linkId = $this->producto();
+        $this->conectarPorOAuth();
+        $this->preferenciaOk();
+        $codigo = $this->comprar($linkId)->body['codigo'];
+        $this->pagoDeMercadoPago($codigo, 2500.0, 'rejected', ['id' => 1]);
+        $this->aviso($codigo, '1');
+        $this->assertSame('rechazada', $this->orden($codigo)['estado']);
+
+        $this->assertSame([$codigo], OrdenesDeProductos::sinConciliar($this->db));
+
+        $this->http->responde('/v1/payments/search', 200, ['results' => [
+            ['id' => 2, 'status' => 'approved', 'external_reference' => $codigo, 'transaction_amount' => 2500.0],
+            ['id' => 1, 'status' => 'rejected', 'external_reference' => $codigo, 'transaction_amount' => 2500.0],
+        ]]);
+        $r = CompraProductoHandler::conciliar($this->db, $codigo, $this->http, $this->mailer);
+
+        $this->assertTrue($r['acreditada']);
+        $this->assertSame('pagada', $this->orden($codigo)['estado']);
+        $this->assertSame('2', $this->orden($codigo)['mp_payment_id']);
+        $this->assertSame([], OrdenesDeProductos::sinConciliar($this->db));
+
+        // Fuera de la ventana, una rechazada ya no se revisa.
+        $this->db->exec("UPDATE product_orders SET estado = 'rechazada', creado_en = NOW() - INTERVAL 61 DAY");
+        $this->assertSame([], OrdenesDeProductos::sinConciliar($this->db));
+    }
+
+    /** La verificación del código corre sobre las dos tablas, para entradas y para productos. */
+    public function testElCodigoLibreSeVerificaContraLasDosTablas()
+    {
+        $codigo = $this->comprar($this->producto('0.00'))->body['codigo'];
+
+        $stmt = $this->db->prepare('
+            SELECT 1 FROM ticket_orders WHERE codigo = ?
+            UNION ALL
+            SELECT 1 FROM product_orders WHERE codigo = ?
+        ');
+        $stmt->execute([$codigo, $codigo]);
+        $this->assertSame('1', (string) $stmt->fetchColumn());
+
+        foreach (['ticket_orders', 'product_orders'] as $tabla) {
+            $nuevo = \Entradas::codigoLibre($this->db, $tabla);
+            $this->assertMatchesRegularExpression('/^[A-F0-9]{12}$/', $nuevo);
+            $this->assertNotSame($codigo, $nuevo);
+        }
+    }
+
+    /** Un campo más largo que su columna es un 400, no un 500 de la base. */
+    public function testLosCamposLargosDan400()
+    {
+        $linkId = $this->producto('0.00');
+
+        $this->assertStatus(400, $this->comprar($linkId, ['nombre' => str_repeat('x', 151)]));
+        $this->assertStatus(400, $this->comprar($linkId, ['telefono' => str_repeat('1', 51)]));
+        $this->assertStatus(400, $this->comprar($linkId, ['email' => str_repeat('a', 250) . '@test.local']));
+        $this->assertSame(0, $this->cantidadDeOrdenes());
+        $this->assertStatus(201, $this->comprar($linkId, ['nombre' => str_repeat('ñ', 150)]));
     }
 
     // ================================================================= mail

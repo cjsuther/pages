@@ -911,16 +911,33 @@ class PagesHandlerTest extends HandlerTestCase
         $this->assertStringContainsString('user_id = ?', $this->db->callsFor('DELETE FROM pages')[0]['sql']);
     }
 
-    /** Una página con productos vendidos no se borra: los compradores perderían la descarga (#18). */
-    public function testDeleteNoBorraUnaPaginaConProductosVendidos()
+    /** Una página con productos vendidos se borra, pero lo vendido se queda (#18). */
+    public function testDeleteDeUnaPaginaConProductosVendidosLosConserva()
     {
-        $this->db->onSelect('FROM product_orders o', [[1]]);
+        $this->db->onSelect('FOR UPDATE', [['id' => 40, 'link_id' => 7, 'archivo_ruta' => 'productos/' . str_repeat('d', 32), 'con_ordenes' => 1, 'con_compras' => 1]]);
+        $this->db->onWrite('DELETE FROM pages', 1);
+        $disco = new \Tests\Support\FakeDisco();
 
-        $res = PagesHandler::detail($this->db, $this->delete(['id' => '5'], $this->user(9)));
+        $res = PagesHandler::detail($this->db, $this->delete(['id' => '5'], $this->user(9)), $disco);
 
-        $this->assertError(409, $res, 'ventas');
-        $this->assertSame([5, 9], $this->db->paramsFor('FROM product_orders o'));
-        $this->assertNoWrites();
+        $this->assertStatus(200, $res);
+        $this->assertSame([5], $this->db->paramsFor('FOR UPDATE'));
+        $this->assertSame([40], $this->db->paramsFor('SET borrado_en = NOW()'));
+        $this->assertSame([], $disco->borrados);
+    }
+
+    /** Si no era suya, se deshace lo que se preparó de los productos. */
+    public function testDeleteDeUnaPaginaAjenaDeshaceLoDeLosProductos()
+    {
+        $this->db->onSelect('FOR UPDATE', [['id' => 40, 'link_id' => 7, 'archivo_ruta' => 'productos/' . str_repeat('d', 32), 'con_ordenes' => 0, 'con_compras' => 0]]);
+        $this->db->onWrite('DELETE FROM pages', 0);
+        $disco = new \Tests\Support\FakeDisco();
+
+        $res = PagesHandler::detail($this->db, $this->delete(['id' => '5'], $this->user(9)), $disco);
+
+        $this->assertStatus(404, $res);
+        $this->assertTrue($this->db->rolledBack);
+        $this->assertSame([], $disco->borrados);
     }
 
     public function testLosSlugsDeLasPantallasDelCompradorEstanReservados()
@@ -1025,11 +1042,11 @@ class PagesHandlerTest extends HandlerTestCase
         $this->assertStringNotContainsString('dp.*', $sql);
     }
 
-    public function testBorrarLaPaginaBorraLosArchivosDeSusProductos()
+    public function testBorrarLaPaginaBorraLosArchivosDeSusProductosSinOrdenes()
     {
         $disco = new FakeDisco();
         $ruta = 'productos/' . str_repeat('d', 32);
-        $this->db->onSelect('WHERE lg.page_id = ? AND dp.archivo_ruta', [[$ruta]]);
+        $this->db->onSelect('FOR UPDATE', [['id' => 40, 'link_id' => 7, 'archivo_ruta' => $ruta, 'con_ordenes' => 0, 'con_compras' => 0]]);
         $this->db->onWrite('DELETE FROM pages', 1);
 
         $res = PagesHandler::detail($this->db, $this->delete(['id' => '5'], $this->user(9)), $disco);

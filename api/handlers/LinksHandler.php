@@ -173,6 +173,11 @@ class LinksHandler
 
             $linkId = $db->lastInsertId();
             ProductosDigitales::guardarPrecio($db, $linkId, $precio);
+            ProductosDigitales::actualizarFoto($db, $linkId);
+
+            if ($req->has('oculto')) {
+                ProductosDigitales::guardarOculto($db, $linkId, self::esVerdadero($req->input('oculto')));
+            }
 
             $db->commit();
         } catch (Exception $e) {
@@ -234,6 +239,7 @@ class LinksHandler
 
             $esProducto = $linkData && $linkData['type'] === 'productos';
             $precio = null;
+            $oculto = $esProducto && $req->has('oculto') ? self::esVerdadero($req->input('oculto')) : null;
 
             if ($esProducto && $req->has('precio')) {
                 $precio = ProductosDigitales::precio($req->input('precio'));
@@ -245,9 +251,9 @@ class LinksHandler
 
             list($fields, $values) = self::camposAActualizar($req);
 
-            // A un producto se le puede cambiar sólo el precio, que no es
-            // una columna de links.
-            if (empty($fields) && $precio === null) {
+            // A un producto se le puede cambiar sólo el precio o si está
+            // oculto, que no son columnas de links.
+            if (empty($fields) && $precio === null && $oculto === null) {
                 return Response::error(400, 'No fields to update');
             }
 
@@ -265,6 +271,14 @@ class LinksHandler
 
             if ($precio !== null) {
                 ProductosDigitales::guardarPrecio($db, $linkId, $precio);
+            }
+
+            if ($oculto !== null) {
+                ProductosDigitales::guardarOculto($db, $linkId, $oculto);
+            }
+
+            if ($esProducto) {
+                ProductosDigitales::actualizarFoto($db, $linkId);
             }
 
             // Si el evento vende, su registro guarda el título y la fecha
@@ -293,35 +307,43 @@ class LinksHandler
                 return Response::notFound('Link not found');
             }
 
-            // Si es un producto, su archivo se va con él. La fila se borra
-            // sola (ON DELETE CASCADE); el disco no.
-            $producto = ProductosDigitales::delLink($db, $linkId);
+            $db->beginTransaction();
 
-            if ($producto !== null) {
-                $motivo = ProductosDigitales::motivoParaNoBorrar($db, $linkId);
+            try {
+                // Si es un producto: sin órdenes se va entero; con órdenes
+                // queda su fila (y el archivo, si alguien puede descargarlo).
+                $archivos = ProductosDigitales::soltar($db, 'link', $linkId);
 
-                if ($motivo !== null) {
-                    return Response::error(409, $motivo);
-                }
+                // Las compras sobreviven al evento colgadas de su registro. Se
+                // refresca antes de borrar para que quede con los últimos datos
+                // y con las colaboraciones de este momento.
+                Clientes::actualizarEvento($db, $linkId);
+
+                $stmt = $db->prepare('DELETE FROM links WHERE id = ?');
+                $stmt->execute([$linkId]);
+
+                $db->commit();
+            } catch (Exception $e) {
+                $db->rollBack();
+
+                throw $e;
             }
 
-            // Las compras sobreviven al evento colgadas de su registro. Se
-            // refresca antes de borrar para que quede con los últimos datos y
-            // con las colaboraciones de este momento.
-            Clientes::actualizarEvento($db, $linkId);
-
-            $stmt = $db->prepare('DELETE FROM links WHERE id = ?');
-            $stmt->execute([$linkId]);
-
-            if ($producto !== null && !empty($producto['archivo_ruta'])) {
-                ProductosDigitales::borrarArchivos([$producto['archivo_ruta']], $storage);
-            }
+            // Recién con el borrado confirmado: si la base fallaba, el
+            // producto seguía entero con su archivo.
+            ProductosDigitales::borrarArchivos($archivos, $storage);
 
             return Response::ok(['message' => 'Link deleted successfully']);
 
         } catch (Exception $e) {
             return Response::serverError($e->getMessage());
         }
+    }
+
+    /** Un booleano que puede llegar como true, 1, "1" o "true". */
+    private static function esVerdadero($valor)
+    {
+        return $valor === true || $valor === 1 || $valor === '1' || $valor === 'true';
     }
 
     /**

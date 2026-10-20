@@ -12,6 +12,9 @@ class CompraProductoHandler
 {
     const MENSAJE_LINK_INVALIDO = 'Este link de descarga no es válido.';
 
+    /** Los largos de las columnas de product_orders. */
+    const LARGOS = ['nombre' => 150, 'email' => 255, 'telefono' => 50];
+
     // ---------------------------------------------------------------- comprar
 
     /**
@@ -35,17 +38,31 @@ class CompraProductoHandler
             return Response::error(400, 'link_id requerido');
         }
 
-        $producto = OrdenesDeProductos::productoEnVenta($db, $linkId);
-
-        if ($producto === null) {
-            return Response::notFound('El producto no existe');
-        }
-
         $comprador = [
             'nombre'   => self::texto($req->input('nombre')),
             'email'    => self::texto($req->input('email')),
             'telefono' => self::texto($req->input('telefono')),
         ];
+
+        // Antes que nada: un campo más largo que su columna sería un 500.
+        $problema = self::problemaDeLargo($comprador);
+
+        if ($problema !== null) {
+            return Response::error(400, $problema);
+        }
+
+        $producto = OrdenesDeProductos::productoEnVenta($db, $linkId);
+
+        if ($producto === null) {
+            return ProductosDigitales::fueBorrado($db, $linkId)
+                ? Response::error(409, ProductosDigitales::MENSAJE_NO_DISPONIBLE)
+                : Response::notFound('El producto no existe');
+        }
+
+        // Oculto: no acepta pedidos nuevos. Lo ya pedido sigue su curso.
+        if (!ProductosDigitales::aceptaPedidos($producto)) {
+            return Response::error(409, ProductosDigitales::MENSAJE_NO_DISPONIBLE);
+        }
 
         // Lo mismo que se le pide a quien compra una entrada.
         $problema = Entradas::validarComprador($comprador + ['cantidad' => 1]);
@@ -54,10 +71,11 @@ class CompraProductoHandler
             return Response::error(400, $problema);
         }
 
+        $productoId = (int) $producto['producto_id'];
         $total = round((float) $producto['precio'], 2);
 
         if ($total <= 0) {
-            return self::pedirGratis($db, $linkId, $comprador, $mailer);
+            return self::pedirGratis($db, $productoId, $comprador, $req->ip(), $mailer);
         }
 
         $tokenMp = Cobros::tokenDelEvento($db, $linkId, $http);
@@ -66,7 +84,7 @@ class CompraProductoHandler
             return Response::error(503, 'Este producto no se puede cobrar en este momento. Probá más tarde.');
         }
 
-        $orden = OrdenesDeProductos::crear($db, $linkId, $comprador, $total);
+        $orden = OrdenesDeProductos::crear($db, $productoId, $comprador, $total, $req->ip());
 
         // La misma regla que en las entradas: la comisión sólo se manda si la
         // página conectó por OAuth, porque con una credencial pegada a mano
@@ -114,14 +132,21 @@ class CompraProductoHandler
      * Si ese email ya lo pidió no se crea otra: se le reenvía el link que ya
      * tiene. La respuesta es la misma en los dos casos, para que el formulario
      * no sirva para averiguar qué emails pidieron qué.
+     *
+     * Una orden nueva cuenta para el límite por hora, por email y por IP. El
+     * reenvío no crea orden y tiene su propio mínimo entre envíos.
      */
-    private static function pedirGratis($db, $linkId, array $comprador, $mailer)
+    private static function pedirGratis($db, $productoId, array $comprador, $ip, $mailer)
     {
-        $codigo = OrdenesDeProductos::gratisDelEmail($db, $linkId, $comprador['email']);
+        $codigo = OrdenesDeProductos::gratisDelEmail($db, $productoId, $comprador['email']);
         $reenviar = $codigo !== null;
 
         if (!$reenviar) {
-            $codigo = OrdenesDeProductos::crear($db, $linkId, $comprador, 0)['codigo'];
+            if (OrdenesDeProductos::superaLimiteGratis($db, $comprador['email'], $ip)) {
+                return Response::error(429, OrdenesDeProductos::MENSAJE_DEMASIADOS_PEDIDOS);
+            }
+
+            $codigo = OrdenesDeProductos::crear($db, $productoId, $comprador, 0, $ip)['codigo'];
         }
 
         self::mandarLink($db, $codigo, $mailer, $reenviar);
@@ -161,7 +186,7 @@ class CompraProductoHandler
             return Response::ok(['recibido' => true, 'motivo' => 'orden inexistente']);
         }
 
-        $tokenMp = Cobros::tokenDelEvento($db, $orden['link_id'], $http);
+        $tokenMp = self::tokenDeLaOrden($db, $orden, $http);
 
         if ($tokenMp === null) {
             return Response::ok(['recibido' => true, 'motivo' => 'la página no tiene credenciales']);
@@ -173,12 +198,10 @@ class CompraProductoHandler
             return Response::error(503, 'No se pudo consultar el pago');
         }
 
-        if ($pago['referencia'] !== null && $pago['referencia'] !== $orden['codigo']) {
-            return Response::ok(['recibido' => true, 'motivo' => 'el pago es de otra orden']);
-        }
+        $problema = self::problemaDelPago($pago, $orden);
 
-        if ($pago['monto'] !== null && abs($pago['monto'] - (float) $orden['total']) > 0.01) {
-            return Response::ok(['recibido' => true, 'motivo' => 'el monto no coincide con la orden']);
+        if ($problema !== null) {
+            return Response::ok(['recibido' => true, 'motivo' => $problema]);
         }
 
         $resultado = OrdenesDeProductos::acreditarPago($db, $orden['codigo'], $pagoId, $pago['estado'], $pago);
@@ -210,7 +233,7 @@ class CompraProductoHandler
             return ['revisada' => false, 'acreditada' => false, 'motivo' => 'no hay nada que revisar'];
         }
 
-        $tokenMp = Cobros::tokenDelEvento($db, $orden['link_id'], $http);
+        $tokenMp = self::tokenDeLaOrden($db, $orden, $http);
 
         if ($tokenMp === null) {
             return ['revisada' => false, 'acreditada' => false, 'motivo' => 'la página no tiene credenciales'];
@@ -222,8 +245,10 @@ class CompraProductoHandler
             return ['revisada' => true, 'acreditada' => false, 'motivo' => 'sin pagos para esta orden'];
         }
 
-        if ($pago['monto'] !== null && abs($pago['monto'] - (float) $orden['total']) > 0.01) {
-            return ['revisada' => true, 'acreditada' => false, 'motivo' => 'el monto no coincide con la orden'];
+        $problema = self::problemaDelPago($pago, $orden);
+
+        if ($problema !== null) {
+            return ['revisada' => true, 'acreditada' => false, 'motivo' => $problema];
         }
 
         $resultado = OrdenesDeProductos::acreditarPago($db, $orden['codigo'], $pago['id'], $pago['estado'], $pago);
@@ -245,8 +270,10 @@ class CompraProductoHandler
      * Estado de una orden, para la pantalla a la que vuelve el comprador.
      *
      * Concilia antes de contestar, como la de entradas: si el aviso todavía no
-     * llegó, acá se nota. No devuelve el token ni datos personales: el código
-     * se ve en la URL y no es una credencial.
+     * llegó, acá se nota. Sólo dentro de la ventana de la conciliación: el
+     * código se ve en una URL, y cada GET de una orden vieja no puede ser una
+     * consulta más a Mercado Pago. No devuelve el token ni datos personales:
+     * el código no es una credencial.
      */
     public static function orden($db, Request $req, $http = null, $mailer = null)
     {
@@ -266,7 +293,8 @@ class CompraProductoHandler
             return Response::notFound('No encontramos esa orden');
         }
 
-        if (in_array($orden['estado'], OrdenesDeProductos::ACREDITABLES, true)) {
+        if (in_array($orden['estado'], OrdenesDeProductos::ACREDITABLES, true)
+            && OrdenesDeProductos::estaEnVentanaDeConciliacion($orden)) {
             $resultado = self::conciliar($db, $orden['codigo'], $http, $mailer);
 
             if ($resultado['acreditada'] || $resultado['motivo'] === 'pago rechazado') {
@@ -375,6 +403,53 @@ class CompraProductoHandler
     private static function texto($valor)
     {
         return is_string($valor) || is_int($valor) || is_float($valor) ? (string) $valor : '';
+    }
+
+    /** Qué campo excede el largo de su columna, o null. */
+    private static function problemaDeLargo(array $comprador)
+    {
+        $nombres = ['nombre' => 'El nombre', 'email' => 'El email', 'telefono' => 'El teléfono'];
+
+        foreach (self::LARGOS as $campo => $maximo) {
+            $valor = trim($comprador[$campo]);
+            $largo = function_exists('mb_strlen') ? mb_strlen($valor, 'UTF-8') : strlen($valor);
+
+            if ($largo > $maximo) {
+                return $nombres[$campo] . ' puede tener hasta ' . $maximo . ' caracteres.';
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Por qué un pago no sirve para esta orden, o null si sirve.
+     *
+     * Más estricto que en las entradas: la referencia y el monto tienen que
+     * venir y coincidir. Un pago sin referencia o sin monto no acredita nada.
+     */
+    private static function problemaDelPago(array $pago, array $orden)
+    {
+        if (!isset($pago['referencia']) || $pago['referencia'] !== $orden['codigo']) {
+            return 'el pago es de otra orden';
+        }
+
+        if (!isset($pago['monto']) || abs((float) $pago['monto'] - (float) $orden['total']) > 0.01) {
+            return 'el monto no coincide con la orden';
+        }
+
+        return null;
+    }
+
+    /**
+     * Las credenciales de la página del producto.
+     *
+     * Se buscan por la página y no por el link: el producto puede estar
+     * borrado u oculto y lo que se pagó igual se tiene que acreditar.
+     */
+    private static function tokenDeLaOrden($db, array $orden, $http)
+    {
+        return empty($orden['pagina_id']) ? null : Cobros::tokenDe($db, (int) $orden['pagina_id'], $http);
     }
 
     /** Manda el link sin que un problema de correo tumbe la operación. */
