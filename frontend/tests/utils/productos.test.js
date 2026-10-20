@@ -11,6 +11,8 @@ import {
   subirArchivoDeProducto,
   tokenDeDescarga,
   tokenDelHash,
+  linkDeProducto,
+  compartirLink,
 } from '../../src/utils/productos';
 import { gruposPublicos } from '../../src/utils/plantillas';
 import { mockFetch, llamadaA, respuesta, cuerpoDe } from '../helpers/api';
@@ -186,6 +188,55 @@ describe('productos digitales', () => {
       expect(gruposPublicos([{ id: 1 }])).toHaveLength(1);
       expect(gruposPublicos(undefined)).toEqual([]);
     });
+  });
+});
+
+describe('link de un producto', () => {
+  afterEach(() => {
+    delete navigator.share;
+    delete navigator.clipboard;
+  });
+
+  it('es /producto/<id> en el dominio en el que se está, como los eventos', () => {
+    expect(linkDeProducto(400)).toBe(`${window.location.origin}/producto/400`);
+    expect(linkDeProducto(400, 'https://maxipeque.com')).toBe('https://maxipeque.com/producto/400');
+  });
+
+  it('con navigator.share comparte y no copia', async () => {
+    const share = vi.fn(() => Promise.resolve());
+    const writeText = vi.fn();
+    Object.defineProperty(navigator, 'share', { configurable: true, value: share });
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+
+    expect(await compartirLink({ url: 'https://rezon.ar/producto/1', titulo: 'Guía' })).toBe('compartido');
+    expect(share).toHaveBeenCalledWith({ title: 'Guía', url: 'https://rezon.ar/producto/1' });
+    expect(writeText).not.toHaveBeenCalled();
+  });
+
+  it('si se cancela el menú no copia', async () => {
+    const cancelado = Object.assign(new Error('x'), { name: 'AbortError' });
+    const writeText = vi.fn();
+    Object.defineProperty(navigator, 'share', { configurable: true, value: vi.fn(() => Promise.reject(cancelado)) });
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+
+    expect(await compartirLink({ url: 'u', titulo: 't' })).toBe('cancelado');
+    expect(writeText).not.toHaveBeenCalled();
+  });
+
+  it('si navigator.share falla por otra cosa, copia', async () => {
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, 'share', { configurable: true, value: vi.fn(() => Promise.reject(new Error('NotAllowed'))) });
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+
+    expect(await compartirLink({ url: 'u', titulo: 't' })).toBe('copiado');
+    expect(writeText).toHaveBeenCalledWith('u');
+  });
+
+  it('sin navigator.share copia', async () => {
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+
+    expect(await compartirLink({ url: 'u', titulo: 't' })).toBe('copiado');
   });
 });
 

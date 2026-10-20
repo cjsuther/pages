@@ -1,9 +1,9 @@
 import React, { useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, Download, FileText, ShoppingBag } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, FileText, Share2, ShoppingBag } from 'lucide-react';
 import { AuthContext } from '../App';
 import ComprarProducto from './ComprarProducto';
 import useBloqueoDeScroll from '../hooks/useBloqueoDeScroll';
-import { describirPrecio, esPago } from '../utils/productos';
+import { compartirLink, describirPrecio, esPago, linkDeProducto } from '../utils/productos';
 import { describirPeso } from '../utils/imagenes';
 import { textoSobre } from '../utils/colores';
 
@@ -316,15 +316,52 @@ function DetalleProducto({
   );
 }
 
-/** Un producto entero: imagen, título, descripción, archivo, precio y el botón. */
-function Producto({ producto, colores, onComprar }) {
+/**
+ * Compartir el link propio del producto: el menú del sistema donde exista y,
+ * si no, copiarlo con un aviso.
+ */
+export function BotonCompartir({ producto }) {
+  const [aviso, setAviso] = useState(null);
+
+  const compartir = async () => {
+    try {
+      const resultado = await compartirLink({ url: linkDeProducto(producto.id), titulo: producto.text });
+      setAviso(resultado === 'copiado' ? 'Link copiado' : null);
+    } catch (e) {
+      setAviso('No se pudo copiar el link');
+    }
+  };
+
+  return (
+    <span className="inline-flex items-center gap-2">
+      <button
+        type="button"
+        onClick={compartir}
+        className="inline-flex items-center gap-1.5 text-sm font-semibold opacity-80 hover:opacity-100 transition"
+      >
+        <Share2 className="w-4 h-4 shrink-0" aria-hidden="true" />
+        Compartir
+      </button>
+      <span role="status" className="text-sm opacity-70">{aviso}</span>
+    </span>
+  );
+}
+
+/**
+ * Un producto entero: imagen, título, descripción, archivo, precio y los
+ * botones. Es lo que muestra el detalle de la página y también /producto/:id,
+ * que lo usa con un h1 y el color de títulos de la página.
+ */
+export function Producto({ producto, colores, onComprar, Titulo = 'h2', colorTitulo }) {
   return (
     <>
       {producto.image_url && (
         <img src={producto.image_url} alt={producto.text} className="w-full h-auto rounded-lg mb-6" />
       )}
 
-      <h2 className="text-3xl font-bold mb-4">{producto.text}</h2>
+      <Titulo className="text-3xl font-bold mb-4" style={colorTitulo ? { color: colorTitulo } : undefined}>
+        {producto.text}
+      </Titulo>
 
       {producto.description && (
         <p className="mb-4 text-lg leading-relaxed whitespace-pre-line">{producto.description}</p>
@@ -343,6 +380,10 @@ function Producto({ producto, colores, onComprar }) {
       <div className="flex flex-wrap items-center justify-between gap-4 mt-6">
         <span className="text-2xl font-bold">{describirPrecio(producto.precio)}</span>
         <BotonComprar producto={producto} colores={colores} onComprar={onComprar} className="px-5 py-3 rounded-lg" />
+      </div>
+
+      <div className="mt-4">
+        <BotonCompartir producto={producto} />
       </div>
     </>
   );

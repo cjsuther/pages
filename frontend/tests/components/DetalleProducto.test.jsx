@@ -331,6 +331,60 @@ describe('DetalleProducto', () => {
     });
   });
 
+  describe('compartir', () => {
+    afterEach(() => {
+      delete navigator.share;
+      delete navigator.clipboard;
+    });
+
+    it('comparte el link propio del producto que se está viendo', async () => {
+      const share = vi.fn(() => Promise.resolve());
+      Object.defineProperty(navigator, 'share', { configurable: true, value: share });
+      montar({ inicial: 1 });
+
+      const diapositiva = within(detalle()).getByRole('group', { name: '2 de 3' });
+      fireEvent.click(within(diapositiva).getByRole('button', { name: 'Compartir' }));
+
+      await vi.waitFor(() => expect(share).toHaveBeenCalledWith({
+        title: 'Mapa',
+        url: `${window.location.origin}/producto/401`,
+      }));
+    });
+
+    it('sin navigator.share copia el link y avisa "Link copiado"', async () => {
+      const writeText = vi.fn(() => Promise.resolve());
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+      montar({ productos: [producto()] });
+
+      fireEvent.click(within(detalle()).getByRole('button', { name: 'Compartir' }));
+
+      expect(await within(detalle()).findByText('Link copiado')).toBeInTheDocument();
+      expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/producto/400`);
+    });
+
+    it('si se cierra el menú de compartir no copia ni avisa', async () => {
+      const cancelado = Object.assign(new Error('cancelado'), { name: 'AbortError' });
+      Object.defineProperty(navigator, 'share', { configurable: true, value: vi.fn(() => Promise.reject(cancelado)) });
+      const writeText = vi.fn(() => Promise.resolve());
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+      montar({ productos: [producto()] });
+
+      fireEvent.click(within(detalle()).getByRole('button', { name: 'Compartir' }));
+
+      await vi.waitFor(() => expect(navigator.share).toHaveBeenCalled());
+      expect(writeText).not.toHaveBeenCalled();
+      expect(within(detalle()).queryByText('Link copiado')).not.toBeInTheDocument();
+    });
+
+    it('si no se puede ni compartir ni copiar, lo dice', async () => {
+      montar({ productos: [producto()] });
+
+      fireEvent.click(within(detalle()).getByRole('button', { name: 'Compartir' }));
+
+      expect(await within(detalle()).findByText('No se pudo copiar el link')).toBeInTheDocument();
+    });
+  });
+
   describe('compra', () => {
     beforeEach(() => {
       delete window.location;
