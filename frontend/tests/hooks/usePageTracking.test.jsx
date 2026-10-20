@@ -9,6 +9,9 @@ function Sonda() {
   return <div>sonda</div>;
 }
 
+/** Las vistas registradas; gtag también recibe un `set` con la ubicación. */
+const vistas = () => window.gtag.mock.calls.filter((c) => c[0] === 'event' && c[1] === 'page_view');
+
 function ConNavegacion() {
   usePageTracking();
   const navigate = useNavigate();
@@ -58,19 +61,15 @@ describe('usePageTracking', () => {
       </MemoryRouter>
     );
 
-    expect(window.gtag).toHaveBeenCalledTimes(1);
+    expect(vistas()).toHaveLength(1);
 
     fireEvent.click(getByText('ir'));
 
     await vi.waitFor(() => {
-      expect(window.gtag).toHaveBeenCalledTimes(2);
+      expect(vistas()).toHaveLength(2);
     });
 
-    expect(window.gtag).toHaveBeenLastCalledWith(
-      'event',
-      'page_view',
-      expect.objectContaining({ page_path: '/otra?x=1' })
-    );
+    expect(vistas()[1][2]).toEqual(expect.objectContaining({ page_path: '/otra?x=1' }));
   });
 
   it('no rompe si gtag no está cargado', () => {

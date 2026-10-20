@@ -73,6 +73,11 @@ class FakeDisco extends FileStorage
         unset($this->archivos[$ruta]);
     }
 
+    public function bytes($ruta)
+    {
+        return isset($this->archivos[$ruta]) ? strlen($this->archivos[$ruta]) : null;
+    }
+
     public function tipoMime($ruta)
     {
         return $this->mime;

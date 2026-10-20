@@ -143,15 +143,26 @@ class GroupsHandler
                 return Response::notFound('Group not found');
             }
 
-            // Borrar el grupo borra sus eventos: lo mismo que al borrar uno.
-            Clientes::actualizarEventosDelGrupo($db, $groupId);
+            $db->beginTransaction();
 
-            // Y sus productos, con sus archivos. Las rutas se leen antes,
-            // porque después del DELETE ya no hay filas que las digan.
-            $archivos = ProductosDigitales::rutasDelGrupo($db, $groupId);
+            try {
+                // Borrar el grupo borra sus eventos: lo mismo que al borrar uno.
+                Clientes::actualizarEventosDelGrupo($db, $groupId);
 
-            $stmt = $db->prepare('DELETE FROM link_groups WHERE id = ?');
-            $stmt->execute([$groupId]);
+                // Y sus links, por cascada. Los productos se preparan antes:
+                // los que tienen órdenes se quedan, con su archivo si alguien
+                // puede descargarlo; el resto se va.
+                $archivos = ProductosDigitales::soltar($db, 'grupo', $groupId);
+
+                $stmt = $db->prepare('DELETE FROM link_groups WHERE id = ?');
+                $stmt->execute([$groupId]);
+
+                $db->commit();
+            } catch (Exception $e) {
+                $db->rollBack();
+
+                throw $e;
+            }
 
             ProductosDigitales::borrarArchivos($archivos, $storage);
 

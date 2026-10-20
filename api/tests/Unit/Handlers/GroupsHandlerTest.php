@@ -355,18 +355,58 @@ class GroupsHandlerTest extends HandlerTestCase
         $this->assertNoWrites();
     }
 
-    public function testBorrarUnGrupoBorraLosArchivosDeSusProductos()
+    public function testBorrarUnGrupoBorraLosArchivosDeSusProductosSinOrdenes()
     {
         $disco = new FakeDisco();
         $rutas = ['productos/' . str_repeat('a', 32), 'productos/' . str_repeat('b', 32)];
         $this->autorizarGrupo();
-        $this->db->onSelect('dp.archivo_ruta IS NOT NULL', array_map(function ($r) { return [$r]; }, $rutas));
+        $this->db->onSelect('FOR UPDATE', [
+            ['id' => 1, 'link_id' => 10, 'archivo_ruta' => $rutas[0], 'con_ordenes' => 0, 'con_compras' => 0],
+            ['id' => 2, 'link_id' => 11, 'archivo_ruta' => $rutas[1], 'con_ordenes' => 0, 'con_compras' => 0],
+        ]);
         $this->db->onWrite('DELETE FROM link_groups', 1);
 
         $res = GroupsHandler::detail($this->db, $this->delete(['id' => '5'], $this->user()), $disco);
 
         $this->assertStatus(200, $res);
         $this->assertSame(array_map([ProductosDigitales::class, 'rutaEnDisco'], $rutas), $disco->borrados);
+        $this->assertSame([5], $this->db->paramsFor('FOR UPDATE'));
+        $this->assertTrue($this->db->committed);
+    }
+
+    /** Las ventas sobreviven al grupo, como las entradas al evento (#18). */
+    public function testUnGrupoConProductosVendidosSeBorraConservandoLoVendido()
+    {
+        $disco = new FakeDisco();
+        $this->autorizarGrupo();
+        $this->db->onSelect('FOR UPDATE', [
+            ['id' => 1, 'link_id' => 10, 'archivo_ruta' => 'productos/' . str_repeat('a', 32), 'con_ordenes' => 1, 'con_compras' => 1],
+        ]);
+        $this->db->onWrite('DELETE FROM link_groups', 1);
+
+        $res = GroupsHandler::detail($this->db, $this->delete(['id' => '5'], $this->user()), $disco);
+
+        $this->assertStatus(200, $res);
+        $this->assertSame([1], $this->db->paramsFor('SET borrado_en = NOW()'));
+        $this->assertFalse($this->db->ran('DELETE FROM digital_products'));
+        $this->assertSame([], $disco->borrados);
+    }
+
+    /** Si el DELETE falla no se toca el disco y se deshace todo. */
+    public function testSiFallaElBorradoDelGrupoNoSeBorranArchivos()
+    {
+        $disco = new FakeDisco();
+        $this->autorizarGrupo();
+        $this->db->onSelect('FOR UPDATE', [
+            ['id' => 1, 'link_id' => 10, 'archivo_ruta' => 'productos/' . str_repeat('a', 32), 'con_ordenes' => 0, 'con_compras' => 0],
+        ]);
+        $this->db->failOn('DELETE FROM link_groups');
+
+        $res = GroupsHandler::detail($this->db, $this->delete(['id' => '5'], $this->user()), $disco);
+
+        $this->assertStatus(500, $res);
+        $this->assertTrue($this->db->rolledBack);
+        $this->assertSame([], $disco->borrados);
     }
 
     public function testSiFallaElBorradoDelGrupoLosArchivosQuedan()

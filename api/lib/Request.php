@@ -30,6 +30,13 @@ class Request
      */
     public $form;
 
+    /**
+     * @var string|null IP de quien hace el pedido (REMOTE_ADDR). No se leen
+     *                  X-Forwarded-For ni parecidas: las escribe el cliente,
+     *                  y con eso cualquiera esquivaría un límite por IP.
+     */
+    public $ip = null;
+
     public function __construct(
         $method = 'GET',
         array $body = [],
@@ -62,7 +69,7 @@ class Request
 
         $headers = function_exists('getallheaders') ? getallheaders() : [];
 
-        return new self(
+        $req = new self(
             isset($_SERVER['REQUEST_METHOD']) ? $_SERVER['REQUEST_METHOD'] : 'GET',
             $body,
             $_GET,
@@ -71,6 +78,17 @@ class Request
             is_array($headers) ? $headers : [],
             $_POST
         );
+        $req->ip = isset($_SERVER['REMOTE_ADDR']) ? (string) $_SERVER['REMOTE_ADDR'] : null;
+
+        return $req;
+    }
+
+    /** La IP del cliente si es una IP válida, o null. */
+    public function ip()
+    {
+        $ip = is_string($this->ip) ? trim($this->ip) : '';
+
+        return $ip !== '' && filter_var($ip, FILTER_VALIDATE_IP) !== false ? $ip : null;
     }
 
     /** Valor de un campo de formulario ($_POST). */

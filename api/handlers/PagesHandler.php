@@ -17,6 +17,8 @@ class PagesHandler
         'public', 'pages', 'groups', 'links', 'user', 'users', 'config',
         'settings', 'logout', 'profile', 'account', 'artistas',
         'asistentes', 'precios',
+        // Pantallas del comprador de productos digitales (#18).
+        'descarga', 'compra',
     ];
 
     private static $defaults = [
@@ -449,15 +451,29 @@ class PagesHandler
         }
 
         try {
-            // Los archivos de sus productos se van con ella. Se leen antes:
-            // después del DELETE ya no hay filas que digan dónde están.
-            $archivos = ProductosDigitales::rutasDeLaPagina($db, $pageId);
+            $db->beginTransaction();
 
-            $stmt = $db->prepare('DELETE FROM pages WHERE id = ? AND user_id = ?');
-            $stmt->execute([$pageId, $req->userId()]);
+            try {
+                // Sus productos: los que tienen órdenes se quedan, con su
+                // archivo si alguien puede descargarlo; el resto se va. Se
+                // preparan antes porque el DELETE se lleva los links.
+                $archivos = ProductosDigitales::soltar($db, 'pagina', $pageId);
 
-            if ($stmt->rowCount() === 0) {
-                return Response::notFound('Page not found');
+                $stmt = $db->prepare('DELETE FROM pages WHERE id = ? AND user_id = ?');
+                $stmt->execute([$pageId, $req->userId()]);
+
+                // No era suya (o no existe): se deshace lo de los productos.
+                if ($stmt->rowCount() === 0) {
+                    $db->rollBack();
+
+                    return Response::notFound('Page not found');
+                }
+
+                $db->commit();
+            } catch (Exception $e) {
+                $db->rollBack();
+
+                throw $e;
             }
 
             ProductosDigitales::borrarArchivos($archivos, $storage);

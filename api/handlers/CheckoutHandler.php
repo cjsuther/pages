@@ -355,8 +355,10 @@ class CheckoutHandler
     /**
      * El id del pago llega en distintos lugares según el tipo de aviso: los
      * webhooks lo mandan en data.id y las IPN viejas en query.id.
+     *
+     * Pública porque el aviso de los productos digitales llega igual.
      */
-    private static function idDePagoDelAviso(Request $req)
+    public static function idDePagoDelAviso(Request $req)
     {
         if (isset($req->body['data']['id'])) {
             return (string) $req->body['data']['id'];

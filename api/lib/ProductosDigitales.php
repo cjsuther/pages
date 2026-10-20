@@ -29,7 +29,18 @@ class ProductosDigitales
     const PRECIO_MAXIMO = 9999999999.99;
 
     /** Lo que el editor ve de un producto; archivo_ruta queda afuera. */
-    const COLUMNAS_PUBLICAS = 'COALESCE(dp.precio, 0) AS precio, dp.archivo_nombre, dp.archivo_bytes, dp.archivo_tipo';
+    const COLUMNAS_PUBLICAS = 'COALESCE(dp.precio, 0) AS precio, COALESCE(dp.oculto, 0) AS oculto, dp.archivo_nombre, dp.archivo_bytes, dp.archivo_tipo';
+
+    /**
+     * Lo que tiene que cumplir un producto para mostrarse en la página pública
+     * y aceptar pedidos: con link (no borrado), no oculto y con archivo.
+     *
+     * Sobre el alias dp de digital_products. La página pública (parte 3 de
+     * #18) filtra con esto, o con publicosDelGrupo().
+     */
+    const CONDICION_EN_VENTA = 'dp.link_id IS NOT NULL AND dp.borrado_en IS NULL AND dp.oculto = 0 AND dp.archivo_ruta IS NOT NULL';
+
+    const MENSAJE_NO_DISPONIBLE = 'Este producto ya no está disponible.';
 
     const MENSAJE_EXCESO ='El archivo pesa más de 50 MB, que es el máximo. Si son varios archivos, comprimilos en un ZIP.';
 
@@ -169,6 +180,69 @@ class ProductosDigitales
         $stmt->execute([(int) $linkId, $precio]);
     }
 
+    /** Oculta o vuelve a mostrar un producto. */
+    public static function guardarOculto($db, $linkId, $oculto)
+    {
+        $stmt = $db->prepare('UPDATE digital_products SET oculto = ? WHERE link_id = ?');
+        $stmt->execute([$oculto ? 1 : 0, (int) $linkId]);
+    }
+
+    /**
+     * Copia en digital_products el título del link y la página a la que
+     * pertenece: es lo que queda para reconocer el producto si algún día se
+     * borra el link. Se llama al crear y al editar.
+     */
+    public static function actualizarFoto($db, $linkId)
+    {
+        $stmt = $db->prepare('
+            UPDATE digital_products dp
+                INNER JOIN links l ON l.id = dp.link_id
+                INNER JOIN link_groups lg ON lg.id = l.group_id
+            SET dp.titulo = l.text, dp.page_id = lg.page_id
+            WHERE dp.link_id = ?
+        ');
+        $stmt->execute([(int) $linkId]);
+    }
+
+    /**
+     * true si el producto acepta pedidos nuevos.
+     *
+     * Uno oculto o borrado no, pero lo que ya se pidió se sigue acreditando y
+     * descargando.
+     */
+    public static function aceptaPedidos(array $producto)
+    {
+        return empty($producto['oculto']) && empty($producto['borrado_en']);
+    }
+
+    /** true si ese link era un producto que se borró conservando sus ventas. */
+    public static function fueBorrado($db, $linkId)
+    {
+        $stmt = $db->prepare('SELECT 1 FROM digital_products WHERE link_original = ? AND borrado_en IS NOT NULL LIMIT 1');
+        $stmt->execute([(int) $linkId]);
+
+        return $stmt->fetchColumn() !== false;
+    }
+
+    /**
+     * Los productos de un grupo que se muestran al público: los que están en
+     * venta (CONDICION_EN_VENTA). Para la página pública, sin la ruta del
+     * archivo.
+     */
+    public static function publicosDelGrupo($db, $groupId)
+    {
+        $stmt = $db->prepare('
+            SELECT l.*, ' . self::COLUMNAS_PUBLICAS . '
+            FROM links l
+            INNER JOIN digital_products dp ON dp.link_id = l.id
+            WHERE l.group_id = ? AND ' . self::CONDICION_EN_VENTA . '
+            ORDER BY l.position, l.id
+        ');
+        $stmt->execute([(int) $groupId]);
+
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
     /** Deja asociado el archivo nuevo. */
     public static function guardarArchivo($db, $linkId, $ruta, $nombre, $bytes, $tipo)
     {
@@ -219,48 +293,90 @@ class ProductosDigitales
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
+    // ------------------------------------------------------------ borrado
+
     /**
-     * Por qué un producto no se puede borrar, o null si se puede.
+     * Prepara el borrado de los productos de un link, un grupo o una página,
+     * antes de borrar eso. Devuelve las rutas de los archivos que hay que
+     * borrar del disco después del DELETE (y del commit).
      *
-     * Hoy siempre se puede. Cuando haya ventas (parte 2), uno con ventas
-     * pagadas no: quien lo compró tiene que poder seguir descargándolo.
+     * Las ventas sobreviven, como las entradas a su evento:
      *
-     * @return string|null
+     * - Un producto sin ninguna orden se borra entero: la fila acá y el archivo
+     *   después.
+     * - Uno con órdenes se queda: se marca borrado_en, se recuerda el link
+     *   (link_original) y la foto (titulo, page_id) se refresca. Cuando el
+     *   link se borre, la base le pone link_id en null.
+     * - El archivo se conserva si alguna orden puede terminar en una descarga:
+     *   pagada, o pendiente, vencida o rechazada (un pago aprobado posterior
+     *   todavía la acredita). Si todas están canceladas, se borra.
+     *
+     * Tiene que correr en la misma transacción que el DELETE: los productos
+     * se leen con FOR UPDATE, así que una orden que se esté creando en ese
+     * momento (su clave foránea toma un lock sobre el producto) o espera a que
+     * esto termine o termina antes y se ve acá.
+     *
+     * @param string $alcance 'link', 'grupo' o 'pagina'
+     * @return string[] rutas relativas
      */
-    public static function motivoParaNoBorrar($db, $linkId)
+    public static function soltar($db, $alcance, $id)
     {
-        return null;
-    }
+        $filtros = [
+            'link'   => 'l.id = ?',
+            'grupo'  => 'l.group_id = ?',
+            'pagina' => 'lg.page_id = ?',
+        ];
 
-    // ------------------------------------------------------------ archivos
+        if (!isset($filtros[$alcance])) {
+            throw new InvalidArgumentException('Alcance de borrado desconocido');
+        }
 
-    /** Las rutas de los archivos de un grupo, para borrarlas con él. */
-    public static function rutasDelGrupo($db, $groupId)
-    {
         $stmt = $db->prepare('
-            SELECT dp.archivo_ruta
-            FROM digital_products dp
-            INNER JOIN links l ON l.id = dp.link_id
-            WHERE l.group_id = ? AND dp.archivo_ruta IS NOT NULL
-        ');
-        $stmt->execute([(int) $groupId]);
-
-        return $stmt->fetchAll(PDO::FETCH_COLUMN);
-    }
-
-    /** Las rutas de los archivos de una página, para borrarlas con ella. */
-    public static function rutasDeLaPagina($db, $pageId)
-    {
-        $stmt = $db->prepare('
-            SELECT dp.archivo_ruta
+            SELECT dp.id, dp.link_id, dp.archivo_ruta,
+                   EXISTS (SELECT 1 FROM product_orders o WHERE o.product_id = dp.id) AS con_ordenes,
+                   EXISTS (SELECT 1 FROM product_orders o WHERE o.product_id = dp.id AND o.estado <> \'cancelada\') AS con_compras
             FROM digital_products dp
             INNER JOIN links l ON l.id = dp.link_id
             INNER JOIN link_groups lg ON lg.id = l.group_id
-            WHERE lg.page_id = ? AND dp.archivo_ruta IS NOT NULL
+            WHERE ' . $filtros[$alcance] . '
+            FOR UPDATE
         ');
-        $stmt->execute([(int) $pageId]);
+        $stmt->execute([(int) $id]);
+        $productos = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        return $stmt->fetchAll(PDO::FETCH_COLUMN);
+        $rutas = [];
+
+        foreach ($productos as $p) {
+            $tieneArchivo = !empty($p['archivo_ruta']);
+
+            if (!(int) $p['con_ordenes']) {
+                $del = $db->prepare('DELETE FROM digital_products WHERE id = ?');
+                $del->execute([(int) $p['id']]);
+
+                if ($tieneArchivo) {
+                    $rutas[] = $p['archivo_ruta'];
+                }
+
+                continue;
+            }
+
+            self::actualizarFoto($db, $p['link_id']);
+
+            $conservarArchivo = (int) $p['con_compras'] > 0;
+
+            $upd = $db->prepare('
+                UPDATE digital_products
+                SET borrado_en = NOW(), link_original = link_id' . ($conservarArchivo ? '' : ', archivo_ruta = NULL') . '
+                WHERE id = ?
+            ');
+            $upd->execute([(int) $p['id']]);
+
+            if (!$conservarArchivo && $tieneArchivo) {
+                $rutas[] = $p['archivo_ruta'];
+            }
+        }
+
+        return $rutas;
     }
 
     /**

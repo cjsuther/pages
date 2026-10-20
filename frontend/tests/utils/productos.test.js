@@ -1,13 +1,18 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import {
   MAX_BYTES_PRODUCTO,
+  esOculto,
+  comprarProducto,
   describirPrecio,
   esPago,
   excesoArchivoProducto,
+  guardarTokenDeDescarga,
   subirArchivoDeProducto,
+  tokenDeDescarga,
+  tokenDelHash,
 } from '../../src/utils/productos';
 import { gruposPublicos } from '../../src/utils/plantillas';
-import { mockFetch, llamadaA, respuesta } from '../helpers/api';
+import { mockFetch, llamadaA, respuesta, cuerpoDe } from '../helpers/api';
 
 const archivo = (bytes, nombre = 'guia.pdf') => {
   const f = new File(['x'], nombre, { type: 'application/pdf' });
@@ -84,6 +89,72 @@ describe('productos digitales', () => {
     });
   });
 
+  describe('compra', () => {
+    const TOKEN = 'ab'.repeat(32);
+
+    afterEach(() => {
+      window.localStorage.clear();
+      vi.restoreAllMocks();
+    });
+
+    it('guarda el token antes de devolver a dónde ir a pagar', async () => {
+      const { llamadas } = mockFetch({
+        'public/comprar-producto.php': {
+          status: 201,
+          body: { codigo: 'AAAABBBBCCCC', estado: 'pendiente', url: 'https://mp.test/pagar', token: TOKEN },
+        },
+      });
+
+      const compra = await comprarProducto({ apiUrl: 'http://api', linkId: 7, nombre: 'Ana', email: 'ana@test.local' });
+
+      expect(compra.url).toBe('https://mp.test/pagar');
+      expect(tokenDeDescarga('AAAABBBBCCCC')).toBe(TOKEN);
+      const llamada = llamadaA(llamadas, 'public/comprar-producto.php');
+      expect(llamada.url).not.toContain(TOKEN);
+      expect(cuerpoDe(llamada)).toEqual({ link_id: 7, nombre: 'Ana', email: 'ana@test.local' });
+    });
+
+    it('un producto gratis no guarda nada: el link llega por mail', async () => {
+      mockFetch({ 'public/comprar-producto.php': { status: 201, body: { codigo: 'AAAABBBBCCCC', estado: 'pagada', url: null } } });
+
+      await comprarProducto({ apiUrl: 'http://api', linkId: 7, nombre: 'Ana', email: 'ana@test.local' });
+
+      expect(tokenDeDescarga('AAAABBBBCCCC')).toBeNull();
+    });
+
+    it('muestra el error que contesta la API', async () => {
+      mockFetch({ 'public/comprar-producto.php': { status: 400, body: { error: 'El email no es válido' } } });
+
+      await expect(comprarProducto({ apiUrl: 'http://api', linkId: 7 })).rejects.toThrow('El email no es válido');
+    });
+
+    // En modo privado de Safari, localStorage tira al escribir.
+    it('si no se puede guardar, la compra sigue igual', async () => {
+      vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('QuotaExceededError'); });
+      mockFetch({ 'public/comprar-producto.php': { status: 201, body: { codigo: 'C', url: 'https://mp.test', token: TOKEN } } });
+
+      await expect(comprarProducto({ apiUrl: 'http://api', linkId: 7 })).resolves.toMatchObject({ url: 'https://mp.test' });
+    });
+
+    it('si no se puede leer, no hay token', () => {
+      vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('SecurityError'); });
+
+      expect(tokenDeDescarga('C')).toBeNull();
+    });
+
+    it('un valor guardado que no tiene forma de token no se usa', () => {
+      guardarTokenDeDescarga('C', 'cualquier cosa');
+
+      expect(tokenDeDescarga('C')).toBeNull();
+    });
+
+    it('el token del link sale de lo que va después del #', () => {
+      expect(tokenDelHash(`#${TOKEN}`)).toBe(TOKEN);
+      expect(tokenDelHash('')).toBeNull();
+      expect(tokenDelHash('#corto')).toBeNull();
+    });
+  });
+
   describe('grupos públicos', () => {
     it('deja afuera los productos y cualquier tipo que no se sepa dibujar', () => {
       const grupos = [
@@ -101,5 +172,12 @@ describe('productos digitales', () => {
       expect(gruposPublicos([{ id: 1 }])).toHaveLength(1);
       expect(gruposPublicos(undefined)).toEqual([]);
     });
+  });
+});
+
+describe('esOculto', () => {
+  it('acepta lo que devuelve la API y lo que guarda el editor', () => {
+    expect([1, '1', true, 'true'].map(esOculto)).toEqual([true, true, true, true]);
+    expect([0, '0', false, null, undefined, ''].map(esOculto)).toEqual([false, false, false, false, false, false]);
   });
 });

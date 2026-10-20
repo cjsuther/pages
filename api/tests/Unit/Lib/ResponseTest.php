@@ -7,6 +7,43 @@ use PHPUnit\Framework\TestCase;
 
 class ResponseTest extends TestCase
 {
+    public function testArchivoGuardaLaRutaSinLeerla()
+    {
+        $res = Response::archivo(200, '/no/existe', ['Content-Type' => 'application/octet-stream']);
+
+        $this->assertSame(200, $res->status);
+        $this->assertSame('/no/existe', $res->archivo);
+        $this->assertNull($res->raw);
+        $this->assertNull($res->body);
+    }
+
+    /** Un archivo más grande que un bloque llega entero y en orden. */
+    public function testUnArchivoSeCopiaPorPartesEntero()
+    {
+        $ruta = tempnam(sys_get_temp_dir(), 'rezonar-descarga');
+        $contenido = random_bytes(Response::BLOQUE * 2 + 123);
+        file_put_contents($ruta, $contenido);
+        $destino = fopen('php://memory', 'w+b');
+
+        $copiados = Response::copiarPorPartes($ruta, $destino);
+
+        rewind($destino);
+        $this->assertSame(strlen($contenido), $copiados);
+        $this->assertSame($contenido, stream_get_contents($destino));
+
+        fclose($destino);
+        unlink($ruta);
+    }
+
+    public function testCopiarUnArchivoQueNoEstaDevuelveFalse()
+    {
+        $destino = fopen('php://memory', 'w+b');
+
+        $this->assertFalse(Response::copiarPorPartes('/no/existe/' . uniqid(), $destino));
+
+        fclose($destino);
+    }
+
     public function testJsonGuardaEstadoYCuerpo()
     {
         $res = Response::json(418, ['a' => 1]);

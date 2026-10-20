@@ -1495,7 +1495,13 @@ class Entradas
         return array_keys(array_filter($veces, function ($n) { return $n > 1; }));
     }
 
-    private static function validarComprador(array $datos)
+    /**
+     * Qué tiene de malo lo que cargó el comprador, o null si está bien.
+     *
+     * Pública porque los productos digitales piden lo mismo: nombre, email y
+     * teléfono opcional (con cantidad 1, que es lo que vale una compra suya).
+     */
+    public static function validarComprador(array $datos)
     {
         $nombre = isset($datos['nombre']) ? trim($datos['nombre']) : '';
         $email = isset($datos['email']) ? trim($datos['email']) : '';
@@ -1526,14 +1532,30 @@ class Entradas
         return null;
     }
 
-    /** Código público aleatorio, verificando que no exista. */
-    private static function codigoLibre($db)
+    /**
+     * Código público aleatorio, verificando que no exista.
+     *
+     * Lo usan también las órdenes de productos: el mismo formato en las dos
+     * tablas, y un código no se repite entre ellas —una entrada y un producto
+     * nunca comparten código—, así que se verifica contra las dos sea cual
+     * sea la tabla. $tabla queda por compatibilidad y se valida contra una
+     * lista cerrada.
+     */
+    public static function codigoLibre($db, $tabla = 'ticket_orders')
     {
-        $stmt = $db->prepare('SELECT 1 FROM ticket_orders WHERE codigo = ?');
+        if (!in_array($tabla, ['ticket_orders', 'product_orders'], true)) {
+            throw new InvalidArgumentException('Tabla de órdenes desconocida');
+        }
+
+        $stmt = $db->prepare('
+            SELECT 1 FROM ticket_orders WHERE codigo = ?
+            UNION ALL
+            SELECT 1 FROM product_orders WHERE codigo = ?
+        ');
 
         for ($intento = 0; $intento < 5; $intento++) {
             $codigo = strtoupper(bin2hex(random_bytes(6)));
-            $stmt->execute([$codigo]);
+            $stmt->execute([$codigo, $codigo]);
 
             if ($stmt->fetchColumn() === false) {
                 return $codigo;

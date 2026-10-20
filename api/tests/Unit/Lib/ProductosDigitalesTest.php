@@ -180,25 +180,105 @@ class ProductosDigitalesTest extends HandlerTestCase
         $this->assertSame([5, 1200.0], $this->db->paramsFor('INSERT INTO digital_products'));
     }
 
-    public function testLasRutasDeUnGrupoSalenDeSusProductos()
-    {
-        $this->db->onSelect('WHERE l.group_id = ? AND dp.archivo_ruta IS NOT NULL', [['productos/x']]);
+    // =========================================================== borrado
 
-        $this->assertSame(['productos/x'], ProductosDigitales::rutasDelGrupo($this->db, 3));
-        $this->assertSame([3], $this->db->paramsFor('WHERE l.group_id = ?'));
+    private function productosASoltar(array $filas)
+    {
+        $this->db->onSelect('FOR UPDATE', $filas);
     }
 
-    public function testLasRutasDeUnaPaginaSalenDeTodosSusGrupos()
+    public function testSoltarUnProductoSinOrdenesLoBorraConSuArchivo()
     {
-        $this->db->onSelect('WHERE lg.page_id = ? AND dp.archivo_ruta IS NOT NULL', [['productos/x'], ['productos/y']]);
+        $this->productosASoltar([['id' => 40, 'link_id' => 5, 'archivo_ruta' => 'productos/x', 'con_ordenes' => 0, 'con_compras' => 0]]);
 
-        $this->assertSame(['productos/x', 'productos/y'], ProductosDigitales::rutasDeLaPagina($this->db, 9));
+        $rutas = ProductosDigitales::soltar($this->db, 'link', 5);
+
+        $this->assertSame(['productos/x'], $rutas);
+        $this->assertSame([40], $this->db->paramsFor('DELETE FROM digital_products WHERE id = ?'));
+        $this->assertFalse($this->db->ran('SET borrado_en'));
+        $this->assertSame([5], $this->db->paramsFor('FOR UPDATE'));
     }
 
-    /** Preparado para la parte 2: hoy no hay ventas que lo impidan. */
-    public function testHoyCualquierProductoSePuedeBorrar()
+    /** Las ventas sobreviven: la fila se queda, marcada, y el archivo también. */
+    public function testSoltarUnProductoConComprasConservaFilaYArchivo()
     {
-        $this->assertNull(ProductosDigitales::motivoParaNoBorrar($this->db, 5));
+        $this->productosASoltar([['id' => 40, 'link_id' => 5, 'archivo_ruta' => 'productos/x', 'con_ordenes' => 1, 'con_compras' => 1]]);
+
+        $rutas = ProductosDigitales::soltar($this->db, 'link', 5);
+
+        $this->assertSame([], $rutas);
+        $this->assertFalse($this->db->ran('DELETE FROM digital_products'));
+        $this->assertTrue($this->db->ran('SET dp.titulo = l.text, dp.page_id = lg.page_id'));
+        $update = $this->db->callsFor('SET borrado_en = NOW()')[0];
+        $this->assertStringContainsString('link_original = link_id', $update['sql']);
+        $this->assertStringNotContainsString('archivo_ruta', $update['sql']);
+        $this->assertSame([40], $update['params']);
+    }
+
+    /** Si todas las órdenes se cancelaron nadie puede descargar: el archivo se va, la fila no. */
+    public function testSoltarUnProductoConOrdenesCanceladasBorraSoloElArchivo()
+    {
+        $this->productosASoltar([['id' => 40, 'link_id' => 5, 'archivo_ruta' => 'productos/x', 'con_ordenes' => 1, 'con_compras' => 0]]);
+
+        $rutas = ProductosDigitales::soltar($this->db, 'link', 5);
+
+        $this->assertSame(['productos/x'], $rutas);
+        $this->assertFalse($this->db->ran('DELETE FROM digital_products'));
+        $this->assertStringContainsString('archivo_ruta = NULL', $this->db->callsFor('SET borrado_en = NOW()')[0]['sql']);
+    }
+
+    public function testSoltarFiltraPorElAlcance()
+    {
+        ProductosDigitales::soltar($this->db, 'grupo', 3);
+        ProductosDigitales::soltar($this->db, 'pagina', 9);
+
+        $consultas = $this->db->callsFor('FOR UPDATE');
+        $this->assertStringContainsString('WHERE l.group_id = ?', $consultas[0]['sql']);
+        $this->assertSame([3], $consultas[0]['params']);
+        $this->assertStringContainsString('WHERE lg.page_id = ?', $consultas[1]['sql']);
+        $this->assertSame([9], $consultas[1]['params']);
+
+        $this->expectException(\InvalidArgumentException::class);
+        ProductosDigitales::soltar($this->db, 'usuario', 1);
+    }
+
+    // ===================================================== oculto / público
+
+    public function testUnProductoOcultoOBorradoNoAceptaPedidos()
+    {
+        $this->assertTrue(ProductosDigitales::aceptaPedidos(['oculto' => 0, 'borrado_en' => null]));
+        $this->assertFalse(ProductosDigitales::aceptaPedidos(['oculto' => 1, 'borrado_en' => null]));
+        $this->assertFalse(ProductosDigitales::aceptaPedidos(['oculto' => 0, 'borrado_en' => '2026-10-01 00:00:00']));
+    }
+
+    public function testGuardarOculto()
+    {
+        ProductosDigitales::guardarOculto($this->db, 5, true);
+        ProductosDigitales::guardarOculto($this->db, 5, false);
+
+        $llamadas = $this->db->callsFor('UPDATE digital_products SET oculto = ?');
+        $this->assertSame([1, 5], $llamadas[0]['params']);
+        $this->assertSame([0, 5], $llamadas[1]['params']);
+    }
+
+    /** Lo que va a usar la página pública: sólo lo que está en venta. */
+    public function testLosProductosPublicosSonLosQueEstanEnVenta()
+    {
+        ProductosDigitales::publicosDelGrupo($this->db, 3);
+
+        $sql = $this->db->callsFor('FROM links l')[0]['sql'];
+        $this->assertStringContainsString(ProductosDigitales::CONDICION_EN_VENTA, $sql);
+        $this->assertStringContainsString('dp.oculto = 0', ProductosDigitales::CONDICION_EN_VENTA);
+        $this->assertStringContainsString('dp.borrado_en IS NULL', ProductosDigitales::CONDICION_EN_VENTA);
+        $this->assertStringNotContainsString('archivo_ruta,', $sql);
+    }
+
+    public function testUnLinkBorradoConVentasSeReconoce()
+    {
+        $this->assertFalse(ProductosDigitales::fueBorrado($this->db, 5));
+
+        $this->db->onSelect('WHERE link_original = ?', [[1]]);
+        $this->assertTrue(ProductosDigitales::fueBorrado($this->db, 5));
     }
 
     // ========================================================== FileStorage
@@ -210,6 +290,19 @@ class ProductosDigitalesTest extends HandlerTestCase
         file_put_contents($ruta, "%PDF-1.4\n%\xE2\xE3\xCF\xD3\n1 0 obj\n<<>>\nendobj\n");
 
         $this->assertSame('application/pdf', (new FileStorage())->tipoMime($ruta));
+
+        unlink($ruta);
+    }
+
+    public function testLoQuePesaUnArchivo()
+    {
+        $almacen = new FileStorage();
+        $ruta = sys_get_temp_dir() . '/rezonar-prueba-' . uniqid();
+        file_put_contents($ruta, '12345');
+
+        $this->assertSame(5, $almacen->bytes($ruta));
+        $this->assertNull($almacen->bytes($ruta . '-no-existe'));
+        $this->assertNull($almacen->bytes(sys_get_temp_dir()), 'una carpeta no es un archivo');
 
         unlink($ruta);
     }

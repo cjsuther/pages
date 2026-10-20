@@ -91,6 +91,22 @@ class FileStorage
         return file_exists($ruta);
     }
 
+    /**
+     * Lo que pesa un archivo, o null si no está.
+     *
+     * @return int|null
+     */
+    public function bytes($ruta)
+    {
+        if (!is_file($ruta)) {
+            return null;
+        }
+
+        $bytes = @filesize($ruta);
+
+        return $bytes === false ? null : (int) $bytes;
+    }
+
     /** @return bool */
     public function escribir($ruta, $contenido)
     {

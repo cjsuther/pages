@@ -71,6 +71,7 @@ class ProductosHandler
                 (int) $archivo['size'],
                 $tipo === null ? 'application/octet-stream' : $tipo
             );
+            ProductosDigitales::actualizarFoto($db, $linkId);
         } catch (Exception $e) {
             // Sin fila que lo nombre, el archivo no lo va a encontrar nadie.
             $storage->borrar($destino);

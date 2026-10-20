@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { pageview, trackEvent, iniciarAnalytics, GA_MEASUREMENT_ID } from '../../src/utils/analytics';
+import { pageview, trackEvent, iniciarAnalytics, urlSinHash, GA_MEASUREMENT_ID } from '../../src/utils/analytics';
 
 describe('analytics', () => {
   beforeEach(() => {
@@ -40,9 +40,54 @@ describe('analytics', () => {
       expect(window.gtag).toHaveBeenCalledWith('event', 'page_view', {
         page_path: '/mi-pagina?x=1',
         page_title: 'Mi página',
-        page_location: window.location.href,
+        page_location: window.location.origin + window.location.pathname + window.location.search,
       });
       expect(window.gtag).not.toHaveBeenCalledWith('config', expect.anything(), expect.anything());
+    });
+  });
+
+  /**
+   * Detrás del # viajan credenciales: el token de /descarga#<token> y las
+   * claves de /puerta# y /venta#. Nada de eso puede llegar a Google.
+   */
+  describe('lo que va después del # no se manda', () => {
+    const TOKEN = 'a'.repeat(64);
+
+    beforeEach(() => {
+      window.history.replaceState(null, '', `/descarga?x=1#${TOKEN}`);
+    });
+
+    afterEach(() => {
+      window.history.replaceState(null, '', '/');
+    });
+
+    it('urlSinHash deja origen, ruta y query', () => {
+      expect(urlSinHash()).toBe(`${window.location.origin}/descarga?x=1`);
+    });
+
+    it('ni en la vista ni en lo que queda fijado para los eventos', () => {
+      pageview('/descarga?x=1', 'Descarga');
+      trackEvent.event('algo', { a: 1 });
+
+      const enviado = JSON.stringify(window.gtag.mock.calls);
+      expect(enviado).not.toContain(TOKEN);
+      expect(enviado).not.toContain('#');
+      expect(window.gtag).toHaveBeenCalledWith('set', { page_location: `${window.location.origin}/descarga?x=1` });
+      expect(window.gtag).toHaveBeenCalledWith('event', 'page_view', expect.objectContaining({
+        page_location: `${window.location.origin}/descarga?x=1`,
+      }));
+    });
+
+    it('ni en la configuración inicial', () => {
+      delete window.gtag;
+      delete window.dataLayer;
+
+      iniciarAnalytics();
+
+      const config = window.dataLayer.find((a) => a[0] === 'config');
+      expect(config[2].page_location).toBe(`${window.location.origin}/descarga?x=1`);
+      expect(JSON.stringify(window.dataLayer.map((a) => Array.from(a)))).not.toContain(TOKEN);
+      document.head.querySelectorAll('script[src*="googletagmanager"]').forEach((e) => e.remove());
     });
   });
 

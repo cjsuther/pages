@@ -815,18 +815,72 @@ class LinksHandlerTest extends HandlerTestCase
         $this->assertSame(0, $this->db->countCalls('digital_products'));
     }
 
-    public function testBorrarUnProductoBorraSuArchivo()
+    public function testBorrarUnProductoSinOrdenesBorraSuFilaYSuArchivo()
     {
         $disco = new FakeDisco();
         $ruta = 'productos/' . str_repeat('c', 32);
         $this->autorizarLink();
-        $this->db->onSelect('SELECT * FROM digital_products WHERE link_id', [['link_id' => 5, 'archivo_ruta' => $ruta]]);
+        $this->db->onSelect('FOR UPDATE', [['id' => 40, 'link_id' => 5, 'archivo_ruta' => $ruta, 'con_ordenes' => 0, 'con_compras' => 0]]);
         $this->db->onWrite('DELETE FROM links', 1);
 
         $res = LinksHandler::detail($this->db, $this->delete(['id' => '5'], $this->user()), $disco);
 
         $this->assertStatus(200, $res);
+        $this->assertSame([40], $this->db->paramsFor('DELETE FROM digital_products WHERE id = ?'));
         $this->assertSame([ProductosDigitales::rutaEnDisco($ruta)], $disco->borrados);
+        $this->assertTrue($this->db->committed);
+    }
+
+    /** Quien lo compró tiene que poder seguir descargándolo (#18): se borra el link, no lo vendido. */
+    public function testUnProductoConVentasSeBorraConservandoFilaYArchivo()
+    {
+        $disco = new FakeDisco();
+        $this->autorizarLink();
+        $this->db->onSelect('FOR UPDATE', [['id' => 40, 'link_id' => 5, 'archivo_ruta' => 'productos/' . str_repeat('c', 32), 'con_ordenes' => 1, 'con_compras' => 1]]);
+        $this->db->onWrite('DELETE FROM links', 1);
+
+        $res = LinksHandler::detail($this->db, $this->delete(['id' => '5'], $this->user()), $disco);
+
+        $this->assertStatus(200, $res);
+        $this->assertSame([40], $this->db->paramsFor('SET borrado_en = NOW()'));
+        $this->assertFalse($this->db->ran('DELETE FROM digital_products'));
+        $this->assertTrue($this->db->ran('DELETE FROM links'));
+        $this->assertSame([], $disco->borrados);
+    }
+
+    public function testOcultarUnProducto()
+    {
+        $this->autorizarLink();
+        $this->db->onSelect('JOIN link_groups lg ON l.group_id = lg.id', [['id' => 5, 'type' => 'productos']]);
+
+        $res = LinksHandler::detail($this->db, new \Request('PUT', ['oculto' => true], ['id' => '5'], $this->user()));
+
+        $this->assertStatus(200, $res);
+        $this->assertSame([1, 5], $this->db->paramsFor('UPDATE digital_products SET oculto = ?'));
+        $this->assertFalse($this->db->ran('UPDATE links SET'));
+    }
+
+    /** "oculto" es sólo de los productos: en un link común no se toca nada. */
+    public function testOcultoNoSeAplicaAUnLinkComun()
+    {
+        $this->autorizarLink();
+        $this->db->onSelect('JOIN link_groups lg ON l.group_id = lg.id', [['id' => 5, 'type' => 'links']]);
+
+        $res = LinksHandler::detail($this->db, new \Request('PUT', ['oculto' => true], ['id' => '5'], $this->user()));
+
+        $this->assertError(400, $res);
+        $this->assertFalse($this->db->ran('digital_products'));
+    }
+
+    /** El título queda copiado en el producto: es lo que se ve si se borra el link. */
+    public function testEditarUnProductoActualizaSuFoto()
+    {
+        $this->autorizarLink();
+        $this->db->onSelect('JOIN link_groups lg ON l.group_id = lg.id', [['id' => 5, 'type' => 'productos']]);
+
+        LinksHandler::detail($this->db, new \Request('PUT', ['text' => 'Nuevo título'], ['id' => '5'], $this->user()));
+
+        $this->assertSame([5], $this->db->paramsFor('SET dp.titulo = l.text, dp.page_id = lg.page_id'));
     }
 
     public function testBorrarUnProductoSinArchivoNoBorraNadaDelDisco()

@@ -9,7 +9,7 @@ import ArchivoDeProducto from '../components/ArchivoDeProducto';
 import AvisoMercadoPago from '../components/AvisoMercadoPago';
 import { analizarEmbed, EJEMPLOS_EMBED } from '../utils/embeds';
 import { MAX_BYTES, excesoImagenEvento } from '../utils/imagenes';
-import { subirArchivoDeProducto } from '../utils/productos';
+import { subirArchivoDeProducto, esOculto } from '../utils/productos';
 
 /**
  * Edición de un item (link, imagen o evento) en pantalla completa.
@@ -632,6 +632,22 @@ function ItemEditor() {
               </div>
 
               <AvisoMercadoPago pageId={id} apiUrl={apiUrl} token={token} precio={item.precio} />
+
+              <label htmlFor="oculto-producto" className="flex items-start gap-3 cursor-pointer">
+                <input
+                  id="oculto-producto"
+                  type="checkbox"
+                  checked={esOculto(item.oculto)}
+                  onChange={(e) => setItem({ ...item, oculto: e.target.checked })}
+                  className="mt-1 h-4 w-4 accent-verde-oscuro"
+                />
+                <span>
+                  <span className="block text-sm font-semibold text-tinta">Oculto</span>
+                  <span className="block text-xs text-tinta-suave">
+                    Oculto: no se muestra y no acepta pedidos nuevos. Quienes ya compraron pueden seguir descargando.
+                  </span>
+                </span>
+              </label>
 
               <ArchivoDeProducto
                 archivo={item.archivo_nombre ? { nombre: item.archivo_nombre, bytes: item.archivo_bytes } : null}
