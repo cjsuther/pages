@@ -7,6 +7,7 @@ import {
   esPago,
   excesoArchivoProducto,
   guardarTokenDeDescarga,
+  mensajeDeErrorDeCompra,
   subirArchivoDeProducto,
   tokenDeDescarga,
   tokenDelHash,
@@ -128,6 +129,19 @@ describe('productos digitales', () => {
       await expect(comprarProducto({ apiUrl: 'http://api', linkId: 7 })).rejects.toThrow('El email no es válido');
     });
 
+    it('un producto que se ocultó o se borró dice que ya no está disponible', async () => {
+      mockFetch({ 'public/comprar-producto.php': { status: 409, body: { error: 'otra cosa' } } });
+
+      await expect(comprarProducto({ apiUrl: 'http://api', linkId: 7 }))
+        .rejects.toMatchObject({ status: 409, message: 'Este producto ya no está disponible.' });
+    });
+
+    it('demasiados pedidos y datos inválidos tienen su mensaje aunque la API no lo mande', () => {
+      expect(mensajeDeErrorDeCompra(429)).toMatch(/demasiados pedidos/);
+      expect(mensajeDeErrorDeCompra(400)).toMatch(/Revisá los datos/);
+      expect(mensajeDeErrorDeCompra(500)).toBe('No pudimos iniciar la compra');
+    });
+
     // En modo privado de Safari, localStorage tira al escribir.
     it('si no se puede guardar, la compra sigue igual', async () => {
       vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('QuotaExceededError'); });
@@ -156,7 +170,7 @@ describe('productos digitales', () => {
   });
 
   describe('grupos públicos', () => {
-    it('deja afuera los productos y cualquier tipo que no se sepa dibujar', () => {
+    it('incluye los productos y deja afuera cualquier tipo que no se sepa dibujar', () => {
       const grupos = [
         { id: 1, type: 'links' },
         { id: 2, type: 'productos' },
@@ -165,7 +179,7 @@ describe('productos digitales', () => {
         { id: 5, type: 'algo-nuevo' },
       ];
 
-      expect(gruposPublicos(grupos).map((g) => g.id)).toEqual([1, 3, 4]);
+      expect(gruposPublicos(grupos).map((g) => g.id)).toEqual([1, 2, 3, 4]);
     });
 
     it('un grupo sin tipo es de links, como en la base', () => {

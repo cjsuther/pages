@@ -9,6 +9,7 @@ import RedesSociales from '../RedesSociales';
 import BotonEntradas, { vendeEntradas } from '../BotonEntradas';
 import PrecioEvento from '../PrecioEvento';
 import RezonarBadge from '../RezonarBadge';
+import GaleriaProductos from '../GaleriaProductos';
 import { MiniaturaGaleria, VisorGaleria } from '../MediaGaleria';
 import { textoSobre, paleta } from '../../utils/colores';
 import { CLASES_ALREDEDOR, CLASES_CAJA, estiloDeAlrededor, estiloDeCaja, gruposPublicos } from '../../utils/plantillas';
@@ -147,6 +148,15 @@ function MinimalTemplate({ page }) {
                   </div>
                 ))}
               </div>
+            ) : group.type === 'productos' ? (
+              <GaleriaProductos
+                productos={group.links || []}
+                titulo={group.title}
+                colores={colores}
+                claseTarjeta="border overflow-hidden"
+                estiloTarjeta={{ backgroundColor: colores.tarjeta, borderColor: textColor, color: textColor }}
+                claseImagen="w-full h-48 object-cover"
+              />
             ) : (
               <div className="space-y-3">
                 {group.links?.map((link) => (

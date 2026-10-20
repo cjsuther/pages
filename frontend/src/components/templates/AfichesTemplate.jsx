@@ -8,6 +8,7 @@ import RedesSociales from '../RedesSociales';
 import BotonEntradas, { vendeEntradas } from '../BotonEntradas';
 import PrecioEvento from '../PrecioEvento';
 import RezonarBadge from '../RezonarBadge';
+import GaleriaProductos from '../GaleriaProductos';
 import { MiniaturaGaleria, VisorGaleria } from '../MediaGaleria';
 import { textoSobre, paleta } from '../../utils/colores';
 import { CLASES_ALREDEDOR, CLASES_CAJA, estiloDeAlrededor, estiloDeCaja, gruposPublicos } from '../../utils/plantillas';
@@ -178,6 +179,18 @@ function AfichesTemplate({ page }) {
                     </div>
                   ))}
                 </div>
+              ) : group.type === 'productos' ? (
+                // El marco de color, como los afiches, pero con el cuerpo en la
+                // superficie de tarjetas: el botón se pinta con el acento y
+                // sobre un marco del mismo color desaparecería.
+                <GaleriaProductos
+                  productos={group.links || []}
+                  titulo={group.title}
+                  colores={colores}
+                  claseTarjeta="rounded-2xl overflow-hidden shadow-lg"
+                  estiloTarjeta={{ ...tarjetaStyle, border: `8px solid ${marco}` }}
+                  claseImagen="w-full aspect-[1080/1350] object-cover"
+                />
               ) : (
                 <div className="grid grid-cols-1 gap-4">
                   {group.links?.map((link) => (

@@ -18,12 +18,11 @@ export const ANCHO_COLUMNA = 'max-w-[580px]';
 /**
  * Los tipos de grupo que una plantilla sabe dibujar.
  *
- * Las plantillas dibujan como lista de links todo lo que no es galería ni
- * eventos, así que un tipo nuevo se publicaría solo, y mal. Los productos
- * digitales todavía no se muestran (#17): la API ya no los manda a la página
- * pública, y esto es la segunda llave.
+ * Las plantillas dibujan como lista de links todo lo que no reconocen, así
+ * que un tipo nuevo se publicaría solo, y mal. Por eso es una lista de los
+ * que sí: cada tipo nuevo se suma acá cuando las cinco plantillas lo dibujan.
  */
-const TIPOS_PUBLICOS = ['links', 'galeria', 'eventos'];
+const TIPOS_PUBLICOS = ['links', 'galeria', 'eventos', 'productos'];
 
 /** Los grupos de una página que se muestran en público. */
 export function gruposPublicos(grupos) {

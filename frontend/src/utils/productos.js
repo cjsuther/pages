@@ -61,6 +61,23 @@ export function tokenDelHash(hash) {
   return /^[a-f0-9]{64}$/.test(token) ? token : null;
 }
 
+export const MENSAJE_NO_DISPONIBLE = 'Este producto ya no está disponible.';
+
+/**
+ * Lo que se le dice a quien compra cuando el pedido no sale, según la
+ * respuesta de la API.
+ *
+ * - 409: el producto se ocultó o se borró mientras tenía la página abierta.
+ * - 429: pidió demasiados productos gratis en la última hora.
+ * - 400: algún dato no sirve; la API dice cuál.
+ */
+export function mensajeDeErrorDeCompra(status, error) {
+  if (status === 409) return MENSAJE_NO_DISPONIBLE;
+  if (status === 429) return error || 'Hiciste demasiados pedidos en poco tiempo. Probá de nuevo en una hora.';
+  if (status === 400) return error || 'Revisá los datos: hay algo que no está bien.';
+  return error || 'No pudimos iniciar la compra';
+}
+
 /**
  * Pide un producto: crea la orden y, si es pago, devuelve a dónde ir a pagar.
  *
@@ -77,7 +94,9 @@ export async function comprarProducto({ apiUrl, linkId, nombre, email, telefono 
   const data = await r.json().catch(() => ({}));
 
   if (!r.ok) {
-    throw new Error(data.error || 'No pudimos iniciar la compra');
+    const error = new Error(mensajeDeErrorDeCompra(r.status, data.error));
+    error.status = r.status;
+    throw error;
   }
 
   if (data.token && data.codigo) {

@@ -8,6 +8,7 @@ import RedesSociales from '../RedesSociales';
 import BotonEntradas, { vendeEntradas } from '../BotonEntradas';
 import PrecioEvento from '../PrecioEvento';
 import RezonarBadge from '../RezonarBadge';
+import GaleriaProductos from '../GaleriaProductos';
 import { MiniaturaGaleria, VisorGaleria } from '../MediaGaleria';
 import { textoSobre, paleta } from '../../utils/colores';
 import { CLASES_ALREDEDOR, CLASES_CAJA, estiloDeAlrededor, estiloDeCaja, gruposPublicos } from '../../utils/plantillas';
@@ -179,6 +180,17 @@ function CondensedTemplate({ page }) {
                     </div>
                   ))}
                 </div>
+              ) : group.type === 'productos' ? (
+                // La píldora no alcanza para precio, archivo y botón: va una
+                // tarjeta con las mismas esquinas redondeadas, compacta.
+                <GaleriaProductos
+                  productos={group.links || []}
+                  titulo={group.title}
+                  colores={colores}
+                  claseTarjeta="rounded-3xl overflow-hidden shadow-md"
+                  estiloTarjeta={{ ...estiloPildora, color: textColor }}
+                  claseImagen="w-full h-40 object-cover"
+                />
               ) : (
                 <div className="space-y-3">
                   {group.links?.map((link) => (

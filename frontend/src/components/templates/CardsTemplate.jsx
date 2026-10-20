@@ -8,6 +8,7 @@ import RedesSociales from '../RedesSociales';
 import BotonEntradas, { vendeEntradas } from '../BotonEntradas';
 import PrecioEvento from '../PrecioEvento';
 import RezonarBadge from '../RezonarBadge';
+import GaleriaProductos from '../GaleriaProductos';
 import { MiniaturaGaleria, VisorGaleria } from '../MediaGaleria';
 import { textoSobre, paleta } from '../../utils/colores';
 import { CLASES_ALREDEDOR, CLASES_CAJA, estiloDeAlrededor, estiloDeCaja, gruposPublicos } from '../../utils/plantillas';
@@ -161,6 +162,15 @@ function CardsTemplate({ page }) {
                     </div>
                   ))}
                 </div>
+              ) : group.type === 'productos' ? (
+                <GaleriaProductos
+                  productos={group.links || []}
+                  titulo={group.title}
+                  colores={colores}
+                  claseTarjeta="rounded-lg overflow-hidden shadow-md"
+                  estiloTarjeta={tarjetaStyle}
+                  claseImagen="w-full aspect-square object-cover"
+                />
               ) : (
                 <div className="grid grid-cols-1 gap-6">
                   {group.links?.map((link) => (
