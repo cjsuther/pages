@@ -171,7 +171,7 @@ $SUMMARY
   if [[ -n "$(git status --porcelain)" ]]; then
     git stash push --include-untracked -m "$BRANCH sin commitear $(date +%Y%m%d-%H%M%S)"
   fi
-  git checkout "$BASE_BRANCH"
+  git checkout -q -f -B "$BASE_BRANCH" "origin/$BASE_BRANCH"
   exit 0
 fi
 
@@ -187,7 +187,9 @@ $SUMMARY
 
 gh issue edit "$NUM" --repo "$REPO" --remove-label "$LABEL_WORKING" --remove-label "$LABEL_READY" --add-label "$LABEL_REVIEW"
 gh issue comment "$NUM" --repo "$REPO" --body "✅ PR listo para revisión: $PR_URL"
-git checkout "$BASE_BRANCH"
+# -B con origin/main, no el main local: este script se relee de ahí en la
+# próxima corrida, y el main local del clon nunca se actualiza solo.
+git checkout -q -f -B "$BASE_BRANCH" "origin/$BASE_BRANCH"
 echo "Listo: $PR_URL"
 
 # --- launchd: correrlo cada 5 minutos en la Mac mini --------------------------
