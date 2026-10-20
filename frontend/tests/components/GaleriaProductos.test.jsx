@@ -291,6 +291,35 @@ describe('GaleriaProductos', () => {
       expect(llamadas).toHaveLength(0);
     });
 
+    it('al salir del email avisa si le falta algo, y sugiere un dominio mal tipeado', () => {
+      montar([producto()]);
+      fireEvent.click(screen.getByRole('button', { name: 'Comprar' }));
+      const email = screen.getByLabelText('EMAIL');
+
+      fireEvent.change(email, { target: { value: 'ana@' } });
+      fireEvent.blur(email);
+      expect(screen.getByRole('alert')).toHaveTextContent(/Revisá el email/);
+
+      fireEvent.change(email, { target: { value: 'ana@gmial.com' } });
+      fireEvent.blur(email);
+      fireEvent.click(screen.getByRole('button', { name: 'ana@gmail.com' }));
+      expect(email).toHaveValue('ana@gmail.com');
+    });
+
+    it('después de pedir uno gratis, Listo cierra el aviso', async () => {
+      mockFetch({
+        'public/comprar-producto.php': { status: 201, body: { codigo: 'AAAABBBBCCCC', estado: 'pagada', url: null } },
+      });
+      montar([producto({ precio: 0 })]);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Descargar gratis' }));
+      completar();
+      enviar();
+      fireEvent.click(await screen.findByRole('button', { name: 'Listo' }));
+
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
     it('se cierra con Escape', () => {
       montar([producto()]);
 
