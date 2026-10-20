@@ -911,6 +911,24 @@ class PagesHandlerTest extends HandlerTestCase
         $this->assertStringContainsString('user_id = ?', $this->db->callsFor('DELETE FROM pages')[0]['sql']);
     }
 
+    /** Una página con productos vendidos no se borra: los compradores perderían la descarga (#18). */
+    public function testDeleteNoBorraUnaPaginaConProductosVendidos()
+    {
+        $this->db->onSelect('FROM product_orders o', [[1]]);
+
+        $res = PagesHandler::detail($this->db, $this->delete(['id' => '5'], $this->user(9)));
+
+        $this->assertError(409, $res, 'ventas');
+        $this->assertSame([5, 9], $this->db->paramsFor('FROM product_orders o'));
+        $this->assertNoWrites();
+    }
+
+    public function testLosSlugsDeLasPantallasDelCompradorEstanReservados()
+    {
+        $this->assertTrue(PagesHandler::esReservado('descarga'));
+        $this->assertTrue(PagesHandler::esReservado('compra'));
+    }
+
     public function testDeleteDevuelve500SiLaBaseFalla()
     {
         $this->db->failOn('DELETE FROM pages', 'clave foránea');

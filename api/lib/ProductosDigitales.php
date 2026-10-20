@@ -222,14 +222,59 @@ class ProductosDigitales
     /**
      * Por qué un producto no se puede borrar, o null si se puede.
      *
-     * Hoy siempre se puede. Cuando haya ventas (parte 2), uno con ventas
-     * pagadas no: quien lo compró tiene que poder seguir descargándolo.
+     * Uno con ventas pagadas no: quien lo compró tiene que poder seguir
+     * descargándolo, y borrar el producto se llevaría el archivo y la orden.
+     * Las órdenes que nunca se pagaron no frenan nada: se van con él.
      *
      * @return string|null
      */
     public static function motivoParaNoBorrar($db, $linkId)
     {
-        return null;
+        $stmt = $db->prepare("SELECT COUNT(*) FROM product_orders WHERE link_id = ? AND estado = 'pagada'");
+        $stmt->execute([(int) $linkId]);
+
+        return (int) $stmt->fetchColumn() > 0
+            ? 'Este producto ya tiene ventas: quien lo compró tiene que poder seguir descargándolo, así que no se puede borrar.'
+            : null;
+    }
+
+    /** Lo mismo para un grupo: borrarlo borraría sus productos. */
+    public static function motivoParaNoBorrarGrupo($db, $groupId)
+    {
+        $stmt = $db->prepare("
+            SELECT COUNT(*)
+            FROM product_orders o
+            INNER JOIN links l ON l.id = o.link_id
+            WHERE l.group_id = ? AND o.estado = 'pagada'
+        ");
+        $stmt->execute([(int) $groupId]);
+
+        return (int) $stmt->fetchColumn() > 0
+            ? 'Este grupo tiene productos con ventas: quien los compró tiene que poder seguir descargándolos, así que no se puede borrar.'
+            : null;
+    }
+
+    /**
+     * Y para una página entera.
+     *
+     * Se pregunta junto con quién es la dueña: si no, alguien que no lo es
+     * podría averiguar con el 409 si una página ajena vende.
+     */
+    public static function motivoParaNoBorrarPagina($db, $pageId, $userId)
+    {
+        $stmt = $db->prepare("
+            SELECT COUNT(*)
+            FROM product_orders o
+            INNER JOIN links l ON l.id = o.link_id
+            INNER JOIN link_groups lg ON lg.id = l.group_id
+            INNER JOIN pages p ON p.id = lg.page_id
+            WHERE lg.page_id = ? AND p.user_id = ? AND o.estado = 'pagada'
+        ");
+        $stmt->execute([(int) $pageId, (int) $userId]);
+
+        return (int) $stmt->fetchColumn() > 0
+            ? 'Esta página tiene productos con ventas: quien los compró tiene que poder seguir descargándolos, así que no se puede borrar.'
+            : null;
     }
 
     // ------------------------------------------------------------ archivos

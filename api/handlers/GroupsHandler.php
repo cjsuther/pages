@@ -143,6 +143,14 @@ class GroupsHandler
                 return Response::notFound('Group not found');
             }
 
+            // Un producto con ventas no se puede borrar, y borrar el grupo lo
+            // borraría igual.
+            $motivo = ProductosDigitales::motivoParaNoBorrarGrupo($db, $groupId);
+
+            if ($motivo !== null) {
+                return Response::error(409, $motivo);
+            }
+
             // Borrar el grupo borra sus eventos: lo mismo que al borrar uno.
             Clientes::actualizarEventosDelGrupo($db, $groupId);
 

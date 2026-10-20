@@ -829,6 +829,21 @@ class LinksHandlerTest extends HandlerTestCase
         $this->assertSame([ProductosDigitales::rutaEnDisco($ruta)], $disco->borrados);
     }
 
+    /** Quien lo compró tiene que poder seguir descargándolo (#18). */
+    public function testUnProductoConVentasPagadasNoSeBorra()
+    {
+        $disco = new FakeDisco();
+        $this->autorizarLink();
+        $this->db->onSelect('SELECT * FROM digital_products WHERE link_id', [['link_id' => 5, 'archivo_ruta' => 'productos/' . str_repeat('c', 32)]]);
+        $this->db->onSelect("FROM product_orders WHERE link_id = ? AND estado = 'pagada'", [[1]]);
+
+        $res = LinksHandler::detail($this->db, $this->delete(['id' => '5'], $this->user()), $disco);
+
+        $this->assertError(409, $res, 'ya tiene ventas');
+        $this->assertNoWrites();
+        $this->assertSame([], $disco->borrados);
+    }
+
     public function testBorrarUnProductoSinArchivoNoBorraNadaDelDisco()
     {
         $disco = new FakeDisco();

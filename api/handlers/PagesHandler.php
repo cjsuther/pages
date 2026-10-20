@@ -17,6 +17,8 @@ class PagesHandler
         'public', 'pages', 'groups', 'links', 'user', 'users', 'config',
         'settings', 'logout', 'profile', 'account', 'artistas',
         'asistentes', 'precios',
+        // Pantallas del comprador de productos digitales (#18).
+        'descarga', 'compra',
     ];
 
     private static $defaults = [
@@ -449,6 +451,12 @@ class PagesHandler
         }
 
         try {
+            $motivo = ProductosDigitales::motivoParaNoBorrarPagina($db, $pageId, $req->userId());
+
+            if ($motivo !== null) {
+                return Response::error(409, $motivo);
+            }
+
             // Los archivos de sus productos se van con ella. Se leen antes:
             // después del DELETE ya no hay filas que digan dónde están.
             $archivos = ProductosDigitales::rutasDeLaPagina($db, $pageId);

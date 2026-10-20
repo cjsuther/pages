@@ -369,6 +369,20 @@ class GroupsHandlerTest extends HandlerTestCase
         $this->assertSame(array_map([ProductosDigitales::class, 'rutaEnDisco'], $rutas), $disco->borrados);
     }
 
+    /** Borrar el grupo borraría productos ya vendidos (#18). */
+    public function testUnGrupoConProductosVendidosNoSeBorra()
+    {
+        $disco = new FakeDisco();
+        $this->autorizarGrupo();
+        $this->db->onSelect('FROM product_orders o', [[2]]);
+
+        $res = GroupsHandler::detail($this->db, $this->delete(['id' => '5'], $this->user()), $disco);
+
+        $this->assertError(409, $res, 'ventas');
+        $this->assertNoWrites();
+        $this->assertSame([], $disco->borrados);
+    }
+
     public function testSiFallaElBorradoDelGrupoLosArchivosQuedan()
     {
         $disco = new FakeDisco();

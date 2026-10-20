@@ -195,10 +195,36 @@ class ProductosDigitalesTest extends HandlerTestCase
         $this->assertSame(['productos/x', 'productos/y'], ProductosDigitales::rutasDeLaPagina($this->db, 9));
     }
 
-    /** Preparado para la parte 2: hoy no hay ventas que lo impidan. */
-    public function testHoyCualquierProductoSePuedeBorrar()
+    public function testUnProductoSinVentasSePuedeBorrar()
     {
         $this->assertNull(ProductosDigitales::motivoParaNoBorrar($this->db, 5));
+    }
+
+    /** Quien lo compró tiene que poder seguir descargándolo (#18). */
+    public function testUnProductoConVentasPagadasNoSePuedeBorrar()
+    {
+        $this->db->onSelect("FROM product_orders WHERE link_id = ? AND estado = 'pagada'", [[2]]);
+
+        $this->assertStringContainsString('ya tiene ventas', ProductosDigitales::motivoParaNoBorrar($this->db, 5));
+        $this->assertSame([5], $this->db->paramsFor('FROM product_orders'));
+    }
+
+    public function testUnGrupoConVentasPagadasNoSePuedeBorrar()
+    {
+        $this->assertNull(ProductosDigitales::motivoParaNoBorrarGrupo($this->db, 3));
+
+        $this->db->onSelect('WHERE l.group_id = ? AND o.estado', [[1]]);
+        $this->assertNotNull(ProductosDigitales::motivoParaNoBorrarGrupo($this->db, 3));
+    }
+
+    /** Se pregunta con la dueña: a otra persona no se le dice si la página vende. */
+    public function testUnaPaginaConVentasPagadasNoSePuedeBorrar()
+    {
+        $this->assertNull(ProductosDigitales::motivoParaNoBorrarPagina($this->db, 9, 1));
+
+        $this->db->onSelect('p.user_id = ?', [[1]]);
+        $this->assertNotNull(ProductosDigitales::motivoParaNoBorrarPagina($this->db, 9, 1));
+        $this->assertSame([9, 1], $this->db->paramsFor('p.user_id = ?'));
     }
 
     // ========================================================== FileStorage
@@ -210,6 +236,19 @@ class ProductosDigitalesTest extends HandlerTestCase
         file_put_contents($ruta, "%PDF-1.4\n%\xE2\xE3\xCF\xD3\n1 0 obj\n<<>>\nendobj\n");
 
         $this->assertSame('application/pdf', (new FileStorage())->tipoMime($ruta));
+
+        unlink($ruta);
+    }
+
+    public function testLoQuePesaUnArchivo()
+    {
+        $almacen = new FileStorage();
+        $ruta = sys_get_temp_dir() . '/rezonar-prueba-' . uniqid();
+        file_put_contents($ruta, '12345');
+
+        $this->assertSame(5, $almacen->bytes($ruta));
+        $this->assertNull($almacen->bytes($ruta . '-no-existe'));
+        $this->assertNull($almacen->bytes(sys_get_temp_dir()), 'una carpeta no es un archivo');
 
         unlink($ruta);
     }
