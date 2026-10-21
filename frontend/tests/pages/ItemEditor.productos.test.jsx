@@ -196,6 +196,63 @@ describe('ItemEditor — productos digitales', () => {
     });
   });
 
+  describe('link para compartir', () => {
+    const conArchivo = (extra = {}) => producto({ archivo_nombre: 'guia.pdf', archivo_bytes: 1024, ...extra });
+
+    afterEach(() => {
+      delete navigator.clipboard;
+    });
+
+    it('muestra el link público del producto', async () => {
+      await render({ item: conArchivo() });
+
+      expect(screen.getByLabelText('Link para compartir')).toHaveValue(`${window.location.origin}/producto/100`);
+      expect(screen.queryByText(/no está disponible/)).not.toBeInTheDocument();
+    });
+
+    it('Copiar link lo copia y avisa', async () => {
+      const writeText = vi.fn(() => Promise.resolve());
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+      await render({ item: conArchivo() });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Copiar link' }));
+
+      expect(await screen.findByRole('button', { name: 'Link copiado' })).toBeInTheDocument();
+      expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/producto/100`);
+    });
+
+    it('si no se puede copiar, pide copiarlo a mano', async () => {
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true, value: { writeText: vi.fn(() => Promise.reject(new Error('no'))) },
+      });
+      await render({ item: conArchivo() });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Copiar link' }));
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('copialo a mano');
+    });
+
+    it('si está oculto, avisa que el link todavía no muestra el producto', async () => {
+      await render({ item: conArchivo({ oculto: '1' }) });
+
+      expect(screen.getByText(/está oculto: hasta que lo vuelvas a mostrar, el link dice que no está disponible/)).toBeInTheDocument();
+    });
+
+    it('sin archivo, avisa que el link todavía no muestra el producto', async () => {
+      await render();
+
+      expect(screen.getByText(/todavía no tiene archivo: hasta que lo subas, el link dice que no está disponible/)).toBeInTheDocument();
+    });
+
+    it('el aviso se va al subir el archivo', async () => {
+      await render();
+
+      fireEvent.change(campoArchivo(), { target: { files: [archivo()] } });
+
+      await waitFor(() => expect(screen.queryByText(/no está disponible/)).not.toBeInTheDocument());
+    });
+  });
+
   describe('aviso de Mercado Pago', () => {
     it('con precio y sin Mercado Pago conectado, avisa', async () => {
       await render({ item: producto({ precio: '1500.00' }) });

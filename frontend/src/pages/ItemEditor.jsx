@@ -7,6 +7,7 @@ import PanelEntradas from '../components/PanelEntradas';
 import PanelVentas from '../components/PanelVentas';
 import PanelVentasProductos from '../components/PanelVentasProductos';
 import ArchivoDeProducto from '../components/ArchivoDeProducto';
+import LinkDeProducto from '../components/LinkDeProducto';
 import AvisoMercadoPago from '../components/AvisoMercadoPago';
 import { analizarEmbed, EJEMPLOS_EMBED } from '../utils/embeds';
 import { MAX_BYTES, excesoImagenEvento } from '../utils/imagenes';
@@ -670,6 +671,12 @@ function ItemEditor() {
                 subiendo={subiendoArchivo}
                 onElegir={subirArchivo}
                 error={errorArchivo}
+              />
+
+              <LinkDeProducto
+                linkId={item.id}
+                oculto={esOculto(item.oculto)}
+                conArchivo={Boolean(item.archivo_nombre)}
               />
             </>
           )}

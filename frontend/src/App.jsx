@@ -17,6 +17,7 @@ import Puerta from './pages/Puerta';
 import VentaEnVivo from './pages/VentaEnVivo';
 import PublicPage from './pages/PublicPage';
 import EventDetail from './pages/EventDetail';
+import PaginaDeProducto from './pages/PaginaDeProducto';
 import EstadoOrden from './pages/EstadoOrden';
 import EstadoCompra from './pages/EstadoCompra';
 import Descarga from './pages/Descarga';
@@ -119,6 +120,8 @@ function App() {
             <Route path="/page/:id" element={token ? <PageEditor /> : <Navigate to="/login" />} />
             <Route path="/page/:id/item/:linkId" element={token ? <ItemEditor /> : <Navigate to="/login" />} />
             <Route path="/evento/:id" element={<EventDetail />} />
+            {/* El link para compartir un producto digital (#27). */}
+            <Route path="/producto/:id" element={<PaginaDeProducto />} />
             <Route path="/entrada/:codigo" element={<EstadoOrden apiUrl={API_URL} />} />
             {/* Productos digitales: la vuelta de Mercado Pago y el link del
                 mail, que lleva el token después del #. */}
