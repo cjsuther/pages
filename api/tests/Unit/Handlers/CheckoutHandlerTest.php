@@ -676,6 +676,16 @@ class CheckoutHandlerTest extends HandlerTestCase
         $this->assertSame('Fiesta', $r->body['orden']['evento']);
     }
 
+    /** Las sugerencias de la pantalla de vuelta salen del evento comprado (#30). */
+    public function testLaOrdenDiceDeQueEventoEs()
+    {
+        $this->hayOrdenPendiente(['estado' => 'pagada', 'link_id' => '100']);
+
+        $r = CheckoutHandler::orden($this->db, new Request('GET', [], ['codigo' => self::CODIGO]));
+
+        $this->assertSame(100, $r->body['orden']['link_id']);
+    }
+
     /**
      * El código va en una URL: quien la tenga no puede ver los datos de
      * contacto de quien compró.

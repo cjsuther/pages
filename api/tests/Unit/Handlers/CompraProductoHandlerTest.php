@@ -656,6 +656,26 @@ class CompraProductoHandlerTest extends HandlerTestCase
         $this->assertStringNotContainsString(self::RUTA, $json);
     }
 
+    /** Las sugerencias de la pantalla de vuelta salen del producto comprado (#30). */
+    public function testLaOrdenDiceDeQueProductoEs()
+    {
+        $this->hayOrden(['estado' => 'pagada', 'link_id' => '300']);
+
+        $r = CompraProductoHandler::orden($this->db, new Request('GET', [], ['codigo' => self::CODIGO]));
+
+        $this->assertSame(300, $r->body['orden']['link_id']);
+    }
+
+    /** Con el producto borrado no hay link: tampoco hay sugerencias que pedir. */
+    public function testLaOrdenDeUnProductoBorradoNoTieneLink()
+    {
+        $this->hayOrden(['estado' => 'pagada', 'link_id' => null]);
+
+        $r = CompraProductoHandler::orden($this->db, new Request('GET', [], ['codigo' => self::CODIGO]));
+
+        $this->assertNull($r->body['orden']['link_id']);
+    }
+
     /** La pantalla de vuelta concilia antes de decir que no se pagó. */
     public function testLaPantallaDeVueltaConciliaAlEntrar()
     {

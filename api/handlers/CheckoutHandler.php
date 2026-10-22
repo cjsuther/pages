@@ -320,6 +320,9 @@ class CheckoutHandler
             'moneda'        => $orden['moneda'],
             'nombre'        => $orden['nombre'],
             'evento'        => $orden['evento'],
+            // El link del evento, que es público: con él la pantalla pide
+            // las sugerencias de "También te puede interesar".
+            'link_id'       => (int) $orden['link_id'],
             'event_date'    => $orden['event_date'],
             'event_time'    => $orden['event_time'],
             'event_address' => $orden['event_address'],

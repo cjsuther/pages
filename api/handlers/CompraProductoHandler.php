@@ -308,6 +308,9 @@ class CompraProductoHandler
             'total'           => (float) $orden['total'],
             'moneda'          => 'ARS',
             'producto'        => $orden['producto'],
+            // El link del producto, que es público, para las sugerencias de
+            // "También te puede interesar". null si el producto se borró.
+            'link_id'         => $orden['link_id'] === null ? null : (int) $orden['link_id'],
             'producto_imagen' => $orden['producto_imagen'],
             'archivo_nombre'  => $orden['archivo_nombre'],
             'archivo_bytes'   => $orden['archivo_bytes'] === null ? null : (int) $orden['archivo_bytes'],
