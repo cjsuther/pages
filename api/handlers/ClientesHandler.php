@@ -46,7 +46,8 @@ class ClientesHandler
                 Excel::cabeceras('clientes-' . self::slug($db, $pageId) . '.xlsx'));
         }
 
-        return Response::ok($listado);
+        // Quién se dio de baja de los mails, y a cuántos se les puede escribir (#37).
+        return Response::ok(EnviosAClientes::marcarBajas($db, $pageId, $listado));
     }
 
     private static function slug($db, $pageId)
