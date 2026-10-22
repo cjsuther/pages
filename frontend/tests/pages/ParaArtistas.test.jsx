@@ -24,7 +24,7 @@ describe('ParaArtistas: cuánto cuesta vender entradas', () => {
   it('pide los costos sin sesión', async () => {
     const { llamadas } = montar();
 
-    await screen.findByText('Cuánto cuesta vender entradas');
+    await screen.findByText('Cuánto cuesta vender entradas y productos');
     const pedido = llamadas.find((l) => l.url.includes('public/costos.php'));
     expect(pedido.options.headers).toBeUndefined();
   });
@@ -33,6 +33,22 @@ describe('ParaArtistas: cuánto cuesta vender entradas', () => {
     montar();
 
     expect(await screen.findByText(/Comisión de Rezonar: 1,5%/)).toBeInTheDocument();
+  });
+
+  it('cobra a los productos digitales la misma comisión que a las entradas', async () => {
+    montar();
+
+    expect(await screen.findByText(/de cada entrada o producto digital vendido/)).toBeInTheDocument();
+    expect(screen.getByText('Las reservas sin costo y los productos gratis no pagan nada.')).toBeInTheDocument();
+  });
+
+  it('cuenta que se pueden vender productos digitales', async () => {
+    montar();
+
+    await screen.findByText('Cuánto cuesta vender entradas y productos');
+    expect(screen.getByRole('heading', { name: 'Vendé productos digitales' })).toBeInTheDocument();
+    expect(screen.getByText('¿Puedo vender un libro, un disco o un curso?')).toBeInTheDocument();
+    expect(screen.getByText(/Paga la misma comisión que una entrada/)).toBeInTheDocument();
   });
 
   it('muestra lo que cobra Mercado Pago y cuándo libera la plata', async () => {
@@ -45,7 +61,7 @@ describe('ParaArtistas: cuánto cuesta vender entradas', () => {
   it('hace la cuenta con una entrada de ejemplo', async () => {
     montar();
 
-    await screen.findByText('Cuánto cuesta vender entradas');
+    await screen.findByText('Cuánto cuesta vender entradas y productos');
     expect(screen.getByText('−$150')).toBeInTheDocument();
     expect(screen.getByText('−$725')).toBeInTheDocument();
     expect(screen.getByText('$9.125')).toBeInTheDocument();
@@ -64,6 +80,6 @@ describe('ParaArtistas: cuánto cuesta vender entradas', () => {
     renderConProviders(<ParaArtistas />);
 
     await waitFor(() => expect(fetch).toHaveBeenCalled());
-    expect(screen.queryByText('Cuánto cuesta vender entradas')).not.toBeInTheDocument();
+    expect(screen.queryByText('Cuánto cuesta vender entradas y productos')).not.toBeInTheDocument();
   });
 });
