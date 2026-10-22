@@ -79,6 +79,7 @@ function mockearEditor({ page = pagina(), admins = [], pending = [], results = [
     'entradas/eventos.php': { eventos: [] },
     'entradas/credenciales.php': { cobros: { configurado: false }, comision: 10, mercadopago: null, disponible: true },
     'productos/ventas.php': { ordenes: [], resumen: { pagadas: 0, recaudado: 0, descargaron: 0 } },
+    'pages/email.php': { disponible: true, cuenta: null, predeterminados: { remitente_nombre: 'Mi Página', responder_a: '' } },
   });
 }
 
@@ -216,6 +217,33 @@ describe('PageEditor', () => {
       await render({ page: pagina({ user_id: 77 }) });
 
       expect(screen.queryByRole('button', { name: /^Administradores/ })).not.toBeInTheDocument();
+    });
+
+    it('email va después de administradores, dentro de configuración', async () => {
+      const { llamadas } = await render();
+
+      const sub = screen.getByRole('navigation', { name: 'Configuración' });
+      const solapas = within(sub).getAllByRole('button').map((b) => b.textContent);
+      expect(solapas.slice(-2)).toEqual(['Administradores', 'Email']);
+
+      fireEvent.click(within(sub).getByRole('button', { name: 'Email' }));
+      expect(await screen.findByRole('heading', { name: 'Email' })).toBeInTheDocument();
+      await waitFor(() => expect(llamadaA(llamadas, 'pages/email.php').url).toContain('page_id=5'));
+    });
+
+    it('?c=email abre la solapa de email', async () => {
+      await render({}, null, '/page/5?c=email');
+
+      expect(await screen.findByRole('heading', { name: 'Email' })).toBeInTheDocument();
+    });
+
+    /** Como el resto de la configuración: no es sólo del dueño. */
+    it('un administrador que no es dueño también ve la solapa de email', async () => {
+      await render({ page: pagina({ user_id: 77 }) });
+
+      const sub = screen.getByRole('navigation', { name: 'Configuración' });
+      fireEvent.click(within(sub).getByRole('button', { name: 'Email' }));
+      expect(await screen.findByRole('heading', { name: 'Email' })).toBeInTheDocument();
     });
 
     it('avisa si la página no tiene grupos', async () => {
