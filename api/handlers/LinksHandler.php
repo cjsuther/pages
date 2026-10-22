@@ -59,9 +59,34 @@ class LinksHandler
 
     const ERROR_SIN_COORDENADAS = 'Los eventos deben tener coordenadas. Por favor selecciona una dirección de Google Maps.';
 
+    const ERROR_SIN_PRECIO = 'Elegí si el evento es gratis o desde qué precio salen las entradas';
+
+    /**
+     * Un evento que no vende por Rezonar tiene que decir si es gratis o desde
+     * cuánto sale: es lo que se muestra en las tarjetas y por lo que se filtra
+     * en la home. Uno que vende acá no lo necesita, porque el precio sale de
+     * la venta.
+     *
+     * @param mixed $precio Lo que quedaría guardado, ya pasado por precioONull()
+     */
+    private static function faltaElPrecio($db, $linkId, $precio)
+    {
+        if ($precio !== null) {
+            return false;
+        }
+
+        $venta = $linkId === null ? null : Entradas::configDelEvento($db, $linkId);
+
+        return $venta === null || empty($venta['activo']);
+    }
+
     // ------------------------------------------------------------------ index
 
-    public static function index($db, Request $req)
+    /**
+     * @param bool $exigirPrecio false para el asistente (MCP), que puede crear
+     *                           un evento sin saber todavía el precio
+     */
+    public static function index($db, Request $req, $exigirPrecio = true)
     {
         if ($req->method !== 'POST') {
             return Response::methodNotAllowed();
@@ -90,6 +115,12 @@ class LinksHandler
 
                 if (empty($lat) || empty($lng)) {
                     return Response::error(400, self::ERROR_SIN_COORDENADAS);
+                }
+
+                // Un evento recién creado todavía no vende por Rezonar: la
+                // venta se configura después, sobre el evento ya guardado.
+                if ($exigirPrecio && self::faltaElPrecio($db, null, self::precioONull($req->input('precio_desde')))) {
+                    return Response::error(400, self::ERROR_SIN_PRECIO);
                 }
             }
 
@@ -191,7 +222,10 @@ class LinksHandler
 
     // ----------------------------------------------------------------- detail
 
-    public static function detail($db, Request $req, ?FileStorage $storage = null)
+    /**
+     * @param bool $exigirPrecio false para el asistente (MCP), como en index()
+     */
+    public static function detail($db, Request $req, ?FileStorage $storage = null, $exigirPrecio = true)
     {
         $linkId = (int) $req->param('id');
 
@@ -204,7 +238,7 @@ class LinksHandler
         }
 
         if ($req->method === 'PUT') {
-            return self::update($db, $req, $linkId);
+            return self::update($db, $req, $linkId, $exigirPrecio);
         }
 
         if ($req->method === 'DELETE') {
@@ -214,7 +248,7 @@ class LinksHandler
         return Response::methodNotAllowed();
     }
 
-    private static function update($db, Request $req, $linkId)
+    private static function update($db, Request $req, $linkId, $exigirPrecio = true)
     {
         try {
             if (!PageAccess::canManageLink($db, $linkId, $req->userId())) {
@@ -234,6 +268,15 @@ class LinksHandler
                 $error = self::validarCoordenadasDeEvento($db, $req, $linkId);
                 if ($error !== null) {
                     return $error;
+                }
+
+                // Sólo cuando el pedido trae el precio: guardar el link desde
+                // la solapa de entradas, o reordenar, no puede trabarse por un
+                // evento viejo que nunca lo tuvo. El editor lo manda siempre,
+                // así que ahí sí se pide.
+                if ($exigirPrecio && array_key_exists('precio_desde', $req->body)
+                    && self::faltaElPrecio($db, $linkId, self::precioONull($req->body['precio_desde']))) {
+                    return Response::error(400, self::ERROR_SIN_PRECIO);
                 }
             }
 
@@ -384,7 +427,11 @@ class LinksHandler
                     continue;
                 }
                 $fields[] = $campo . ' = ?';
-                $values[] = self::valorONull($req->body[$campo]);
+                // El precio pasa por la misma regla que en el alta: vacío es
+                // "no se sabe", nunca cero, y nada que no sea un número.
+                $values[] = $campo === 'precio_desde'
+                    ? self::precioONull($req->body[$campo])
+                    : self::valorONull($req->body[$campo]);
                 continue;
             }
 
