@@ -2,6 +2,7 @@ import React, { useContext, useEffect, useLayoutEffect, useRef, useState } from 
 import { ChevronLeft, ChevronRight, Download, FileText, Share2, ShoppingBag } from 'lucide-react';
 import { AuthContext } from '../App';
 import ComprarProducto from './ComprarProducto';
+import Sugerencias from './Sugerencias';
 import useBloqueoDeScroll from '../hooks/useBloqueoDeScroll';
 import { compartirLink, describirPrecio, esPago, linkDeProducto } from '../utils/productos';
 import { describirPeso } from '../utils/imagenes';
@@ -307,6 +308,9 @@ function DetalleProducto({
                 </div>
               )}
             </section>
+
+            {/* Las del producto que se está viendo: al pasar a otro se piden de nuevo. */}
+            <Sugerencias tipo="producto" id={productos[actual]?.id} colores={colores} className="mt-8" />
           </div>
         </div>
       </div>

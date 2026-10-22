@@ -66,16 +66,19 @@ function Sugerencias({ tipo, id, pagina, colores, apiUrl: apiUrlPropia, classNam
     const query = new URLSearchParams({ tipo, id: String(id) });
     if (pagina) query.set('pagina', String(pagina));
 
-    fetch(`${apiUrl}/public/sugerencias.php?${query}`)
-      .then(async (r) => {
+    const pedir = async () => {
+      try {
+        const r = await fetch(`${apiUrl}/public/sugerencias.php?${query}`);
         const data = await r.json().catch(() => ({}));
         if (vigente && r.ok && Array.isArray(data.sugerencias)) {
           setItems(data.sugerencias.slice(0, 3));
         }
-      })
-      .catch(() => {
+      } catch (e) {
         // Sin sugerencias no se pierde nada: el detalle sigue entero.
-      });
+      }
+    };
+
+    pedir();
 
     return () => { vigente = false; };
   }, [apiUrl, tipo, id, pagina]);

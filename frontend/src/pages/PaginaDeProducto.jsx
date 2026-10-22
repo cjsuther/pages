@@ -5,6 +5,7 @@ import { AuthContext } from '../App';
 import ComprarProducto from '../components/ComprarProducto';
 import FondoDeLaCaja from '../components/FondoDeLaCaja';
 import RezonarBadge from '../components/RezonarBadge';
+import Sugerencias from '../components/Sugerencias';
 import { Producto } from '../components/DetalleProducto';
 import { paleta } from '../utils/colores';
 import { MENSAJE_NO_DISPONIBLE } from '../utils/productos';
@@ -122,6 +123,8 @@ function PaginaDeProducto() {
             colorTitulo={colores.titulo}
           />
         </div>
+
+        <Sugerencias tipo="producto" id={producto.id} colores={colores} className="mt-8" />
       </div>
 
       {comprando && (

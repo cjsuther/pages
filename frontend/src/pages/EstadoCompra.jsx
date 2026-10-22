@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router';
 import { Helmet } from 'react-helmet-async';
 import { Check, Clock, X, Loader2, Mail } from 'lucide-react';
 import BotonDescarga from '../components/BotonDescarga';
+import Sugerencias from '../components/Sugerencias';
 import { formatearPrecio } from '../utils/entradas';
 import { tokenDeDescarga } from '../utils/productos';
 import { evento } from '../utils/metaPixel';
@@ -173,6 +174,11 @@ function EstadoCompra({ apiUrl }) {
         <Link to={`/${orden.url_slug}`} className="text-tinta-media hover:text-tinta text-sm">
           ← Volver a {orden.pagina}
         </Link>
+      )}
+
+      {/* Acaba de comprar: es el momento de mostrarle qué más hay. */}
+      {orden.estado === 'pagada' && orden.link_id && (
+        <Sugerencias tipo="producto" id={orden.link_id} apiUrl={apiUrl} className="mt-10 text-tinta" />
       )}
     </Marco>
   );

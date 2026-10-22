@@ -5,6 +5,7 @@ import { AuthContext } from '../App';
 import BotonEntradas, { vendeEntradas } from '../components/BotonEntradas';
 import FondoDeLaCaja from '../components/FondoDeLaCaja';
 import RezonarBadge from '../components/RezonarBadge';
+import Sugerencias from '../components/Sugerencias';
 import { paleta, conAlfa, textoSobre } from '../utils/colores';
 import { vista, evento } from '../utils/metaPixel';
 import { CLASES_ALREDEDOR, CLASES_CAJA, estiloDeAlrededor, estiloDeCaja } from '../utils/plantillas';
@@ -181,6 +182,8 @@ function EventDetail() {
           </a>
         )}
         </div>
+
+        <Sugerencias tipo="evento" id={event.id} colores={colores} className="mt-8" />
       </div>
     </div>
   );

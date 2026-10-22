@@ -9,6 +9,7 @@ import RedesSociales from '../RedesSociales';
 import BotonEntradas, { vendeEntradas } from '../BotonEntradas';
 import PrecioEvento from '../PrecioEvento';
 import RezonarBadge from '../RezonarBadge';
+import Sugerencias from '../Sugerencias';
 import DetalleProducto, { BotonComprar, tarjetaQueAbre } from '../DetalleProducto';
 import { MiniaturaGaleria, VisorGaleria } from '../MediaGaleria';
 import { textoSobre, paleta } from '../../utils/colores';
@@ -345,6 +346,8 @@ function MinimalTemplate({ page }) {
                   {modalEvent.url_text || 'Más información →'}
                 </a>
               )}
+
+              <Sugerencias tipo="evento" id={modalEvent.id} pagina={page.id} colores={colores} className="clear-both mt-8" />
             </div>
           </div>
         </div>

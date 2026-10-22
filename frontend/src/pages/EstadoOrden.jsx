@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router';
 import { Check, Clock, X, Loader2, MapPin, Calendar } from 'lucide-react';
+import Sugerencias from '../components/Sugerencias';
 import { formatearPrecio } from '../utils/entradas';
 import { evento } from '../utils/metaPixel';
 
@@ -195,6 +196,11 @@ function EstadoOrden({ apiUrl }) {
         <Link to={`/${orden.url_slug}`} className="text-tinta-media hover:text-tinta text-sm">
           ← Volver a {orden.pagina}
         </Link>
+      )}
+
+      {/* Acaba de comprar: es el momento de mostrarle qué más hay. */}
+      {orden.estado === 'pagada' && orden.link_id && (
+        <Sugerencias tipo="evento" id={orden.link_id} apiUrl={apiUrl} className="mt-10 text-tinta" />
       )}
     </Marco>
   );
