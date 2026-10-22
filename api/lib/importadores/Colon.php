@@ -165,7 +165,7 @@ class Colon
         }
 
         $produccion = preg_match('/href="(' . preg_quote(self::BASE, '/') . '\/produccion\/[^"]+)"/', $item, $m) ? $m[1] : '';
-        $entradas = preg_match('/href="(https:\/\/(?:entradasba|comprar)[^"]+)"/', $item, $m) ? $m[1] : '';
+        $entradas = preg_match('/href="(https:\/\/(?:entradasba|comprar|(?:www\.)?tuentrada\.com\/)[^"]+)"/', $item, $m) ? $m[1] : '';
         $imagen = preg_match('/<figure[^>]*>\s*<img[^>]*src="([^"]+)"/', $item, $m) ? $m[1] : '';
         $categoria = preg_match('/class="category">(.*?)<\/div>/s', $item, $m) ? self::limpiar($m[1], 1000) : '';
 
