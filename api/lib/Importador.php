@@ -240,6 +240,13 @@ class Importador
                 continue;
             }
 
+            // Un precio que no vino no es un precio que dejó de existir: lo
+            // normal es que la ficha haya fallado esa noche. Borrarlo dejaría
+            // el evento sin precio hasta que la ficha vuelva a responder.
+            if ($columna === 'precio_desde' && $valor === null && $existente[$columna] !== null) {
+                continue;
+            }
+
             $cambios[$columna] = $valor;
         }
 
@@ -307,6 +314,84 @@ class Importador
             'event_longitude' => $evento['longitud'],
             'precio_desde'    => isset($evento['precio_desde']) ? $evento['precio_desde'] : null,
         ];
+    }
+
+    // -------------------------------------------------------------- precios
+
+    /**
+     * El precio más barato que publican los bloques schema.org de una ficha.
+     *
+     * Recorre todos los <script type="application/ld+json">, porque una ficha
+     * suele traer varios (la organización, el sitio, el evento), y en cada uno
+     * busca `offers`, que puede venir como una oferta sola o como una lista.
+     *
+     * Un cero se devuelve como cero: qué significa depende de la ticketera, y
+     * eso lo decide cada adaptador.
+     *
+     * @return float|null null si ninguna oferta trae un precio numérico
+     */
+    public static function precioDeJsonLd($html)
+    {
+        if (!is_string($html) || !preg_match_all('#<script[^>]*ld\+json[^>]*>(.*?)</script>#s', $html, $m)) {
+            return null;
+        }
+
+        $precios = [];
+
+        foreach ($m[1] as $bruto) {
+            $datos = json_decode(trim($bruto), true);
+
+            if (!is_array($datos)) {
+                continue;
+            }
+
+            $items = isset($datos['@graph']) && is_array($datos['@graph'])
+                ? $datos['@graph']
+                : (isset($datos[0]) ? $datos : [$datos]);
+
+            foreach ($items as $item) {
+                if (is_array($item) && isset($item['offers'])) {
+                    $precio = self::precioDeOfertas($item['offers']);
+
+                    if ($precio !== null) {
+                        $precios[] = $precio;
+                    }
+                }
+            }
+        }
+
+        return $precios === [] ? null : min($precios);
+    }
+
+    /**
+     * El precio más barato de un `offers` de schema.org: una oferta sola o
+     * una lista de ofertas.
+     *
+     * @return float|null
+     */
+    public static function precioDeOfertas($ofertas)
+    {
+        if (!is_array($ofertas)) {
+            return null;
+        }
+
+        $lista = isset($ofertas[0]) ? $ofertas : [$ofertas];
+        $precios = [];
+
+        foreach ($lista as $oferta) {
+            if (!is_array($oferta)) {
+                continue;
+            }
+
+            // Una AggregateOffer publica el rango y no un precio.
+            $precio = isset($oferta['price']) ? $oferta['price'] : (isset($oferta['lowPrice']) ? $oferta['lowPrice'] : null);
+
+            if (is_numeric($precio) && (float) $precio >= 0) {
+                $precios[] = round((float) $precio, 2);
+            }
+        }
+
+        return $precios === [] ? null : min($precios);
     }
 
     private static function anotarCorrida($db, $fuenteId, array $resumen)
