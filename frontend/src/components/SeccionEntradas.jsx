@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router';
 import { Check, AlertTriangle, Loader2, ExternalLink } from 'lucide-react';
 import { formatearPorcentaje } from '../utils/comisiones';
-import BuscadorDeVentas from './BuscadorDeVentas';
 
 /**
- * Sección del editor donde el dueño conecta su cuenta de Mercado Pago.
+ * Ventas → Configuración en el editor: donde el dueño conecta su cuenta de
+ * Mercado Pago y deja el email al que le responden los compradores. Lo que se
+ * vendió vive en las otras solapas de Ventas.
  *
  * Se conecta por OAuth y no pegando credenciales: es lo único que permite que
  * Mercado Pago descuente la comisión de la plataforma en la misma operación.
@@ -23,16 +24,6 @@ const ERRORES = {
   no_se_pudo_guardar: 'No pudimos guardar la conexión. Probá de nuevo.',
 };
 
-/** Las dos mitades de la sección, en el orden en que se muestran. */
-// Primero lo que se mira seguido. La configuración de cobro se toca una vez
-// —cuando se conecta Mercado Pago— y después de eso no se vuelve; las ventas
-// se miran todas las semanas, y estaban a un clic de distancia todos los días
-// por una pantalla que ya se resolvió.
-const SUBSECCIONES = [
-  { clave: 'ventas', etiqueta: 'Ventas' },
-  { clave: 'cobros', etiqueta: 'Configuración' },
-];
-
 function SeccionEntradas({ pageId, apiUrl, token, emailContacto = '', onGuardarContacto }) {
   const [datos, setDatos] = useState(null);
   const [cargando, setCargando] = useState(true);
@@ -40,23 +31,6 @@ function SeccionEntradas({ pageId, apiUrl, token, emailContacto = '', onGuardarC
   const [error, setError] = useState(null);
   const [aviso, setAviso] = useState(null);
   const [parametros, setParametros] = useSearchParams();
-  // La sub-solapa va en la URL como la sección: volver de editar un evento
-  // tiene que dejarte donde estabas, no en CONFIGURACIÓN.
-  const subEnUrl = parametros.get('e');
-  const subseccion = SUBSECCIONES.some((x) => x.clave === subEnUrl) ? subEnUrl : 'ventas';
-
-  const setSubseccion = (clave) => {
-    const proximos = new URLSearchParams(parametros);
-
-    // La solapa que abre por defecto no necesita quedar escrita en la URL.
-    if (clave === 'ventas') {
-      proximos.delete('e');
-    } else {
-      proximos.set('e', clave);
-    }
-
-    setParametros(proximos);
-  };
 
   const cabeceras = {
     'Content-Type': 'application/json',
@@ -104,10 +78,6 @@ function SeccionEntradas({ pageId, apiUrl, token, emailContacto = '', onGuardarC
     const limpios = new URLSearchParams(parametros);
     limpios.delete('conectado');
     limpios.delete('error');
-    // Mercado Pago devuelve a esta sección, y el resultado de la conexión se
-    // cuenta en CONFIGURACIÓN: sin esto el cartel quedaría en una solapa que
-    // no es la que se abre, y la vuelta se vería como que no pasó nada.
-    limpios.set('e', 'cobros');
     setParametros(limpios, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -180,178 +150,153 @@ function SeccionEntradas({ pageId, apiUrl, token, emailContacto = '', onGuardarC
 
   return (
     <div className="bg-white border border-borde rounded-2xl p-6 sm:p-8 mb-8">
-      <h2 className="text-2xl font-bold mb-2 tracking-tight">Entradas</h2>
+      <h2 className="text-2xl font-bold mb-2 tracking-tight">Configuración de cobros</h2>
 
-      {/* Dos cosas distintas viven acá: cómo se cobra, que se toca una vez, y
-          qué se vendió, que se mira seguido. Apiladas, lo segundo quedaba
-          debajo de toda la configuración de Mercado Pago. */}
-      <nav className="flex gap-2 mb-8 border-b border-borde">
-        {SUBSECCIONES.map((sub) => (
-          <button
-            key={sub.clave}
-            onClick={() => setSubseccion(sub.clave)}
-            className={`px-4 py-2 font-bold text-xs tracking-wide transition border-b-2 -mb-px ${
-              subseccion === sub.clave
-                ? 'border-verde text-verde-oscuro'
-                : 'border-transparent text-tinta-suave hover:text-tinta-media'
-            }`}
-          >
-            {sub.etiqueta}
-          </button>
-        ))}
-      </nav>
+      <p className="text-sm text-tinta-suave mb-8">
+        Conectá tu cuenta de Mercado Pago para cobrar entradas. El dinero va directo
+        a tu cuenta. Para eventos con reserva sin costo no hace falta.
+      </p>
 
-      {subseccion === 'ventas' ? (
-        <BuscadorDeVentas pageId={pageId} apiUrl={apiUrl} token={token} />
-      ) : (
-      <>
-        <p className="text-sm text-tinta-suave mb-8">
-          Conectá tu cuenta de Mercado Pago para cobrar entradas. El dinero va directo
-          a tu cuenta. Para eventos con reserva sin costo no hace falta.
-        </p>
+      <ContactoDeCompradores
+        valor={emailContacto}
+        onGuardar={onGuardarContacto}
+      />
 
-        <ContactoDeCompradores
-          valor={emailContacto}
-          onGuardar={onGuardarContacto}
-        />
+      {cobros.configurado ? (
+        <div className="border border-borde bg-white p-6 mb-6">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <p className="flex items-center gap-2 text-verde-oscuro font-bold mb-2">
+                <Check className="w-4 h-4" />
+                Mercado Pago conectado
+              </p>
 
-        {cobros.configurado ? (
-          <div className="border border-borde bg-white p-6 mb-6">
-            <div className="flex items-start justify-between gap-4 flex-wrap">
-              <div>
-                <p className="flex items-center gap-2 text-verde-oscuro font-bold mb-2">
-                  <Check className="w-4 h-4" />
-                  Mercado Pago conectado
+              {cobros.cuenta && (
+                <p className="text-sm text-tinta-suave">
+                  Cuenta <span className="font-mono text-tinta-media">{cobros.cuenta}</span>
                 </p>
+              )}
 
-                {cobros.cuenta && (
-                  <p className="text-sm text-tinta-suave">
-                    Cuenta <span className="font-mono text-tinta-media">{cobros.cuenta}</span>
-                  </p>
-                )}
+              {cobros.modo === 'prueba' && (
+                <p className="flex items-center gap-2 text-amber-400 text-sm mt-3">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  Es una cuenta de prueba: los pagos no son reales.
+                </p>
+              )}
 
-                {cobros.modo === 'prueba' && (
-                  <p className="flex items-center gap-2 text-amber-400 text-sm mt-3">
-                    <AlertTriangle className="w-4 h-4 shrink-0" />
-                    Es una cuenta de prueba: los pagos no son reales.
-                  </p>
-                )}
-
-                {/* Una cuenta cargada a mano cobra igual, pero la comisión no se
-                    descuenta. Conviene decirlo antes de que aparezca la diferencia
-                    en la liquidación. */}
-                {!cobros.admite_split && comision > 0 && (
-                  <p className="flex items-start gap-2 text-amber-400 text-sm mt-3">
-                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                    Esta cuenta se cargó a mano y no permite el descuento automático
-                    de la comisión. Volvé a conectarla desde acá.
-                  </p>
-                )}
-              </div>
-
-              <button
-                type="button"
-                onClick={() => desconectar(false)}
-                className="text-red-700 hover:text-red-700 text-sm font-bold"
-              >
-                Desconectar
-              </button>
+              {/* Una cuenta cargada a mano cobra igual, pero la comisión no se
+                  descuenta. Conviene decirlo antes de que aparezca la diferencia
+                  en la liquidación. */}
+              {!cobros.admite_split && comision > 0 && (
+                <p className="flex items-start gap-2 text-amber-400 text-sm mt-3">
+                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                  Esta cuenta se cargó a mano y no permite el descuento automático
+                  de la comisión. Volvé a conectarla desde acá.
+                </p>
+              )}
             </div>
-          </div>
-        ) : (
-          <div className="border border-borde bg-white p-6 mb-6">
-            <p className="text-sm text-tinta-suave mb-6">
-              Todavía no conectaste Mercado Pago. Sin esto sólo podés ofrecer reservas
-              sin costo.
-            </p>
 
             <button
               type="button"
-              onClick={conectar}
-              disabled={conectando || !disponible}
-              className="bg-[#009ee3] text-tinta px-6 py-3 font-bold hover:opacity-90 transition disabled:opacity-50 flex items-center gap-2"
+              onClick={() => desconectar(false)}
+              className="text-red-700 hover:text-red-700 text-sm font-bold"
             >
-              {conectando && <Loader2 className="w-4 h-4 animate-spin" />}
-              {conectando ? 'Redirigiendo...' : 'Conectar con Mercado Pago'}
+              Desconectar
             </button>
-
-            {!disponible && (
-              <p className="flex items-start gap-2 text-amber-400 text-sm mt-4">
-                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                La plataforma todavía no terminó de configurar su integración con
-                Mercado Pago. Escribinos y lo resolvemos.
-              </p>
-            )}
-
-            <p className="text-xs text-tinta-suave mt-4">
-              Te vamos a llevar a Mercado Pago para que autorices el cobro en tu nombre.
-              No vemos ni guardamos tu usuario ni tu contraseña.
-            </p>
           </div>
-        )}
-
-        {comision > 0 && (
-          <div className="border border-borde bg-white p-6 mb-6">
-            <p className="text-sm text-tinta-media mb-2">
-              <strong className="text-tinta">Comisión de Rezonar: {formatearPorcentaje(comision)}%</strong> de cada
-              entrada vendida.
-            </p>
-            <p className="text-xs text-tinta-suave mb-3">
-              Se descuenta en el momento del cobro: el comprador paga una sola vez y a
-              tu cuenta entra el resto. En una entrada de $10.000 son{' '}
-              ${(10000 * comision / 100).toLocaleString('es-AR')} de comisión.
-              Las reservas sin costo no pagan nada.
-            </p>
-
-            {/* Sin esto el dueño hace la cuenta sólo con nuestra comisión y no le
-                cierra con lo que ve en su cuenta. El porcentaje y el plazo van
-                juntos: en Mercado Pago uno depende del otro. Los dos salen de la
-                configuración del servidor; si no están, no inventamos un número. */}
-            {mercadoPago && (
-              <p className="text-xs text-tinta-suave border-t border-borde pt-3">
-                <strong className="text-tinta-media">Aparte de esto, Mercado Pago cobra{' '}
-                {formatearPorcentaje(mercadoPago.porcentaje)}%</strong> por procesar el pago, y libera
-                la plata a los {mercadoPago.dias} días de la compra. Podés verlo en{' '}
-                <a
-                  href="https://www.mercadopago.com.ar/costs-section/release-options"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-tinta-media hover:text-tinta inline-flex items-center gap-1"
-                >
-                  Mercado Pago → Costos
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-                .
-              </p>
-            )}
-          </div>
-        )}
-
-        {error && (
-          <p className="text-sm text-red-700 bg-red-50 border border-red-200 px-4 py-3">{error}</p>
-        )}
-
-        {aviso && (
-          <p className="text-sm text-verde-oscuro bg-verde-claro border border-verde-medio rounded-xl px-4 py-3">
-            {aviso}
+        </div>
+      ) : (
+        <div className="border border-borde bg-white p-6 mb-6">
+          <p className="text-sm text-tinta-suave mb-6">
+            Todavía no conectaste Mercado Pago. Sin esto sólo podés ofrecer reservas
+            sin costo.
           </p>
-        )}
 
-        <p className="text-xs text-tinta-suave mt-6">
-          Podés revisar los permisos otorgados en{' '}
-          <a
-            href="https://www.mercadopago.com.ar/settings/security/connected-apps"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-tinta-media hover:text-tinta inline-flex items-center gap-1"
+          <button
+            type="button"
+            onClick={conectar}
+            disabled={conectando || !disponible}
+            className="bg-[#009ee3] text-tinta px-6 py-3 font-bold hover:opacity-90 transition disabled:opacity-50 flex items-center gap-2"
           >
-            Mercado Pago → Aplicaciones conectadas
-            <ExternalLink className="w-3 h-3" />
-          </a>
-          .
-        </p>
-      </>
+            {conectando && <Loader2 className="w-4 h-4 animate-spin" />}
+            {conectando ? 'Redirigiendo...' : 'Conectar con Mercado Pago'}
+          </button>
+
+          {!disponible && (
+            <p className="flex items-start gap-2 text-amber-400 text-sm mt-4">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              La plataforma todavía no terminó de configurar su integración con
+              Mercado Pago. Escribinos y lo resolvemos.
+            </p>
+          )}
+
+          <p className="text-xs text-tinta-suave mt-4">
+            Te vamos a llevar a Mercado Pago para que autorices el cobro en tu nombre.
+            No vemos ni guardamos tu usuario ni tu contraseña.
+          </p>
+        </div>
       )}
+
+      {comision > 0 && (
+        <div className="border border-borde bg-white p-6 mb-6">
+          <p className="text-sm text-tinta-media mb-2">
+            <strong className="text-tinta">Comisión de Rezonar: {formatearPorcentaje(comision)}%</strong> de cada
+            entrada vendida.
+          </p>
+          <p className="text-xs text-tinta-suave mb-3">
+            Se descuenta en el momento del cobro: el comprador paga una sola vez y a
+            tu cuenta entra el resto. En una entrada de $10.000 son{' '}
+            ${(10000 * comision / 100).toLocaleString('es-AR')} de comisión.
+            Las reservas sin costo no pagan nada.
+          </p>
+
+          {/* Sin esto el dueño hace la cuenta sólo con nuestra comisión y no le
+              cierra con lo que ve en su cuenta. El porcentaje y el plazo van
+              juntos: en Mercado Pago uno depende del otro. Los dos salen de la
+              configuración del servidor; si no están, no inventamos un número. */}
+          {mercadoPago && (
+            <p className="text-xs text-tinta-suave border-t border-borde pt-3">
+              <strong className="text-tinta-media">Aparte de esto, Mercado Pago cobra{' '}
+              {formatearPorcentaje(mercadoPago.porcentaje)}%</strong> por procesar el pago, y libera
+              la plata a los {mercadoPago.dias} días de la compra. Podés verlo en{' '}
+              <a
+                href="https://www.mercadopago.com.ar/costs-section/release-options"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-tinta-media hover:text-tinta inline-flex items-center gap-1"
+              >
+                Mercado Pago → Costos
+                <ExternalLink className="w-3 h-3" />
+              </a>
+              .
+            </p>
+          )}
+        </div>
+      )}
+
+      {error && (
+        <p className="text-sm text-red-700 bg-red-50 border border-red-200 px-4 py-3">{error}</p>
+      )}
+
+      {aviso && (
+        <p className="text-sm text-verde-oscuro bg-verde-claro border border-verde-medio rounded-xl px-4 py-3">
+          {aviso}
+        </p>
+      )}
+
+      <p className="text-xs text-tinta-suave mt-6">
+        Podés revisar los permisos otorgados en{' '}
+        <a
+          href="https://www.mercadopago.com.ar/settings/security/connected-apps"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-tinta-media hover:text-tinta inline-flex items-center gap-1"
+        >
+          Mercado Pago → Aplicaciones conectadas
+          <ExternalLink className="w-3 h-3" />
+        </a>
+        .
+      </p>
     </div>
   );
 }
