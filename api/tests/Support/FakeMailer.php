@@ -22,10 +22,20 @@ class FakeMailer extends Mailer
     /** @var string|null Clasificación del fallo, como la devuelve Mailer::motivo() */
     private $motivo = null;
 
+    /** @var array email => [error, motivo]: fallos sólo para esas direcciones */
+    private $fallosPara = [];
+
     public function fallarCon($error, $motivo = null)
     {
         $this->falla = $error;
         $this->motivo = $motivo;
+        return $this;
+    }
+
+    /** Falla sólo con esta dirección; las demás salen bien. */
+    public function fallarPara($email, $error, $motivo = null)
+    {
+        $this->fallosPara[$email] = [$error, $motivo];
         return $this;
     }
 
@@ -34,13 +44,17 @@ class FakeMailer extends Mailer
         $this->enviados[] = $mensaje;
         $this->cuentas[] = $cuenta;
 
-        if ($this->falla === null) {
+        list($falla, $motivo) = isset($this->fallosPara[$mensaje['para']])
+            ? $this->fallosPara[$mensaje['para']]
+            : [$this->falla, $this->motivo];
+
+        if ($falla === null) {
             return ['ok' => true, 'error' => null];
         }
 
-        return $this->motivo === null
-            ? ['ok' => false, 'error' => $this->falla]
-            : ['ok' => false, 'error' => $this->falla, 'motivo' => $this->motivo];
+        return $motivo === null
+            ? ['ok' => false, 'error' => $falla]
+            : ['ok' => false, 'error' => $falla, 'motivo' => $motivo];
     }
 
     /** El último mensaje mandado a una dirección. */

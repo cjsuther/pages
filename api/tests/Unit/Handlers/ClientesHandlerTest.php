@@ -43,6 +43,24 @@ class ClientesHandlerTest extends HandlerTestCase
         $this->assertSame(0, $res->body['resumen']['clientes']);
     }
 
+    /** #37: quien se dio de baja de los mails se ve marcado, y no cuenta para "Seleccionar los N". */
+    public function testMarcaALosQueSeDieronDeBaja()
+    {
+        $this->puedeAdministrar();
+        $this->db->onSelect('FROM page_followers pf', [
+            ['user_id' => 1, 'email' => 'ana@example.com', 'name' => 'Ana', 'created_at' => '2026-07-01 12:00:00'],
+            ['user_id' => 2, 'email' => 'beto@example.com', 'name' => 'Beto', 'created_at' => '2026-07-02 12:00:00'],
+        ]);
+        $this->db->onSelect('SELECT email FROM bajas_de_correo', [['email' => 'beto@example.com']]);
+
+        $res = ClientesHandler::index($this->db, $this->get(['page_id' => 5], $this->user()));
+
+        $porEmail = array_column($res->body['clientes'], 'baja', 'email');
+        $this->assertSame(['beto@example.com' => true, 'ana@example.com' => false], $porEmail);
+        $this->assertSame(1, $res->body['resumen']['contactables']);
+        $this->assertSame([5], $this->db->paramsFor('SELECT email FROM bajas_de_correo'));
+    }
+
     public function testExportaAExcel()
     {
         $this->puedeAdministrar();

@@ -221,6 +221,54 @@ describe('SeccionEmail', () => {
     expect(screen.getByLabelText('Servidor')).toHaveValue('smtp.gmail.com');
   });
 
+  describe('envío a clientes por ráfagas', () => {
+    it('sin cuenta no se configura', async () => {
+      await montar();
+
+      expect(screen.queryByLabelText('Mails por tanda')).not.toBeInTheDocument();
+    });
+
+    it('muestra los valores por defecto y la ayuda de Gmail', async () => {
+      await montarCon({
+        'GET email.php': { body: { disponible: true, cuenta: GUARDADA, predeterminados: PREDETERMINADOS } },
+      });
+
+      expect(screen.getByLabelText('Mails por tanda')).toHaveValue(20);
+      expect(screen.getByLabelText('Minutos entre tandas')).toHaveValue(10);
+      expect(screen.getByLabelText('Tope por día (opcional)')).toHaveValue(null);
+      expect(screen.getByText(/Gmail personal permite unos 500 mails por día/)).toBeInTheDocument();
+    });
+
+    it('guarda la configuración', async () => {
+      const llamadas = await montarCon({
+        'GET email.php': {
+          body: { disponible: true, cuenta: { ...GUARDADA, rafagas: { tamano: 30, pausa_minutos: 15, tope_diario: null } }, predeterminados: PREDETERMINADOS },
+        },
+        'PUT email-rafagas.php': { body: { rafagas: { tamano: 30, pausa_minutos: 15, tope_diario: 450 } } },
+      });
+
+      expect(screen.getByLabelText('Mails por tanda')).toHaveValue(30);
+      fireEvent.change(screen.getByLabelText('Tope por día (opcional)'), { target: { value: '450' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar envío a clientes' }));
+
+      expect(await screen.findByText('Guardado')).toBeInTheDocument();
+      expect(cuerpoDe(llamadas.find((l) => l.url.includes('email-rafagas.php')))).toEqual({
+        page_id: 5, tamano: 30, pausa_minutos: 15, tope_diario: 450,
+      });
+    });
+
+    it('muestra el error de validación', async () => {
+      await montarCon({
+        'GET email.php': { body: { disponible: true, cuenta: GUARDADA, predeterminados: PREDETERMINADOS } },
+        'PUT email-rafagas.php': { status: 400, body: { error: 'Cada ráfaga tiene que ser de entre 5 y 100 mails' } },
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar envío a clientes' }));
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('entre 5 y 100');
+    });
+  });
+
   it('sin la clave de cifrado en el servidor avisa que no está disponible', async () => {
     await montar({
       'pages/email.php': { status: 503, body: { error: 'El envío por SMTP propio no está disponible en este momento.', disponible: false } },

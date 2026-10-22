@@ -60,6 +60,7 @@ class Mailer
      *   @type string $html
      *   @type string $texto     Alternativa en texto plano
      *   @type string $responder Reply-To, opcional
+     *   @type array  $cabeceras Cabeceras extra, nombre => valor
      *   @type array  $imagenes  [['cid' => 'qr', 'contenido' => binario, 'tipo' => 'image/png']]
      * }
      * @param array|null $cuenta {
@@ -114,6 +115,12 @@ class Mailer
             }
 
             $mail->addAddress($mensaje['para'], isset($mensaje['paraNombre']) ? $mensaje['paraNombre'] : '');
+
+            // Como List-Unsubscribe en los mails a clientes. PHPMailer rechaza
+            // un valor con saltos de línea: no se puede colar otra cabecera.
+            foreach (isset($mensaje['cabeceras']) ? $mensaje['cabeceras'] : [] as $nombre => $valor) {
+                $mail->addCustomHeader($nombre, $valor);
+            }
 
             foreach (isset($mensaje['imagenes']) ? $mensaje['imagenes'] : [] as $imagen) {
                 // Incrustadas y no adjuntas: Gmail bloquea las imágenes en
