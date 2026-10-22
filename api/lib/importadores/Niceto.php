@@ -8,8 +8,11 @@
  * data-lazy-src— en lugar de sólo maquetarlo. Se lee eso: sobrevive a un
  * cambio de estilos, que es lo que más seguido rompe un adaptador.
  *
- * Todo sale de un único pedido, así que acá no hay pausa entre pedidos que
- * administrar. El robots.txt del sitio no restringe nada.
+ * La agenda sale de un único pedido. Lo que no publica es el precio: ese está
+ * en la ficha de Venti de cada show, que trae schema.org con la oferta más
+ * barata. Se pide una ficha por evento, con una pausa entre una y otra y con
+ * tope por corrida, como las fichas del Movistar Arena. Si una ficha falla, el
+ * evento entra igual, sin precio. El robots.txt del sitio no restringe nada.
  *
  * Lo que la agenda no publica son coordenadas, y Rezonar las necesita para el
  * mapa. No hace falta pedirlas por evento: Niceto tiene dos direcciones fijas
@@ -25,6 +28,17 @@ class Niceto
 
     /** Tope por corrida. La agenda publicada nunca pasa de unas decenas. */
     const MAX_EVENTOS = 60;
+
+    /** Segundos entre fichas de Venti. Es un sitio ajeno y no hay apuro. */
+    const PAUSA = 2;
+
+    /**
+     * Fichas de Venti por corrida.
+     *
+     * Las que no entran quedan sin precio esa noche; como la agenda viene por
+     * fecha, son las más lejanas, y lo completan cuando se acercan.
+     */
+    const MAX_FICHAS = 40;
 
     /**
      * Las salas y su dirección.
@@ -54,10 +68,16 @@ class Niceto
     /** @var Geocodificador */
     private $geo;
 
+    /** @var int */
+    private $pausa;
+
     public function __construct($traer = null, $geo = null)
     {
         $this->traer = $traer === null ? [$this, 'traerConCurl'] : $traer;
         $this->geo = $geo === null ? new Geocodificador() : $geo;
+
+        // Con un lector inyectado no hay sitio ajeno que cuidar.
+        $this->pausa = $traer === null ? self::PAUSA : 0;
     }
 
     /**
@@ -81,6 +101,7 @@ class Niceto
 
         $encontrados = [];
         $coordenadas = [];
+        $fichas = 0;
 
         foreach (self::tarjetas($html) as $tarjeta) {
             $evento = self::normalizar($tarjeta);
@@ -117,6 +138,20 @@ class Niceto
             $evento['latitud'] = $coords['latitud'];
             $evento['longitud'] = $coords['longitud'];
             unset($evento['sala']);
+
+            // Repetido en la grilla: ya entró, y con su ficha ya pedida.
+            if (isset($encontrados[$evento['id']])) {
+                continue;
+            }
+
+            if ($fichas < self::MAX_FICHAS && self::esDeVenti($evento['url'])) {
+                if ($fichas > 0 && $this->pausa > 0) {
+                    sleep($this->pausa);
+                }
+
+                $fichas++;
+                $evento['precio_desde'] = self::precioDeVenti(call_user_func($this->traer, $evento['url']));
+            }
 
             $encontrados[$evento['id']] = $evento;
 
@@ -180,10 +215,35 @@ class Niceto
             'hora'        => $fecha['hora'],
             'direccion'   => self::SALAS[$sala],
             'sala'        => $sala,
-            // La grilla no publica precios. Se deja sin dato en lugar de
-            // suponer que es gratis, que sería anunciar algo falso.
+            // La grilla no publica precios: sale de la ficha de Venti, que se
+            // pide aparte. Hasta entonces, sin dato.
             'precio_desde' => null,
         ];
+    }
+
+    /** Sólo se piden fichas de Venti: cualquier otro link no es asunto nuestro. */
+    public static function esDeVenti($url)
+    {
+        $host = is_string($url) ? strtolower((string) parse_url($url, PHP_URL_HOST)) : '';
+
+        return $host === 'venti.live' || substr($host, -11) === '.venti.live';
+    }
+
+    /**
+     * El precio "desde" de una ficha de Venti.
+     *
+     * Venti publica en `offers.price` la entrada más barata. Un cero no es un
+     * evento gratis: es una reserva que se paga en la puerta, y el mismo show
+     * tiene otras entradas pagas. Anunciarlo como gratis sería falso, así que
+     * queda sin dato.
+     *
+     * @return float|null
+     */
+    public static function precioDeVenti($html)
+    {
+        $precio = Importador::precioDeJsonLd($html);
+
+        return $precio !== null && $precio > 0 ? $precio : null;
     }
 
     /**
@@ -266,7 +326,8 @@ class Niceto
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
         curl_setopt($ch, CURLOPT_MAXREDIRS, 3);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        // Una ficha de Venti que no contesta no puede frenar la agenda entera.
+        curl_setopt($ch, CURLOPT_TIMEOUT, self::esDeVenti($url) ? 15 : 30);
         curl_setopt($ch, CURLOPT_USERAGENT, self::AGENTE);
         curl_setopt($ch, CURLOPT_HTTPHEADER, ['Accept-Language: es-AR,es;q=0.9']);
 

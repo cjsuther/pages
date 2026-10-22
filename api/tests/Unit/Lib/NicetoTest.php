@@ -238,6 +238,121 @@ class NicetoTest extends TestCase
         $this->assertSame([], $niceto->eventos([], new \stdClass()));
     }
 
+    // ----------------------------------------------------------------- precio
+
+    private function muestra($archivo)
+    {
+        return file_get_contents(__DIR__ . '/../../Fixtures/precios/niceto/' . $archivo);
+    }
+
+    /**
+     * Corre la agenda de muestra sin precios, con una ficha de Venti por URL.
+     * Lo que no está en $fichas responde vacío, como una ficha que falló.
+     */
+    private function correrConFichas(array $fichas, &$pedidos = null)
+    {
+        $agenda = $this->muestra('agenda-tarjetas-sin-precio.html');
+        $pedidos = [];
+        $pedidas = [];
+
+        $lector = function ($url) use ($agenda, $fichas, &$pedidos) {
+            $pedidos[] = $url;
+
+            if (strpos($url, 'nicetoclub.com/agenda') !== false) {
+                return $agenda;
+            }
+
+            return isset($fichas[$url]) ? $fichas[$url] : '';
+        };
+
+        $eventos = (new Niceto($lector, $this->geoFalso($pedidas)))->eventos([], new \stdClass());
+        $porId = [];
+
+        foreach ($eventos as $evento) {
+            $porId[$evento['id']] = $evento;
+        }
+
+        return $porId;
+    }
+
+    public function testElPrecioSaleDeLaFichaDeVenti()
+    {
+        $eventos = $this->correrConFichas([
+            'https://venti.live/evento/antamarta-en-niceto-club-18-a-os' => $this->muestra('venti-pago-15000.html'),
+        ], $pedidos);
+
+        $this->assertSame(15000.0, $eventos['antamarta-en-niceto-club-18-a-os']['precio_desde']);
+        $this->assertContains('https://venti.live/evento/antamarta-en-niceto-club-18-a-os', $pedidos);
+    }
+
+    /** "Desde $ 65.000" en la ficha: offers.price ya es el mínimo. */
+    public function testElPrecioDeVentiEsElDesde()
+    {
+        $this->assertSame(65000.0, Niceto::precioDeVenti($this->muestra('venti-pago-65000-desde.html')));
+    }
+
+    /**
+     * Un 0 de Venti es una reserva con pago en puerta, con otras entradas
+     * pagas en el mismo show. Anunciarlo como gratis sería mentir.
+     */
+    public function testUnCeroDeVentiQuedaSinPrecioYNoGratis()
+    {
+        $this->assertNull(Niceto::precioDeVenti($this->muestra('venti-precio-0-reserva-pago-en-puerta.html')));
+
+        $eventos = $this->correrConFichas([
+            'https://venti.live/evento/la-m-quina-camale-n-solito-world-tour-22-oct-en-niceto-bar' => $this->muestra('venti-precio-0-reserva-pago-en-puerta.html'),
+        ]);
+
+        $this->assertNull($eventos['la-m-quina-camale-n-solito-world-tour-22-oct-en-niceto-bar']['precio_desde']);
+    }
+
+    /** Una ficha que falla o viene sin JSON-LD no saca al evento de la agenda. */
+    public function testUnaFichaQueFallaDejaElEventoSinPrecio()
+    {
+        $eventos = $this->correrConFichas([
+            'https://venti.live/evento/antamarta-en-niceto-club-18-a-os' => '<html><body>sin schema</body></html>',
+        ]);
+
+        $this->assertCount(2, $eventos);
+        $this->assertNull($eventos['antamarta-en-niceto-club-18-a-os']['precio_desde']);
+        $this->assertNull($eventos['la-m-quina-camale-n-solito-world-tour-22-oct-en-niceto-bar']['precio_desde']);
+    }
+
+    public function testSePideUnaFichaPorEvento()
+    {
+        $this->correrConFichas([], $pedidos);
+
+        $this->assertCount(3, $pedidos, 'la agenda y una ficha por cada uno de los dos eventos');
+    }
+
+    public function testSoloSePidenFichasDeVenti()
+    {
+        $this->assertTrue(Niceto::esDeVenti('https://venti.live/evento/x'));
+        $this->assertTrue(Niceto::esDeVenti('https://www.venti.live/evento/x'));
+        $this->assertFalse(Niceto::esDeVenti('https://venti.live.otro.com/evento/x'));
+        $this->assertFalse(Niceto::esDeVenti('https://ventiladores.com/x'));
+        $this->assertFalse(Niceto::esDeVenti(''));
+    }
+
+    /** La ficha de un evento repetido en la grilla se pide una sola vez. */
+    public function testUnEventoRepetidoNoPideDosVecesLaFicha()
+    {
+        $tarjetas = Niceto::tarjetas($this->agenda());
+        $repetida = '<section>' . $tarjetas[0] . $tarjetas[0] . '</section>';
+        $pedidos = [];
+        $pedidas = [];
+
+        $niceto = new Niceto(function ($url) use ($repetida, &$pedidos) {
+            $pedidos[] = $url;
+
+            return $repetida;
+        }, $this->geoFalso($pedidas));
+
+        $niceto->eventos([], new \stdClass());
+
+        $this->assertCount(2, $pedidos, 'la agenda y una sola ficha');
+    }
+
     /** El mismo evento repetido en la grilla no puede entrar dos veces. */
     public function testNoSeRepitenEventos()
     {
