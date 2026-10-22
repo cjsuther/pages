@@ -5,6 +5,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import GooglePlacesAutocomplete from '../components/GooglePlacesAutocomplete';
 import SeccionRedes from '../components/SeccionRedes';
 import SeccionEntradas from '../components/SeccionEntradas';
+import BuscadorDeVentas from '../components/BuscadorDeVentas';
 import PanelMetricas from '../components/PanelMetricas';
 import PanelClientes from '../components/PanelClientes';
 import PanelVentasProductos from '../components/PanelVentasProductos';
@@ -54,17 +55,85 @@ const PLANTILLAS = [
   { clave: 'afiches',   nombre: 'Afiches',    descripcion: 'La imagen es la ficha, con marco de color' },
 ];
 
-/** Secciones del editor, en el orden en que se muestran. */
+/** Secciones del editor, en el orden en que se muestran (?s=). */
 const SECCIONES = [
   { clave: 'general',   etiqueta: 'Configuración' },
   { clave: 'contenido', etiqueta: 'Contenido' },
-  { clave: 'redes',     etiqueta: 'Redes sociales' },
-  { clave: 'entradas',  etiqueta: 'Entradas' },
+  { clave: 'ventas',    etiqueta: 'Ventas' },
   { clave: 'clientes',  etiqueta: 'Clientes' },
-  { clave: 'productos', etiqueta: 'Ventas de productos' },
   { clave: 'metricas',  etiqueta: 'Métricas' },
-  { clave: 'admins',    etiqueta: 'Administradores', soloDueno: true },
 ];
+
+/** Solapas de Configuración (?c=). La primera es la que abre. */
+const SUB_CONFIGURACION = [
+  { clave: 'general', etiqueta: 'General' },
+  { clave: 'redes',   etiqueta: 'Redes sociales' },
+  { clave: 'admins',  etiqueta: 'Administradores', soloDueno: true },
+];
+
+/** Solapas de Ventas (?v=). Primero lo que se mira seguido; el cobro se configura una vez. */
+const SUB_VENTAS = [
+  { clave: 'entradas',  etiqueta: 'Entradas' },
+  { clave: 'productos', etiqueta: 'Productos' },
+  { clave: 'cobros',    etiqueta: 'Configuración' },
+];
+
+/**
+ * Las direcciones de antes de agrupar las solapas (?s=redes, ?s=entradas…)
+ * siguen andando: alguien las guardó, y Mercado Pago vuelve a ?s=entradas
+ * después de conectar la cuenta. Devuelve la dirección nueva, o null si la
+ * actual ya lo es.
+ */
+function direccionNueva(actuales) {
+  const s = actuales.get('s');
+  const proximos = new URLSearchParams(actuales);
+  proximos.delete('s');
+  proximos.delete('e');
+
+  if (s === 'redes' || s === 'admins') {
+    proximos.set('c', s);
+    return proximos;
+  }
+
+  if (s === 'productos') {
+    proximos.set('s', 'ventas');
+    proximos.set('v', 'productos');
+    return proximos;
+  }
+
+  if (s === 'entradas') {
+    // El resultado de conectar Mercado Pago se cuenta en la configuración de
+    // cobros: abrir en otra solapa haría parecer que la vuelta no pasó nada.
+    const alCobro = actuales.get('e') === 'cobros' || actuales.has('conectado') || actuales.has('error');
+    proximos.set('s', 'ventas');
+    if (alCobro) proximos.set('v', 'cobros');
+    return proximos;
+  }
+
+  return null;
+}
+
+/** Las solapas de segundo nivel, debajo del menú del editor. */
+function SubMenu({ titulo, opciones, activa, onElegir }) {
+  return (
+    <nav aria-label={titulo} className="flex flex-wrap gap-2 mb-6">
+      {opciones.map((o) => (
+        <button
+          key={o.clave}
+          onClick={() => onElegir(o.clave)}
+          aria-current={activa === o.clave ? 'page' : undefined}
+          className={`px-4 py-2 rounded-full font-semibold text-sm transition-colors border ${
+            activa === o.clave
+              ? 'bg-verde-claro border-verde-medio text-verde-oscuro'
+              : 'bg-white border-borde text-tinta-suave hover:text-tinta-media'
+          }`}
+        >
+          {o.etiqueta}
+        </button>
+      ))}
+    </nav>
+  );
+}
 
 function PageEditor() {
   const { id } = useParams();
@@ -74,9 +143,26 @@ function PageEditor() {
   // —con el botón del editor o con el "atrás" del navegador— se cae en la
   // misma sección y no en CONFIGURACIÓN.
   const [searchParams, setSearchParams] = useSearchParams();
+  // Mientras se pasa de una dirección vieja a la nueva no se muestra ninguna
+  // sección: así lo que se abre ya lee la URL definitiva.
+  const legado = direccionNueva(searchParams);
+  const legadoTexto = legado ? legado.toString() : '';
+  useEffect(() => {
+    if (legado) setSearchParams(legado, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [legadoTexto]);
   const seccionEnUrl = searchParams.get('s');
-  const seccion = SECCIONES.some(x => x.clave === seccionEnUrl) ? seccionEnUrl : 'general';
+  const seccion = legado
+    ? null
+    : SECCIONES.some(x => x.clave === seccionEnUrl) ? seccionEnUrl : 'general';
   const setSeccion = (clave) => setSearchParams(clave === 'general' ? {} : { s: clave });
+  // Una solapa de segundo nivel: la que abre por defecto no queda escrita.
+  const setSubseccion = (parametro, clave, porDefecto) => {
+    const proximos = new URLSearchParams();
+    if (seccion !== 'general') proximos.set('s', seccion);
+    if (clave !== porDefecto) proximos.set(parametro, clave);
+    setSearchParams(proximos);
+  };
   const [page, setPage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [globalLoading, setGlobalLoading] = useState(false);
@@ -136,6 +222,13 @@ function PageEditor() {
 
   // ¿El usuario actual es el dueño de la página? (gestionar admins es solo del dueño)
   const isOwner = page && user && Number(page.user_id) === Number(user.id);
+  const solapasDeConfiguracion = SUB_CONFIGURACION.filter(x => !x.soloDueno || isOwner);
+  const subConfig = solapasDeConfiguracion.some(x => x.clave === searchParams.get('c'))
+    ? searchParams.get('c')
+    : 'general';
+  const subVentas = SUB_VENTAS.some(x => x.clave === searchParams.get('v'))
+    ? searchParams.get('v')
+    : 'entradas';
 
   // Los colores ya resueltos, para poder mostrar en el selector el que rige
   // cuando el campo está en automático.
@@ -835,7 +928,7 @@ function PageEditor() {
         {/* Secciones del editor. Antes todo se apilaba en una sola columna y
             había que bajar mucho para llegar a los administradores. */}
         <nav className="flex flex-wrap gap-2 mb-8 border-b border-borde">
-          {SECCIONES.filter(s => !s.soloDueno || isOwner).map((s) => (
+          {SECCIONES.map((s) => (
             <button
               key={s.clave}
               onClick={() => setSeccion(s.clave)}
@@ -856,6 +949,24 @@ function PageEditor() {
         </nav>
 
         {seccion === 'general' && (
+          <SubMenu
+            titulo="Configuración"
+            opciones={solapasDeConfiguracion}
+            activa={subConfig}
+            onElegir={(clave) => setSubseccion('c', clave, 'general')}
+          />
+        )}
+
+        {seccion === 'ventas' && (
+          <SubMenu
+            titulo="Ventas"
+            opciones={SUB_VENTAS}
+            activa={subVentas}
+            onElegir={(clave) => setSubseccion('v', clave, 'entradas')}
+          />
+        )}
+
+        {seccion === 'general' && subConfig === 'general' && (
           <div className="bg-white border border-borde rounded-2xl p-6 sm:p-8 mb-8">
             <h2 className="text-2xl font-bold mb-8 tracking-tight">Configuración</h2>
 
@@ -1056,7 +1167,7 @@ function PageEditor() {
           </div>
         )}
 
-        {seccion === 'redes' && (
+        {seccion === 'general' && subConfig === 'redes' && (
           <SeccionRedes
             socials={page.socials || []}
             guardando={globalLoading}
@@ -1064,7 +1175,14 @@ function PageEditor() {
           />
         )}
 
-        {seccion === 'entradas' && (
+        {seccion === 'ventas' && subVentas === 'entradas' && (
+          <div className="bg-white border border-borde rounded-2xl p-6 sm:p-8 mb-8">
+            <h2 className="text-2xl font-bold mb-6 tracking-tight">Ventas de entradas</h2>
+            <BuscadorDeVentas pageId={id} apiUrl={apiUrl} token={token} />
+          </div>
+        )}
+
+        {seccion === 'ventas' && subVentas === 'cobros' && (
           <SeccionEntradas
             pageId={id}
             apiUrl={apiUrl}
@@ -1083,7 +1201,7 @@ function PageEditor() {
 
         {/* Las de todos los productos, también los borrados: el link de un
             producto borrado ya no existe y su pestaña Ventas tampoco. */}
-        {seccion === 'productos' && (
+        {seccion === 'ventas' && subVentas === 'productos' && (
           <div className="bg-white border border-borde rounded-2xl p-6 sm:p-8 mb-8">
             <h2 className="text-2xl font-bold mb-2 tracking-tight">Ventas de productos</h2>
             <p className="text-sm text-tinta-suave mb-6">
@@ -1101,7 +1219,7 @@ function PageEditor() {
           </>
         )}
 
-        {seccion === 'admins' && isOwner && (
+        {seccion === 'general' && subConfig === 'admins' && isOwner && (
             <div className="bg-white border border-borde rounded-2xl p-6 sm:p-8 mb-8">
               <h2 className="text-2xl font-bold mb-2 tracking-tight">Administradores</h2>
               <p className="text-sm text-tinta-suave mb-6">

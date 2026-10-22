@@ -76,14 +76,17 @@ function mockearEditor({ page = pagina(), admins = [], pending = [], results = [
     'upload/image.php': { url: 'https://img/subida.png' },
     'notifications/index.php': { notifications: [], unread_count: 0 },
     'users/location.php': { latitude: null, longitude: null },
+    'entradas/eventos.php': { eventos: [] },
+    'entradas/credenciales.php': { cobros: { configurado: false }, comision: 10, mercadopago: null, disponible: true },
+    'productos/ventas.php': { ordenes: [], resumen: { pagadas: 0, recaudado: 0, descargaron: 0 } },
   });
 }
 
-async function render(datos = {}, seccion = null) {
+async function render(datos = {}, seccion = null, route = '/page/5') {
   const mock = mockearEditor(datos);
   const resultado = renderConProviders(<PageEditor />, {
     auth: autenticado(),
-    route: '/page/5',
+    route,
     path: '/page/:id',
   });
   // El encabezado del editor es el nombre de la página, no la palabra "editor".
@@ -119,20 +122,77 @@ describe('PageEditor', () => {
       expect(llamadaA(llamadas, 'pages/detail.php').url).toContain('id=5');
     });
 
-    it('ofrece las cinco secciones en el submenú', async () => {
+    it('ofrece las cinco secciones en el menú', async () => {
       await render();
 
-      ['Configuración', 'Contenido', 'Redes sociales', 'Entradas', 'Administradores'].forEach((s) => {
+      ['Configuración', 'Contenido', 'Ventas', 'Clientes', 'Métricas'].forEach((s) => {
         expect(screen.getByRole('button', { name: new RegExp(`^${s}`) })).toBeInTheDocument();
       });
     });
 
-    it('la solapa de entradas abre la configuración de cobros', async () => {
+    it('redes sociales y administradores están dentro de configuración', async () => {
       await render();
 
-      fireEvent.click(screen.getByRole('button', { name: /^Entradas/ }));
+      const sub = screen.getByRole('navigation', { name: 'Configuración' });
+      expect(within(sub).getByRole('button', { name: 'General' })).toBeInTheDocument();
 
-      expect(await screen.findByRole('heading', { name: 'Entradas' })).toBeInTheDocument();
+      fireEvent.click(within(sub).getByRole('button', { name: 'Redes sociales' }));
+      expect(await screen.findByRole('heading', { name: 'Redes sociales' })).toBeInTheDocument();
+
+      fireEvent.click(within(sub).getByRole('button', { name: 'Administradores' }));
+      expect(await screen.findByRole('heading', { name: 'Administradores' })).toBeInTheDocument();
+    });
+
+    it('ventas agrupa entradas, productos y la configuración de cobros', async () => {
+      await render();
+
+      fireEvent.click(screen.getByRole('button', { name: /^Ventas/ }));
+      // Abre en lo que se mira seguido: las ventas de entradas.
+      expect(await screen.findByRole('heading', { name: 'Ventas de entradas' })).toBeInTheDocument();
+
+      const sub = screen.getByRole('navigation', { name: 'Ventas' });
+      fireEvent.click(within(sub).getByRole('button', { name: 'Productos' }));
+      expect(await screen.findByRole('heading', { name: 'Ventas de productos' })).toBeInTheDocument();
+
+      fireEvent.click(within(sub).getByRole('button', { name: 'Configuración' }));
+      expect(await screen.findByRole('heading', { name: 'Configuración de cobros' })).toBeInTheDocument();
+    });
+
+    /**
+     * Mercado Pago vuelve a ?s=entradas después de conectar la cuenta, y hay
+     * direcciones viejas guardadas: tienen que caer en la solapa nueva.
+     */
+    describe('direcciones de antes de agrupar las solapas', () => {
+      it('la vuelta de Mercado Pago abre la configuración de cobros con el aviso', async () => {
+        await render({}, null, '/page/5?s=entradas&conectado=1');
+
+        expect(await screen.findByText('Tu cuenta de Mercado Pago quedó conectada.')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Configuración de cobros' })).toBeInTheDocument();
+      });
+
+      it('?s=entradas abre las ventas de entradas', async () => {
+        await render({}, null, '/page/5?s=entradas');
+
+        expect(await screen.findByRole('heading', { name: 'Ventas de entradas' })).toBeInTheDocument();
+      });
+
+      it('?s=productos abre las ventas de productos', async () => {
+        await render({}, null, '/page/5?s=productos');
+
+        expect(await screen.findByRole('heading', { name: 'Ventas de productos' })).toBeInTheDocument();
+      });
+
+      it('?s=redes abre las redes dentro de configuración', async () => {
+        await render({}, null, '/page/5?s=redes');
+
+        expect(await screen.findByRole('heading', { name: 'Redes sociales' })).toBeInTheDocument();
+      });
+
+      it('?s=admins abre los administradores dentro de configuración', async () => {
+        await render({}, null, '/page/5?s=admins');
+
+        expect(await screen.findByRole('heading', { name: 'Administradores' })).toBeInTheDocument();
+      });
     });
 
     it('abre en configuración', async () => {

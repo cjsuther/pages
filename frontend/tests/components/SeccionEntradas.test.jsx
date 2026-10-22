@@ -28,9 +28,7 @@ async function montar({
   comision = 10,
   mercadopago = MERCADO_PAGO,
   disponible = true,
-  // La sección abre en VENTAS: la mayoría de los tests son de la configuración
-  // de cobro, así que el helper entra por esa solapa salvo que se pida otra.
-  ruta = '/page/5?e=cobros',
+  ruta = '/page/5?s=ventas&v=cobros',
   emailContacto = '',
   onGuardarContacto = () => {},
 } = {}) {
@@ -247,25 +245,25 @@ describe('SeccionEntradas', () => {
 
   describe('vuelta desde Mercado Pago', () => {
     it('confirma cuando la conexión salió bien', async () => {
-      await montar({ cobros: CONECTADO, ruta: '/page/5?s=entradas&conectado=1' });
+      await montar({ cobros: CONECTADO, ruta: '/page/5?s=ventas&v=cobros&conectado=1' });
 
       expect(screen.getByText(/quedó conectada/)).toBeInTheDocument();
     });
 
     it('explica en castellano si el dueño canceló', async () => {
-      await montar({ ruta: '/page/5?s=entradas&error=cancelado' });
+      await montar({ ruta: '/page/5?s=ventas&v=cobros&error=cancelado' });
 
       expect(screen.getByText(/No autorizaste la conexión/)).toBeInTheDocument();
     });
 
     it('explica si el link venció', async () => {
-      await montar({ ruta: '/page/5?s=entradas&error=estado_invalido' });
+      await montar({ ruta: '/page/5?s=ventas&v=cobros&error=estado_invalido' });
 
       expect(screen.getByText(/link de conexión venció/)).toBeInTheDocument();
     });
 
     it('un error desconocido no deja la pantalla muda', async () => {
-      await montar({ ruta: '/page/5?s=entradas&error=algo_raro' });
+      await montar({ ruta: '/page/5?s=ventas&v=cobros&error=algo_raro' });
 
       expect(screen.getByText(/No se pudo conectar la cuenta/)).toBeInTheDocument();
     });
@@ -356,50 +354,6 @@ describe('SeccionEntradas', () => {
       fireEvent.blur(screen.getByLabelText('Email de contacto'));
 
       expect(onGuardarContacto).not.toHaveBeenCalled();
-    });
-  });
-
-  /**
-   * La configuración de cobros se toca una vez y las ventas se miran seguido.
-   * Apiladas, lo segundo quedaba debajo de todo lo primero.
-   */
-  describe('sub-solapas', () => {
-    it('abre en VENTAS, que es lo que se mira seguido', async () => {
-      global.fetch.mockReturnValue(respuestaDe({ eventos: [] }));
-      await montar({ ruta: '/page/5' });
-
-      expect(await screen.findByLabelText('Buscar por nombre del evento')).toBeInTheDocument();
-      expect(screen.queryByText(/Conectá tu cuenta de Mercado Pago/)).not.toBeInTheDocument();
-    });
-
-    it('desde CONFIGURACIÓN se llega a la conexión con Mercado Pago', async () => {
-      global.fetch.mockReturnValue(respuestaDe({ eventos: [] }));
-      await montar({ ruta: '/page/5' });
-
-      fireEvent.click(screen.getByRole('button', { name: 'Configuración' }));
-
-      expect(screen.getByText(/Conectá tu cuenta de Mercado Pago/)).toBeInTheDocument();
-    });
-
-    /**
-     * Editar un evento desde las ventas y volver tiene que dejarte en VENTAS.
-     * Por eso la sub-solapa va en la URL, como la sección.
-     */
-    it('la sub-solapa abierta queda en la URL', async () => {
-      await montar({ cobros: CONECTADO, ruta: '/page/5?s=entradas&e=cobros' });
-
-      expect(screen.getByText(/Mercado Pago conectado/)).toBeInTheDocument();
-    });
-
-    /**
-     * Mercado Pago devuelve a esta sección y el resultado se cuenta en
-     * CONFIGURACIÓN: si se abriera en VENTAS, la vuelta se vería como que no
-     * pasó nada.
-     */
-    it('al volver de Mercado Pago se abre en CONFIGURACIÓN', async () => {
-      await montar({ cobros: CONECTADO, ruta: '/page/5?s=entradas&conectado=1' });
-
-      expect(await screen.findByText('Tu cuenta de Mercado Pago quedó conectada.')).toBeInTheDocument();
     });
   });
 });
