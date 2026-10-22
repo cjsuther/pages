@@ -1,0 +1,32 @@
+{
+ "schedules": {
+  "7431c2ef-4a12-4d48-82c7-b9aea17ed044": {
+   "title": "19 de Diciembre",
+   "labelForReplaceDate": "19/12 20:00hs",
+   "date": {
+    "year": 2026,
+    "month": 12,
+    "day": 19
+   },
+   "label": "",
+   "labelColor": "",
+   "enabledPrices": {
+    "General": {
+     "priceGroupName": "Venta General",
+     "categoryColorOnMap": null,
+     "price": 55000,
+     "free": false,
+     "priceId": 6107,
+     "soldOut": false,
+     "label": null,
+     "format": {
+      "labelColor": null,
+      "italic": false,
+      "bold": false,
+      "lineThrough": false
+     }
+    }
+   }
+  }
+ }
+}
