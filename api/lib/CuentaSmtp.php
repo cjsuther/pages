@@ -25,6 +25,15 @@ class CuentaSmtp
 
     const PRUEBAS_POR_HORA = 5;
 
+    /** Ráfagas de los envíos a clientes: lo que se usa si no se cambió, y los límites. */
+    const RAFAGA_TAMANO = 20;
+    const RAFAGA_MIN = 5;
+    const RAFAGA_MAX = 100;
+    const RAFAGA_PAUSA = 10;
+    const PAUSA_MIN = 5;
+    const PAUSA_MAX = 1440;
+    const TOPE_MAX = 100000;
+
     /** Marca de versión, para poder rotar el formato sin romper lo ya guardado. */
     const PREFIJO = 'v1:';
 
@@ -278,7 +287,8 @@ class CuentaSmtp
     {
         $stmt = $db->prepare('
             SELECT page_id, host, port, seguridad, usuario, contrasena_cifrada,
-                   remitente_email, remitente_nombre, responder_a, verificado_en, actualizado_en
+                   remitente_email, remitente_nombre, responder_a, verificado_en, actualizado_en,
+                   rafaga_tamano, rafaga_pausa_minutos, tope_diario, ultima_rafaga_en
             FROM page_smtp WHERE page_id = ?
         ');
         $stmt->execute([(int) $pageId]);
@@ -343,7 +353,68 @@ class CuentaSmtp
             'remitente_nombre' => $fila['remitente_nombre'],
             'responder_a' => $fila['responder_a'],
             'verificado_en' => $fila['verificado_en'],
+            'rafagas' => self::rafagas($fila),
         ];
+    }
+
+    // ----------------------------------------------------------- ráfagas
+
+    /**
+     * Cómo se reparten los envíos a clientes (#37): cuántos mails por ráfaga,
+     * cuántos minutos entre una y otra, y un tope opcional por día. Una
+     * casilla que manda cientos de mails seguidos termina marcada como spam.
+     *
+     * @return array{tamano: int, pausa_minutos: int, tope_diario: int|null}
+     */
+    public static function rafagas($fila)
+    {
+        $tamano = isset($fila['rafaga_tamano']) ? (int) $fila['rafaga_tamano'] : self::RAFAGA_TAMANO;
+        $pausa = isset($fila['rafaga_pausa_minutos']) ? (int) $fila['rafaga_pausa_minutos'] : self::RAFAGA_PAUSA;
+        $tope = isset($fila['tope_diario']) && (int) $fila['tope_diario'] > 0 ? (int) $fila['tope_diario'] : null;
+
+        // Lo guardado ya se validó; esto es por si alguien lo tocó a mano.
+        return [
+            'tamano' => max(self::RAFAGA_MIN, min(self::RAFAGA_MAX, $tamano)),
+            'pausa_minutos' => max(self::PAUSA_MIN, $pausa),
+            'tope_diario' => $tope,
+        ];
+    }
+
+    /** @return array ['error' => string] o ['datos' => array] */
+    public static function validarRafagas(array $entrada)
+    {
+        $tamano = self::texto($entrada, 'tamano');
+
+        if (!preg_match('/^\d+$/', trim((string) $tamano)) || (int) $tamano < self::RAFAGA_MIN || (int) $tamano > self::RAFAGA_MAX) {
+            return ['error' => 'Cada ráfaga tiene que ser de entre ' . self::RAFAGA_MIN . ' y ' . self::RAFAGA_MAX . ' mails'];
+        }
+
+        $pausa = self::texto($entrada, 'pausa_minutos');
+
+        if (!preg_match('/^\d+$/', trim((string) $pausa)) || (int) $pausa < self::PAUSA_MIN || (int) $pausa > self::PAUSA_MAX) {
+            return ['error' => 'La pausa entre ráfagas tiene que ser de entre ' . self::PAUSA_MIN . ' y ' . self::PAUSA_MAX . ' minutos'];
+        }
+
+        $tope = trim((string) self::texto($entrada, 'tope_diario'));
+
+        if ($tope !== '' && (!preg_match('/^\d+$/', $tope) || (int) $tope < 1 || (int) $tope > self::TOPE_MAX)) {
+            return ['error' => 'El tope diario tiene que ser un número entre 1 y ' . self::TOPE_MAX . ', o quedar vacío'];
+        }
+
+        return ['datos' => [
+            'tamano' => (int) $tamano,
+            'pausa_minutos' => (int) $pausa,
+            'tope_diario' => $tope === '' ? null : (int) $tope,
+        ]];
+    }
+
+    public static function guardarRafagas($db, $pageId, array $datos)
+    {
+        $stmt = $db->prepare('
+            UPDATE page_smtp SET rafaga_tamano = ?, rafaga_pausa_minutos = ?, tope_diario = ?
+            WHERE page_id = ?
+        ');
+        $stmt->execute([$datos['tamano'], $datos['pausa_minutos'], $datos['tope_diario'], (int) $pageId]);
     }
 
     // ----------------------------------------------------------- pruebas
