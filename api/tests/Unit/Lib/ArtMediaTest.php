@@ -277,6 +277,157 @@ class ArtMediaTest extends TestCase
         $this->assertCount(2, $this->correr(['max_eventos' => 2]));
     }
 
+    // ----------------------------------------------------------------- precio
+
+    private function muestra($archivo)
+    {
+        return file_get_contents(__DIR__ . '/../../Fixtures/precios/artmedia/' . $archivo);
+    }
+
+    /**
+     * Corre la cartelera de muestra (gratis, Passline, AllAccess, Enigma y
+     * agotado) con las fichas de las ticketeras. Passline responde 403, que el
+     * lector real devuelve como cadena vacía.
+     */
+    private function correrConPrecios(&$pedidos = null, $fichas = null)
+    {
+        $api = $this->muestra('api-events-gratis-comprar-agotado.json');
+        $fichas = $fichas !== null ? $fichas : [
+            'https://www.allaccess.com.ar/event/la-joaqui' => $this->muestra('allaccess-la-joaqui-50000.html'),
+            'https://www.enigmatickets.com/event/57e6a8b8-26b7-4871-a92f-70dc6b67827d' => '<html><script>window.__EVENTO__ = '
+                . $this->muestra('enigmatickets-six-sex-55000-fragmento.json') . ';</script></html>',
+        ];
+        $pedidos = [];
+        $pedidas = [];
+
+        $lector = function ($url) use ($api, $fichas, &$pedidos) {
+            $pedidos[] = $url;
+
+            if ($url === ArtMedia::API) {
+                return $api;
+            }
+
+            return isset($fichas[$url]) ? $fichas[$url] : '';
+        };
+
+        $porId = [];
+
+        foreach ((new ArtMedia($lector, $this->geoFalso($pedidas)))->eventos([], new \stdClass()) as $evento) {
+            $porId[$evento['id']] = $evento;
+        }
+
+        return $porId;
+    }
+
+    public function testUnShowGratisSeMarcaGratisSinPedirNada()
+    {
+        $eventos = $this->correrConPrecios($pedidos);
+
+        $this->assertSame(0.0, $eventos['784']['precio_desde']);
+        $this->assertNotContains('https://voces.c5n.com/', $pedidos);
+    }
+
+    public function testGratisPorElBotonOPorElTipo()
+    {
+        $this->assertTrue(ArtMedia::esGratis(['tipoBoton' => ' Gratis ']));
+        $this->assertTrue(ArtMedia::esGratis(['tipoBoton' => 'comprar', 'type' => 'Gratis']));
+        $this->assertFalse(ArtMedia::esGratis(['tipoBoton' => 'comprar', 'type' => 'Recitales']));
+        $this->assertFalse(ArtMedia::esGratis([]));
+    }
+
+    public function testElPrecioDeAllAccessSaleDeSuJsonLd()
+    {
+        $this->assertSame(50000.0, $this->correrConPrecios()['751']['precio_desde']);
+    }
+
+    public function testElPrecioDeEnigmaSaleDeSuJsonEmbebido()
+    {
+        $this->assertSame(55000.0, $this->correrConPrecios()['772']['precio_desde']);
+    }
+
+    /** Passline está detrás de Cloudflare: no se pide y queda sin precio. */
+    public function testPasslineNoSePide()
+    {
+        $eventos = $this->correrConPrecios($pedidos);
+
+        $this->assertNull($eventos['757']['precio_desde']);
+
+        foreach ($pedidos as $url) {
+            $this->assertStringNotContainsString('passline', $url);
+        }
+    }
+
+    /** Sólo se leen las ticketeras que se pueden leer sin un navegador. */
+    public function testUnaTicketeraQueNoSeConoceQuedaSinPrecio()
+    {
+        $this->assertNull(ArtMedia::ticketera('https://www.passline.com/eventos/kapanga-en-c-art-media'));
+        $this->assertNull(ArtMedia::ticketera('https://microweb.me/'));
+        $this->assertNull(ArtMedia::ticketera(''));
+        $this->assertSame('allaccess', ArtMedia::ticketera('https://www.allaccess.com.ar/event/la-joaqui'));
+        $this->assertSame('enigma', ArtMedia::ticketera('https://enigmatickets.com/event/x'));
+    }
+
+    public function testUnShowAgotadoNoSePideYQuedaComoVenga()
+    {
+        $eventos = $this->correrConPrecios($pedidos);
+
+        $this->assertNull($eventos['650']['precio_desde']);
+        $this->assertCount(3, $pedidos, 'la API, AllAccess y Enigma');
+    }
+
+    /** Una ficha que falla (403, timeout) deja el evento sin precio, pero adentro. */
+    public function testUnaFichaQueFallaNoSacaAlEvento()
+    {
+        $eventos = $this->correrConPrecios($pedidos, []);
+
+        $this->assertCount(5, $eventos);
+        $this->assertNull($eventos['751']['precio_desde']);
+        $this->assertNull($eventos['772']['precio_desde']);
+    }
+
+    public function testEnigmaIgnoraLasAgotadas()
+    {
+        $json = json_encode(['schedules' => ['a' => ['enabledPrices' => [
+            'Anticipada' => ['price' => 30000, 'free' => false, 'soldOut' => true],
+            'General'    => ['price' => 45000, 'free' => false, 'soldOut' => false],
+        ]]]]);
+
+        $this->assertSame(45000.0, ArtMedia::precioDeEnigma($json));
+    }
+
+    public function testEnigmaConUnaEntradaLibreEsGratis()
+    {
+        $json = json_encode(['schedules' => [
+            'a' => ['enabledPrices' => ['Libre' => ['price' => 0, 'free' => true, 'soldOut' => false]]],
+            'b' => ['enabledPrices' => ['General' => ['price' => 20000, 'free' => false]]],
+        ]]);
+
+        $this->assertSame(0.0, ArtMedia::precioDeEnigma($json));
+    }
+
+    /** Un cero sin la marca de libre no dice nada: no se anuncia como gratis. */
+    public function testEnigmaUnCeroSinMarcaDeLibreNoCuenta()
+    {
+        $json = json_encode(['schedules' => ['a' => ['enabledPrices' => ['Invitación' => ['price' => 0, 'free' => false]]]]]);
+
+        $this->assertNull(ArtMedia::precioDeEnigma($json));
+    }
+
+    public function testEnigmaSinSchedulesNoTienePrecio()
+    {
+        $this->assertNull(ArtMedia::precioDeEnigma('<html>Cargando…</html>'));
+        $this->assertNull(ArtMedia::precioDeEnigma('{"schedules": {roto'));
+        $this->assertNull(ArtMedia::precioDeEnigma(''));
+    }
+
+    /** El JSON trae llaves dentro de textos: el recorte no se puede confundir. */
+    public function testEnigmaRespetaLasLlavesDentroDeLosTextos()
+    {
+        $json = '{"schedules":{"a":{"title":"Show {especial} \\"}\\"","enabledPrices":{"G":{"price":12000}}}},"otro":1}';
+
+        $this->assertSame(12000.0, ArtMedia::precioDeEnigma($json));
+    }
+
     public function testSiLaApiNoRespondeDevuelveVacio()
     {
         $pedidas = [];

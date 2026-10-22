@@ -11,6 +11,12 @@
  * Es la fuente más liviana de todas: un pedido por corrida contra un endpoint
  * que el propio sitio usa en cada visita.
  *
+ * La API no trae precios, pero dice si el show es gratis. Para el resto, el
+ * precio está en la ticketera del link de compra, y sólo se pide donde se
+ * puede leer sin un navegador: AllAccess publica schema.org y Enigma Tickets
+ * embebe su configuración en JSON. Passline, que es la mayoría, está detrás
+ * del desafío de Cloudflare: no se pide, y esos shows quedan sin precio.
+ *
  * Todas las salas —Central, Corrientes, Sótano— son del mismo complejo, así
  * que la dirección es una y se geocodifica una vez.
  */
@@ -30,16 +36,28 @@ class ArtMedia
     /** Tope por corrida. La cartelera publicada ronda los 40 shows. */
     const MAX_EVENTOS = 60;
 
+    /** Segundos entre fichas de las ticketeras. Son sitios ajenos. */
+    const PAUSA = 2;
+
+    /** Tope de fichas de ticketeras por corrida. */
+    const MAX_FICHAS = 40;
+
     /** @var callable Trae una URL; se sustituye en los tests. */
     private $traer;
 
     /** @var Geocodificador */
     private $geo;
 
+    /** @var int */
+    private $pausa;
+
     public function __construct($traer = null, $geo = null)
     {
         $this->traer = $traer === null ? [$this, 'traerConCurl'] : $traer;
         $this->geo = $geo === null ? new Geocodificador() : $geo;
+
+        // Con un lector inyectado no hay sitio ajeno que cuidar.
+        $this->pausa = $traer === null ? self::PAUSA : 0;
     }
 
     /**
@@ -65,6 +83,7 @@ class ArtMedia
 
         $cuerpo = call_user_func($this->traer, self::API);
         $encontrados = [];
+        $fichas = 0;
 
         foreach (self::eventosDeLaRespuesta($cuerpo) as $crudo) {
             $evento = self::normalizar($crudo);
@@ -84,6 +103,26 @@ class ArtMedia
             $evento['latitud'] = $coords['latitud'];
             $evento['longitud'] = $coords['longitud'];
             unset($evento['sala']);
+
+            if (isset($encontrados[$evento['id']])) {
+                continue;
+            }
+
+            $ticketera = $evento['precio_desde'] === null && self::seVende($crudo)
+                ? self::ticketera($evento['url'])
+                : null;
+
+            if ($ticketera !== null && $fichas < self::MAX_FICHAS) {
+                if ($fichas > 0 && $this->pausa > 0) {
+                    sleep($this->pausa);
+                }
+
+                $fichas++;
+                $ficha = call_user_func($this->traer, $evento['url']);
+                $evento['precio_desde'] = $ticketera === 'allaccess'
+                    ? Importador::precioDeJsonLd($ficha)
+                    : self::precioDeEnigma($ficha);
+            }
 
             $encontrados[$evento['id']] = $evento;
 
@@ -157,10 +196,153 @@ class ArtMedia
             // (Sótano) — Av. Corrientes 6271" ubica mejor que la calle sola.
             'direccion'   => self::LUGAR . ($sala === '' ? '' : " ($sala)") . ' — ' . self::DIRECCION,
             'sala'        => $sala,
-            // La API no publica precios. Se deja sin dato en lugar de suponer
-            // que es gratis, que sería anunciar algo falso.
-            'precio_desde' => null,
+            // La API no publica precios, pero sí cuándo es gratis. El resto
+            // queda sin dato hasta que lo complete la ticketera, si se puede.
+            'precio_desde' => self::esGratis($evento) ? 0.0 : null,
         ];
+    }
+
+    /** La API marca un show gratis en el botón ("gratis") o en el tipo ("Gratis"). */
+    public static function esGratis(array $evento)
+    {
+        $boton = isset($evento['tipoBoton']) ? preg_replace('/\s+/u', '', mb_strtolower((string) $evento['tipoBoton'])) : '';
+        $tipo = isset($evento['type']) ? self::paraComparar($evento['type']) : '';
+
+        return $boton === 'gratis' || $tipo === 'gratis';
+    }
+
+    /**
+     * Si el show está a la venta. Uno agotado no se pide: el botón ya dice
+     * todo lo que hay que saber, y su precio queda como estaba.
+     */
+    private static function seVende(array $evento)
+    {
+        $boton = isset($evento['tipoBoton']) ? preg_replace('/\s+/u', '', mb_strtolower((string) $evento['tipoBoton'])) : '';
+
+        return $boton !== 'agotado';
+    }
+
+    /**
+     * La ticketera del link de compra, si es una que se puede leer.
+     *
+     * Passline queda afuera a propósito: responde con el desafío de
+     * Cloudflare, y no se intenta saltearlo.
+     *
+     * @return string|null 'allaccess', 'enigma' o null
+     */
+    public static function ticketera($url)
+    {
+        $host = is_string($url) ? strtolower((string) parse_url(trim($url), PHP_URL_HOST)) : '';
+        $host = preg_replace('/^www\./', '', $host);
+
+        if ($host === 'allaccess.com.ar') {
+            return 'allaccess';
+        }
+
+        if ($host === 'enigmatickets.com') {
+            return 'enigma';
+        }
+
+        return null;
+    }
+
+    /**
+     * El precio "desde" de una ficha de Enigma Tickets.
+     *
+     * La ficha embebe la configuración del evento en JSON: cada función
+     * (`schedules`) con sus precios habilitados (`enabledPrices`). Se toma el
+     * más barato de los que no están agotados. Una entrada marcada `free` en
+     * cero hace gratis al evento; un cero sin esa marca no dice nada.
+     *
+     * @return float|null
+     */
+    public static function precioDeEnigma($cuerpo)
+    {
+        $funciones = self::schedules($cuerpo);
+
+        if ($funciones === null) {
+            return null;
+        }
+
+        $precios = [];
+
+        foreach ($funciones as $funcion) {
+            if (!is_array($funcion) || !isset($funcion['enabledPrices']) || !is_array($funcion['enabledPrices'])) {
+                continue;
+            }
+
+            foreach ($funcion['enabledPrices'] as $entrada) {
+                if (!is_array($entrada) || !empty($entrada['soldOut']) || !isset($entrada['price']) || !is_numeric($entrada['price'])) {
+                    continue;
+                }
+
+                $precio = round((float) $entrada['price'], 2);
+
+                if ($precio > 0 || ($precio == 0 && !empty($entrada['free']))) {
+                    $precios[] = $precio;
+                }
+            }
+        }
+
+        return $precios === [] ? null : min($precios);
+    }
+
+    /**
+     * El objeto `schedules` del JSON de Enigma, donde sea que venga: la
+     * respuesta entera o embebido en un script de la página.
+     *
+     * No se decodifica el documento sino sólo ese objeto, recortado por sus
+     * llaves: así no importa en qué variable ni en qué script lo dejó el
+     * sitio.
+     */
+    private static function schedules($cuerpo)
+    {
+        if (!is_string($cuerpo) || !preg_match_all('/"schedules"\s*:\s*\{/', $cuerpo, $m, PREG_OFFSET_CAPTURE)) {
+            return null;
+        }
+
+        foreach ($m[0] as $coincidencia) {
+            $inicio = $coincidencia[1] + strlen($coincidencia[0]) - 1;
+            $objeto = self::objetoDesde($cuerpo, $inicio);
+            $datos = $objeto === null ? null : json_decode($objeto, true);
+
+            if (is_array($datos)) {
+                return $datos;
+            }
+        }
+
+        return null;
+    }
+
+    /** El objeto JSON que abre la llave en $inicio, hasta la que lo cierra. */
+    private static function objetoDesde($texto, $inicio)
+    {
+        $nivel = 0;
+        $enCadena = false;
+        $largo = strlen($texto);
+
+        for ($i = $inicio; $i < $largo; $i++) {
+            $c = $texto[$i];
+
+            if ($enCadena) {
+                if ($c === '\\') {
+                    $i++;
+                } elseif ($c === '"') {
+                    $enCadena = false;
+                }
+                continue;
+            }
+
+            if ($c === '"') {
+                $enCadena = true;
+            } elseif ($c === '{') {
+                $nivel++;
+            } elseif ($c === '}' && --$nivel === 0) {
+                return substr($texto, $inicio, $i - $inicio + 1);
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -262,9 +444,11 @@ class ArtMedia
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
         curl_setopt($ch, CURLOPT_MAXREDIRS, 3);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        // Una ficha de ticketera que no contesta no puede frenar la cartelera.
+        $esLaApi = $url === self::API;
+        curl_setopt($ch, CURLOPT_TIMEOUT, $esLaApi ? 30 : 15);
         curl_setopt($ch, CURLOPT_USERAGENT, self::AGENTE);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Accept: application/json']);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [$esLaApi ? 'Accept: application/json' : 'Accept: text/html,application/json']);
 
         $cuerpo = curl_exec($ch);
         $estado = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
