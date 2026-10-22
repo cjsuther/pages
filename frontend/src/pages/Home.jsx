@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useContext, useMemo } from 'react';
-import { Link, useNavigate } from 'react-router';
+import React, { useState, useEffect, useContext, useMemo, useRef } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { Helmet } from 'react-helmet-async';
 import {
   Search, MapPin, Bell, UserPlus, CalendarDays, Map, List,
-  ArrowRight, Compass, Sparkles,
+  ArrowRight, Compass, Sparkles, Tag,
 } from 'lucide-react';
 import { AuthContext } from '../App';
 import Navigation from '../components/Navigation';
@@ -18,6 +18,33 @@ import { distanciaDelEvento } from '../utils/eventos';
 
 /** Radio del filtro "cerca mío". El mismo que usan las alertas de eventos cercanos. */
 const RADIO_CERCA_KM = 30;
+
+/**
+ * Los filtros de precio, con el valor que entiende la API en ?precio=.
+ *
+ * Se filtra en el servidor y no sobre lo que llegó: la lista de la home viene
+ * recortada, y filtrar después dejaría afuera los gratis que no entraron en el
+ * recorte. El elegido queda en la URL para poder compartirlo.
+ */
+export const FILTROS_DE_PRECIO = [
+  { id: '', texto: 'Cualquier precio' },
+  { id: 'gratis', texto: 'Gratis' },
+  { id: 'hasta:10000', texto: 'Hasta $ 10.000' },
+  { id: 'hasta:25000', texto: 'Hasta $ 25.000' },
+  { id: 'hasta:50000', texto: 'Hasta $ 50.000' },
+];
+
+/** El filtro de precio de la URL, si es uno de los que hay; si no, ninguno. */
+function precioDeLaUrl(valor) {
+  return FILTROS_DE_PRECIO.some(({ id }) => id !== '' && id === valor) ? valor : '';
+}
+
+/** Agrega ?precio= a una URL de la API, si hay filtro. */
+function conPrecio(url, precio) {
+  if (!precio) return url;
+
+  return `${url}${url.includes('?') ? '&' : '?'}precio=${encodeURIComponent(precio)}`;
+}
 
 /** Los tres pasos para seguir a un artista, tal como se explican en la home. */
 const PASOS_PARA_SEGUIR = [
@@ -58,6 +85,27 @@ function Home() {
   const [filtro, setFiltro] = useState('todos');
   const [vista, setVista] = useState('lista');
 
+  // El precio vive en la URL (?precio=gratis) y se combina con el filtro de
+  // arriba: "cerca mío" y "gratis" a la vez es una pregunta razonable.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const precio = precioDeLaUrl(searchParams.get('precio'));
+
+  const cambiarPrecio = (id) => {
+    setSearchParams((actuales) => {
+      const nuevos = new URLSearchParams(actuales);
+      if (id) {
+        nuevos.set('precio', id);
+      } else {
+        nuevos.delete('precio');
+      }
+      return nuevos;
+    }, { replace: true });
+  };
+
+  // Cambiar de filtro rápido deja pedidos en vuelo: sólo vale la respuesta
+  // del último, o la lista mostraría lo de un filtro con el otro elegido.
+  const ultimoPedido = useRef(0);
+
   // ------------------------------------------------------------------ carga
 
   useEffect(() => {
@@ -70,13 +118,16 @@ function Home() {
   }, [token]);
 
   useEffect(() => {
+    const pedido = ++ultimoPedido.current;
+    const vigente = () => pedido === ultimoPedido.current;
+
     if (token && filtro === 'siguiendo') {
-      loadFollowedEvents();
+      loadFollowedEvents(vigente);
     } else {
-      loadAllEvents();
+      loadAllEvents(vigente);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtro, token]);
+  }, [filtro, token, precio]);
 
   const loadUserLocation = async () => {
     try {
@@ -147,34 +198,34 @@ function Home() {
     }
   };
 
-  const loadAllEvents = async () => {
+  const loadAllEvents = async (vigente = () => true) => {
     setLoading(true);
     try {
-      const response = await fetch(`${apiUrl}/public/recent-events.php`);
+      const response = await fetch(conPrecio(`${apiUrl}/public/recent-events.php`, precio));
       const data = await response.json();
-      setEvents(data.events || []);
+      if (vigente()) setEvents(data.events || []);
     } catch (err) {
       console.error('Error loading events:', err);
     } finally {
-      setLoading(false);
+      if (vigente()) setLoading(false);
     }
   };
 
-  const loadFollowedEvents = async () => {
+  const loadFollowedEvents = async (vigente = () => true) => {
     setLoading(true);
     try {
-      const response = await fetch(`${apiUrl}/pages/feed-events.php?sortBy=date&sortOrder=asc`, {
+      const response = await fetch(conPrecio(`${apiUrl}/pages/feed-events.php?sortBy=date&sortOrder=asc`, precio), {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       await handleApiResponse(response, navigate, logout);
       const data = await response.json();
-      setEvents(data.events || []);
+      if (vigente()) setEvents(data.events || []);
     } catch (err) {
       if (err.message !== 'Unauthorized') {
         console.error('Error loading events:', err);
       }
     } finally {
-      setLoading(false);
+      if (vigente()) setLoading(false);
     }
   };
 
@@ -458,6 +509,24 @@ function Home() {
               ))}
             </div>
 
+            <div role="group" aria-label="Filtrar por precio" className="flex flex-wrap items-center gap-2 -mt-3 mb-6">
+              <Tag className="w-4 h-4 text-tinta-suave" aria-hidden="true" />
+              {FILTROS_DE_PRECIO.map(({ id, texto }) => (
+                <button
+                  key={id || 'cualquiera'}
+                  onClick={() => cambiarPrecio(id)}
+                  aria-pressed={precio === id}
+                  className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
+                    precio === id
+                      ? 'bg-tinta text-white border-tinta'
+                      : 'bg-white text-tinta-media border-borde hover:border-borde-fuerte hover:text-tinta'
+                  }`}
+                >
+                  {texto}
+                </button>
+              ))}
+            </div>
+
             {/* La ubicación se pide acá, donde ya se ve para qué sirve. */}
             {filtro === 'cerca' && !userLocation && (
               <Tarjeta destacada className="p-6 mb-6 flex flex-wrap items-center justify-between gap-4">
@@ -490,28 +559,46 @@ function Home() {
               <Cargando texto="Buscando fechas..." />
             ) : eventosVisibles.length === 0 ? (
               <Tarjeta>
-                <Vacio
-                  icono={CalendarDays}
-                  titulo={
-                    filtro === 'siguiendo'
-                      ? 'Las páginas que seguís no tienen fechas cargadas'
-                      : filtro === 'cerca'
-                        ? `No hay nada a menos de ${RADIO_CERCA_KM} km`
-                        : 'Todavía no hay fechas publicadas'
-                  }
-                  detalle={
-                    filtro === 'siguiendo'
-                      ? 'Cuando publiquen una, la vas a ver acá y te va a llegar un aviso.'
-                      : filtro === 'cerca'
-                        ? 'Probá con todas las fechas: puede haber algo un poco más lejos que valga el viaje.'
-                        : 'Volvé en unos días, o armá tu página y publicá la primera.'
-                  }
-                  accion={
-                    filtro === 'todos'
-                      ? <Boton a="/artistas" variante="secundario">Publicar mis fechas</Boton>
-                      : <Boton onClick={() => setFiltro('todos')} variante="secundario">Ver todas las fechas</Boton>
-                  }
-                />
+                {/* Con un filtro de precio, lo que falta casi siempre es el
+                    dato y no la fecha: hay que decirlo, o parece que no hay
+                    nada gratis cuando lo que no hay es el precio cargado. */}
+                {precio ? (
+                  <Vacio
+                    icono={Tag}
+                    titulo={
+                      filtro === 'siguiendo'
+                        ? 'Las páginas que seguís no tienen fechas con ese precio'
+                        : filtro === 'cerca'
+                          ? `No hay fechas con ese precio a menos de ${RADIO_CERCA_KM} km`
+                          : 'No hay fechas con ese precio'
+                    }
+                    detalle="Con un filtro de precio sólo aparecen las fechas que tienen el precio cargado: puede haber otras que todavía no lo dicen."
+                    accion={<Boton onClick={() => cambiarPrecio('')} variante="secundario">Ver cualquier precio</Boton>}
+                  />
+                ) : (
+                  <Vacio
+                    icono={CalendarDays}
+                    titulo={
+                      filtro === 'siguiendo'
+                        ? 'Las páginas que seguís no tienen fechas cargadas'
+                        : filtro === 'cerca'
+                          ? `No hay nada a menos de ${RADIO_CERCA_KM} km`
+                          : 'Todavía no hay fechas publicadas'
+                    }
+                    detalle={
+                      filtro === 'siguiendo'
+                        ? 'Cuando publiquen una, la vas a ver acá y te va a llegar un aviso.'
+                        : filtro === 'cerca'
+                          ? 'Probá con todas las fechas: puede haber algo un poco más lejos que valga el viaje.'
+                          : 'Volvé en unos días, o armá tu página y publicá la primera.'
+                    }
+                    accion={
+                      filtro === 'todos'
+                        ? <Boton a="/artistas" variante="secundario">Publicar mis fechas</Boton>
+                        : <Boton onClick={() => setFiltro('todos')} variante="secundario">Ver todas las fechas</Boton>
+                    }
+                  />
+                )}
               </Tarjeta>
             ) : (
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">

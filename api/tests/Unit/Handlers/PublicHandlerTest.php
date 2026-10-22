@@ -563,6 +563,118 @@ class PublicHandlerTest extends HandlerTestCase
         $this->assertCount(1, $res->body['events']);
     }
 
+    // ------------------------------------------------- precio de referencia
+
+    public function testRecentEventsTraeElPrecioDeReferencia()
+    {
+        $this->db->onSelect('FROM links l JOIN link_groups lg', [
+            ['id' => 1, 'precio_referencia' => '15000.00'],
+            ['id' => 2, 'precio_referencia' => null],
+        ]);
+
+        $res = PublicHandler::recentEvents($this->db, $this->get());
+        $sql = $this->db->callsFor('FROM links l JOIN link_groups lg')[0]['sql'];
+
+        $this->assertSame([15000.0, null], array_column($res->body['events'], 'precio_referencia'));
+        $this->assertStringContainsString(\PrecioDeReferencia::JOIN, $sql);
+        $this->assertStringContainsString(\PrecioDeReferencia::COLUMNA, $sql);
+    }
+
+    /** La lista viene recortada: el filtro va en la consulta, antes del LIMIT. */
+    public function testRecentEventsFiltraGratisEnLaConsulta()
+    {
+        PublicHandler::recentEvents($this->db, $this->get(['precio' => 'gratis']));
+
+        $sql = $this->db->callsFor('FROM links l JOIN link_groups lg')[0]['sql'];
+
+        $this->assertStringContainsString('AND ' . \PrecioDeReferencia::EXPRESION . ' = 0', $sql);
+        $this->assertSame([], $this->db->paramsFor('FROM links l JOIN link_groups lg'));
+    }
+
+    public function testRecentEventsFiltraHastaUnMontoConParametro()
+    {
+        PublicHandler::recentEvents($this->db, $this->get(['precio' => 'hasta:25000']));
+
+        $sql = $this->db->callsFor('FROM links l JOIN link_groups lg')[0]['sql'];
+
+        $this->assertStringContainsString('AND ' . \PrecioDeReferencia::EXPRESION . ' <= ?', $sql);
+        $this->assertStringNotContainsString('25000', $sql, 'el monto va como parámetro');
+        $this->assertSame([25000.0], $this->db->paramsFor('FROM links l JOIN link_groups lg'));
+    }
+
+    public function testRecentEventsSinFiltroNoFiltraPorPrecio()
+    {
+        PublicHandler::recentEvents($this->db, $this->get());
+
+        $sql = $this->db->callsFor('FROM links l JOIN link_groups lg')[0]['sql'];
+
+        $this->assertStringNotContainsString('AND ' . \PrecioDeReferencia::EXPRESION, $sql);
+    }
+
+    public function testRecentEventsRechazaUnFiltroDePrecioInvalido()
+    {
+        $this->assertError(400, PublicHandler::recentEvents($this->db, $this->get(['precio' => 'barato'])), 'gratis');
+        $this->assertSame([], $this->db->log());
+    }
+
+    public function testSearchTraeElPrecioDeReferenciaDeLosEventos()
+    {
+        $this->db->onSelect('FROM links l JOIN link_groups lg', [['id' => 100, 'title' => 'Recital', 'precio_referencia' => '0.00']]);
+
+        $res = PublicHandler::search($this->db, $this->get(['q' => 'rock']));
+
+        $this->assertSame(0.0, $res->body['results'][0]['precio_referencia']);
+        $this->assertStringContainsString(\PrecioDeReferencia::JOIN, $this->db->callsFor('FROM links l JOIN link_groups lg')[0]['sql']);
+    }
+
+    public function testEventsTraeElPrecioDeReferencia()
+    {
+        $this->db->onSelect('FROM links l JOIN link_groups lg', [['id' => 1, 'precio_referencia' => '8000.00']]);
+
+        $res = PublicHandler::events($this->db, $this->get());
+
+        $this->assertSame(8000.0, $res->body['events'][0]['precio_referencia']);
+    }
+
+    /** Vende por Rezonar: el precio es el de la venta, sin otra consulta. */
+    public function testElEventoQueVendeTraeElPrecioDeLaVenta()
+    {
+        $this->db->onSelect('WHERE l.id = ? AND lg.type', [['id' => 7, 'text' => 'Show', 'precio_desde' => '99999.00']]);
+        $this->db->onSelect('FROM event_ticketing WHERE link_id', [[
+            'link_id' => 7, 'activo' => 1, 'capacidad' => 100, 'precio' => '12000.00', 'moneda' => 'ARS',
+            'max_por_compra' => 10, 'plano' => null, 'tipos' => null,
+        ]]);
+
+        $res = PublicHandler::event($this->db, $this->get(['id' => '7']));
+
+        $this->assertSame(12000.0, $res->body['event']['precio_referencia']);
+        $this->assertSame(1, $this->db->countCalls('FROM event_ticketing'), 'reusa la disponibilidad');
+    }
+
+    public function testElEventoQueNoVendeTraeSuPrecioDesde()
+    {
+        $this->db->onSelect('WHERE l.id = ? AND lg.type', [['id' => 7, 'text' => 'Show', 'precio_desde' => '0.00']]);
+
+        $res = PublicHandler::event($this->db, $this->get(['id' => '7']));
+
+        $this->assertSame(0.0, $res->body['event']['precio_referencia']);
+        $this->assertStringContainsString('l.precio_desde', $this->db->callsFor('WHERE l.id = ? AND lg.type')[0]['sql']);
+    }
+
+    public function testLosEventosDeLaPaginaTraenElPrecioDeReferencia()
+    {
+        $this->db->onSelect('FROM pages WHERE url_slug = ?', [['id' => 5]]);
+        $this->db->onSelect('FROM link_groups WHERE page_id = ?', [['id' => 10, 'type' => 'eventos']]);
+        $this->db->onSelect('FROM links WHERE group_id = ? AND event_date', [['id' => 100, 'text' => 'Evento', 'precio_desde' => '4500.00']]);
+        $this->db->onSelect('FROM event_collaborations ec JOIN links l', [['id' => 200, 'text' => 'Colaborado', 'precio_desde' => null]]);
+
+        $res = PublicHandler::page($this->db, $this->get(['slug' => 'mi-pagina']));
+        $grupo = $res->body['page']['groups'][0];
+
+        $this->assertSame(4500.0, $grupo['links'][0]['precio_referencia']);
+        $this->assertNull($grupo['collaborated_events'][0]['precio_referencia']);
+    }
+
     // ================================================================= search
 
     public function testSearchRechazaMetodosDistintosDeGet()

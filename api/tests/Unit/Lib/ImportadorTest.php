@@ -204,6 +204,128 @@ class ImportadorTest extends HandlerTestCase
         $this->assertStringNotContainsString('text = ?', $sql);
     }
 
+    // ---------------------------------------------------- precio al reimportar
+
+    /** La ficha falló una noche: el precio que ya se conocía se queda. */
+    public function testUnPrecioQueNoVinoNoPisaElConocido()
+    {
+        $this->laPaginaExiste();
+        $this->yaExiste(['precio_desde' => '15000.00']);
+        $this->db->onWrite('UPDATE import_sources', 1);
+
+        $r = Importador::sincronizar($this->db, $this->fuente(), $this->conEventos([$this->evento(['precio_desde' => null])]));
+
+        $this->assertSame(0, $r['actualizados']);
+        $this->assertSame(0, $this->db->countCalls('UPDATE links SET'));
+    }
+
+    /** Si el resto cambió, se actualiza el resto, pero el precio no se borra. */
+    public function testUnPrecioQueNoVinoNoSeBorraAunqueCambieOtraCosa()
+    {
+        $this->laPaginaExiste();
+        $this->yaExiste(['precio_desde' => '15000.00', 'event_date' => '2026-12-01']);
+        $this->db->onWrite('UPDATE links SET', 1);
+        $this->db->onWrite('UPDATE import_sources', 1);
+
+        Importador::sincronizar($this->db, $this->fuente(), $this->conEventos([$this->evento(['precio_desde' => null])]));
+        $sql = $this->db->callsFor('UPDATE links SET')[0]['sql'];
+
+        $this->assertStringContainsString('event_date = ?', $sql);
+        $this->assertStringNotContainsString('precio_desde', $sql);
+    }
+
+    public function testUnPrecioNuevoActualizaElGuardado()
+    {
+        $this->laPaginaExiste();
+        $this->yaExiste(['precio_desde' => '15000.00']);
+        $this->db->onWrite('UPDATE links SET', 1);
+        $this->db->onWrite('UPDATE import_sources', 1);
+
+        $r = Importador::sincronizar($this->db, $this->fuente(), $this->conEventos([$this->evento(['precio_desde' => 18000.0])]));
+        $llamada = $this->db->callsFor('UPDATE links SET')[0];
+
+        $this->assertSame(1, $r['actualizados']);
+        $this->assertStringContainsString('precio_desde = ?', $llamada['sql']);
+        $this->assertContains(18000.0, $llamada['params']);
+    }
+
+    public function testUnPrecioQueAparecePorPrimeraVezSeGuarda()
+    {
+        $this->laPaginaExiste();
+        $this->yaExiste(['precio_desde' => null]);
+        $this->db->onWrite('UPDATE links SET', 1);
+        $this->db->onWrite('UPDATE import_sources', 1);
+
+        Importador::sincronizar($this->db, $this->fuente(), $this->conEventos([$this->evento(['precio_desde' => 0.0])]));
+
+        $this->assertStringContainsString('precio_desde = ?', $this->db->callsFor('UPDATE links SET')[0]['sql']);
+    }
+
+    /** Pasar a gratis es un dato, no una ausencia: tiene que llegar. */
+    public function testUnGratisPisaUnPrecioAnterior()
+    {
+        $this->laPaginaExiste();
+        $this->yaExiste(['precio_desde' => '15000.00']);
+        $this->db->onWrite('UPDATE links SET', 1);
+        $this->db->onWrite('UPDATE import_sources', 1);
+
+        Importador::sincronizar($this->db, $this->fuente(), $this->conEventos([$this->evento(['precio_desde' => 0.0])]));
+
+        $this->assertStringContainsString('precio_desde = ?', $this->db->callsFor('UPDATE links SET')[0]['sql']);
+    }
+
+    // ---------------------------------------------------------- JSON-LD
+
+    private function conLd(...$bloques)
+    {
+        return '<html><head>' . implode('', array_map(function ($b) {
+            return '<script type="application/ld+json">' . json_encode($b) . '</script>';
+        }, $bloques)) . '</head></html>';
+    }
+
+    public function testElJsonLdConUnaOfertaSola()
+    {
+        $html = $this->conLd(['@type' => 'Event', 'offers' => ['@type' => 'Offer', 'price' => '15000']]);
+
+        $this->assertSame(15000.0, Importador::precioDeJsonLd($html));
+    }
+
+    public function testElJsonLdConVariasOfertasDaLaMasBarata()
+    {
+        $html = $this->conLd(['@type' => 'Event', 'offers' => [['price' => 50000], ['price' => '32000.50'], ['price' => 'consultar']]]);
+
+        $this->assertSame(32000.5, Importador::precioDeJsonLd($html));
+    }
+
+    /** Las fichas traen varios bloques: el de la organización no tiene ofertas. */
+    public function testElJsonLdRecorreTodosLosBloques()
+    {
+        $html = $this->conLd(['@type' => 'Organization', 'name' => 'X'], ['@type' => 'Event', 'offers' => ['price' => 9000]]);
+
+        $this->assertSame(9000.0, Importador::precioDeJsonLd($html));
+    }
+
+    public function testElJsonLdDevuelveElCeroComoCero()
+    {
+        $this->assertSame(0.0, Importador::precioDeJsonLd($this->conLd(['offers' => ['price' => '0']])));
+    }
+
+    public function testSinOfertasNiJsonLdNoHayPrecio()
+    {
+        $this->assertNull(Importador::precioDeJsonLd($this->conLd(['@type' => 'Event', 'name' => 'X'])));
+        $this->assertNull(Importador::precioDeJsonLd('<html><body>nada</body></html>'));
+        $this->assertNull(Importador::precioDeJsonLd('<script type="application/ld+json">{roto</script>'));
+        $this->assertNull(Importador::precioDeJsonLd(''));
+        $this->assertNull(Importador::precioDeJsonLd(null));
+    }
+
+    public function testLaMuestraDeAllAccessDa50000()
+    {
+        $html = file_get_contents(__DIR__ . '/../../Fixtures/precios/artmedia/allaccess-la-joaqui-50000.html');
+
+        $this->assertSame(50000.0, Importador::precioDeJsonLd($html));
+    }
+
     public function testSePuedenCongelarVariosCampos()
     {
         $link = ['campos_editados' => 'text, event_time ,description'];

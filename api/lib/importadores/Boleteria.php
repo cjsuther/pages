@@ -314,13 +314,7 @@ class Boleteria
      */
     public static function precio(array $schema)
     {
-        $precio = isset($schema['offers']['price']) ? $schema['offers']['price'] : null;
-
-        if ($precio === null && isset($schema['offers'][0]['price'])) {
-            $precio = $schema['offers'][0]['price'];
-        }
-
-        return is_numeric($precio) ? round((float) $precio, 2) : null;
+        return Importador::precioDeOfertas(isset($schema['offers']) ? $schema['offers'] : null);
     }
 
     private static function imagen(array $schema)

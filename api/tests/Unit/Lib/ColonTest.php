@@ -129,6 +129,21 @@ class ColonTest extends TestCase
         $this->assertStringContainsString('entradasba', $evento['url']);
     }
 
+    /** Parte de la venta del Colón pasó a Tuentrada: también es la boletería. */
+    public function testReconoceTuentradaComoBoleteria()
+    {
+        $item = '<div class="calendar-item"><div class="day-number">4</div>'
+            . '<div class="day-hour">vie_20.00 hs</div>'
+            . '<h1 class="colon-serif-regular">Un estreno</h1>'
+            . '<a href="https://teatrocolon.org.ar/produccion/un-estreno/">+ info</a>'
+            . '<a href="https://www.tuentrada.com/teatro/colon/un-estreno">Entradas</a></div>';
+
+        $evento = Colon::normalizar($item, 2026, 9);
+
+        $this->assertSame('https://www.tuentrada.com/teatro/colon/un-estreno', $evento['url']);
+        $this->assertNull($evento['precio_desde'], 'Tuentrada está detrás de Cloudflare: no se lee el precio');
+    }
+
     public function testSinBoleteriaQuedaLaFichaDeLaProduccion()
     {
         $item = '<div class="calendar-item"><div class="day-number">4</div>'

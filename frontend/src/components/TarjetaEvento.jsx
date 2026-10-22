@@ -3,6 +3,7 @@ import { Link } from 'react-router';
 import { MapPin, Clock, Navigation as Brujula } from 'lucide-react';
 import { cuandoEs, horaDe, localidadDe } from '../utils/eventos';
 import { Avatar } from './ui';
+import PrecioEvento from './PrecioEvento';
 
 /**
  * Un evento en un listado.
@@ -54,6 +55,8 @@ function TarjetaEvento({ evento, distanciaKm = null, mostrarPagina = true }) {
         <h3 className="text-lg font-bold text-tinta leading-snug text-balance group-hover:text-verde-oscuro transition-colors">
           {titulo}
         </h3>
+
+        <PrecioEvento evento={evento} enTarjeta />
 
         {mostrarPagina && evento.page_title && (
           <div className="flex items-center gap-2 text-sm text-tinta-media min-w-0">

@@ -223,6 +223,7 @@ class LinksHandlerTest extends HandlerTestCase
             'event_latitude' => '-34.6037',
             'event_longitude' => '-58.3816',
             'event_date' => '2026-12-01',
+            'precio_desde' => '15000',
         ], $this->user()));
 
         $this->assertStatus(201, $res);
@@ -231,6 +232,108 @@ class LinksHandlerTest extends HandlerTestCase
         $this->assertSame('2026-12-01', $params[8], 'event_date');
         $this->assertSame('-34.6037', $params[11], 'event_latitude');
         $this->assertSame('-58.3816', $params[12], 'event_longitude');
+        $this->assertSame(15000.0, $params[14], 'precio_desde');
+    }
+
+    // ----------------------------------------------- precio de un evento
+
+    private function crearEvento(array $cuerpo, $exigirPrecio = true)
+    {
+        $this->autorizarGrupo();
+        $this->db->onSelect('SELECT id, type FROM link_groups', [['id' => 7, 'type' => 'eventos']]);
+        $this->db->onInsert('INSERT INTO links', 60);
+        $this->db->onSelect('SELECT * FROM links WHERE id = ?', [['id' => 60]]);
+
+        return LinksHandler::index($this->db, $this->post(array_merge([
+            'group_id' => 7, 'url' => 'u', 'text' => 'Mi evento',
+            'event_latitude' => '-34.6', 'event_longitude' => '-58.4',
+        ], $cuerpo), $this->user()), $exigirPrecio);
+    }
+
+    /**
+     * @dataProvider preciosQueNoDicenNada
+     */
+    public function testUnEventoSinPrecioNoSeCrea($cuerpo)
+    {
+        $res = $this->crearEvento($cuerpo);
+
+        $this->assertError(400, $res, 'gratis');
+        $this->assertSame(0, $this->db->countCalls('INSERT INTO links'));
+    }
+
+    public function preciosQueNoDicenNada()
+    {
+        return [
+            'sin el campo' => [[]],
+            'null' => [['precio_desde' => null]],
+            'vacío' => [['precio_desde' => '']],
+            'texto' => [['precio_desde' => 'a consultar']],
+        ];
+    }
+
+    public function testUnEventoGratisSeCreaConCero()
+    {
+        $this->assertStatus(201, $this->crearEvento(['precio_desde' => 0]));
+        $this->assertSame(0.0, $this->db->paramsFor('INSERT INTO links')[14]);
+    }
+
+    /** El asistente (MCP) puede crear un evento sin saber todavía el precio. */
+    public function testSinExigirPrecioSeCreaSinPrecio()
+    {
+        $this->assertStatus(201, $this->crearEvento([], false));
+        $this->assertNull($this->db->paramsFor('INSERT INTO links')[14]);
+    }
+
+    private function editarEvento(array $cuerpo, $venta = null, $exigirPrecio = true)
+    {
+        $this->autorizarLink();
+        $this->db->onSelect('JOIN link_groups lg ON l.group_id = lg.id', [['id' => 5, 'type' => 'eventos']]);
+        $this->db->onSelect('SELECT event_latitude, event_longitude FROM links', [['event_latitude' => '-34.6', 'event_longitude' => '-58.4']]);
+
+        if ($venta !== null) {
+            $this->db->onSelect('FROM event_ticketing WHERE link_id', [$venta]);
+        }
+
+        $this->db->onSelect('SELECT * FROM links WHERE id = ?', [['id' => 5]]);
+
+        return LinksHandler::detail($this->db, $this->put($cuerpo, $this->user(), ['id' => '5']), null, $exigirPrecio);
+    }
+
+    public function testEditarNoDejaSinPrecioAUnEventoQueNoVende()
+    {
+        $this->assertError(400, $this->editarEvento(['precio_desde' => '']), 'gratis');
+        $this->assertSame(0, $this->db->countCalls('UPDATE links SET'));
+    }
+
+    public function testEditarGuardaElPrecioNormalizado()
+    {
+        $this->assertStatus(200, $this->editarEvento(['precio_desde' => '18000.456']));
+        $this->assertSame([18000.46, 5], $this->db->paramsFor('UPDATE links SET'));
+    }
+
+    /** Lo que no trae el precio (el link de la solapa de entradas) no lo exige. */
+    public function testEditarSinMandarElPrecioNoLoExige()
+    {
+        $this->assertStatus(200, $this->editarEvento(['url' => 'https://otra.example']));
+    }
+
+    public function testUnEventoQueVendePorRezonarNoNecesitaPrecio()
+    {
+        $venta = ['link_id' => 5, 'activo' => 1, 'capacidad' => 10, 'precio' => '5000.00', 'plano' => null, 'tipos' => null];
+
+        $this->assertStatus(200, $this->editarEvento(['precio_desde' => null], $venta));
+    }
+
+    public function testUnaVentaDesactivadaNoCuentaComoVenta()
+    {
+        $venta = ['link_id' => 5, 'activo' => 0, 'capacidad' => 10, 'precio' => '5000.00', 'plano' => null, 'tipos' => null];
+
+        $this->assertError(400, $this->editarEvento(['precio_desde' => null], $venta), 'gratis');
+    }
+
+    public function testElAsistentePuedeEditarSinPrecio()
+    {
+        $this->assertStatus(200, $this->editarEvento(['precio_desde' => null], null, false));
     }
 
     // ------------------------------------------- aviso a los seguidores
@@ -253,7 +356,7 @@ class LinksHandlerTest extends HandlerTestCase
 
         LinksHandler::index($this->db, $this->post([
             'group_id' => 7, 'url' => 'u', 'text' => 'Mi Evento',
-            'event_latitude' => '-34.6', 'event_longitude' => '-58.4',
+            'event_latitude' => '-34.6', 'event_longitude' => '-58.4', 'precio_desde' => 0,
         ], $this->user()));
 
         $this->assertSame('evento:60:11', $this->db->paramsFor('INSERT IGNORE INTO notifications')[6]);
@@ -284,7 +387,7 @@ class LinksHandlerTest extends HandlerTestCase
 
         $res = LinksHandler::index($this->db, $this->post([
             'group_id' => 7, 'url' => 'u', 'text' => 'Mi Evento',
-            'event_latitude' => '-34.6', 'event_longitude' => '-58.4',
+            'event_latitude' => '-34.6', 'event_longitude' => '-58.4', 'precio_desde' => 0,
         ], $this->user()));
 
         $this->assertStatus(201, $res);

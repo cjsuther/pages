@@ -166,6 +166,9 @@ function AfichesTemplate({ page }) {
                             })}
                         </p>
                       )}
+                      <div className="text-center">
+                        <PrecioEvento evento={link} enTarjeta className="mt-1" />
+                      </div>
                       <EventCollaborators event={link} currentPageId={page.id} color={primaryColor} />
                     </div>
                   ))}

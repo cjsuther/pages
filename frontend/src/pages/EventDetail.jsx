@@ -4,6 +4,7 @@ import { Calendar, MapPin, ExternalLink, ArrowLeft } from 'lucide-react';
 import { AuthContext } from '../App';
 import BotonEntradas, { vendeEntradas } from '../components/BotonEntradas';
 import FondoDeLaCaja from '../components/FondoDeLaCaja';
+import PrecioEvento from '../components/PrecioEvento';
 import RezonarBadge from '../components/RezonarBadge';
 import Sugerencias from '../components/Sugerencias';
 import { paleta, conAlfa, textoSobre } from '../utils/colores';
@@ -166,6 +167,9 @@ function EventDetail() {
             {event.description}
           </p>
         )}
+
+        {/* Si vende acá, el precio lo dice el botón de compra. */}
+        <PrecioEvento evento={event} className="mt-6" />
 
         <BotonEntradas evento={event} color={colores.boton} />
 

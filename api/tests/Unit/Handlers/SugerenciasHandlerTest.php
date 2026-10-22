@@ -105,6 +105,7 @@ class SugerenciasHandlerTest extends HandlerTestCase
             [
                 'tipo' => 'evento', 'id' => 301, 'text' => 'Evento 301', 'image_url' => null,
                 'event_date' => '2026-10-24', 'event_time' => '21:00:00', 'page_title' => 'La Sala',
+                'precio_referencia' => null,
             ],
         ], $res->body['sugerencias']);
         $this->assertStringNotContainsString('archivo_ruta', json_encode($res->body));

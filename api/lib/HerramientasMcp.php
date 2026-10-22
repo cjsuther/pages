@@ -66,7 +66,11 @@ class HerramientasMcp
                             'description' => 'URL absoluta de un afiche ya publicado; se descarga y se aloja en Rezonar. Máximo 600 KB.',
                         ],
                         'url'         => ['type' => 'string', 'description' => 'Enlace de entradas o más info'],
-                        'precio_desde' => ['type' => 'number', 'description' => 'Precio de referencia, sólo informativo'],
+                        'precio_desde' => [
+                            'type' => 'number',
+                            'description' => 'La entrada más barata, en pesos; 0 si es gratis. Se muestra como "Desde $X" o "Gratis" '
+                                . 'en las tarjetas. Si las entradas se venden en otra plataforma, mandalo siempre que lo sepas.',
+                        ],
                     ],
                     'required' => ['pagina', 'titulo', 'fecha'],
                 ],
@@ -87,7 +91,7 @@ class HerramientasMcp
                         'imagen'      => ['type' => 'string', 'description' => 'Afiche nuevo en base64 (o data URI); reemplaza al anterior. Máximo 600 KB'],
                         'imagen_url'  => ['type' => 'string', 'description' => 'URL de un afiche ya publicado; se descarga y se aloja en Rezonar. Máximo 600 KB'],
                         'url'         => ['type' => 'string'],
-                        'precio_desde' => ['type' => 'number'],
+                        'precio_desde' => ['type' => 'number', 'description' => 'La entrada más barata, en pesos; 0 si es gratis'],
                     ],
                     'required' => ['evento_id'],
                 ],
@@ -270,7 +274,9 @@ class HerramientasMcp
             'precio_desde' => isset($args['precio_desde']) ? $args['precio_desde'] : null,
         ];
 
-        $r = LinksHandler::index($db, self::pedido('POST', $cuerpo, [], $usuario));
+        // El asistente puede crear el evento sin saber el precio: se le pide
+        // cuando lo sepa, pero no se le traba el alta.
+        $r = LinksHandler::index($db, self::pedido('POST', $cuerpo, [], $usuario), false);
 
         return self::desdeRespuesta($r, 'evento creado');
     }
@@ -320,7 +326,7 @@ class HerramientasMcp
             return self::mal('No mandaste ningún campo para cambiar');
         }
 
-        $r = LinksHandler::detail($db, self::pedido('PUT', $cuerpo, ['id' => $eventoId], $usuario));
+        $r = LinksHandler::detail($db, self::pedido('PUT', $cuerpo, ['id' => $eventoId], $usuario), null, false);
 
         return self::desdeRespuesta($r, 'evento actualizado');
     }

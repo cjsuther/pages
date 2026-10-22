@@ -137,13 +137,78 @@ class EventosTest extends IntegracionTestCase
         $this->assertEquals($this->fila('SELECT * FROM links WHERE id = ?', [$res->body['link']['id']]), $res->body['link']);
     }
 
-    /** Vacío no es cero: sin precio de referencia queda NULL, y un texto vacío también. */
+    /** Un texto vacío no se guarda como texto vacío: queda NULL. */
     public function testLosOpcionalesVaciosQuedanEnNull()
     {
-        $res = $this->crear($this->datosDeEvento(['url_text' => '', 'precio_desde' => '', 'embed_url' => '']));
+        $res = $this->crear($this->datosDeEvento(['url_text' => '', 'embed_url' => '']));
 
-        $fila = $this->fila('SELECT url_text, precio_desde, embed_url FROM links WHERE id = ?', [$res->body['link']['id']]);
-        $this->assertSame(['url_text' => null, 'precio_desde' => null, 'embed_url' => null], $fila);
+        $fila = $this->fila('SELECT url_text, embed_url FROM links WHERE id = ?', [$res->body['link']['id']]);
+        $this->assertSame(['url_text' => null, 'embed_url' => null], $fila);
+    }
+
+    /**
+     * Vacío no es cero, y un evento cargado a mano tiene que decir cuál de
+     * las dos: sin precio no se crea.
+     */
+    public function testUnEventoSinPrecioNoSeCrea()
+    {
+        foreach (['', null, 'a consultar'] as $precio) {
+            $res = $this->crear($this->datosDeEvento(['precio_desde' => $precio]));
+
+            $this->assertStatus(400, $res);
+            $this->assertStringContainsString('gratis', $res->body['error']);
+        }
+
+        $res = $this->crear(array_diff_key($this->datosDeEvento(), ['precio_desde' => true]));
+
+        $this->assertStatus(400, $res);
+        $this->assertSame(0, $this->cuenta('links'));
+    }
+
+    /** Un link de un grupo de links no tiene precio que pedir. */
+    public function testUnLinkComunNoPidePrecio()
+    {
+        $grupoDeLinks = $this->grupo($this->paginaId, 'links', 'Redes');
+
+        $this->assertStatus(201, $this->crear(['group_id' => $grupoDeLinks, 'url' => 'https://x.test', 'text' => 'Mi web']));
+    }
+
+    public function testEditarNoPuedeDejarSinPrecioAUnEventoQueNoVende()
+    {
+        $linkId = $this->crear($this->datosDeEvento())->body['link']['id'];
+
+        $res = $this->editar($linkId, ['precio_desde' => '']);
+
+        $this->assertStatus(400, $res);
+        $this->assertEquals(12000, (float) $this->valor('SELECT precio_desde FROM links WHERE id = ?', [$linkId]));
+    }
+
+    /** Un evento viejo sin precio se puede seguir tocando por otros caminos. */
+    public function testEditarSinMandarElPrecioNoLoExige()
+    {
+        $linkId = $this->evento($this->grupoId, ['event_latitude' => '-34.6', 'event_longitude' => '-58.4']);
+
+        $this->assertStatus(200, $this->editar($linkId, ['url' => 'https://otra.example', 'url_text' => 'Entradas']));
+        $this->assertStatus(400, $this->editar($linkId, ['url' => 'https://otra.example', 'precio_desde' => null]));
+        $this->assertStatus(200, $this->editar($linkId, ['precio_desde' => 0]));
+        $this->assertEquals(0, (float) $this->valor('SELECT precio_desde FROM links WHERE id = ?', [$linkId]));
+    }
+
+    /** Si vende por Rezonar, el precio sale de la venta y no hace falta cargarlo. */
+    public function testUnEventoQueVendePorRezonarNoNecesitaPrecio()
+    {
+        $linkId = $this->eventoConVentas();
+
+        $this->assertStatus(200, $this->editar($linkId, ['text' => 'Otro nombre', 'precio_desde' => null]));
+    }
+
+    /** Con la venta desactivada vuelve a ser un evento que se vende afuera. */
+    public function testConLaVentaDesactivadaVuelveAPedirPrecio()
+    {
+        $linkId = $this->evento($this->grupoId, ['event_latitude' => '-34.6', 'event_longitude' => '-58.4']);
+        $this->insertar('event_ticketing', ['link_id' => $linkId, 'activo' => 0, 'capacidad' => 10, 'precio' => 0]);
+
+        $this->assertStatus(400, $this->editar($linkId, ['precio_desde' => '']));
     }
 
     public function testUnEventoGratisTienePrecioCeroYNoNull()
@@ -322,10 +387,10 @@ class EventosTest extends IntegracionTestCase
     {
         $linkId = $this->crear($this->datosDeEvento())->body['link']['id'];
 
-        $this->editar($linkId, ['precio_desde' => '', 'url_text' => null, 'image_url' => null]);
+        $this->editar($linkId, ['url_text' => null, 'image_url' => null]);
 
         $fila = $this->fila('SELECT precio_desde, url_text, image_url, description FROM links WHERE id = ?', [$linkId]);
-        $this->assertNull($fila['precio_desde']);
+        $this->assertEquals(12000, (float) $fila['precio_desde']);
         $this->assertNull($fila['url_text']);
         $this->assertNull($fila['image_url']);
         $this->assertSame('Con orquesta en vivo', $fila['description']);
@@ -751,6 +816,26 @@ class EventosTest extends IntegracionTestCase
         $r = $this->llamarAsistente('borrar_evento', ['evento_id' => (int) $linkId]);
         $this->assertFalse($r['isError']);
         $this->assertSame(0, $this->cuenta('links'));
+    }
+
+    /** Al asistente no se le exige el precio, pero si lo manda se guarda, también el gratis. */
+    public function testElAsistenteCreaSinPrecioYPuedeCargarloDespues()
+    {
+        $this->direccionConocida('Av. Corrientes 1234, CABA');
+
+        $r = $this->llamarAsistente('crear_evento', ['pagina' => 'la-sala', 'titulo' => 'Sin precio', 'fecha' => '2030-01-01', 'direccion' => 'Av. Corrientes 1234, CABA']);
+        $this->assertFalse($r['isError'], $r['content'][0]['text']);
+        $linkId = (int) $this->valor('SELECT id FROM links WHERE text = ?', ['Sin precio']);
+        $this->assertNull($this->valor('SELECT precio_desde FROM links WHERE id = ?', [$linkId]));
+
+        $r = $this->llamarAsistente('actualizar_evento', ['evento_id' => $linkId, 'precio_desde' => 0]);
+        $this->assertFalse($r['isError'], $r['content'][0]['text']);
+        $this->assertEquals(0, (float) $this->valor('SELECT precio_desde FROM links WHERE id = ?', [$linkId]));
+        $this->assertNotNull($this->valor('SELECT precio_desde FROM links WHERE id = ?', [$linkId]));
+
+        $r = $this->llamarAsistente('crear_evento', ['pagina' => 'la-sala', 'titulo' => 'Con precio', 'fecha' => '2030-01-02', 'direccion' => 'Av. Corrientes 1234, CABA', 'precio_desde' => 18000]);
+        $this->assertFalse($r['isError'], $r['content'][0]['text']);
+        $this->assertEquals(18000, (float) $this->valor('SELECT precio_desde FROM links WHERE text = ?', ['Con precio']));
     }
 
     /** Si la dirección no aparece en el mapa, no se publica un evento sin mapa. */

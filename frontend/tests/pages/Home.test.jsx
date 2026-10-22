@@ -1,6 +1,7 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { useLocation } from 'react-router';
 import Home from '../../src/pages/Home';
 import { renderConProviders, crearAuth, usuarioDePrueba } from '../helpers/render';
 import { mockFetch, llamadaA } from '../helpers/api';
@@ -419,6 +420,156 @@ describe('Home', () => {
       fireEvent.click(await screen.findByRole('button', { name: 'Usar mi ubicación' }));
 
       expect(await screen.findByText('No hay nada a menos de 30 km')).toBeInTheDocument();
+    });
+  });
+
+  // "Gratis" / "Desde $X" en las tarjetas y filtros de precio (#32).
+  describe('precio', () => {
+    /** Muestra la URL actual, para ver qué queda para compartir. */
+    function Ubicacion() {
+      const { search } = useLocation();
+      return <output data-testid="ubicacion">{search}</output>;
+    }
+
+    async function renderEn(ruta, datos = {}, auth = crearAuth()) {
+      const mock = mockearHome(datos);
+      renderConProviders(<><Home /><Ubicacion /></>, { auth, route: ruta });
+      await screen.findByRole('heading', { name: 'Qué se viene' });
+      return mock;
+    }
+
+    const precios = () => within(screen.getByRole('group', { name: 'Filtrar por precio' }));
+    const botonDePrecio = (nombre) => precios().getByRole('button', { name: nombre });
+    const urlDe = (llamadas, fragmento) => {
+      const todas = llamadas.filter((l) => l.url.includes(fragmento));
+      return todas.length ? todas[todas.length - 1].url : null;
+    };
+
+    it('la tarjeta dice si es gratis o desde cuánto sale', async () => {
+      await render({
+        events: [
+          eventoReciente({ id: 1, text: 'Al aire libre', precio_referencia: 0 }),
+          eventoReciente({ id: 2, text: 'En la sala', precio_referencia: 15000 }),
+          eventoReciente({ id: 3, text: 'Sin dato', precio_referencia: null }),
+        ],
+      });
+
+      const tarjeta = (titulo) => screen.getByText(titulo).closest('a');
+
+      expect(within(tarjeta('Al aire libre')).getByText('Gratis')).toBeInTheDocument();
+      expect(within(tarjeta('En la sala')).getByText(/Desde.*15\.000/)).toBeInTheDocument();
+      expect(within(tarjeta('Sin dato')).queryByText(/Gratis|Desde/)).not.toBeInTheDocument();
+    });
+
+    it('los resultados de búsqueda también traen la etiqueta', async () => {
+      await render({
+        results: [{
+          id: 100, type: 'event', title: 'Recital de Rock', slug: 'rock-del-sur',
+          item_date: '2026-12-01', event_time: '20:00:00', event_address: 'Corrientes 1234', precio_referencia: 0,
+        }],
+      });
+
+      fireEvent.change(buscador(), { target: { value: 'rock' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Buscar' }));
+
+      const tarjeta = (await screen.findByText('Recital de Rock')).closest('a');
+      expect(within(tarjeta).getByText('Gratis')).toBeInTheDocument();
+    });
+
+    it('arranca en cualquier precio y sin filtrar', async () => {
+      const { llamadas } = await renderEn('/');
+
+      expect(botonDePrecio('Cualquier precio')).toHaveAttribute('aria-pressed', 'true');
+      expect(urlDe(llamadas, 'recent-events.php')).not.toContain('precio=');
+    });
+
+    it('ofrece gratis y tres topes', async () => {
+      await renderEn('/');
+
+      ['Gratis', 'Hasta $ 10.000', 'Hasta $ 25.000', 'Hasta $ 50.000'].forEach((nombre) => {
+        expect(botonDePrecio(nombre)).toBeInTheDocument();
+      });
+    });
+
+    /** La lista viene recortada: se filtra en la API, no sobre lo que llegó. */
+    it('elegir un precio vuelve a pedir los eventos filtrados', async () => {
+      const { llamadas } = await renderEn('/');
+
+      fireEvent.click(botonDePrecio('Hasta $ 25.000'));
+
+      await waitFor(() => {
+        expect(urlDe(llamadas, 'recent-events.php')).toContain('precio=hasta%3A25000');
+      });
+      expect(botonDePrecio('Hasta $ 25.000')).toHaveAttribute('aria-pressed', 'true');
+    });
+
+    it('el precio elegido queda en la URL para compartirlo', async () => {
+      await renderEn('/');
+
+      fireEvent.click(botonDePrecio('Gratis'));
+
+      await waitFor(() => expect(screen.getByTestId('ubicacion')).toHaveTextContent('?precio=gratis'));
+
+      fireEvent.click(botonDePrecio('Cualquier precio'));
+
+      await waitFor(() => expect(screen.getByTestId('ubicacion')).toHaveTextContent(/^$/));
+    });
+
+    it('un link con ?precio= abre con ese filtro', async () => {
+      const { llamadas } = await renderEn('/?precio=gratis');
+
+      expect(botonDePrecio('Gratis')).toHaveAttribute('aria-pressed', 'true');
+      await waitFor(() => expect(urlDe(llamadas, 'recent-events.php')).toContain('precio=gratis'));
+    });
+
+    it('un ?precio= que no existe se ignora', async () => {
+      const { llamadas } = await renderEn('/?precio=regalado');
+
+      expect(botonDePrecio('Cualquier precio')).toHaveAttribute('aria-pressed', 'true');
+      expect(urlDe(llamadas, 'recent-events.php')).not.toContain('precio=');
+    });
+
+    it('se combina con las páginas que sigue', async () => {
+      const { llamadas } = await renderEn('/?precio=hasta:10000', {}, autenticado());
+
+      fireEvent.click(filtro('De quienes sigo'));
+
+      await waitFor(() => {
+        const url = urlDe(llamadas, 'feed-events.php');
+        expect(url).toContain('sortBy=date');
+        expect(url).toContain('precio=hasta%3A10000');
+      });
+    });
+
+    it('se combina con cerca mío', async () => {
+      geolocalizacion((onOk) => onOk({ coords: { latitude: -34.6037, longitude: -58.3816 } }));
+
+      const { llamadas } = await renderEn('/?precio=gratis', {
+        events: [
+          eventoReciente({ id: 1, text: 'Gratis al lado', precio_referencia: 0 }),
+          eventoReciente({ id: 2, text: 'Gratis lejos', precio_referencia: 0, event_latitude: '-31.42', event_longitude: '-64.18' }),
+        ],
+      });
+
+      fireEvent.click(filtro('Cerca mío'));
+      fireEvent.click(await screen.findByRole('button', { name: 'Usar mi ubicación' }));
+
+      expect(await screen.findByText('Gratis al lado')).toBeInTheDocument();
+      expect(screen.queryByText('Gratis lejos')).not.toBeInTheDocument();
+      expect(urlDe(llamadas, 'recent-events.php')).toContain('precio=gratis');
+      expect(botonDePrecio('Gratis')).toHaveAttribute('aria-pressed', 'true');
+    });
+
+    /** Lo que suele faltar es el dato, no la fecha: el mensaje lo tiene que decir. */
+    it('sin resultados avisa que sólo entran las fechas con precio cargado', async () => {
+      await renderEn('/?precio=gratis', { events: [] });
+
+      expect(await screen.findByText('No hay fechas con ese precio')).toBeInTheDocument();
+      expect(screen.getByText(/sólo aparecen las fechas que tienen el precio cargado/)).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Ver cualquier precio' }));
+
+      await waitFor(() => expect(botonDePrecio('Cualquier precio')).toHaveAttribute('aria-pressed', 'true'));
     });
   });
 
