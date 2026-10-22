@@ -61,6 +61,23 @@ describe('Precios', () => {
       await waitFor(() => expect(fetch).toHaveBeenCalled());
       expect(screen.getByText(/Ves el porcentaje exacto antes de activar la venta/)).toBeInTheDocument();
       expect(screen.queryByText(/\d%/)).not.toBeInTheDocument();
+      expect(screen.getByText(/de cada entrada o producto digital pago/)).toBeInTheDocument();
+    });
+  });
+
+  describe('los productos digitales', () => {
+    it('cobran la misma comisión que una entrada, y los gratis no pagan', async () => {
+      montar();
+
+      expect(await screen.findByText('por entrada o producto digital vendido, como comisión de Rezonar.')).toBeInTheDocument();
+      expect(screen.getByText(/pagan la misma\s+comisión que una entrada/)).toBeInTheDocument();
+      expect(screen.getByText(/los productos que publicás gratis no pagan comisión/)).toBeInTheDocument();
+    });
+
+    it('aparecen entre las herramientas de venta', () => {
+      montar();
+
+      expect(screen.getByText('Productos digitales')).toBeInTheDocument();
     });
   });
 

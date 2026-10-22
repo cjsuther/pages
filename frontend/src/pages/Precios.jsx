@@ -2,7 +2,7 @@ import React, { useContext } from 'react';
 import { Helmet } from 'react-helmet-async';
 import {
   CalendarDays, Bell, Palette, QrCode, Users, Link2, MapPin, Globe, Sparkles,
-  ScanLine, BarChart3, Mail, Armchair, FileSpreadsheet, Gift,
+  ScanLine, BarChart3, Mail, Armchair, FileSpreadsheet, Gift, Download,
   ArrowRight, Check, Clock,
 } from 'lucide-react';
 import { AuthContext } from '../App';
@@ -41,6 +41,7 @@ const GRATIS_ENTRADAS = [
   { icono: Armchair, titulo: 'Plano de ubicaciones', detalle: 'Butacas y mesas numeradas, si tu sala las tiene.' },
   { icono: BarChart3, titulo: 'Venta en vivo para compartir', detalle: 'Un link para que tu socio vea cómo va la venta.' },
   { icono: FileSpreadsheet, titulo: 'Tus clientes en Excel', detalle: 'Quedan después del evento y los podés exportar.' },
+  { icono: Download, titulo: 'Productos digitales', detalle: 'Un libro, un disco o un curso: cada comprador recibe su link de descarga privado.' },
 ];
 
 function GrillaGratis({ items }) {
@@ -79,9 +80,9 @@ function Precios() {
     <div className="min-h-screen bg-white text-tinta flex flex-col">
       <Helmet>
         <title>Precios — Rezonar</title>
-        <meta name="description" content="Tu página, tus fechas y los avisos a tus seguidores son gratis. Si vendés entradas pagás una comisión por entrada y la plata te llega a los pocos días de cada compra, no después del evento." />
+        <meta name="description" content="Tu página, tus fechas y los avisos a tus seguidores son gratis. Si vendés entradas o productos digitales pagás una comisión por venta y la plata te llega a los pocos días de cada compra, no después del evento." />
         <meta property="og:title" content="Precios — Rezonar" />
-        <meta property="og:description" content="Todo gratis salvo la venta de entradas. Y la plata te llega a los pocos días de cada compra, no después del evento." />
+        <meta property="og:description" content="Todo gratis salvo la venta de entradas y productos digitales. Y la plata te llega a los pocos días de cada compra, no después del evento." />
         <meta property="og:type" content="website" />
         <link rel="canonical" href={window.location.href} />
       </Helmet>
@@ -100,7 +101,7 @@ function Precios() {
             </h1>
             <p className="mt-5 text-lg text-tinta-media max-w-2xl mx-auto leading-relaxed">
               Sin abono mensual y sin costo por publicar. Sólo se cobra una comisión
-              cuando vendés una entrada paga, y esa plata te llega {plazo}.
+              cuando vendés una entrada o un producto digital pago, y esa plata te llega {plazo}.
             </p>
             <div className="mt-8 flex flex-wrap justify-center gap-3">
               <Boton a={destinoCrear} tamano="lg">
@@ -124,7 +125,7 @@ function Precios() {
             <GrillaGratis items={GRATIS_PAGINA} />
 
             <h3 className="mt-12 mb-4 text-xl font-bold text-tinta">
-              Y para vender entradas, también sin costo:
+              Y para vender entradas y productos digitales, también sin costo:
             </h3>
             <GrillaGratis items={GRATIS_ENTRADAS} />
           </div>
@@ -135,7 +136,7 @@ function Precios() {
         <section className="border-b border-borde">
           <div className="max-w-5xl mx-auto px-5 sm:px-6 py-14">
             <TituloSeccion
-              titulo="Venta de entradas"
+              titulo="Venta de entradas y productos digitales"
               bajada="Lo único que tiene costo, y sólo cuando vendés."
             />
 
@@ -146,7 +147,7 @@ function Precios() {
                     <p className="text-5xl font-bold tracking-tight text-tinta tabular-nums">
                       {formatearPorcentaje(costos.comision)}%
                     </p>
-                    <p className="mt-1 text-tinta-media">por entrada vendida, como comisión de Rezonar.</p>
+                    <p className="mt-1 text-tinta-media">por entrada o producto digital vendido, como comisión de Rezonar.</p>
                   </div>
 
                   <ul className="space-y-3 text-tinta-media leading-relaxed">
@@ -174,7 +175,15 @@ function Precios() {
                     )}
                     <li className="flex gap-2">
                       <Check className="w-5 h-5 text-verde-oscuro flex-shrink-0 mt-0.5" />
-                      <span>Las reservas sin costo no pagan comisión.</span>
+                      <span>
+                        Los productos digitales (un libro, un disco, un curso) pagan la misma
+                        comisión que una entrada. El archivo puede pesar hasta 50 MB y se
+                        descarga desde un link privado que le llega a cada comprador.
+                      </span>
+                    </li>
+                    <li className="flex gap-2">
+                      <Check className="w-5 h-5 text-verde-oscuro flex-shrink-0 mt-0.5" />
+                      <span>Las reservas sin costo y los productos que publicás gratis no pagan comisión.</span>
                     </li>
                   </ul>
                 </div>
@@ -183,9 +192,9 @@ function Precios() {
               </div>
             ) : (
               <p className="text-tinta-media leading-relaxed max-w-2xl">
-                Se descuenta una comisión de cada entrada paga, y Mercado Pago cobra la
-                suya por procesar el pago. Ves el porcentaje exacto antes de activar la
-                venta. Las reservas sin costo no pagan nada.
+                Se descuenta una comisión de cada entrada o producto digital pago, y Mercado
+                Pago cobra la suya por procesar el pago. Ves el porcentaje exacto antes de
+                activar la venta. Las reservas sin costo y los productos gratis no pagan nada.
               </p>
             )}
           </div>
@@ -236,7 +245,7 @@ function Precios() {
               Armá tu página. Cuesta $0.
             </h2>
             <p className="mt-4 text-tinta-media text-lg">
-              Y cuando quieras vender entradas, se activa desde la misma página.
+              Y cuando quieras vender entradas o productos digitales, se activa desde la misma página.
             </p>
             <div className="mt-8 flex flex-wrap justify-center gap-3">
               <Boton a={destinoCrear} tamano="lg">

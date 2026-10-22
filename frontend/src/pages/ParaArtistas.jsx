@@ -1,7 +1,7 @@
 import React, { useContext } from 'react';
 import { Helmet } from 'react-helmet-async';
 import {
-  CalendarDays, Bell, Ticket, Palette, QrCode, Users, Link2, MapPin,
+  CalendarDays, Bell, Ticket, Palette, QrCode, Users, Link2, MapPin, Download,
   ArrowRight, Check, Instagram, Globe, Sparkles,
 } from 'lucide-react';
 import { AuthContext } from '../App';
@@ -39,6 +39,11 @@ const LO_QUE_TIENE = [
     icono: Ticket,
     titulo: 'Vendé tus entradas',
     detalle: 'Podés cobrar desde tu propia página, con QR y control de acceso, sin mandar a la gente a otro sitio.',
+  },
+  {
+    icono: Download,
+    titulo: 'Vendé productos digitales',
+    detalle: 'Un libro en PDF, un disco, un video o un curso. Subís el archivo y cada comprador recibe un link privado para descargarlo.',
   },
   {
     icono: Link2,
@@ -85,7 +90,11 @@ const PASOS_INSTAGRAM = [
 const PREGUNTAS = [
   {
     q: '¿Cuánto sale?',
-    a: 'Armar tu página, cargar fechas y que te sigan es gratis. Si vendés entradas por Rezonar se descuenta una comisión de cada entrada paga, y Mercado Pago cobra la suya por procesar el pago. Las reservas sin costo no pagan nada.',
+    a: 'Armar tu página, cargar fechas y que te sigan es gratis. Si vendés entradas o productos digitales por Rezonar se descuenta una comisión de cada venta paga, y Mercado Pago cobra la suya por procesar el pago. Las reservas sin costo y los productos gratis no pagan nada.',
+  },
+  {
+    q: '¿Puedo vender un libro, un disco o un curso?',
+    a: 'Sí. Agregás un grupo de productos digitales a tu página, subís el archivo (hasta 50 MB; si son varios, en un ZIP) y le ponés precio, o lo dejás gratis. Cada comprador recibe por mail un link privado para descargarlo, y en tus ventas ves quién ya lo descargó. Paga la misma comisión que una entrada.',
   },
   {
     q: '¿Sirve si ya tengo Linktree?',
@@ -112,15 +121,15 @@ function CostosDeVenta({ costos }) {
     <section className="border-b border-borde bg-papel-hueso">
       <div className="max-w-5xl mx-auto px-5 sm:px-6 py-14">
         <TituloSeccion
-          titulo="Cuánto cuesta vender entradas"
-          bajada="Armar la página y publicar fechas es gratis. Sólo se cobra sobre las entradas pagas que vendés."
+          titulo="Cuánto cuesta vender entradas y productos"
+          bajada="Armar la página y publicar fechas es gratis. Sólo se cobra sobre las entradas y los productos digitales pagos que vendés."
         />
 
         <div className="grid md:grid-cols-[1fr_auto] gap-8 items-start">
           <ul className="space-y-4 text-tinta-media leading-relaxed">
             <li>
               <strong className="text-tinta">Comisión de Rezonar: {formatearPorcentaje(comision)}%</strong>{' '}
-              de cada entrada vendida. Se descuenta en el momento del cobro: el comprador
+              de cada entrada o producto digital vendido. Se descuenta en el momento del cobro: el comprador
               paga el precio que pusiste, una sola vez, y a tu cuenta entra el resto.
             </li>
             {mercadopago && (
@@ -140,7 +149,7 @@ function CostosDeVenta({ costos }) {
               </li>
             )}
             <li>
-              <strong className="text-tinta">Las reservas sin costo no pagan nada.</strong>{' '}
+              <strong className="text-tinta">Las reservas sin costo y los productos gratis no pagan nada.</strong>{' '}
               Tampoco hay abono mensual ni costo por publicar fechas.
             </li>
           </ul>
