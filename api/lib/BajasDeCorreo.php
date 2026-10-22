@@ -47,7 +47,7 @@ class BajasDeCorreo
     /** La página de baja, para el link del pie. */
     public static function urlPagina($token)
     {
-        return rtrim(FRONTEND_URL, '/') . '/baja?t=' . rawurlencode($token);
+        return rtrim(FRONTEND_URL, '/') . '/baja-de-mails?t=' . rawurlencode($token);
     }
 
     /** La baja de un solo paso, para List-Unsubscribe: el lector de correo la pide por POST. */

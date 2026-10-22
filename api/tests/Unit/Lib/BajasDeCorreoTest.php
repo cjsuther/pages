@@ -34,7 +34,7 @@ class BajasDeCorreoTest extends HandlerTestCase
     {
         $token = BajasDeCorreo::token(5, 'ana@example.com');
 
-        $this->assertSame('https://frontend.test/baja?t=' . $token, BajasDeCorreo::urlPagina($token));
+        $this->assertSame('https://frontend.test/baja-de-mails?t=' . $token, BajasDeCorreo::urlPagina($token));
         $this->assertSame([
             'List-Unsubscribe' => '<https://rezonar.test/api/public/baja.php?t=' . $token . '>',
             'List-Unsubscribe-Post' => 'List-Unsubscribe=One-Click',

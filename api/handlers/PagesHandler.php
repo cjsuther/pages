@@ -21,6 +21,8 @@ class PagesHandler
         'descarga', 'compra',
         // El link para compartir un producto, /producto/:id (#27).
         'producto',
+        // La baja de los mails a clientes, /baja-de-mails?t= (#37).
+        'baja-de-mails',
     ];
 
     private static $defaults = [
