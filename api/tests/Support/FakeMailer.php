@@ -13,22 +13,34 @@ class FakeMailer extends Mailer
     /** @var array Mensajes que se intentaron mandar */
     public $enviados = [];
 
+    /** @var array La cuenta SMTP de cada mensaje, en el mismo orden (null = la de la plataforma) */
+    public $cuentas = [];
+
     /** @var string|null Motivo con el que falla, o null si todo sale bien */
     private $falla = null;
 
-    public function fallarCon($motivo)
+    /** @var string|null Clasificación del fallo, como la devuelve Mailer::motivo() */
+    private $motivo = null;
+
+    public function fallarCon($error, $motivo = null)
     {
-        $this->falla = $motivo;
+        $this->falla = $error;
+        $this->motivo = $motivo;
         return $this;
     }
 
-    public function enviar(array $mensaje)
+    public function enviar(array $mensaje, ?array $cuenta = null)
     {
         $this->enviados[] = $mensaje;
+        $this->cuentas[] = $cuenta;
 
-        return $this->falla === null
-            ? ['ok' => true, 'error' => null]
-            : ['ok' => false, 'error' => $this->falla];
+        if ($this->falla === null) {
+            return ['ok' => true, 'error' => null];
+        }
+
+        return $this->motivo === null
+            ? ['ok' => false, 'error' => $this->falla]
+            : ['ok' => false, 'error' => $this->falla, 'motivo' => $this->motivo];
     }
 
     /** El último mensaje mandado a una dirección. */
