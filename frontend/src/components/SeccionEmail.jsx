@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Check, Loader2, Mail, Send, Trash2 } from 'lucide-react';
+import RafagasDeEnvio from './RafagasDeEnvio';
 
 /** Al elegir la seguridad se sugiere el puerto que casi siempre va con ella. */
 const PUERTO_SUGERIDO = { ssl: '465', tls: '587' };
@@ -258,6 +259,10 @@ function SeccionEmail({ pageId, apiUrl, token }) {
             {cuenta?.verificado_en && ' La última prueba salió bien.'}
           </p>
         </form>
+      )}
+
+      {!cargando && !noDisponible && cuenta && (
+        <RafagasDeEnvio pageId={pageId} apiUrl={apiUrl} token={token} rafagas={cuenta.rafagas} />
       )}
     </div>
   );
