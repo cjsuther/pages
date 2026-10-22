@@ -297,6 +297,7 @@ describe('PageEditor — modales de link', () => {
       });
 
       act(() => listeners.forEach((cb) => cb()));
+      fireEvent.click(screen.getByRole('radio', { name: 'Gratis' }));
 
       fireEvent.submit(form);
 
@@ -310,9 +311,91 @@ describe('PageEditor — modales de link', () => {
           event_longitude: -58.3816,
           event_address: 'Av. Corrientes 1234',
           event_maps_url: 'https://maps.google.com/x',
+          precio_desde: 0,
         });
       });
       expect(window.alert).not.toHaveBeenCalled();
+    });
+
+    // "Gratis" o "Pago, desde $X" al dar de alta un evento (#32).
+    describe('precio del evento', () => {
+      /** Con la dirección ya elegida: lo único que falta es el precio. */
+      async function conDireccion() {
+        const abierto = await abrirAltaEvento();
+        const form = screen.getByRole('button', { name: 'Crear' }).closest('form');
+
+        form.querySelectorAll('input[required], textarea[required]').forEach((campo) => {
+          if (campo.type !== 'file') fireEvent.change(campo, { target: { value: 'x' } });
+        });
+        act(() => abierto.listeners.forEach((cb) => cb()));
+
+        return { ...abierto, form };
+      }
+
+      const posts = (llamadas) => llamadas.filter(
+        (l) => l.url.includes('links/index.php') && l.options.method === 'POST'
+      );
+
+      it('arranca sin marcar, con la ayuda a la vista', async () => {
+        await abrirAltaEvento();
+
+        expect(screen.getByRole('radio', { name: 'Gratis' })).not.toBeChecked();
+        expect(screen.getByRole('radio', { name: /Pago, desde/ })).not.toBeChecked();
+        expect(screen.getByText('Si las entradas se venden en otra plataforma, poné el precio más barato.')).toBeInTheDocument();
+      });
+
+      it('sin elegir no deja crear y dice por qué', async () => {
+        const { form, llamadas } = await conDireccion();
+
+        fireEvent.submit(form);
+
+        expect(await screen.findByRole('alert')).toHaveTextContent(/gratis o desde qué precio/);
+        expect(posts(llamadas)).toHaveLength(0);
+      });
+
+      it('pago sin monto no deja crear', async () => {
+        const { form, llamadas } = await conDireccion();
+
+        fireEvent.click(screen.getByRole('radio', { name: /Pago, desde/ }));
+        fireEvent.submit(form);
+
+        expect(await screen.findByRole('alert')).toHaveTextContent(/mayor que 0/);
+        expect(posts(llamadas)).toHaveLength(0);
+      });
+
+      it('pago en cero no deja crear: gratis es la otra opción', async () => {
+        const { form, llamadas } = await conDireccion();
+
+        fireEvent.change(screen.getByLabelText('Precio de la entrada más barata'), { target: { value: '0' } });
+        fireEvent.submit(form);
+
+        expect(await screen.findByRole('alert')).toHaveTextContent(/mayor que 0/);
+        expect(posts(llamadas)).toHaveLength(0);
+      });
+
+      it('escribir el monto elige pago y lo manda', async () => {
+        const { form, llamadas } = await conDireccion();
+
+        fireEvent.change(screen.getByLabelText('Precio de la entrada más barata'), { target: { value: '15000' } });
+
+        expect(screen.getByRole('radio', { name: /Pago, desde/ })).toBeChecked();
+
+        fireEvent.submit(form);
+
+        await waitFor(() => expect(posts(llamadas)).toHaveLength(1));
+        expect(cuerpoDe(posts(llamadas)[0]).precio_desde).toBe(15000);
+      });
+
+      it('elegir corrige el aviso', async () => {
+        const { form } = await conDireccion();
+
+        fireEvent.submit(form);
+        await screen.findByRole('alert');
+
+        fireEvent.click(screen.getByRole('radio', { name: 'Gratis' }));
+
+        expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      });
     });
   });
 

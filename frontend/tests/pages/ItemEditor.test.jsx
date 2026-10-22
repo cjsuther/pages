@@ -50,7 +50,7 @@ const pagina = (overrides = {}) => ({
 const conItem = (overrides = {}, tipo = 'links', idGrupo = 10) =>
   pagina({ groups: [grupo({ id: idGrupo, type: tipo, links: [link({ id: 100, ...overrides })] })] });
 
-function mockearApi({ page = conItem(), results = [] } = {}) {
+function mockearApi({ page = conItem(), results = [], entradas = null } = {}) {
   return mockFetch({
     'pages/detail.php': { page },
     'links/detail.php': { link: link() },
@@ -58,7 +58,7 @@ function mockearApi({ page = conItem(), results = [] } = {}) {
     'collaborations/detail.php': { message: 'ok' },
     'public/search.php': { results },
     'upload/image.php': { url: 'https://img/subida.png' },
-    'entradas/evento.php': { entradas: null, cobros: { configurado: false }, ocupadas: 0, comision: 0 },
+    'entradas/evento.php': { entradas, cobros: { configurado: false }, ocupadas: 0, comision: 0 },
   });
 }
 
@@ -276,6 +276,102 @@ describe('ItemEditor', () => {
         );
       });
       expect(put(llamadas, 'links/detail.php')).toBeUndefined();
+    });
+
+    // "Gratis" o "Pago, desde $X" al editar un evento (#32).
+    describe('precio de un evento', () => {
+      const conPrecio = (precio_desde) => ({
+        page: conItem({ text: 'Mi Evento', event_latitude: '-34.6', event_longitude: '-58.4', precio_desde }, 'eventos'),
+      });
+
+      const guardar = () => fireEvent.submit(screen.getByRole('button', { name: 'Guardar' }).closest('form'));
+
+      it('un evento gratis aparece con gratis elegido', async () => {
+        await render(conPrecio('0.00'));
+
+        expect(await screen.findByRole('radio', { name: 'Gratis' })).toBeChecked();
+      });
+
+      it('un evento pago aparece con su monto', async () => {
+        await render(conPrecio('15000.00'));
+
+        expect(await screen.findByRole('radio', { name: /Pago, desde/ })).toBeChecked();
+        expect(screen.getByLabelText('Precio de la entrada más barata')).toHaveValue(15000);
+      });
+
+      it('un evento viejo sin precio aparece sin marcar y con un aviso', async () => {
+        await render(conPrecio(null));
+
+        expect(await screen.findByText(/todavía no dice si es gratis o pago/)).toBeInTheDocument();
+        expect(screen.getByRole('radio', { name: 'Gratis' })).not.toBeChecked();
+        expect(screen.getByRole('radio', { name: /Pago, desde/ })).not.toBeChecked();
+      });
+
+      it('sin elegir no se puede guardar', async () => {
+        const { llamadas } = await render(conPrecio(null));
+        await screen.findByRole('radio', { name: 'Gratis' });
+
+        guardar();
+
+        expect(await screen.findByRole('alert')).toHaveTextContent(/gratis o desde qué precio/);
+        expect(put(llamadas, 'links/detail.php')).toBeUndefined();
+      });
+
+      it('elegido, guarda el precio', async () => {
+        const { llamadas } = await render(conPrecio(null));
+
+        fireEvent.click(await screen.findByRole('radio', { name: /Pago, desde/ }));
+        fireEvent.change(screen.getByLabelText('Precio de la entrada más barata'), { target: { value: '22000' } });
+        guardar();
+
+        await waitFor(() => {
+          expect(cuerpoDe(put(llamadas, 'links/detail.php'))).toMatchObject({ precio_desde: 22000 });
+        });
+      });
+
+      it('pasar de pago a gratis guarda cero', async () => {
+        const { llamadas } = await render(conPrecio('15000.00'));
+
+        fireEvent.click(await screen.findByRole('radio', { name: 'Gratis' }));
+        guardar();
+
+        await waitFor(() => {
+          expect(cuerpoDe(put(llamadas, 'links/detail.php'))).toMatchObject({ precio_desde: 0 });
+        });
+      });
+
+      /** Si vende por Rezonar el precio sale de la venta: no se pide. */
+      it('un evento que vende por Rezonar no pide el precio', async () => {
+        const { llamadas } = await render({
+          ...conPrecio(null),
+          entradas: { activo: 1, capacidad: 100, precio: '5000.00', max_por_compra: 10, plano: null, tipos: null },
+        });
+
+        expect(await screen.findByText(/sale de la venta de entradas por Rezonar/)).toBeInTheDocument();
+        expect(screen.queryByRole('radio', { name: 'Gratis' })).not.toBeInTheDocument();
+
+        guardar();
+
+        await waitFor(() => expect(put(llamadas, 'links/detail.php')).toBeDefined());
+      });
+
+      /** Guardar el link desde ENTRADAS no tiene por qué trabarse por el precio. */
+      it('guardar el link desde ENTRADAS manda sólo el link', async () => {
+        const { llamadas } = await render(conPrecio(null));
+
+        fireEvent.click(screen.getByRole('button', { name: 'Entradas' }));
+        fireEvent.change(await screen.findByLabelText('Texto del botón (opcional)'), { target: { value: 'Comprar' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Guardar entradas' }));
+
+        await waitFor(() => expect(put(llamadas, 'links/detail.php')).toBeDefined());
+        expect(Object.keys(cuerpoDe(put(llamadas, 'links/detail.php'))).sort()).toEqual(['url', 'url_text']);
+      });
+
+      it('un link común no tiene precio que elegir', async () => {
+        await render();
+
+        expect(screen.queryByRole('radio', { name: 'Gratis' })).not.toBeInTheDocument();
+      });
     });
 
     it('cancelar no guarda nada', async () => {

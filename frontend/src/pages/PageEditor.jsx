@@ -11,6 +11,7 @@ import PanelVentasProductos from '../components/PanelVentasProductos';
 import PixelDeMeta from '../components/PixelDeMeta';
 import ArchivoDeProducto from '../components/ArchivoDeProducto';
 import AvisoMercadoPago from '../components/AvisoMercadoPago';
+import EleccionDePrecio, { eleccionDesdePrecio, precioDeEleccion, problemaDeEleccion } from '../components/EleccionDePrecio';
 import { describirPrecio, esOculto, excesoArchivoProducto, subirArchivoDeProducto } from '../utils/productos';
 import { analizarEmbed, portadaDe } from '../utils/embeds';
 import { paleta } from '../utils/colores';
@@ -102,6 +103,9 @@ function PageEditor() {
     event_longitude: null,
     event_maps_url: ''
   });
+  // El precio de un evento nuevo: "Gratis" o "Pago, desde $X", sin marcar.
+  const [eleccionPrecio, setEleccionPrecio] = useState(() => eleccionDesdePrecio(null));
+  const [errorPrecio, setErrorPrecio] = useState(null);
   const [uploadingLinkImage, setUploadingLinkImage] = useState(false);
   // El archivo de un producto nuevo se elige en el formulario, pero se sube
   // después de crear el producto: la subida necesita su id.
@@ -519,6 +523,12 @@ function PageEditor() {
         alert('Debes seleccionar una dirección válida de Google Maps para el evento');
         return;
       }
+
+      const problema = problemaDeEleccion(eleccionPrecio);
+      if (problema) {
+        setErrorPrecio(problema);
+        return;
+      }
     }
 
     const esProducto = selectedGroup.type === 'productos';
@@ -531,7 +541,9 @@ function PageEditor() {
           image_url: newLink.image_url,
           precio: newLink.precio ?? '',
         }
-      : { ...newLink, group_id: selectedGroup.id };
+      : selectedGroup.type === 'eventos'
+        ? { ...newLink, group_id: selectedGroup.id, precio_desde: precioDeEleccion(eleccionPrecio) }
+        : { ...newLink, group_id: selectedGroup.id };
 
     try {
       setGlobalLoading(true);
@@ -547,12 +559,18 @@ function PageEditor() {
         const data = await response.json().catch(() => ({}));
         alert(data.error || 'No se pudo crear el producto');
       }
+      if (!response.ok && selectedGroup.type === 'eventos') {
+        const data = await response.json().catch(() => ({}));
+        alert(data.error || 'No se pudo crear el evento');
+      }
       if (response.ok) {
         if (esProducto && archivoNuevo) {
           const data = await response.json();
           await subirArchivoNuevo(data.link.id);
         }
         setArchivoNuevo(null);
+        setEleccionPrecio(eleccionDesdePrecio(null));
+        setErrorPrecio(null);
         setShowLinkModal(false);
         setNewLink({
           url: '',
@@ -1780,24 +1798,15 @@ function PageEditor() {
                       />
                     </div>
                   </div>
-                  <div>
-                    <label htmlFor="nuevo-precio-desde" className="block text-sm font-semibold text-tinta mb-1.5">
-                      Precio desde (opcional)
-                    </label>
-                    <input
-                      id="nuevo-precio-desde"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={newLink.precio_desde ?? ''}
-                      onChange={(e) => setNewLink({ ...newLink, precio_desde: e.target.value })}
-                      placeholder="Vacío si no se sabe"
-                      className="w-full px-4 py-3 rounded-xl bg-white border border-borde-fuerte text-tinta placeholder-tinta-suave focus:border-verde-oscuro focus:outline-none transition-colors"
-                    />
-                    <p className="text-xs text-tinta-suave mt-1">
-                      En 0 el evento se anuncia como gratis; vacío no muestra nada.
-                    </p>
-                  </div>
+                  {/* Un evento nuevo todavía no vende por Rezonar: eso se
+                      configura después, en Entradas. Hasta entonces, el precio
+                      lo dice quien lo carga. */}
+                  <EleccionDePrecio
+                    id="nuevo-precio"
+                    eleccion={eleccionPrecio}
+                    onChange={(nueva) => { setEleccionPrecio(nueva); setErrorPrecio(null); }}
+                    error={errorPrecio}
+                  />
                   <div>
                     <label className="block text-sm font-semibold text-tinta mb-1.5">
                       Dirección<span className="text-red-500">*</span>
@@ -1872,6 +1881,8 @@ function PageEditor() {
                     setShowLinkModal(false);
                     setSelectedGroup(null);
                     setArchivoNuevo(null);
+                    setEleccionPrecio(eleccionDesdePrecio(null));
+                    setErrorPrecio(null);
                     setNewLink({
                       url: '',
                       text: '',

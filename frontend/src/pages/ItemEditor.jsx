@@ -9,6 +9,7 @@ import PanelVentasProductos from '../components/PanelVentasProductos';
 import ArchivoDeProducto from '../components/ArchivoDeProducto';
 import LinkDeProducto from '../components/LinkDeProducto';
 import AvisoMercadoPago from '../components/AvisoMercadoPago';
+import EleccionDePrecio, { eleccionDesdePrecio, precioDeEleccion, problemaDeEleccion } from '../components/EleccionDePrecio';
 import { analizarEmbed, EJEMPLOS_EMBED } from '../utils/embeds';
 import { MAX_BYTES, excesoImagenEvento } from '../utils/imagenes';
 import { subirArchivoDeProducto, esOculto } from '../utils/productos';
@@ -40,6 +41,11 @@ function ItemEditor() {
   // Qué es este item de galería: imagen, youtube o instagram. Se deduce de la
   // URL guardada; el formulario lo usa para mostrar el campo que corresponde.
   const [tipoMedia, setTipoMedia] = useState('imagen');
+  // El precio de un evento que no vende por Rezonar: "Gratis" o "Desde $X".
+  // vendePorRezonar es null mientras no se sabe.
+  const [eleccionPrecio, setEleccionPrecio] = useState(() => eleccionDesdePrecio(null));
+  const [errorPrecio, setErrorPrecio] = useState(null);
+  const [vendePorRezonar, setVendePorRezonar] = useState(null);
   const [pageSearchQuery, setPageSearchQuery] = useState('');
   const [pageSearchResults, setPageSearchResults] = useState([]);
   const [searchingPages, setSearchingPages] = useState(false);
@@ -69,12 +75,33 @@ function ItemEditor() {
           setGroup(grupo);
           setItem({ ...encontrado });
           setTipoMedia(analizarEmbed(encontrado.embed_url)?.tipo || 'imagen');
+
+          if (grupo.type === 'eventos') {
+            setEleccionPrecio(eleccionDesdePrecio(encontrado.precio_desde));
+            setVendePorRezonar(await vendeEntradasPorRezonar(encontrado.id));
+          }
         }
       }
     } catch (err) {
       console.error('Error cargando el item:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  /**
+   * Si el evento vende entradas por acá: en ese caso el precio sale de la
+   * venta y no se pide. Si no se puede saber, se pide: la API lo acepta igual.
+   */
+  const vendeEntradasPorRezonar = async (id) => {
+    try {
+      const r = await fetch(`${apiUrl}/entradas/evento.php?link_id=${id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const cuerpo = await r.json();
+      return !!(r.ok && cuerpo.entradas && Number(cuerpo.entradas.activo));
+    } catch {
+      return false;
     }
   };
 
@@ -179,13 +206,15 @@ function ItemEditor() {
   const guardarEnlace = async ({ url, url_text }) => {
     const actualizado = { ...item, url, url_text };
 
+    // Sólo el link: mandar el evento entero haría que la API pida el precio,
+    // y elegir dónde se venden las entradas no es el lugar para eso.
     const r = await fetch(`${apiUrl}/links/detail.php?id=${item.id}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
       },
-      body: JSON.stringify(actualizado)
+      body: JSON.stringify({ url, url_text })
     });
 
     if (!r.ok) {
@@ -209,10 +238,24 @@ function ItemEditor() {
       }
     }
 
+    let cuerpo = item;
+
     if (group.type === 'eventos') {
       if (!item.event_latitude || !item.event_longitude) {
         alert('Debes seleccionar una dirección válida de Google Maps para el evento');
         return;
+      }
+
+      // Si vende por Rezonar el precio sale de la venta y no se pide. Si no,
+      // tiene que decir si es gratis o desde cuánto, también un evento viejo
+      // que nunca lo tuvo.
+      if (!vendePorRezonar) {
+        const problema = problemaDeEleccion(eleccionPrecio);
+        if (problema) {
+          setErrorPrecio(problema);
+          return;
+        }
+        cuerpo = { ...item, precio_desde: precioDeEleccion(eleccionPrecio) };
       }
     }
 
@@ -224,7 +267,7 @@ function ItemEditor() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(item)
+        body: JSON.stringify(cuerpo)
       });
       if (response.ok) {
         navigate(volverA);
@@ -392,6 +435,7 @@ function ItemEditor() {
             linkId={item.id}
             apiUrl={apiUrl}
             token={token}
+            onCambio={(entradas) => setVendePorRezonar(!!(entradas && Number(entradas.activo)))}
             enlace={{ url: item.url, url_text: item.url_text }}
             onGuardarEnlace={guardarEnlace}
           />
@@ -574,24 +618,19 @@ function ItemEditor() {
                   />
                 </div>
               </div>
-              <div>
-                <label htmlFor="editar-precio-desde" className="block text-sm font-semibold text-tinta mb-1.5">
-                  Precio desde (opcional)
-                </label>
-                <input
-                  id="editar-precio-desde"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={item.precio_desde ?? ''}
-                  onChange={(e) => setItem({ ...item, precio_desde: e.target.value })}
-                  placeholder="Vacío si no se sabe"
-                  className="w-full px-4 py-3 rounded-xl bg-white border border-borde-fuerte text-tinta placeholder-tinta-suave focus:border-verde-oscuro focus:outline-none transition-colors"
-                />
-                <p className="text-xs text-tinta-suave mt-1">
-                  En 0 el evento se anuncia como gratis; vacío no muestra nada.
+              {vendePorRezonar ? (
+                <p className="text-sm text-tinta-media">
+                  El precio que se muestra sale de la venta de entradas por Rezonar.
                 </p>
-              </div>
+              ) : vendePorRezonar === false && (
+                <EleccionDePrecio
+                  id="editar-precio"
+                  eleccion={eleccionPrecio}
+                  onChange={(nueva) => { setEleccionPrecio(nueva); setErrorPrecio(null); }}
+                  error={errorPrecio}
+                  sinPrecioGuardado={item.precio_desde === null || item.precio_desde === undefined || item.precio_desde === ''}
+                />
+              )}
               <div>
                 <label className="block text-sm font-semibold text-tinta mb-1.5">
                   Dirección<span className="text-red-500">*</span>
