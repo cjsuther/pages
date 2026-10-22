@@ -93,6 +93,8 @@ define('SMTP_USER', 'entradas@test.local');
 define('SMTP_PASS', 'clave-de-prueba');
 define('MAIL_FROM_NAME', 'Rezonar');
 
+define('CLAVE_CIFRADO', 'clave-de-prueba-para-cifrar-las-contrasenas-smtp');
+
 define('CRON_SECRET_KEY', 'test-cron-secret');
 
 // Clases del dominio y autoload de lib/ + handlers/.

@@ -5,6 +5,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import GooglePlacesAutocomplete from '../components/GooglePlacesAutocomplete';
 import SeccionRedes from '../components/SeccionRedes';
 import SeccionEntradas from '../components/SeccionEntradas';
+import SeccionEmail from '../components/SeccionEmail';
 import BuscadorDeVentas from '../components/BuscadorDeVentas';
 import PanelMetricas from '../components/PanelMetricas';
 import PanelClientes from '../components/PanelClientes';
@@ -70,6 +71,7 @@ const SUB_CONFIGURACION = [
   { clave: 'general', etiqueta: 'General' },
   { clave: 'redes',   etiqueta: 'Redes sociales' },
   { clave: 'admins',  etiqueta: 'Administradores', soloDueno: true },
+  { clave: 'email',   etiqueta: 'Email' },
 ];
 
 /** Solapas de Ventas (?v=). Primero lo que se mira seguido; el cobro se configura una vez. */
@@ -1191,6 +1193,10 @@ function PageEditor() {
             guardando={globalLoading}
             onGuardar={(socials) => updatePage({ socials })}
           />
+        )}
+
+        {seccion === 'general' && subConfig === 'email' && (
+          <SeccionEmail pageId={id} apiUrl={apiUrl} token={token} />
         )}
 
         {seccion === 'ventas' && subVentas === 'entradas' && (

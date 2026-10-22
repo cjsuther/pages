@@ -92,6 +92,14 @@ define('SMTP_USER', 'entradas@tu-dominio.com');
 define('SMTP_PASS', 'TU_CLAVE_DE_LA_CASILLA');
 define('MAIL_FROM_NAME', 'Rezonar');
 
+// Cifra las contraseñas SMTP que cada página carga para mandar mails desde su
+// propia casilla (Configuración → Email). Si falta, esa solapa avisa que el
+// envío por SMTP no está disponible. Si se cambia, las contraseñas guardadas
+// dejan de poder leerse y cada página tiene que volver a cargar la suya.
+// `composer install` genera una aleatoria; a mano:
+//     php -r "echo bin2hex(random_bytes(32));"
+define('CLAVE_CIFRADO', 'CAMBIA_ESTO_POR_UNA_CLAVE_LARGA_Y_ALEATORIA');
+
 // -------------------------------------------------------------- Importador
 // Token privado de Eventbrite (Cuenta → Developer → API keys). Sirve para
 // consultar la ficha de un evento público por id; la búsqueda de eventos de
