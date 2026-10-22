@@ -295,7 +295,7 @@ class SugerenciasTest extends IntegracionTestCase
     {
         $x = $this->eventoDe($this->duena, 'X');
         $producto = $this->productoDe($this->duena, 'Guía');
-        $evento = $this->eventoDe($this->duena, 'Otro show', 5);
+        $evento = $this->eventoDe($this->duena, 'Otro show', 5, ['precio_desde' => '8000.00']);
         $ruta = $this->valor('SELECT archivo_ruta FROM digital_products WHERE link_id = ?', [$producto]);
 
         $sugerencias = $this->sugerencias('evento', $x);
@@ -308,9 +308,22 @@ class SugerenciasTest extends IntegracionTestCase
             [
                 'tipo' => 'evento', 'id' => $evento, 'text' => 'Otro show', 'image_url' => null,
                 'event_date' => date('Y-m-d', strtotime('+5 days')), 'event_time' => '21:00:00', 'page_title' => 'La Sala',
+                'precio_referencia' => 8000.0,
             ],
         ], $sugerencias);
         $this->assertStringNotContainsString(substr($ruta, strlen('productos/')), json_encode($sugerencias));
+    }
+
+    /** Un evento que vende por Rezonar sugiere el precio de su venta, no el cargado a mano. */
+    public function testLaSugerenciaDeUnEventoQueVendeTraeElPrecioDeLaVenta()
+    {
+        $x = $this->eventoDe($this->duena, 'X');
+        $evento = $this->eventoDe($this->duena, 'Con venta', 5, ['precio_desde' => '99999.00']);
+        $this->insertar('event_ticketing', ['link_id' => $evento, 'activo' => 1, 'capacidad' => 10, 'precio' => '12000.00']);
+
+        $sugerencias = $this->sugerencias('evento', $x);
+
+        $this->assertSame(12000.0, $sugerencias[0]['precio_referencia']);
     }
 
     public function testUnXQueNoExisteDa404()

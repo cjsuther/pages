@@ -203,6 +203,10 @@ class PublicHandler
         // link que tenga cargado.
         $evento['entradas'] = Entradas::disponibilidad($db, $evento['id']);
 
+        // "Gratis" o "Desde $X": de la venta si vende acá, si no del precio
+        // que se cargó. Sale de la disponibilidad, sin otra consulta.
+        $evento['precio_referencia'] = PrecioDeReferencia::deEvento($evento, $evento['entradas']);
+
         return $evento;
     }
 
@@ -253,6 +257,7 @@ class PublicHandler
                 l.event_latitude,
                 l.event_longitude,
                 l.event_maps_url,
+                l.precio_desde,
                 p.id as page_id,
                 p.title as page_title,
                 p.url_slug as page_slug,
@@ -362,6 +367,7 @@ class PublicHandler
             l.event_date,
             l.event_time,
             l.event_address as location,
+            ' . PrecioDeReferencia::COLUMNA . ',
             p.url_slug as slug,
             p.title as page_title,
             u.name as owner_name,
@@ -370,6 +376,7 @@ class PublicHandler
           JOIN link_groups lg ON l.group_id = lg.id
           JOIN pages p ON lg.page_id = p.id
           JOIN users u ON p.user_id = u.id
+          ' . PrecioDeReferencia::JOIN . '
           WHERE lg.type = "eventos"
           AND l.event_date IS NOT NULL
           AND l.event_date BETWEEN ? AND ?
@@ -377,7 +384,7 @@ class PublicHandler
         ');
         $stmt->execute([$start, $end]);
 
-        return Response::ok(['events' => $stmt->fetchAll()]);
+        return Response::ok(['events' => PrecioDeReferencia::completar($stmt->fetchAll())]);
     }
 
     /** @return array{0: string, 1: string} Fechas ISO de inicio y fin del rango por defecto. */
@@ -452,29 +459,47 @@ class PublicHandler
 
     // --------------------------------------------------------- recent-events
 
+    /**
+     * Los próximos eventos de toda la plataforma.
+     *
+     * ?precio=gratis|hasta:25000 filtra en la consulta y no después: la lista
+     * viene recortada a LIMITE_EVENTOS_RECIENTES, y filtrar lo que llegó
+     * dejaría afuera los gratis que no entraron en el recorte.
+     */
     public static function recentEvents($db, Request $req)
     {
         if ($req->method !== 'GET') {
             return Response::methodNotAllowed();
         }
 
+        $precio = PrecioDeReferencia::filtro($req->param('precio'));
+
+        if (!$precio['ok']) {
+            return Response::error(400, PrecioDeReferencia::ERROR_FILTRO);
+        }
+
+        list($porPrecio, $params) = PrecioDeReferencia::condicion($precio['filtro']);
+
         try {
             $stmt = $db->prepare("
                 SELECT l.*, lg.page_id, p.url_slug as page_slug, p.title as page_title,
-                       p.profile_image as page_image, u.name as owner_name, u.email as owner_email
+                       p.profile_image as page_image, u.name as owner_name, u.email as owner_email,
+                       " . PrecioDeReferencia::COLUMNA . "
                 FROM links l
                 JOIN link_groups lg ON l.group_id = lg.id
                 JOIN pages p ON lg.page_id = p.id
                 JOIN users u ON p.user_id = u.id
+                " . PrecioDeReferencia::JOIN . "
                 WHERE lg.type = 'eventos'
                   AND l.event_date IS NOT NULL
                   AND l.event_date >= '" . Fechas::hoy() . "'
+                  " . ($porPrecio === '' ? '' : 'AND ' . $porPrecio) . "
                 ORDER BY l.event_date ASC, l.event_time ASC
                 LIMIT " . self::LIMITE_EVENTOS_RECIENTES . "
             ");
-            $stmt->execute();
+            $stmt->execute($params);
 
-            return Response::ok(['events' => $stmt->fetchAll()]);
+            return Response::ok(['events' => PrecioDeReferencia::completar($stmt->fetchAll())]);
 
         } catch (Exception $e) {
             return Response::serverError($e->getMessage());
@@ -518,10 +543,12 @@ class PublicHandler
 
             $stmt = $db->prepare("
                 SELECT l.id, l.text as title, l.description, l.image_url, l.event_date as item_date,
-                       l.event_time, l.event_address, p.url_slug as slug
+                       l.event_time, l.event_address, p.url_slug as slug,
+                       " . PrecioDeReferencia::COLUMNA . "
                 FROM links l
                 JOIN link_groups lg ON l.group_id = lg.id
                 JOIN pages p ON lg.page_id = p.id
+                " . PrecioDeReferencia::JOIN . "
                 WHERE lg.type = 'eventos'
                   AND l.event_date >= '" . Fechas::hoy() . "'
                   AND (l.text LIKE ? OR l.description LIKE ? OR l.event_address LIKE ?)
@@ -530,7 +557,7 @@ class PublicHandler
             ");
             $stmt->execute([$termino, $termino, $termino]);
 
-            foreach ($stmt->fetchAll() as $event) {
+            foreach (PrecioDeReferencia::completar($stmt->fetchAll()) as $event) {
                 $event['type'] = 'event';
                 $results[] = $event;
             }

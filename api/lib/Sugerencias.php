@@ -282,6 +282,7 @@ class Sugerencias
             FROM links l
             INNER JOIN link_groups lg ON lg.id = l.group_id
             INNER JOIN pages p ON p.id = lg.page_id
+            ' . PrecioDeReferencia::JOIN . '
             WHERE ' . $condicion . '
             ORDER BY l.event_date, l.event_time, l.id',
             $params
@@ -300,6 +301,7 @@ class Sugerencias
         $base = 'FROM links l
             INNER JOIN link_groups lg ON lg.id = l.group_id
             INNER JOIN pages p ON p.id = lg.page_id
+            ' . PrecioDeReferencia::JOIN . '
             WHERE lg.type = \'eventos\' AND l.event_date >= ?';
 
         if ($punto === null) {
@@ -335,7 +337,8 @@ class Sugerencias
         );
     }
 
-    const COLUMNAS_DE_EVENTO = 'l.id, l.text, l.image_url, l.event_date, l.event_time, p.title AS page_title';
+    /** Necesita PrecioDeReferencia::JOIN en el FROM. */
+    const COLUMNAS_DE_EVENTO = 'l.id, l.text, l.image_url, l.event_date, l.event_time, p.title AS page_title, ' . PrecioDeReferencia::COLUMNA;
 
     /**
      * Recorre los eventos de la consulta de a LOTE y suma los que se pueden
@@ -406,6 +409,7 @@ class Sugerencias
             'event_date' => $fila['event_date'],
             'event_time' => $fila['event_time'],
             'page_title' => $fila['page_title'],
+            'precio_referencia' => PrecioDeReferencia::valor(isset($fila['precio_referencia']) ? $fila['precio_referencia'] : null),
         ];
     }
 

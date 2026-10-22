@@ -60,6 +60,35 @@ class FeedHandlerTest extends HandlerTestCase
         $this->assertSame(\Fechas::hoy(), end($params));
     }
 
+    public function testTraeElPrecioDeReferencia()
+    {
+        $this->db->onSelect('FROM page_followers pf', [[
+            'id' => 1, 'page_id' => 3, 'is_event' => 1, 'event_date' => '2030-01-01', 'event_time' => null,
+            'event_latitude' => null, 'event_longitude' => null, 'notify_all_events' => 1, 'max_distance_km' => null,
+            'user_latitude' => null, 'user_longitude' => null, 'precio_referencia' => '15000.00',
+        ]]);
+
+        $res = FeedHandler::events($this->db, $this->get([], $this->user(9)));
+
+        $this->assertSame(15000.0, $res->body['events'][0]['precio_referencia']);
+        $this->assertStringContainsString(\PrecioDeReferencia::JOIN, $this->db->callsFor('FROM page_followers pf')[0]['sql']);
+    }
+
+    public function testFiltraPorPrecioEnLaConsulta()
+    {
+        FeedHandler::events($this->db, $this->get(['precio' => 'hasta:10000'], $this->user(9)));
+
+        $sql = $this->db->callsFor('FROM page_followers pf')[0]['sql'];
+
+        $this->assertStringContainsString('AND ' . \PrecioDeReferencia::EXPRESION . ' <= ?', $sql);
+        $this->assertSame([9, 9, \Fechas::hoy(), 10000.0], $this->db->paramsFor('FROM page_followers pf'));
+    }
+
+    public function testRechazaUnFiltroDePrecioInvalido()
+    {
+        $this->assertError(400, FeedHandler::events($this->db, $this->get(['precio' => 'hasta:mucho'], $this->user(9))), 'gratis');
+    }
+
     public function testDevuelveFeedVacio()
     {
         $res = FeedHandler::events($this->db, $this->get([], $this->user()));

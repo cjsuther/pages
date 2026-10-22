@@ -29,6 +29,15 @@ class FeedHandler
         $sortBy = self::valorPermitido($req->param('sortBy'), self::$ordenesValidos, 'date');
         $sortOrder = self::valorPermitido($req->param('sortOrder'), self::$direccionesValidas, 'asc');
 
+        // El mismo ?precio= que los eventos recientes de la home.
+        $precio = PrecioDeReferencia::filtro($req->param('precio'));
+
+        if (!$precio['ok']) {
+            return Response::error(400, PrecioDeReferencia::ERROR_FILTRO);
+        }
+
+        list($porPrecio, $paramsDePrecio) = PrecioDeReferencia::condicion($precio['filtro']);
+
         $stmt = $db->prepare('
             SELECT
                 l.id,
@@ -42,6 +51,7 @@ class FeedHandler
                 l.event_latitude,
                 l.event_longitude,
                 l.event_maps_url,
+                ' . PrecioDeReferencia::COLUMNA . ',
                 1 as is_event,
                 p.id as page_id,
                 p.title as page_title,
@@ -56,17 +66,19 @@ class FeedHandler
             INNER JOIN link_groups g ON g.page_id = p.id
             INNER JOIN links l ON l.group_id = g.id
             LEFT JOIN users u ON u.id = ?
+            ' . PrecioDeReferencia::JOIN . '
             WHERE pf.user_id = ?
             AND g.type = "eventos"
             AND l.event_date IS NOT NULL
             AND l.event_date >= ?
+            ' . ($porPrecio === '' ? '' : 'AND ' . $porPrecio) . '
         ');
         // Un evento que ya pasó no es agenda: es historia. El resto de las
         // vistas públicas ya cortaba por hoy y ésta no, así que el feed de
         // quien seguía páginas se iba llenando de shows vencidos.
-        $stmt->execute([$req->userId(), $req->userId(), Fechas::hoy()]);
+        $stmt->execute(array_merge([$req->userId(), $req->userId(), Fechas::hoy()], $paramsDePrecio));
 
-        $eventos = self::filtrar($stmt->fetchAll(PDO::FETCH_ASSOC));
+        $eventos = self::filtrar(PrecioDeReferencia::completar($stmt->fetchAll(PDO::FETCH_ASSOC)));
         $eventos = self::ordenar($eventos, $sortBy, $sortOrder);
 
         return Response::ok([
