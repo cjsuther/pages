@@ -170,6 +170,7 @@ function CondensedTemplate({ page }) {
                             )}
                           </div>
                         )}
+                        <PrecioEvento evento={link} enTarjeta className="mt-1" />
                       </div>
                       <a
                         href={`/evento/${link.id}`}

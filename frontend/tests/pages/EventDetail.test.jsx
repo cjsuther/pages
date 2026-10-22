@@ -273,4 +273,49 @@ describe('EventDetail', () => {
       expect(screen.queryByText('Mi Página')).not.toBeInTheDocument();
     });
   });
+
+  // El precio que calcula la API (#32): "Gratis", "Desde $X" o nada.
+  describe('precio', () => {
+    async function renderEvento(overrides = {}) {
+      mockFetch({ 'public/event.php': { event: evento(overrides) } });
+      render();
+      return screen.findByRole('heading', { name: 'Recital de Rock' });
+    }
+
+    it('un evento gratis lo dice', async () => {
+      await renderEvento({ precio_referencia: 0 });
+
+      expect(screen.getByText('Gratis')).toBeInTheDocument();
+    });
+
+    it('un evento pago dice desde cuánto sale', async () => {
+      await renderEvento({ precio_referencia: 15000 });
+
+      expect(screen.getByText(/Desde.*15\.000/)).toBeInTheDocument();
+    });
+
+    it('sin precio conocido no dice nada', async () => {
+      await renderEvento({ precio_referencia: null });
+
+      expect(screen.queryByText('Gratis')).not.toBeInTheDocument();
+      expect(screen.queryByText(/Desde/)).not.toBeInTheDocument();
+    });
+
+    it('si vende por acá el precio lo dice el botón, una sola vez', async () => {
+      await renderEvento({
+        precio_referencia: 2000,
+        entradas: {
+          activo: true, es_gratis: false, precio: 2000, moneda: 'ARS',
+          disponibles: 50, max_por_compra: 6, agotado: false,
+          tipos: [
+            { id: 'general', nombre: 'General', precio: 3000, disponibles: 20 },
+            { id: 'anticipada', nombre: 'Anticipada', precio: 2000, disponibles: 20 },
+          ],
+        },
+      });
+
+      expect(screen.getAllByText(/Desde.*2\.000/)).toHaveLength(1);
+      expect(screen.getByRole('button', { name: /COMPRAR ENTRADAS/ })).toBeInTheDocument();
+    });
+  });
 });

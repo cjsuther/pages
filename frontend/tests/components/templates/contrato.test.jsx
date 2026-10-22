@@ -789,53 +789,90 @@ describe.each(PLANTILLAS)('%s', (nombre, Plantilla) => {
     });
   });
 
+  // "Gratis" o "Desde $X" en la tarjeta de cada evento (#32), sin tener que
+  // abrirlo, y en el detalle sin repetir el precio del botón de compra.
   describe('precio de referencia', () => {
-    const conPrecio = (precio, entradas = null) =>
+    const conPrecio = (precio, entradas = null, otros = {}) =>
       pagina({
         groups: [{
           id: 20, title: 'Agenda', type: 'eventos', collaborated_events: [],
-          links: [evento({ precio_desde: precio, entradas })],
+          links: [evento({ precio_referencia: precio, entradas, ...otros })],
         }],
       });
 
     const abrir = () => fireEvent.click(screen.getByText('Mi Evento'));
 
+    const conVenta = {
+      activo: true, es_gratis: false, precio: 1500, moneda: 'ARS',
+      disponibles: 50, max_por_compra: 6, agotado: false,
+    };
+
     /** El cero es la afirmación de que el evento es gratis, no falta de dato. */
-    it('un evento en cero se anuncia como gratis', () => {
+    it('la tarjeta de un evento en cero dice gratis', () => {
       renderConProviders(<Plantilla page={conPrecio(0)} />);
-      abrir();
 
       expect(screen.getByText('Gratis')).toBeInTheDocument();
     });
 
-    it('con precio dice desde cuánto sale', () => {
+    it('la tarjeta dice desde cuánto sale', () => {
       renderConProviders(<Plantilla page={conPrecio(25000)} />);
-      abrir();
 
       expect(screen.getByText(/Desde.*25\.000/)).toBeInTheDocument();
     });
 
+    it('el detalle también lo dice', () => {
+      renderConProviders(<Plantilla page={conPrecio(25000)} />);
+      abrir();
+
+      expect(screen.getAllByText(/Desde.*25\.000/)).toHaveLength(2);
+    });
+
     /** Inventar "Gratis" cuando no se sabe el precio sería mentir. */
-    it('sin dato no anuncia nada', () => {
-      renderConProviders(<Plantilla page={conPrecio(null)} />);
+    it('sin dato no anuncia nada, ni en la tarjeta ni en el detalle', () => {
+      renderConProviders(<Plantilla page={conPrecio(null, null, { precio_desde: null })} />);
+
+      expect(screen.queryByText('Gratis')).not.toBeInTheDocument();
       abrir();
 
       expect(screen.queryByText('Gratis')).not.toBeInTheDocument();
       expect(screen.queryByText(/Desde/)).not.toBeInTheDocument();
     });
 
-    /** Dos precios que podrían no coincidir confunden más de lo que ayudan. */
-    it('no se muestra si el evento vende entradas por acá', () => {
-      const conVenta = {
-        activo: true, es_gratis: false, precio: 1500, moneda: 'ARS',
-        disponibles: 50, max_por_compra: 6, agotado: false,
-      };
+    /** En la tarjeta se ve siempre, también cuando el precio sale de la venta. */
+    it('la tarjeta de un evento que vende por acá muestra el precio de la venta', () => {
+      renderConProviders(<Plantilla page={conPrecio(1500, conVenta, { precio_desde: 25000 })} />);
 
-      renderConProviders(<Plantilla page={conPrecio(25000, conVenta)} />);
+      expect(screen.getByText(/Desde.*1\.500/)).toBeInTheDocument();
+      expect(screen.queryByText(/25\.000/)).not.toBeInTheDocument();
+    });
+
+    /** Dos veces el mismo precio en el detalle, uno arriba del botón, sobra. */
+    it('en el detalle no repite el precio que ya dice el botón de compra', () => {
+      renderConProviders(<Plantilla page={conPrecio(1500, conVenta)} />);
       abrir();
 
-      expect(screen.queryByText(/Desde.*25\.000/)).not.toBeInTheDocument();
+      expect(screen.getAllByText(/Desde.*1\.500/)).toHaveLength(1);
       expect(screen.getByRole('button', { name: /COMPRAR ENTRADAS/ })).toBeInTheDocument();
+    });
+
+    /** "Desde $X" al lado de "Agotado" invita a pensar que todavía hay. */
+    it('un evento agotado no muestra precio', () => {
+      renderConProviders(<Plantilla page={conPrecio(1500, { ...conVenta, agotado: true, disponibles: 0 })} />);
+
+      expect(screen.queryByText(/Desde/)).not.toBeInTheDocument();
+      abrir();
+
+      expect(screen.queryByText(/Desde/)).not.toBeInTheDocument();
+      expect(screen.getByText('AGOTADO')).toBeInTheDocument();
+    });
+
+    /** Un evento que no vino de la API pública arma el precio igual que ella. */
+    it('sin precio_referencia usa el precio cargado', () => {
+      renderConProviders(<Plantilla page={pagina({
+        groups: [{ id: 20, title: 'Agenda', type: 'eventos', collaborated_events: [], links: [evento({ precio_desde: '0.00' })] }],
+      })} />);
+
+      expect(screen.getByText('Gratis')).toBeInTheDocument();
     });
   });
 

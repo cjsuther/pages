@@ -147,6 +147,7 @@ function MinimalTemplate({ page }) {
                             })}
                       </p>
                     )}
+                    <PrecioEvento evento={link} enTarjeta className="mt-2" />
                     <EventCollaborators event={link} currentPageId={page.id} color={page.primary_color || '#3b82f6'} />
                   </div>
                 ))}
