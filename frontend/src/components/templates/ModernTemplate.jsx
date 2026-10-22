@@ -8,6 +8,7 @@ import RedesSociales from '../RedesSociales';
 import BotonEntradas, { vendeEntradas } from '../BotonEntradas';
 import PrecioEvento from '../PrecioEvento';
 import RezonarBadge from '../RezonarBadge';
+import Sugerencias from '../Sugerencias';
 import DetalleProducto, { BotonComprar, tarjetaQueAbre } from '../DetalleProducto';
 import { MiniaturaGaleria, VisorGaleria } from '../MediaGaleria';
 import { textoSobre, paleta } from '../../utils/colores';
@@ -355,6 +356,8 @@ function ModernTemplate({ page }) {
                 </a>
               )}
               <EventCollaborators event={modalEvent} currentPageId={page.id} color={primaryColor} />
+
+              <Sugerencias tipo="evento" id={modalEvent.id} pagina={page.id} colores={colores} className="clear-both mt-8" />
             </div>
           </div>
         </div>
