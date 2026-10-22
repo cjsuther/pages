@@ -270,6 +270,26 @@
         "created_at": "migration_ticketing.sql",
         "updated_at": "migration_ticketing.sql"
     },
+    "page_smtp": {
+        "page_id": "migration_smtp_de_paginas.sql",
+        "host": "migration_smtp_de_paginas.sql",
+        "port": "migration_smtp_de_paginas.sql",
+        "seguridad": "migration_smtp_de_paginas.sql",
+        "usuario": "migration_smtp_de_paginas.sql",
+        "contrasena_cifrada": "migration_smtp_de_paginas.sql",
+        "remitente_email": "migration_smtp_de_paginas.sql",
+        "remitente_nombre": "migration_smtp_de_paginas.sql",
+        "responder_a": "migration_smtp_de_paginas.sql",
+        "verificado_en": "migration_smtp_de_paginas.sql",
+        "actualizado_en": "migration_smtp_de_paginas.sql"
+    },
+    "page_smtp_pruebas": {
+        "id": "migration_smtp_de_paginas.sql",
+        "page_id": "migration_smtp_de_paginas.sql",
+        "user_id": "migration_smtp_de_paginas.sql",
+        "ok": "migration_smtp_de_paginas.sql",
+        "creado_en": "migration_smtp_de_paginas.sql"
+    },
     "page_socials": {
         "id": "migration_page_socials.sql",
         "page_id": "migration_page_socials.sql",

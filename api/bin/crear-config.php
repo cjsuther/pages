@@ -33,10 +33,23 @@ $contenido = preg_replace(
     $cantidad
 );
 
+// La clave que cifra las contraseñas SMTP de las páginas: la del ejemplo
+// también es pública.
+$contenido = preg_replace(
+    "/define\('CLAVE_CIFRADO',\s*'[^']*'\);/",
+    "define('CLAVE_CIFRADO', '" . bin2hex(random_bytes(32)) . "');",
+    $contenido,
+    1,
+    $cantidadCifrado
+);
+
 file_put_contents($config, $contenido);
 
 echo "config.php creado";
 echo $cantidad === 1
     ? " con un JWT_SECRET aleatorio.\n"
     : ". ATENCIÓN: no se pudo generar el JWT_SECRET, cargalo a mano.\n";
+if ($cantidadCifrado !== 1) {
+    echo "ATENCIÓN: no se pudo generar CLAVE_CIFRADO, cargala a mano.\n";
+}
 echo "Faltan las credenciales de base de datos y las claves de OAuth.\n";
