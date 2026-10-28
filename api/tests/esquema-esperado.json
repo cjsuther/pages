@@ -9,6 +9,12 @@
         "revocada_en": "migration_claves_api.sql",
         "created_at": "migration_claves_api.sql"
     },
+    "bajas_de_correo": {
+        "id": "migration_envios_a_clientes.sql",
+        "page_id": "migration_envios_a_clientes.sql",
+        "email": "migration_envios_a_clientes.sql",
+        "creado_en": "migration_envios_a_clientes.sql"
+    },
     "carcajada_ciclos": {
         "id": "migration_carcajada.sql",
         "nombre": "migration_carcajada.sql",
@@ -70,6 +76,32 @@
         "borrado_en": "migration_ordenes_de_productos.sql",
         "creado_en": "migration_productos_digitales.sql",
         "actualizado_en": "migration_productos_digitales.sql"
+    },
+    "envio_destinatarios": {
+        "id": "migration_envios_a_clientes.sql",
+        "envio_id": "migration_envios_a_clientes.sql",
+        "email": "migration_envios_a_clientes.sql",
+        "nombre": "migration_envios_a_clientes.sql",
+        "telefono": "migration_envios_a_clientes.sql",
+        "estado": "migration_envios_a_clientes.sql",
+        "error": "migration_envios_a_clientes.sql",
+        "intentos": "migration_envios_a_clientes.sql",
+        "enviado_en": "migration_envios_a_clientes.sql"
+    },
+    "envios": {
+        "id": "migration_envios_a_clientes.sql",
+        "page_id": "migration_envios_a_clientes.sql",
+        "mensaje_id": "migration_envios_a_clientes.sql",
+        "mensaje_nombre": "migration_envios_a_clientes.sql",
+        "asunto": "migration_envios_a_clientes.sql",
+        "cuerpo": "migration_envios_a_clientes.sql",
+        "reemplazo_nombre": "migration_envios_a_clientes.sql",
+        "creado_por": "migration_envios_a_clientes.sql",
+        "estado": "migration_envios_a_clientes.sql",
+        "motivo_pausa": "migration_envios_a_clientes.sql",
+        "total": "migration_envios_a_clientes.sql",
+        "creado_en": "migration_envios_a_clientes.sql",
+        "terminado_en": "migration_envios_a_clientes.sql"
     },
     "event_access_links": {
         "id": "migration_links_de_evento.sql",
@@ -193,6 +225,16 @@
         "origen_id": "migration_importador.sql",
         "campos_editados": "migration_importador.sql"
     },
+    "mensajes_guardados": {
+        "id": "migration_envios_a_clientes.sql",
+        "page_id": "migration_envios_a_clientes.sql",
+        "nombre": "migration_envios_a_clientes.sql",
+        "asunto": "migration_envios_a_clientes.sql",
+        "cuerpo": "migration_envios_a_clientes.sql",
+        "reemplazo_nombre": "migration_envios_a_clientes.sql",
+        "creado_en": "migration_envios_a_clientes.sql",
+        "actualizado_en": "migration_envios_a_clientes.sql"
+    },
     "notifications": {
         "id": "migration_add_notifications_system.sql",
         "user_id": "migration_add_notifications_system.sql",
@@ -281,7 +323,11 @@
         "remitente_nombre": "migration_smtp_de_paginas.sql",
         "responder_a": "migration_smtp_de_paginas.sql",
         "verificado_en": "migration_smtp_de_paginas.sql",
-        "actualizado_en": "migration_smtp_de_paginas.sql"
+        "actualizado_en": "migration_smtp_de_paginas.sql",
+        "rafaga_tamano": "migration_envios_a_clientes.sql",
+        "rafaga_pausa_minutos": "migration_envios_a_clientes.sql",
+        "tope_diario": "migration_envios_a_clientes.sql",
+        "ultima_rafaga_en": "migration_envios_a_clientes.sql"
     },
     "page_smtp_pruebas": {
         "id": "migration_smtp_de_paginas.sql",

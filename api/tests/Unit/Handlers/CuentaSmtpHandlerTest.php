@@ -411,6 +411,77 @@ class CuentaSmtpHandlerTest extends HandlerTestCase
         $this->assertSame([], $this->mailer->enviados);
     }
 
+    // ------------------------------------------------------------ ráfagas
+
+    private function rafagas(array $datos, $user = null)
+    {
+        return CuentaSmtpHandler::rafagas($this->db, $this->put(array_merge(['page_id' => 5], $datos), $user ?: $this->user()));
+    }
+
+    public function testLaCuentaMuestraLasRafagasConLosValoresPorDefecto()
+    {
+        $this->puedeGestionar();
+        $this->conCuenta();
+
+        $res = CuentaSmtpHandler::index($this->db, $this->get(['page_id' => 5], $this->user()));
+
+        $this->assertSame(['tamano' => 20, 'pausa_minutos' => 10, 'tope_diario' => null], $res->body['cuenta']['rafagas']);
+    }
+
+    public function testGuardaLasRafagas()
+    {
+        $this->puedeGestionar();
+        $this->conCuenta();
+
+        $res = $this->rafagas(['tamano' => '30', 'pausa_minutos' => 15, 'tope_diario' => '450']);
+
+        $this->assertStatus(200, $res);
+        $this->assertSame([30, 15, 450, 5], $this->db->paramsFor('UPDATE page_smtp SET rafaga_tamano'));
+    }
+
+    public function testElTopeDiarioVacioEsSinTope()
+    {
+        $this->puedeGestionar();
+        $this->conCuenta();
+
+        $this->assertStatus(200, $this->rafagas(['tamano' => 20, 'pausa_minutos' => 10, 'tope_diario' => '']));
+        $this->assertNull($this->db->paramsFor('UPDATE page_smtp SET rafaga_tamano')[2]);
+    }
+
+    public function rafagasInvalidas()
+    {
+        return [
+            'ráfaga chica' => [['tamano' => 4, 'pausa_minutos' => 10], 'entre 5 y 100'],
+            'ráfaga grande' => [['tamano' => 101, 'pausa_minutos' => 10], 'entre 5 y 100'],
+            'pausa corta' => [['tamano' => 20, 'pausa_minutos' => 4], 'pausa'],
+            'tope cero' => [['tamano' => 20, 'pausa_minutos' => 10, 'tope_diario' => 0], 'tope'],
+            'tope con letras' => [['tamano' => 20, 'pausa_minutos' => 10, 'tope_diario' => 'mucho'], 'tope'],
+        ];
+    }
+
+    /** @dataProvider rafagasInvalidas */
+    public function testValidaLasRafagas(array $datos, $fragmento)
+    {
+        $this->puedeGestionar();
+        $this->conCuenta();
+
+        $this->assertError(400, $this->rafagas($datos), $fragmento);
+        $this->assertNoWrites();
+    }
+
+    public function testLasRafagasNecesitanCuentaYPermiso()
+    {
+        $this->assertError(403, $this->rafagas(['tamano' => 20, 'pausa_minutos' => 10]));
+
+        $this->puedeGestionar();
+        $this->assertError(404, $this->rafagas(['tamano' => 20, 'pausa_minutos' => 10]));
+
+        $this->assertError(401, CuentaSmtpHandler::rafagas($this->db, $this->put(['page_id' => 5])));
+        $this->assertError(405, CuentaSmtpHandler::rafagas($this->db, $this->get(['page_id' => 5], $this->user())));
+        $this->assertError(400, CuentaSmtpHandler::rafagas($this->db, $this->put([], $this->user())));
+        $this->assertNoWrites();
+    }
+
     public function testUnaContrasenaIlegibleSePideDeNuevo()
     {
         $this->listaParaProbar(['contrasena_cifrada' => 'v1:roto']);

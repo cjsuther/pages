@@ -131,6 +131,136 @@ describe('PanelClientes', () => {
     expect(screen.getByText('Todavía no hay clientes')).toBeInTheDocument();
   });
 
+  describe('selección para mandar emails', () => {
+    const BETO = { ...CLIENTE, email: 'beto@example.com', nombre: 'Beto', participaciones: [], baja: false, puede_recibir: true };
+    const CARO = { ...CLIENTE, email: 'caro@example.com', nombre: 'Caro', participaciones: [], baja: true, puede_recibir: false };
+    const ANA = { ...CLIENTE, baja: false, puede_recibir: true };
+
+    /** Los clientes de la primera página de 50; el servidor dice que hay 120 a los que escribir. */
+    function servidor({ respuestaEnvio = { total: 119, de_baja: 0, envio: { id: 9 } } } = {}) {
+      const llamadas = [];
+      global.fetch = vi.fn((url, opciones = {}) => {
+        const metodo = opciones.method || 'GET';
+        llamadas.push({ url, metodo, cuerpo: opciones.body ? JSON.parse(opciones.body) : null });
+        if (url.includes('clientes.php')) {
+          return respuestaDe({ clientes: [ANA, BETO, CARO], eventos: EVENTOS, resumen: { ...RESUMEN, clientes: 121, contactables: 120 } });
+        }
+        if (url.includes('mensajes.php')) {
+          return respuestaDe({ mensajes: [{ id: 2, nombre: 'Aviso', asunto: 'Hola', cuerpo: 'Hola {primer_nombre},', reemplazo_nombre: '' }], cuenta_configurada: true });
+        }
+        if (url.includes('envios.php') && metodo === 'POST') {
+          return Promise.resolve({ ok: true, status: 201, json: () => Promise.resolve(respuestaEnvio) });
+        }
+        if (url.includes('envios.php')) return respuestaDe({ envios: [] });
+        return Promise.reject(new Error(`fetch no declarado: ${url}`));
+      });
+      return llamadas;
+    }
+
+    async function montarConSeleccion() {
+      const llamadas = servidor();
+      renderConProviders(<PanelClientes pageId={5} apiUrl="https://api.test/api" token="tok" />);
+      await waitFor(() => expect(screen.queryByText('Buscando clientes…')).not.toBeInTheDocument());
+      return llamadas;
+    }
+
+    const barra = () => screen.queryByRole('region', { name: 'Clientes seleccionados' });
+
+    it('se elige por fila y aparece la barra con la cantidad', async () => {
+      await montarConSeleccion();
+
+      expect(barra()).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByLabelText('Elegir a Ana Gómez'));
+      fireEvent.click(screen.getByLabelText('Elegir a Beto'));
+
+      expect(barra()).toHaveTextContent('2 seleccionados');
+
+      fireEvent.click(screen.getByLabelText('Elegir a Beto'));
+      expect(barra()).toHaveTextContent('1 seleccionado');
+    });
+
+    it('quien se dio de baja aparece deshabilitado y con el motivo', async () => {
+      await montarConSeleccion();
+
+      expect(screen.getByLabelText('Elegir a Caro')).toBeDisabled();
+      expect(screen.getByText('Se dio de baja de los mails')).toBeInTheDocument();
+    });
+
+    it('la casilla de la cabecera elige a los N del servidor, no sólo a los cargados', async () => {
+      await montarConSeleccion();
+
+      fireEvent.click(screen.getByLabelText('Seleccionar los 120 clientes con email'));
+
+      expect(barra()).toHaveTextContent('120 seleccionados');
+      expect(screen.getByLabelText('Elegir a Ana Gómez')).toBeChecked();
+
+      // Se pueden destildar algunos.
+      fireEvent.click(screen.getByLabelText('Elegir a Beto'));
+      expect(barra()).toHaveTextContent('119 seleccionados');
+    });
+
+    it('en ese modo manda los filtros y los excluidos, no una lista de emails', async () => {
+      const llamadas = await montarConSeleccion();
+
+      fireEvent.change(screen.getByLabelText('Asistencia'), { target: { value: 'vino' } });
+      await waitFor(() => expect(llamadas.some((l) => l.url.includes('asistencia=vino'))).toBe(true));
+      await waitFor(() => expect(screen.queryByLabelText('Seleccionar los 120 que cumplen el filtro')).toBeInTheDocument());
+
+      fireEvent.click(screen.getByLabelText('Seleccionar los 120 que cumplen el filtro'));
+      fireEvent.click(screen.getByLabelText('Elegir a Beto'));
+      fireEvent.click(screen.getByRole('button', { name: /Enviar email/ }));
+
+      fireEvent.change(await screen.findByLabelText('Mensaje guardado'), { target: { value: '2' } });
+      vi.spyOn(window, 'confirm').mockReturnValue(true);
+      fireEvent.click(screen.getByRole('button', { name: 'Enviar a 119 clientes' }));
+
+      await waitFor(() => expect(llamadas.some((l) => l.metodo === 'POST')).toBe(true));
+      expect(llamadas.find((l) => l.metodo === 'POST').cuerpo.seleccion).toEqual({
+        modo: 'filtros',
+        filtros: { asistencia: 'vino' },
+        excluidos: ['beto@example.com'],
+      });
+
+      // Después de mandar, se ve la pantalla de envíos.
+      expect(await screen.findByText(/119 mails en camino/)).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: 'Envíos' })).toHaveAttribute('aria-selected', 'true');
+      vi.restoreAllMocks();
+    });
+
+    it('cambiar los filtros deshace "todos los que cumplen el filtro"', async () => {
+      await montarConSeleccion();
+
+      fireEvent.click(screen.getByLabelText('Seleccionar los 120 clientes con email'));
+      expect(barra()).toBeInTheDocument();
+
+      fireEvent.change(screen.getByLabelText('Cuenta en Rezonar'), { target: { value: 'si' } });
+
+      await waitFor(() => expect(barra()).not.toBeInTheDocument());
+    });
+
+    it('"Limpiar" vacía la selección', async () => {
+      await montarConSeleccion();
+
+      fireEvent.click(screen.getByLabelText('Elegir a Ana Gómez'));
+      fireEvent.click(screen.getByRole('button', { name: 'Limpiar' }));
+
+      expect(barra()).not.toBeInTheDocument();
+      expect(screen.getByLabelText('Elegir a Ana Gómez')).not.toBeChecked();
+    });
+
+    it('la vista previa usa un cliente elegido', async () => {
+      await montarConSeleccion();
+
+      fireEvent.click(screen.getByLabelText('Elegir a Beto'));
+      fireEvent.click(screen.getByRole('button', { name: /Enviar email/ }));
+      fireEvent.change(await screen.findByLabelText('Mensaje guardado'), { target: { value: '2' } });
+
+      expect(screen.getByTestId('vista-cuerpo')).toHaveTextContent('Hola Beto,');
+      expect(screen.getByText('Para: beto@example.com')).toBeInTheDocument();
+    });
+  });
+
   it('muestra el error del servidor', async () => {
     global.fetch.mockReturnValue(respuestaDe({ error: 'No podés ver los clientes de esta página' }, false));
 

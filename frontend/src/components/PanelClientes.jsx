@@ -1,13 +1,31 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Download, ChevronDown, ChevronUp, Users, UserCheck, Heart } from 'lucide-react';
+import { Search, Download, ChevronDown, ChevronUp, Users, UserCheck, Heart, Mail } from 'lucide-react';
 import { Boton, Campo, Selector, TituloSeccion, Chip, Aviso, Vacio, Cargando } from './ui';
 import { formatearPrecio } from '../utils/entradas';
 import { fechaLegible } from './BuscadorDeVentas';
+import DialogoEnvio from './DialogoEnvio';
+import PanelEnvios from './PanelEnvios';
 
 /** Cuántos clientes se dibujan de entrada. El resto, a pedido. */
 const POR_TANDA = 50;
 
 const FILTROS_VACIOS = { q: '', evento: '', origen: '', asistencia: '', cuenta: '', desde: '', hasta: '' };
+
+/**
+ * A quiénes escribirles. 'emails': los tildados uno por uno. 'filtros': todos
+ * los que cumplen los filtros —también los que todavía no se cargaron—, menos
+ * los destildados. En ese modo el servidor resuelve la lista.
+ */
+const SIN_SELECCION = { modo: 'emails', emails: new Set(), excluidos: new Set() };
+
+const clave = (email) => String(email || '').trim().toLowerCase();
+
+/** Por qué no se le puede escribir, o null si se puede. */
+function motivoSinEmail(c) {
+  if (c.baja) return 'Se dio de baja de los mails';
+  if (c.puede_recibir === false) return 'El email no es válido';
+  return null;
+}
 
 const ESTADOS = {
   pagada: 'Confirmada',
@@ -33,6 +51,15 @@ function PanelClientes({ pageId, apiUrl, token, slug = '' }) {
   const [abierto, setAbierto] = useState(null);
   const [visibles, setVisibles] = useState(POR_TANDA);
   const [exportando, setExportando] = useState(false);
+  const [vista, setVista] = useState('clientes');
+  const [seleccion, setSeleccion] = useState(SIN_SELECCION);
+  const [dialogo, setDialogo] = useState(false);
+  const [avisoEnvio, setAvisoEnvio] = useState(null);
+
+  // "Todos los que cumplen el filtro" es de estos filtros: con otros, es otra gente.
+  useEffect(() => {
+    setSeleccion((actual) => (actual.modo === 'filtros' ? SIN_SELECCION : actual));
+  }, [filtros]);
 
   const consulta = (extra = {}) => {
     const query = new URLSearchParams({ page_id: pageId, ...extra });
@@ -124,12 +151,56 @@ function PanelClientes({ pageId, apiUrl, token, slug = '' }) {
   const eventos = datos ? datos.eventos : [];
   const resumen = datos ? datos.resumen : null;
 
+  // ------------------------------------------------------------ selección
+
+  const contactables = resumen && Number.isInteger(resumen.contactables) ? resumen.contactables : 0;
+  const porFiltro = seleccion.modo === 'filtros';
+  const cantidad = porFiltro ? Math.max(0, contactables - seleccion.excluidos.size) : seleccion.emails.size;
+
+  const elegido = (c) => {
+    if (motivoSinEmail(c)) return false;
+    return porFiltro ? !seleccion.excluidos.has(clave(c.email)) : seleccion.emails.has(clave(c.email));
+  };
+
+  const alternar = (c) => {
+    const k = clave(c.email);
+    const lista = new Set(porFiltro ? seleccion.excluidos : seleccion.emails);
+    if (lista.has(k)) lista.delete(k); else lista.add(k);
+    setSeleccion(porFiltro ? { ...seleccion, excluidos: lista } : { ...seleccion, emails: lista });
+  };
+
+  const alternarTodos = () => {
+    setSeleccion(porFiltro ? SIN_SELECCION : { modo: 'filtros', emails: new Set(), excluidos: new Set() });
+  };
+
+  const pedidoDeSeleccion = () => {
+    if (!porFiltro) return { modo: 'emails', emails: [...seleccion.emails] };
+
+    const activos = Object.fromEntries(Object.entries(filtros).filter(([, valor]) => valor));
+    return { modo: 'filtros', filtros: activos, excluidos: [...seleccion.excluidos] };
+  };
+
+  // Para la vista previa: clientes reales de la selección, con su nombre.
+  const muestra = () => {
+    const cargados = clientes.filter(elegido).slice(0, 50).map((c) => ({ email: c.email, nombre: c.nombre }));
+    if (cargados.length || porFiltro) return cargados;
+    return [...seleccion.emails].slice(0, 50).map((email) => ({ email, nombre: '' }));
+  };
+
+  const alEnviar = (resultado) => {
+    setDialogo(false);
+    setSeleccion(SIN_SELECCION);
+    setVista('envios');
+    const omitidos = resultado.de_baja ? ` ${resultado.de_baja} se dejaron afuera porque se dieron de baja.` : '';
+    setAvisoEnvio(`Listo: ${resultado.total} ${resultado.total === 1 ? 'mail' : 'mails'} en camino. Salen de a tandas en los próximos minutos.${omitidos}`);
+  };
+
   return (
     <div className="bg-white border border-borde rounded-2xl p-6 sm:p-8 mb-8">
       <TituloSeccion
         titulo="Clientes"
         bajada="Quienes compraron o reservaron entradas en tus eventos y en los que colaboraste, y quienes siguen la página. Se conservan aunque borres el evento."
-        acciones={
+        acciones={vista === 'clientes' && (
           <Boton
             variante="secundario"
             onClick={exportar}
@@ -138,9 +209,35 @@ function PanelClientes({ pageId, apiUrl, token, slug = '' }) {
             <Download className="w-4 h-4" />
             {exportando ? 'Generando…' : 'Exportar a Excel'}
           </Boton>
-        }
+        )}
       />
 
+      <div role="tablist" className="flex gap-2 mb-6">
+        {[['clientes', 'Clientes'], ['envios', 'Envíos']].map(([id, texto]) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={vista === id}
+            onClick={() => setVista(id)}
+            className={`px-4 py-2 rounded-full text-sm font-semibold border transition-colors ${
+              vista === id ? 'bg-tinta text-white border-tinta' : 'bg-white text-tinta-media border-borde hover:border-tinta'
+            }`}
+          >
+            {texto}
+          </button>
+        ))}
+      </div>
+
+      {vista === 'envios' && (
+        <>
+          {avisoEnvio && <Aviso tipo="ok" className="mb-4">{avisoEnvio}</Aviso>}
+          <PanelEnvios pageId={pageId} apiUrl={apiUrl} token={token} />
+        </>
+      )}
+
+      {vista === 'clientes' && (
+      <>
       {resumen && (
         <div className="flex flex-wrap gap-2 mb-6">
           <Chip><Users className="w-3.5 h-3.5" />{resumen.clientes} {resumen.clientes === 1 ? 'cliente' : 'clientes'}</Chip>
@@ -232,6 +329,21 @@ function PanelClientes({ pageId, apiUrl, token, slug = '' }) {
       )}
 
       {datos && clientes.length > 0 && (
+        <label className="flex items-center gap-3 px-5 mb-2 text-sm font-semibold text-tinta-media">
+          <input
+            type="checkbox"
+            checked={porFiltro}
+            onChange={alternarTodos}
+            disabled={!contactables}
+            className="w-4 h-4 accent-[#6FBE44]"
+          />
+          {hayFiltros
+            ? `Seleccionar los ${contactables} que cumplen el filtro`
+            : `Seleccionar los ${contactables} clientes con email`}
+        </label>
+      )}
+
+      {datos && clientes.length > 0 && (
         <ul className={`divide-y divide-borde border border-borde rounded-xl ${cargando ? 'opacity-60' : ''}`}>
           {clientes.slice(0, visibles).map((c) => (
             <FilaCliente
@@ -239,6 +351,8 @@ function PanelClientes({ pageId, apiUrl, token, slug = '' }) {
               cliente={c}
               abierto={abierto === c.email}
               alternar={() => setAbierto(abierto === c.email ? null : c.email)}
+              elegido={elegido(c)}
+              alElegir={() => alternar(c)}
             />
           ))}
         </ul>
@@ -251,15 +365,64 @@ function PanelClientes({ pageId, apiUrl, token, slug = '' }) {
           </Boton>
         </div>
       )}
+
+      {cantidad > 0 && (
+        <div className="fixed bottom-4 inset-x-0 z-40 flex justify-center px-4 pointer-events-none">
+          <div
+            role="region"
+            aria-label="Clientes seleccionados"
+            className="pointer-events-auto bg-tinta text-white rounded-full shadow-lg pl-5 pr-2 py-2 flex items-center gap-3 text-sm"
+          >
+            <span className="font-semibold">
+              {cantidad} {cantidad === 1 ? 'seleccionado' : 'seleccionados'}
+            </span>
+            <span aria-hidden="true">·</span>
+            <Boton tamano="sm" onClick={() => setDialogo(true)}>
+              <Mail className="w-4 h-4" /> Enviar email
+            </Boton>
+            <button type="button" onClick={() => setSeleccion(SIN_SELECCION)} className="px-3 py-1.5 underline">
+              Limpiar
+            </button>
+          </div>
+        </div>
+      )}
+      </>
+      )}
+
+      {dialogo && (
+        <DialogoEnvio
+          abierto={dialogo}
+          alCerrar={() => setDialogo(false)}
+          pageId={pageId}
+          apiUrl={apiUrl}
+          token={token}
+          cantidad={cantidad}
+          seleccion={pedidoDeSeleccion()}
+          muestra={muestra()}
+          alEnviar={alEnviar}
+        />
+      )}
     </div>
   );
 }
 
-function FilaCliente({ cliente: c, abierto, alternar }) {
+function FilaCliente({ cliente: c, abierto, alternar, elegido, alElegir }) {
   const Flecha = abierto ? ChevronUp : ChevronDown;
+  const motivo = motivoSinEmail(c);
 
   return (
-    <li>
+    <li className="flex items-start">
+      <label className="pl-5 pt-5 shrink-0" title={motivo || undefined}>
+        <input
+          type="checkbox"
+          checked={elegido}
+          onChange={alElegir}
+          disabled={Boolean(motivo)}
+          aria-label={`Elegir a ${c.nombre || c.email}`}
+          className="w-4 h-4 accent-[#6FBE44] disabled:opacity-40"
+        />
+      </label>
+      <div className="flex-1 min-w-0">
       <button
         type="button"
         onClick={alternar}
@@ -273,6 +436,7 @@ function FilaCliente({ cliente: c, abierto, alternar }) {
             {c.telefono ? ` · ${c.telefono}` : ''}
           </span>
           <span className="flex flex-wrap gap-1.5 mt-2">
+            {motivo && <Chip tono="alerta">{motivo}</Chip>}
             {c.tiene_cuenta && <Chip tono="verde">Cuenta en Rezonar</Chip>}
             {c.sigue && <Chip tono="verde">Sigue la página</Chip>}
             {c.compras > 0 && <Chip>{c.compras} {c.compras === 1 ? 'compra' : 'compras'}</Chip>}
@@ -338,6 +502,7 @@ function FilaCliente({ cliente: c, abierto, alternar }) {
           )}
         </div>
       )}
+      </div>
     </li>
   );
 }

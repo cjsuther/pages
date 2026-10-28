@@ -178,6 +178,45 @@ class CuentaSmtpHandler
         return Response::ok(['enviado' => true, 'mensaje' => 'Te mandamos un mail de prueba a ' . $destinatario]);
     }
 
+    /**
+     * PUT: cómo se reparten los envíos a clientes en ráfagas (#37). Va con la
+     * cuenta: sin cuenta no hay envíos que repartir.
+     */
+    public static function rafagas($db, Request $req)
+    {
+        if (!$req->user) {
+            return Response::unauthorized();
+        }
+
+        if ($req->method !== 'PUT') {
+            return Response::methodNotAllowed();
+        }
+
+        $pageId = self::pageId($req);
+
+        if (!$pageId) {
+            return Response::error(400, 'page_id requerido');
+        }
+
+        if (!PageAccess::canManage($db, $pageId, $req->userId())) {
+            return Response::error(403, 'No podés configurar el email de esta página');
+        }
+
+        if (CuentaSmtp::deLaPagina($db, $pageId) === null) {
+            return Response::notFound('Primero guardá la cuenta');
+        }
+
+        $validado = CuentaSmtp::validarRafagas($req->body);
+
+        if (isset($validado['error'])) {
+            return Response::error(400, $validado['error']);
+        }
+
+        CuentaSmtp::guardarRafagas($db, $pageId, $validado['datos']);
+
+        return Response::ok(['rafagas' => $validado['datos']]);
+    }
+
     private static function pageId(Request $req)
     {
         $pageId = $req->param('page_id');

@@ -96,9 +96,11 @@ export function Campo({ className = '', ...props }) {
   return <input className={`${CLASES_CAMPO} ${className}`} {...props} />;
 }
 
-export function AreaTexto({ className = '', ...props }) {
-  return <textarea className={`${CLASES_CAMPO} ${className}`} {...props} />;
-}
+// Con ref: hay quien necesita saber dónde está el cursor, como el diálogo
+// de envío al insertar una variable.
+export const AreaTexto = React.forwardRef(function AreaTexto({ className = '', ...props }, ref) {
+  return <textarea ref={ref} className={`${CLASES_CAMPO} ${className}`} {...props} />;
+});
 
 export function Selector({ className = '', children, ...props }) {
   return (

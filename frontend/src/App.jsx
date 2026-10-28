@@ -21,6 +21,7 @@ import PaginaDeProducto from './pages/PaginaDeProducto';
 import EstadoOrden from './pages/EstadoOrden';
 import EstadoCompra from './pages/EstadoCompra';
 import Descarga from './pages/Descarga';
+import Baja from './pages/Baja';
 import Autorizar from './pages/Autorizar';
 import SubirImagen from './pages/SubirImagen';
 import { paginaDelDominio } from './utils/dominio';
@@ -127,6 +128,7 @@ function App() {
                 mail, que lleva el token después del #. */}
             <Route path="/compra/:codigo" element={<EstadoCompra apiUrl={API_URL} />} />
             <Route path="/descarga" element={<Descarga apiUrl={API_URL} />} />
+            <Route path="/baja-de-mails" element={<Baja apiUrl={API_URL} />} />
             <Route path="/puerta" element={<Puerta apiUrl={API_URL} />} />
             {/* La clave va en la dirección: es lo que le permite a WhatsApp
                 mostrar el afiche del evento al compartir el link. Sin clave
