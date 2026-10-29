@@ -385,6 +385,18 @@
         "posicion": "migration_productos_fisicos.sql",
         "activa": "migration_productos_fisicos.sql"
     },
+    "product_order_envios": {
+        "order_id": "migration_pedidos_fisicos.sql",
+        "calle": "migration_pedidos_fisicos.sql",
+        "piso_depto": "migration_pedidos_fisicos.sql",
+        "localidad": "migration_pedidos_fisicos.sql",
+        "provincia": "migration_pedidos_fisicos.sql",
+        "codigo_postal": "migration_pedidos_fisicos.sql",
+        "indicaciones": "migration_pedidos_fisicos.sql",
+        "dias": "migration_pedidos_fisicos.sql",
+        "franjas": "migration_pedidos_fisicos.sql",
+        "comentario_horario": "migration_pedidos_fisicos.sql"
+    },
     "product_order_options": {
         "order_id": "migration_productos_fisicos.sql",
         "option_id": "migration_productos_fisicos.sql"
@@ -393,6 +405,12 @@
         "id": "migration_ordenes_de_productos.sql",
         "codigo": "migration_ordenes_de_productos.sql",
         "product_id": "migration_ordenes_de_productos.sql",
+        "producto_titulo": "migration_pedidos_fisicos.sql",
+        "variante_id": "migration_pedidos_fisicos.sql",
+        "opciones_texto": "migration_pedidos_fisicos.sql",
+        "cantidad": "migration_pedidos_fisicos.sql",
+        "precio_unitario": "migration_pedidos_fisicos.sql",
+        "costo_envio": "migration_pedidos_fisicos.sql",
         "nombre": "migration_ordenes_de_productos.sql",
         "email": "migration_ordenes_de_productos.sql",
         "telefono": "migration_ordenes_de_productos.sql",
@@ -402,6 +420,7 @@
         "comision_porcentaje": "migration_ordenes_de_productos.sql",
         "mp_comision_cobrada": "migration_ordenes_de_productos.sql",
         "estado": "migration_ordenes_de_productos.sql",
+        "sin_stock": "migration_pedidos_fisicos.sql",
         "mp_preference_id": "migration_ordenes_de_productos.sql",
         "mp_payment_id": "migration_ordenes_de_productos.sql",
         "pagada_en": "migration_ordenes_de_productos.sql",
@@ -413,6 +432,7 @@
         "mail_enviado_en": "migration_ordenes_de_productos.sql",
         "mail_intentos": "migration_ordenes_de_productos.sql",
         "mail_error": "migration_ordenes_de_productos.sql",
+        "aviso_vendedor_en": "migration_pedidos_fisicos.sql",
         "creado_en": "migration_ordenes_de_productos.sql"
     },
     "product_variants": {
