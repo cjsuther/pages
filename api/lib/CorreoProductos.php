@@ -525,6 +525,186 @@ class CorreoProductos
         return implode("\n", $lineas);
     }
 
+    // ------------------------------------------------- estados del pedido
+
+    const MESES = [
+        1 => 'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+        'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
+    ];
+
+    const DIAS_DE_LA_SEMANA = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+
+    /**
+     * El aviso a quien compró cuando su pedido cambia de estado (#44): Con
+     * fecha de entrega (también cuando se corrige), Enviado, Entregado y
+     * Cancelado. Por la cuenta de la plataforma, como los otros mails de un
+     * pedido, con "responder" a quien vende si cargó un contacto.
+     *
+     * Sale una vez, en el momento: no hay cron que lo reintente. Si falla, el
+     * cambio de estado queda igual y quien vende ve que no salió.
+     *
+     * @param array $orden la de OrdenesDeProductos::orden(), ya con el estado nuevo
+     * @param bool $correccion true si es una fecha de entrega que cambió
+     * @return array{enviado: bool, motivo: string}
+     */
+    public static function avisarEstado(array $orden, $estado, $correccion = false, $mailer = null)
+    {
+        $contenido = self::contenidoDelEstado($orden, $estado, $correccion);
+
+        if ($contenido === null) {
+            return ['enviado' => false, 'motivo' => 'ese estado no se avisa'];
+        }
+
+        $mailer = $mailer === null ? new Mailer() : $mailer;
+
+        $mensaje = [
+            'para'       => $orden['email'],
+            'paraNombre' => $orden['nombre'],
+            'asunto'     => $contenido['asunto'] . ': ' . $orden['producto'],
+            'html'       => self::htmlDelEstado($orden, $contenido),
+            'texto'      => self::textoDelEstado($orden, $contenido),
+        ];
+
+        $contacto = CorreoEntradas::contacto($orden);
+
+        if ($contacto !== null) {
+            $mensaje['responder'] = $contacto;
+        }
+
+        $resultado = $mailer->enviar($mensaje);
+
+        return $resultado['ok']
+            ? ['enviado' => true, 'motivo' => 'aviso enviado']
+            : ['enviado' => false, 'motivo' => $resultado['error']];
+    }
+
+    /** "martes 3 de noviembre". */
+    public static function fechaLarga($fecha)
+    {
+        $t = strtotime((string) $fecha . ' 12:00:00');
+
+        if ($t === false) {
+            return (string) $fecha;
+        }
+
+        return self::DIAS_DE_LA_SEMANA[(int) date('w', $t)] . ' ' . (int) date('j', $t) . ' de ' . self::MESES[(int) date('n', $t)];
+    }
+
+    /**
+     * Lo que dice cada aviso: encabezado, asunto, el párrafo y los renglones.
+     *
+     * @return array|null
+     */
+    private static function contenidoDelEstado(array $orden, $estado, $correccion)
+    {
+        $pagina = (string) $orden['pagina'];
+
+        if ($estado === 'con_fecha') {
+            $franja = empty($orden['entrega_franja']) || !isset(PedidosFisicos::FRANJAS[$orden['entrega_franja']])
+                ? null
+                : mb_strtolower(PedidosFisicos::FRANJAS[$orden['entrega_franja']], 'UTF-8');
+            $cuando = self::fechaLarga($orden['entrega_fecha']) . ($franja === null ? '' : ', a la ' . $franja);
+
+            return [
+                'encabezado' => $correccion ? 'CAMBIÓ LA FECHA DE ENTREGA' : 'FECHA DE ENTREGA',
+                'asunto'     => $correccion ? 'Cambió la fecha de entrega de tu pedido' : 'Tu pedido ya tiene fecha de entrega',
+                'parrafo'    => ($correccion ? 'Cambió la fecha: ' : '') . $pagina . ' te lo entrega el ' . $cuando . '.',
+                'renglones'  => array_merge(
+                    [['Fecha', self::fechaLarga($orden['entrega_fecha'])]],
+                    $franja === null ? [] : [['Franja', PedidosFisicos::FRANJAS[$orden['entrega_franja']]]]
+                ),
+            ];
+        }
+
+        if ($estado === 'enviado') {
+            $renglones = [];
+
+            if (!empty($orden['envio_empresa'])) {
+                $renglones[] = ['Lo lleva', $orden['envio_empresa']];
+            }
+
+            if (!empty($orden['envio_seguimiento'])) {
+                $renglones[] = ['Seguimiento', $orden['envio_seguimiento']];
+            }
+
+            $seguimiento = trim((string) $orden['envio_seguimiento']);
+
+            return [
+                'encabezado' => 'TU PEDIDO ESTÁ EN CAMINO',
+                'asunto'     => 'Tu pedido está en camino',
+                'parrafo'    => $pagina . ' ya despachó tu pedido.',
+                'renglones'  => $renglones,
+                // Un seguimiento que es un link se puede tocar.
+                'link'       => preg_match('#^https?://\S+$#i', $seguimiento) === 1 ? $seguimiento : null,
+            ];
+        }
+
+        if ($estado === 'entregado') {
+            return [
+                'encabezado' => 'PEDIDO ENTREGADO',
+                'asunto'     => 'Tu pedido fue entregado',
+                'parrafo'    => $pagina . ' marcó tu pedido como entregado. ¡Que lo disfrutes!',
+                'renglones'  => [],
+            ];
+        }
+
+        if ($estado === 'cancelado') {
+            return [
+                'encabezado' => 'PEDIDO CANCELADO',
+                'asunto'     => 'Se canceló tu pedido',
+                'parrafo'    => $pagina . ' canceló tu pedido.'
+                    . ((float) $orden['total'] > 0 ? ' Si tenés dudas sobre el pago, escribile.' : ''),
+                'renglones'  => [['Motivo', (string) $orden['cancelado_motivo']]],
+            ];
+        }
+
+        return null;
+    }
+
+    private static function htmlDelEstado(array $orden, array $contenido)
+    {
+        $e = function ($valor) { return htmlspecialchars((string) $valor, ENT_QUOTES, 'UTF-8'); };
+        $url = self::urlDelPedido($orden['codigo']);
+
+        $bloqueSeguimiento = empty($contenido['link'])
+            ? ''
+            : '<p style="text-align:center;margin:16px 0 0"><a href="' . $e($contenido['link'])
+                . '" style="color:#000000;font-weight:700">Ver el seguimiento del envío</a></p>';
+
+        $bloqueContacto = CorreoEntradas::contacto($orden) === null
+            ? ''
+            : ' Si tenés alguna duda, respondé este mail y le llega a ' . $e($orden['pagina']) . '.';
+
+        $cuerpo = '<p style="margin:0 0 16px;color:#444444;font-size:15px">Hola ' . $e($orden['nombre']) . '. '
+            . $e($contenido['parrafo']) . '</p>'
+            . (empty($contenido['renglones']) ? '' : self::tablaHtml($contenido['renglones']))
+            . $bloqueSeguimiento
+            . '<p style="text-align:center;margin:24px 0 0"><a href="' . $e($url) . '"
+       style="display:inline-block;padding:14px 28px;background:#000000;color:#ffffff;
+              text-decoration:none;font-weight:700;border-radius:4px">SEGUIR MI PEDIDO</a></p>'
+            . '<p style="margin:24px 0 0;color:#999999;font-size:12px;line-height:1.6;border-top:1px solid #eeeeee;padding-top:16px">'
+            . 'Código de pedido: ' . $e($orden['codigo']) . '.' . $bloqueContacto . '</p>';
+
+        return self::marcoHtml($contenido['encabezado'], $orden['producto'], $cuerpo);
+    }
+
+    private static function textoDelEstado(array $orden, array $contenido)
+    {
+        $lineas = array_merge(
+            [$contenido['encabezado'] . ': ' . mb_strtoupper($orden['producto']), '', 'Hola ' . $orden['nombre'] . '. ' . $contenido['parrafo']],
+            empty($contenido['renglones']) ? [] : array_merge([''], self::textoDeRenglones($contenido['renglones'])),
+            ['', 'Seguí tu pedido: ' . self::urlDelPedido($orden['codigo']), 'Código de pedido: ' . $orden['codigo']]
+        );
+
+        $contacto = CorreoEntradas::contacto($orden);
+
+        if ($contacto !== null) {
+            $lineas[] = 'Dudas: ' . $contacto;
+        }
+
+        return implode("\n", $lineas);
+    }
+
     /** Quién compró: lo que hace falta para coordinar la entrega. */
     private static function renglonesDelComprador(array $orden)
     {
