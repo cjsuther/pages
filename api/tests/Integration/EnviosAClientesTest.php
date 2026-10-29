@@ -149,7 +149,11 @@ class EnviosAClientesTest extends IntegracionTestCase
         $this->assertSame('La Sala', $baja->body['pagina']);
 
         $clientes = ClientesHandler::index($this->db, $this->get(['page_id' => $this->pageId], $this->user($this->duena)));
-        $this->assertSame(['ana@example.com' => true, 'beto@example.com' => false], array_column($clientes->body['clientes'], 'baja', 'email'));
+        // La lista va por última actividad: si las dos compras caen en
+        // segundos distintos, Beto sale primero. Lo que importa es la marca.
+        $bajas = array_column($clientes->body['clientes'], 'baja', 'email');
+        ksort($bajas);
+        $this->assertSame(['ana@example.com' => true, 'beto@example.com' => false], $bajas);
         $this->assertSame(1, $clientes->body['resumen']['contactables']);
 
         $res = $this->crearEnvio(['modo' => 'filtros']);
