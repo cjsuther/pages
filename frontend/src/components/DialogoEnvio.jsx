@@ -12,8 +12,15 @@ const VACIO = { nombre: '', asunto: '', cuerpo: '', reemplazo_nombre: '' };
  * {primer_nombre} se reemplazan por el de cada cliente; la vista previa usa
  * uno real de la selección. Al confirmar se crea el envío y lo manda el
  * servidor por ráfagas.
+ *
+ * `alElegirMensaje` avisa qué mensaje guardado se está usando, y
+ * `alCambiarMensajes` la lista después de guardar o borrar: Clientes los usa
+ * para el mensaje de WhatsApp (#38).
  */
-function DialogoEnvio({ abierto, alCerrar, pageId, apiUrl, token, cantidad, seleccion, muestra = [], alEnviar }) {
+function DialogoEnvio({
+  abierto, alCerrar, pageId, apiUrl, token, cantidad, seleccion, muestra = [], alEnviar,
+  alElegirMensaje = () => {}, alCambiarMensajes = () => {},
+}) {
   const [cargando, setCargando] = useState(true);
   const [cuentaConfigurada, setCuentaConfigurada] = useState(true);
   const [mensajes, setMensajes] = useState([]);
@@ -79,6 +86,7 @@ function DialogoEnvio({ abierto, alCerrar, pageId, apiUrl, token, cantidad, sele
     setForm(mensaje
       ? { nombre: mensaje.nombre, asunto: mensaje.asunto, cuerpo: mensaje.cuerpo, reemplazo_nombre: mensaje.reemplazo_nombre || '' }
       : VACIO);
+    if (mensaje) alElegirMensaje(mensaje.id);
   };
 
   const insertar = (variable) => {
@@ -118,9 +126,10 @@ function DialogoEnvio({ abierto, alCerrar, pageId, apiUrl, token, cantidad, sele
     if (!cuerpo) return;
 
     const guardado = cuerpo.mensaje;
-    setMensajes((actuales) => (editando
-      ? actuales.map((m) => (m.id === guardado.id ? guardado : m))
-      : [...actuales, guardado]));
+    const lista = editando ? mensajes.map((m) => (m.id === guardado.id ? guardado : m)) : [...mensajes, guardado];
+    setMensajes(lista);
+    alCambiarMensajes(lista);
+    alElegirMensaje(guardado.id);
     setElegido(String(guardado.id));
     setAviso({ tipo: 'ok', texto: 'Mensaje guardado' });
   };
@@ -131,7 +140,9 @@ function DialogoEnvio({ abierto, alCerrar, pageId, apiUrl, token, cantidad, sele
     const cuerpo = await pedir('borrar', urlMensajes(`&id=${elegido}`), { method: 'DELETE' });
     if (!cuerpo) return;
 
-    setMensajes((actuales) => actuales.filter((m) => String(m.id) !== elegido));
+    const lista = mensajes.filter((m) => String(m.id) !== elegido);
+    setMensajes(lista);
+    alCambiarMensajes(lista);
     setElegido('');
     setForm(VACIO);
     setAviso({ tipo: 'ok', texto: 'Mensaje borrado' });

@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Download, ChevronDown, ChevronUp, Users, UserCheck, Heart, Mail } from 'lucide-react';
-import { Boton, Campo, Selector, TituloSeccion, Chip, Aviso, Vacio, Cargando } from './ui';
+import { Boton, Campo, Selector, Etiqueta, TituloSeccion, Chip, Aviso, Vacio, Cargando } from './ui';
 import { formatearPrecio } from '../utils/entradas';
+import { urlDeWhatsApp } from '../utils/telefono';
+import { textoParaWhatsApp } from '../utils/mensajes';
 import { fechaLegible } from './BuscadorDeVentas';
+import { IconoDeMarca } from './IconosRedes';
 import DialogoEnvio from './DialogoEnvio';
 import PanelEnvios from './PanelEnvios';
 
@@ -25,6 +28,29 @@ function motivoSinEmail(c) {
   if (c.baja) return 'Se dio de baja de los mails';
   if (c.puede_recibir === false) return 'El email no es válido';
   return null;
+}
+
+/**
+ * El mensaje de WhatsApp elegido se recuerda por página. En modo privado
+ * localStorage puede fallar: no es grave, se vuelve a "Sin mensaje".
+ */
+const claveDeWhatsApp = (pageId) => `rezonar:clientes:whatsapp:${pageId}`;
+
+function leerMensajeDeWhatsApp(pageId) {
+  try {
+    return window.localStorage.getItem(claveDeWhatsApp(pageId)) || '';
+  } catch (e) {
+    return '';
+  }
+}
+
+function guardarMensajeDeWhatsApp(pageId, id) {
+  try {
+    if (id) window.localStorage.setItem(claveDeWhatsApp(pageId), id);
+    else window.localStorage.removeItem(claveDeWhatsApp(pageId));
+  } catch (e) {
+    // Sin localStorage la elección dura lo que dure la pantalla.
+  }
 }
 
 const ESTADOS = {
@@ -55,6 +81,38 @@ function PanelClientes({ pageId, apiUrl, token, slug = '' }) {
   const [seleccion, setSeleccion] = useState(SIN_SELECCION);
   const [dialogo, setDialogo] = useState(false);
   const [avisoEnvio, setAvisoEnvio] = useState(null);
+  const [mensajes, setMensajes] = useState([]);
+  const [mensajeWa, setMensajeWa] = useState(() => leerMensajeDeWhatsApp(pageId));
+
+  // Los mensajes guardados, para el de WhatsApp. Si no se pueden traer, sólo
+  // queda "Sin mensaje": no vale la pena trabar la lista de clientes por eso.
+  useEffect(() => {
+    let vigente = true;
+    setMensajeWa(leerMensajeDeWhatsApp(pageId));
+
+    (async () => {
+      try {
+        const r = await fetch(`${apiUrl}/pages/mensajes.php?page_id=${pageId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const cuerpo = await r.json();
+        if (vigente && r.ok && Array.isArray(cuerpo.mensajes)) setMensajes(cuerpo.mensajes);
+      } catch (e) {
+        // Se sigue sin mensajes.
+      }
+    })();
+
+    return () => { vigente = false; };
+  }, [pageId, apiUrl, token]);
+
+  const elegirMensajeWa = (id) => {
+    const valor = id ? String(id) : '';
+    setMensajeWa(valor);
+    guardarMensajeDeWhatsApp(pageId, valor);
+  };
+
+  // Un id recordado de un mensaje que ya se borró cuenta como "Sin mensaje".
+  const mensajeDeWhatsApp = mensajes.find((m) => String(m.id) === mensajeWa) || null;
 
   // "Todos los que cumplen el filtro" es de estos filtros: con otros, es otra gente.
   useEffect(() => {
@@ -329,6 +387,30 @@ function PanelClientes({ pageId, apiUrl, token, slug = '' }) {
       )}
 
       {datos && clientes.length > 0 && (
+        <div className="mb-4 max-w-md">
+          <Etiqueta htmlFor="clientes-whatsapp">Mensaje para WhatsApp</Etiqueta>
+          <Selector
+            id="clientes-whatsapp"
+            value={mensajeDeWhatsApp ? mensajeWa : ''}
+            onChange={(e) => elegirMensajeWa(e.target.value)}
+          >
+            <option value="">Sin mensaje</option>
+            {mensajes.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+          </Selector>
+          <p className="text-xs text-tinta-suave mt-2">
+            Tocá un teléfono para abrir WhatsApp con este mensaje ya escrito y el nombre del cliente.
+          </p>
+          {mensajeDeWhatsApp && clientes.slice(0, visibles).some(
+            (c) => c.telefono && textoParaWhatsApp(mensajeDeWhatsApp, c.nombre).recortado
+          ) && (
+            <Aviso tipo="atencion" className="mt-2">
+              El mensaje es muy largo para un link de WhatsApp: se recorta y termina en “…”.
+            </Aviso>
+          )}
+        </div>
+      )}
+
+      {datos && clientes.length > 0 && (
         <label className="flex items-center gap-3 px-5 mb-2 text-sm font-semibold text-tinta-media">
           <input
             type="checkbox"
@@ -353,6 +435,7 @@ function PanelClientes({ pageId, apiUrl, token, slug = '' }) {
               alternar={() => setAbierto(abierto === c.email ? null : c.email)}
               elegido={elegido(c)}
               alElegir={() => alternar(c)}
+              mensajeWa={mensajeDeWhatsApp}
             />
           ))}
         </ul>
@@ -400,13 +483,15 @@ function PanelClientes({ pageId, apiUrl, token, slug = '' }) {
           seleccion={pedidoDeSeleccion()}
           muestra={muestra()}
           alEnviar={alEnviar}
+          alElegirMensaje={elegirMensajeWa}
+          alCambiarMensajes={setMensajes}
         />
       )}
     </div>
   );
 }
 
-function FilaCliente({ cliente: c, abierto, alternar, elegido, alElegir }) {
+function FilaCliente({ cliente: c, abierto, alternar, elegido, alElegir, mensajeWa }) {
   const Flecha = abierto ? ChevronUp : ChevronDown;
   const motivo = motivoSinEmail(c);
 
@@ -431,10 +516,7 @@ function FilaCliente({ cliente: c, abierto, alternar, elegido, alElegir }) {
       >
         <span className="min-w-0">
           <span className="block font-bold truncate">{c.nombre || c.email}</span>
-          <span className="block text-sm text-tinta-media truncate">
-            {c.email}
-            {c.telefono ? ` · ${c.telefono}` : ''}
-          </span>
+          <span className="block text-sm text-tinta-media truncate">{c.email}</span>
           <span className="flex flex-wrap gap-1.5 mt-2">
             {motivo && <Chip tono="alerta">{motivo}</Chip>}
             {c.tiene_cuenta && <Chip tono="verde">Cuenta en Rezonar</Chip>}
@@ -457,8 +539,21 @@ function FilaCliente({ cliente: c, abierto, alternar, elegido, alElegir }) {
         </span>
       </button>
 
+      {/* Fuera del botón: un link adentro de un botón no es HTML válido. */}
+      {c.telefono && !abierto && (
+        <div className="px-5 pb-4 -mt-2 text-sm text-tinta-media">
+          <TelefonoWhatsApp cliente={c} mensaje={mensajeWa} />
+        </div>
+      )}
+
       {abierto && (
         <div className="px-5 pb-5">
+          {c.telefono && (
+            <p className="text-sm text-tinta-media mb-3 flex items-center gap-2">
+              <span className="font-semibold">Teléfono:</span>
+              <TelefonoWhatsApp cliente={c} mensaje={mensajeWa} />
+            </p>
+          )}
           {c.participaciones.length === 0 ? (
             <p className="text-sm text-tinta-suave">
               Sigue la página{c.sigue_desde ? ` desde el ${fechaCorta(c.sigue_desde)}` : ''}. Todavía no compró entradas.
@@ -504,6 +599,40 @@ function FilaCliente({ cliente: c, abierto, alternar, elegido, alElegir }) {
       )}
       </div>
     </li>
+  );
+}
+
+/**
+ * El teléfono como link a WhatsApp, con el mensaje elegido ya escrito (#38).
+ *
+ * No pasa por el servidor: abre wa.me desde el navegador de quien atiende, o
+ * la app en el celular. Si el número no se puede interpretar con seguridad,
+ * queda como texto en vez de mandar a un número equivocado.
+ */
+function TelefonoWhatsApp({ cliente: c, mensaje }) {
+  const { texto, recortado } = textoParaWhatsApp(mensaje, c.nombre);
+  const url = urlDeWhatsApp(c.telefono, texto);
+
+  if (!url) {
+    return (
+      <span title="No pudimos interpretar el número para abrir WhatsApp: revisá que tenga la característica">
+        {c.telefono}
+      </span>
+    );
+  }
+
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={`Escribirle por WhatsApp a ${c.nombre || c.email}`}
+      title={recortado ? 'El mensaje es muy largo para WhatsApp: va recortado' : undefined}
+      className="inline-flex items-center gap-1 hover:text-verde-oscuro transition-colors"
+    >
+      <IconoDeMarca red="whatsapp" className="w-3.5 h-3.5 shrink-0" />
+      {c.telefono}
+    </a>
   );
 }
 

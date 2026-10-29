@@ -261,6 +261,145 @@ describe('PanelClientes', () => {
     });
   });
 
+  describe('WhatsApp con el mensaje elegido', () => {
+    const MENSAJES = [
+      { id: 2, nombre: 'Aviso', asunto: 'Volvemos', cuerpo: 'Hola {primer_nombre}, volvemos el sábado & más', reemplazo_nombre: 'amiga' },
+      { id: 3, nombre: 'Largo', asunto: 'Largo', cuerpo: 'ñ'.repeat(1500), reemplazo_nombre: '' },
+    ];
+    const SIN_NOMBRE = { ...CLIENTE, email: 'x@example.com', nombre: '', telefono: '011 15 5555-5555', participaciones: [] };
+    const SIN_TELEFONO = { ...CLIENTE, email: 'beto@example.com', nombre: 'Beto', telefono: '', participaciones: [] };
+    const RARO = { ...CLIENTE, email: 'caro@example.com', nombre: 'Caro', telefono: '555-5555', participaciones: [] };
+
+    function servidor(clientes = [CLIENTE, SIN_NOMBRE, SIN_TELEFONO, RARO]) {
+      global.fetch = vi.fn((url) => {
+        if (url.includes('clientes.php')) return respuestaDe({ clientes, eventos: EVENTOS, resumen: { ...RESUMEN, contactables: 4 } });
+        if (url.includes('mensajes.php')) return respuestaDe({ mensajes: MENSAJES, cuenta_configurada: true });
+        if (url.includes('envios.php')) return respuestaDe({ envios: [] });
+        return Promise.reject(new Error(`fetch no declarado: ${url}`));
+      });
+    }
+
+    async function montarWa(pageId = 5) {
+      const vista = renderConProviders(<PanelClientes pageId={pageId} apiUrl="https://api.test/api" token="tok" />);
+      await waitFor(() => expect(screen.queryByText('Buscando clientes…')).not.toBeInTheDocument());
+      // Que hayan llegado los mensajes guardados.
+      await screen.findByRole('option', { name: 'Aviso' });
+      return vista;
+    }
+
+    const link = (nombre) => screen.getByRole('link', { name: `Escribirle por WhatsApp a ${nombre}` });
+    const selector = () => screen.getByLabelText('Mensaje para WhatsApp');
+
+    beforeEach(() => {
+      window.localStorage.clear();
+      servidor();
+    });
+
+    it('"Sin mensaje" abre el chat vacío, con el número normalizado', async () => {
+      await montarWa();
+
+      expect(selector()).toHaveValue('');
+      expect(link('Ana Gómez')).toHaveAttribute('href', 'https://wa.me/5491122334455');
+      expect(link('Ana Gómez')).toHaveAttribute('target', '_blank');
+      expect(link('x@example.com')).toHaveAttribute('href', 'https://wa.me/5491155555555');
+    });
+
+    it('con un mensaje elegido, el link lleva el cuerpo con el nombre reemplazado', async () => {
+      await montarWa();
+
+      fireEvent.change(selector(), { target: { value: '2' } });
+
+      const url = new URL(link('Ana Gómez').getAttribute('href'));
+      expect(url.origin + url.pathname).toBe('https://wa.me/5491122334455');
+      expect(url.searchParams.get('text')).toBe('Hola Ana, volvemos el sábado & más');
+      expect(link('Ana Gómez').getAttribute('href')).toContain(encodeURIComponent('Hola Ana, volvemos el sábado & más'));
+
+      // Sin nombre va el reemplazo del mensaje; el asunto no va.
+      const otro = new URL(link('x@example.com').getAttribute('href'));
+      expect(otro.searchParams.get('text')).toBe('Hola amiga, volvemos el sábado & más');
+    });
+
+    it('también en el detalle desplegado', async () => {
+      await montarWa();
+      fireEvent.change(selector(), { target: { value: '2' } });
+
+      fireEvent.click(screen.getByText('Ana Gómez'));
+
+      expect(screen.getByText('Teléfono:')).toBeInTheDocument();
+      expect(new URL(link('Ana Gómez').getAttribute('href')).searchParams.get('text')).toBe('Hola Ana, volvemos el sábado & más');
+    });
+
+    it('sin teléfono no hay link, y uno que no se entiende queda como texto con la explicación', async () => {
+      await montarWa();
+
+      expect(screen.queryByRole('link', { name: 'Escribirle por WhatsApp a Beto' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'Escribirle por WhatsApp a Caro' })).not.toBeInTheDocument();
+      expect(screen.getByText('555-5555')).toHaveAttribute('title', expect.stringMatching(/No pudimos interpretar el número/));
+    });
+
+    it('la elección se recuerda por página', async () => {
+      const primera = await montarWa();
+      fireEvent.change(selector(), { target: { value: '2' } });
+      primera.unmount();
+
+      const segunda = await montarWa();
+      expect(selector()).toHaveValue('2');
+      expect(link('Ana Gómez').getAttribute('href')).toContain('?text=');
+      segunda.unmount();
+
+      // Otra página no hereda la elección.
+      servidor();
+      const otra = await montarWa(6);
+      expect(selector()).toHaveValue('');
+      otra.unmount();
+    });
+
+    it('si localStorage falla, sigue andando con "Sin mensaje"', async () => {
+      const getItem = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('privado'); });
+      const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('privado'); });
+
+      await montarWa();
+      expect(selector()).toHaveValue('');
+      fireEvent.change(selector(), { target: { value: '2' } });
+      expect(selector()).toHaveValue('2');
+
+      getItem.mockRestore();
+      setItem.mockRestore();
+    });
+
+    it('un mensaje recordado que se borró cuenta como "Sin mensaje"', async () => {
+      window.localStorage.setItem('rezonar:clientes:whatsapp:5', '99');
+
+      await montarWa();
+
+      expect(selector()).toHaveValue('');
+      expect(link('Ana Gómez')).toHaveAttribute('href', 'https://wa.me/5491122334455');
+    });
+
+    it('un mensaje demasiado largo se avisa y se recorta con "…"', async () => {
+      await montarWa();
+
+      expect(screen.queryByText(/muy largo para un link de WhatsApp/)).not.toBeInTheDocument();
+      fireEvent.change(selector(), { target: { value: '3' } });
+
+      expect(screen.getByText(/muy largo para un link de WhatsApp/)).toBeInTheDocument();
+      const href = link('Ana Gómez').getAttribute('href');
+      expect(new URL(href).searchParams.get('text').endsWith('…')).toBe(true);
+      expect(href.split('?text=')[1].length).toBeLessThanOrEqual(2000);
+    });
+
+    it('el mensaje elegido en el diálogo de email se preselecciona', async () => {
+      await montarWa();
+
+      fireEvent.click(screen.getByLabelText('Elegir a Ana Gómez'));
+      fireEvent.click(screen.getByRole('button', { name: /Enviar email/ }));
+      fireEvent.change(await screen.findByLabelText('Mensaje guardado'), { target: { value: '2' } });
+
+      expect(selector()).toHaveValue('2');
+      expect(window.localStorage.getItem('rezonar:clientes:whatsapp:5')).toBe('2');
+    });
+  });
+
   it('muestra el error del servidor', async () => {
     global.fetch.mockReturnValue(respuestaDe({ error: 'No podés ver los clientes de esta página' }, false));
 
