@@ -30,6 +30,8 @@ function PaginaDeProducto() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
   const [comprando, setComprando] = useState(false);
+  // Las opciones de un físico que ya se eligieron antes de tocar Comprar.
+  const [seleccion, setSeleccion] = useState({});
 
   useEffect(() => {
     let vigente = true;
@@ -118,7 +120,10 @@ function PaginaDeProducto() {
           <Producto
             producto={producto}
             colores={colores}
-            onComprar={() => setComprando(true)}
+            onComprar={(elegidas) => {
+              setSeleccion(elegidas || {});
+              setComprando(true);
+            }}
             Titulo="h1"
             colorTitulo={colores.titulo}
           />
@@ -132,6 +137,7 @@ function PaginaDeProducto() {
           producto={producto}
           apiUrl={apiUrl}
           color={colores.boton}
+          seleccionInicial={seleccion}
           onCerrar={() => setComprando(false)}
         />
       )}

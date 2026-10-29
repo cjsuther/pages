@@ -99,11 +99,13 @@ export async function compartirLink({ url, titulo }) {
  * respuesta de la API.
  *
  * - 409: el producto se ocultó o se borró mientras tenía la página abierta.
+ *   En un físico (#43) también es el stock: no alcanza para la cantidad, o
+ *   se agotó. Ahí se dice lo que manda la API.
  * - 429: pidió demasiados productos gratis en la última hora.
  * - 400: algún dato no sirve; la API dice cuál.
  */
-export function mensajeDeErrorDeCompra(status, error) {
-  if (status === 409) return MENSAJE_NO_DISPONIBLE;
+export function mensajeDeErrorDeCompra(status, error, fisico = false) {
+  if (status === 409) return (fisico && error) || MENSAJE_NO_DISPONIBLE;
   if (status === 429) return error || 'Hiciste demasiados pedidos en poco tiempo. Probá de nuevo en una hora.';
   if (status === 400) return error || 'Revisá los datos: hay algo que no está bien.';
   return error || 'No pudimos iniciar la compra';
@@ -116,16 +118,17 @@ export function mensajeDeErrorDeCompra(status, error) {
  * al volver a /compra/:codigo la pantalla lo busca para ofrecer la descarga.
  * Un producto gratis no trae token: el link llega por mail.
  */
-export async function comprarProducto({ apiUrl, linkId, nombre, email, telefono }) {
+export async function comprarProducto({ apiUrl, linkId, nombre, email, telefono, pedido }) {
   const r = await fetch(`${apiUrl}/public/comprar-producto.php`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ link_id: linkId, nombre, email, telefono }),
+    // Un físico (#43) suma cantidad, opciones, envío y horarios.
+    body: JSON.stringify({ link_id: linkId, nombre, email, telefono, ...(pedido || {}) }),
   });
   const data = await r.json().catch(() => ({}));
 
   if (!r.ok) {
-    const error = new Error(mensajeDeErrorDeCompra(r.status, data.error));
+    const error = new Error(mensajeDeErrorDeCompra(r.status, data.error, Boolean(pedido)));
     error.status = r.status;
     throw error;
   }
@@ -303,3 +306,97 @@ export function problemaDeCaracteristicas(caracteristicas) {
 
 /** Un stock válido: vacío (sin límite) o un entero >= 0. */
 export const stockValido = (valor) => valor === '' || valor === null || valor === undefined || /^\d+$/.test(String(valor).trim());
+
+// ------------------------------------------------ pedido de un físico (#43)
+
+/** Lo mismo que valida la API en api/lib/PedidosFisicos.php. */
+export const MAX_CANTIDAD = 10;
+
+/** Las 23 provincias y la Ciudad de Buenos Aires. */
+export const PROVINCIAS = [
+  'Buenos Aires', 'Ciudad Autónoma de Buenos Aires', 'Catamarca', 'Chaco', 'Chubut', 'Córdoba',
+  'Corrientes', 'Entre Ríos', 'Formosa', 'Jujuy', 'La Pampa', 'La Rioja', 'Mendoza', 'Misiones',
+  'Neuquén', 'Río Negro', 'Salta', 'San Juan', 'San Luis', 'Santa Cruz', 'Santa Fe',
+  'Santiago del Estero', 'Tierra del Fuego', 'Tucumán',
+];
+
+export const DIAS = [
+  { clave: 'lunes', nombre: 'Lunes' }, { clave: 'martes', nombre: 'Martes' },
+  { clave: 'miercoles', nombre: 'Miércoles' }, { clave: 'jueves', nombre: 'Jueves' },
+  { clave: 'viernes', nombre: 'Viernes' }, { clave: 'sabado', nombre: 'Sábado' },
+  { clave: 'domingo', nombre: 'Domingo' },
+];
+
+export const FRANJAS = [
+  { clave: 'manana', nombre: 'Mañana' }, { clave: 'tarde', nombre: 'Tarde' }, { clave: 'noche', nombre: 'Noche' },
+];
+
+/** Cómo se lee una lista de claves de DIAS o FRANJAS: "Lunes, Martes y Sábado". */
+export function describirClaves(claves = [], lista = DIAS) {
+  const nombres = lista.filter((d) => (claves || []).includes(d.clave)).map((d) => d.nombre);
+  if (nombres.length <= 1) return nombres.join('');
+  return `${nombres.slice(0, -1).join(', ')} y ${nombres[nombres.length - 1]}`;
+}
+
+/** Los datos de entrega de un formulario vacío. */
+export const entregaVacia = () => ({
+  calle: '', piso_depto: '', localidad: '', provincia: '', codigo_postal: '', indicaciones: '',
+  dias: [], franjas: [], comentario: '',
+});
+
+/** Un monto en pesos: "$ 5.500". */
+export const pesos = (monto) => `$ ${Number(monto || 0).toLocaleString('es-AR', { maximumFractionDigits: 2 })}`;
+
+const centavos = (monto) => Math.round(Number(monto || 0) * 100);
+
+/** Precio × cantidad + envío, como lo cobra la API. */
+export function totalDelPedido(precio, cantidad, costoEnvio) {
+  const subtotal = centavos(precio) * Number(cantidad || 0);
+  const envio = centavos(costoEnvio);
+  return { subtotal: subtotal / 100, envio: envio / 100, total: (subtotal + envio) / 100 };
+}
+
+/** 4 números (1414) o el CPA de 8 caracteres (C1414BAD). */
+export const codigoPostalValido = (cp) => /^(\d{4}|[A-Za-z]\d{4}[A-Za-z]{3})$/.test(String(cp || '').replace(/\s/g, ''));
+
+/**
+ * Qué falta o está mal en el pedido de un físico antes de mandarlo, o null.
+ * La API valida lo mismo: esto es para avisar sin ir y volver.
+ */
+export function problemaDelPedido({ producto, seleccion = {}, telefono, entrega }) {
+  const falta = (producto.caracteristicas || []).filter((c) => seleccion[c.id] === undefined);
+  if (falta.length) return `Elegí ${falta.map((c) => c.nombre.toLowerCase()).join(' y ')}`;
+
+  const digitos = String(telefono || '').replace(/\D/g, '');
+  if (!String(telefono || '').trim()) return 'Falta el teléfono: lo necesitamos para coordinar la entrega';
+  if (digitos.length < 6) return 'El teléfono no es válido';
+
+  if (!entrega.calle.trim()) return 'Falta la calle y el número';
+  if (!entrega.localidad.trim()) return 'Falta la localidad';
+  if (!PROVINCIAS.includes(entrega.provincia)) return 'Elegí la provincia';
+  if (!entrega.codigo_postal.trim()) return 'Falta el código postal';
+  if (!codigoPostalValido(entrega.codigo_postal)) {
+    return 'El código postal no es válido: son 4 números (1414) o 8 caracteres (C1414BAD)';
+  }
+  if (!entrega.dias.length) return 'Elegí al menos un día para recibir el pedido';
+  if (!entrega.franjas.length) return 'Elegí al menos una franja: mañana, tarde o noche';
+
+  return null;
+}
+
+/** Lo que se le manda a la API del pedido de un físico. */
+export function cuerpoDelPedido({ producto, seleccion = {}, cantidad, entrega }) {
+  return {
+    cantidad: Number(cantidad),
+    opciones: (producto.caracteristicas || []).map((c) => seleccion[c.id]),
+    envio: {
+      calle: entrega.calle.trim(),
+      piso_depto: entrega.piso_depto.trim(),
+      localidad: entrega.localidad.trim(),
+      provincia: entrega.provincia,
+      codigo_postal: entrega.codigo_postal.trim(),
+      indicaciones: entrega.indicaciones.trim(),
+    },
+    horarios: { dias: entrega.dias, franjas: entrega.franjas, comentario: entrega.comentario.trim() },
+  };
+}

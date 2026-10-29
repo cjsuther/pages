@@ -6,7 +6,7 @@ import { paleta } from '../../src/utils/colores';
 
 /**
  * Un producto físico en la página pública (#42): el envío, un selector por
- * característica, "Agotado" y el botón que todavía dice "Próximamente".
+ * característica, "Agotado" y el botón de comprar (#43).
  */
 
 const colores = paleta({ background_color: '#ffffff', text_color: '#000000', primary_color: '#ff8800' });
@@ -103,16 +103,14 @@ describe('Producto físico en la página', () => {
     expect(opcion('Talle', 'M')).toHaveAttribute('aria-checked', 'false');
   });
 
-  it('todavía no se compra: el botón dice Próximamente y no hace nada', () => {
+  it('Comprar lleva al formulario con las opciones ya elegidas (#43)', () => {
     const onComprar = montar(conTalleYColor());
 
     fireEvent.click(opcion('Talle', 'M'));
     fireEvent.click(opcion('Color', 'Negro'));
-    const boton = screen.getByRole('button', { name: 'Próximamente' });
-    fireEvent.click(boton);
+    fireEvent.click(screen.getByRole('button', { name: 'Comprar' }));
 
-    expect(boton).toBeDisabled();
-    expect(onComprar).not.toHaveBeenCalled();
+    expect(onComprar).toHaveBeenCalledWith({ 10: 2, 20: 3 });
   });
 
   it('todo agotado: el botón dice Agotado y no ofrece opciones', () => {
@@ -141,10 +139,13 @@ describe('BotonComprar de la tarjeta', () => {
     expect(onComprar).not.toHaveBeenCalled();
   });
 
-  it('en un físico con stock dice Próximamente', () => {
-    render(<BotonComprar producto={fisico()} colores={colores} onComprar={vi.fn()} />);
+  it('en un físico con stock dice Comprar, aunque sea gratis', () => {
+    const onComprar = vi.fn();
+    render(<BotonComprar producto={fisico({ precio: 0 })} colores={colores} onComprar={onComprar} />);
 
-    expect(screen.getByRole('button', { name: 'Próximamente' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Comprar' }));
+
+    expect(onComprar).toHaveBeenCalled();
   });
 
   it('un digital sigue diciendo Comprar', () => {

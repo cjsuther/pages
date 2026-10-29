@@ -1,12 +1,15 @@
 <?php
 
 /**
- * Parte pública de los productos digitales: comprar, recibir el aviso de pago,
+ * Parte pública de los productos: comprar, recibir el aviso de pago,
  * consultar una orden y descargar. Nada de esto requiere sesión.
  *
  * El cobro es el de las entradas: las mismas credenciales (Cobros), la misma
  * comisión (Comision) y la misma preferencia (MercadoPago). Lo que no se
  * comparte es la orden: vive en product_orders.
+ *
+ * Un físico (#43) se compra por el mismo camino, con cantidad, opciones,
+ * dirección y horarios (PedidosFisicos), y sin nada que descargar.
  */
 class CompraProductoHandler
 {
@@ -72,10 +75,27 @@ class CompraProductoHandler
         }
 
         $productoId = (int) $producto['producto_id'];
-        $total = round((float) $producto['precio'], 2);
+        $pedido = null;
+
+        if (ProductosFisicos::esFisico($producto)) {
+            list($pedido, $status, $problema) = self::pedidoFisico($db, $producto, $comprador, $req);
+
+            if ($problema !== null) {
+                return Response::error($status, $problema);
+            }
+
+            // Precio × cantidad + envío: es lo que se cobra y sobre lo que se
+            // calcula la comisión, porque Mercado Pago hace el split sobre el
+            // total de la preferencia.
+            $total = PedidosFisicos::total($pedido['precio_unitario'], $pedido['cantidad'], $pedido['costo_envio']);
+        } else {
+            $total = round((float) $producto['precio'], 2);
+        }
 
         if ($total <= 0) {
-            return self::pedirGratis($db, $productoId, $comprador, $req->ip(), $mailer);
+            return $pedido === null
+                ? self::pedirGratis($db, $productoId, $comprador, $req->ip(), $mailer)
+                : self::pedirFisicoGratis($db, $productoId, $comprador, $pedido, $req->ip(), $mailer);
         }
 
         $tokenMp = Cobros::tokenDelEvento($db, $linkId, $http);
@@ -84,7 +104,7 @@ class CompraProductoHandler
             return Response::error(503, 'Este producto no se puede cobrar en este momento. Probá más tarde.');
         }
 
-        $orden = OrdenesDeProductos::crear($db, $productoId, $comprador, $total, $req->ip());
+        $orden = OrdenesDeProductos::crear($db, $productoId, $comprador, $total, $req->ip(), $pedido);
 
         // La misma regla que en las entradas: la comisión sólo se manda si la
         // página conectó por OAuth, porque con una credencial pegada a mano
@@ -95,6 +115,7 @@ class CompraProductoHandler
             'titulo'     => $producto['text'],
             'cantidad'   => 1,
             'precio'     => $total,
+            'items'      => $pedido === null ? null : self::itemsDelPedido($pedido),
             'moneda'     => 'ARS',
             'referencia' => $orden['codigo'],
             'urlRetorno' => self::urlDeRetorno($orden['codigo']),
@@ -116,13 +137,143 @@ class CompraProductoHandler
         OrdenesDeProductos::guardarPreferencia($db, $orden['id'], $preferencia['id']);
         OrdenesDeProductos::guardarComision($db, $orden['id'], $comision, $comision > 0 ? Comision::porcentaje() : 0);
 
-        return Response::created([
+        $respuesta = [
             'success' => true,
             'codigo'  => $orden['codigo'],
             'estado'  => 'pendiente',
             'url'     => $preferencia['url'],
             'total'   => $total,
-            'token'   => $orden['token'],
+        ];
+
+        // Un físico no tiene nada que descargar: su token no sale nunca.
+        if ($pedido === null) {
+            $respuesta['token'] = $orden['token'];
+        }
+
+        return Response::created($respuesta);
+    }
+
+    /**
+     * Valida lo propio de la compra de un físico y arma la foto del pedido.
+     *
+     * Primero lo que está mal en el formulario (400), después lo que no se
+     * puede vender (409): agotado, o menos stock que la cantidad pedida. Las
+     * cantidades de stock no se dicen: a quien compra le alcanza con saber si
+     * hay o no. El stock se descuenta recién al acreditar el pago.
+     *
+     * @return array [pedido, null, null] o [null, status, mensaje]
+     */
+    private static function pedidoFisico($db, array $producto, array $comprador, Request $req)
+    {
+        $problema = PedidosFisicos::problemaDeTelefono($comprador['telefono']);
+
+        if ($problema !== null) {
+            return [null, 400, $problema];
+        }
+
+        $cantidad = PedidosFisicos::cantidad($req->input('cantidad', 1));
+
+        if ($cantidad === null) {
+            return [null, 400, 'La cantidad tiene que ser de 1 a ' . PedidosFisicos::CANTIDAD_MAXIMA];
+        }
+
+        $caracteristicas = isset($producto['caracteristicas']) ? $producto['caracteristicas'] : [];
+        list($opciones, $problema) = PedidosFisicos::opciones($caracteristicas, $req->input('opciones'));
+
+        if ($problema !== null) {
+            return [null, 400, $problema];
+        }
+
+        list($envio, $problema) = PedidosFisicos::envio($req->input('envio'));
+
+        if ($problema !== null) {
+            return [null, 400, $problema];
+        }
+
+        list($horarios, $problema) = PedidosFisicos::horarios($req->input('horarios'));
+
+        if ($problema !== null) {
+            return [null, 400, $problema];
+        }
+
+        if (!empty($producto['agotado'])) {
+            return [null, 409, PedidosFisicos::MENSAJE_AGOTADO];
+        }
+
+        $stock = PedidosFisicos::stockDisponible($producto, $opciones['ids']);
+
+        if ($stock !== null && $stock < $cantidad) {
+            return [null, 409, $stock <= 0 ? 'Esa combinación está agotada. Probá con otra opción.' : PedidosFisicos::MENSAJE_SIN_STOCK];
+        }
+
+        return [[
+            'titulo'          => $producto['text'],
+            'opcion_ids'      => $opciones['ids'],
+            'opciones_texto'  => $opciones['texto'],
+            'variante_id'     => self::varianteId($db, (int) $producto['producto_id'], $opciones['ids']),
+            'cantidad'        => $cantidad,
+            'precio_unitario' => round((float) $producto['precio'], 2),
+            'costo_envio'     => round((float) (isset($producto['costo_envio']) ? $producto['costo_envio'] : 0), 2),
+            'envio'           => $envio,
+            'horarios'        => $horarios,
+        ], null, null];
+    }
+
+    /** La fila de stock de la combinación, si tiene. Queda en el pedido sólo como dato. */
+    private static function varianteId($db, $productoId, array $opcionIds)
+    {
+        if (empty($opcionIds)) {
+            return null;
+        }
+
+        $stmt = $db->prepare('SELECT id FROM product_variants WHERE product_id = ? AND clave = ?');
+        $stmt->execute([$productoId, ProductosFisicos::clave($opcionIds)]);
+        $id = $stmt->fetchColumn();
+
+        return $id === false ? null : (int) $id;
+    }
+
+    /**
+     * Lo que ve quien paga en Mercado Pago: el producto por la cantidad y,
+     * aparte, el envío. Un renglón en 0 no va: Mercado Pago no lo acepta.
+     */
+    private static function itemsDelPedido(array $pedido)
+    {
+        $titulo = $pedido['titulo'] . ($pedido['opciones_texto'] ? ' (' . $pedido['opciones_texto'] . ')' : '');
+        $items = [];
+
+        if ($pedido['precio_unitario'] > 0) {
+            $items[] = ['titulo' => $titulo, 'cantidad' => $pedido['cantidad'], 'precio' => $pedido['precio_unitario']];
+        }
+
+        if ($pedido['costo_envio'] > 0) {
+            $items[] = ['titulo' => 'Envío', 'cantidad' => 1, 'precio' => $pedido['costo_envio']];
+        }
+
+        return $items;
+    }
+
+    /**
+     * Un físico gratis, con envío gratis: no pasa por Mercado Pago, como el
+     * digital gratis, y cuenta para el mismo límite por hora, por email y por
+     * IP. A diferencia del digital no se reenvía nada: pedirlo otra vez es
+     * otro pedido, que hay que entregar.
+     */
+    private static function pedirFisicoGratis($db, $productoId, array $comprador, array $pedido, $ip, $mailer)
+    {
+        if (OrdenesDeProductos::superaLimiteGratis($db, $comprador['email'], $ip)) {
+            return Response::error(429, OrdenesDeProductos::MENSAJE_DEMASIADOS_PEDIDOS);
+        }
+
+        $codigo = OrdenesDeProductos::crear($db, $productoId, $comprador, 0, $ip, $pedido)['codigo'];
+
+        self::mandarLink($db, $codigo, $mailer);
+
+        return Response::created([
+            'success' => true,
+            'codigo'  => $codigo,
+            'estado'  => 'pagada',
+            'url'     => null,
         ]);
     }
 
@@ -302,7 +453,7 @@ class CompraProductoHandler
             }
         }
 
-        return Response::ok(['orden' => [
+        $respuesta = [
             'codigo'          => $orden['codigo'],
             'estado'          => OrdenesDeProductos::estaVencida($orden) ? 'vencida' : $orden['estado'],
             'total'           => (float) $orden['total'],
@@ -317,7 +468,47 @@ class CompraProductoHandler
             'pagina'          => $orden['pagina'],
             'url_slug'        => $orden['url_slug'],
             'meta_pixel_id'   => isset($orden['meta_pixel_id']) ? $orden['meta_pixel_id'] : null,
-        ]]);
+        ];
+
+        if (ProductosFisicos::esFisico($orden)) {
+            $respuesta = array_merge($respuesta, self::pedidoPublico($db, $orden));
+        }
+
+        return Response::ok(['orden' => $respuesta]);
+    }
+
+    /**
+     * Lo de un pedido de un físico que ve quien tiene el código: la foto del
+     * pedido, la dirección y los horarios. Nunca el teléfono ni el email, y la
+     * calle a medias, para que un código filtrado no exponga el domicilio.
+     * El piso y las indicaciones tampoco: no hacen falta para reconocerla.
+     */
+    private static function pedidoPublico($db, array $orden)
+    {
+        $envio = PedidosFisicos::envioDe($db, $orden['id']);
+
+        return [
+            'tipo'            => 'fisico',
+            'archivo_nombre'  => null,
+            'archivo_bytes'   => null,
+            'opciones'        => $orden['opciones_texto'],
+            'cantidad'        => (int) $orden['cantidad'],
+            'precio_unitario' => round((float) $orden['precio_unitario'], 2),
+            'costo_envio'     => round((float) $orden['costo_envio'], 2),
+            // Los estados del pedido llegan con #44; pagado, está ingresado.
+            'estado_pedido'   => $orden['estado'] === 'pagada' ? 'ingresado' : null,
+            'envio'           => $envio === null ? null : [
+                'calle'         => PedidosFisicos::calleParcial($envio['calle']),
+                'localidad'     => $envio['localidad'],
+                'provincia'     => $envio['provincia'],
+                'codigo_postal' => $envio['codigo_postal'],
+            ],
+            'horarios'        => $envio === null ? null : [
+                'dias'       => $envio['dias'],
+                'franjas'    => $envio['franjas'],
+                'comentario' => $envio['comentario'],
+            ],
+        ];
     }
 
     // -------------------------------------------------------------- descarga
@@ -455,7 +646,11 @@ class CompraProductoHandler
         return empty($orden['pagina_id']) ? null : Cobros::tokenDe($db, (int) $orden['pagina_id'], $http);
     }
 
-    /** Manda el link sin que un problema de correo tumbe la operación. */
+    /**
+     * Manda el mail de la orden pagada —el link de un digital, o "Recibimos
+     * tu pedido" y el aviso a quien vende de un físico— sin que un problema
+     * de correo tumbe la operación.
+     */
     private static function mandarLink($db, $codigo, $mailer, $reenviar = false)
     {
         try {

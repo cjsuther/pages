@@ -13,6 +13,14 @@ import {
   tokenDelHash,
   linkDeProducto,
   compartirLink,
+  PROVINCIAS,
+  codigoPostalValido,
+  cuerpoDelPedido,
+  describirClaves,
+  entregaVacia,
+  FRANJAS,
+  problemaDelPedido,
+  totalDelPedido,
 } from '../../src/utils/productos';
 import { gruposPublicos } from '../../src/utils/plantillas';
 import { mockFetch, llamadaA, respuesta, cuerpoDe } from '../helpers/api';
@@ -244,5 +252,84 @@ describe('esOculto', () => {
   it('acepta lo que devuelve la API y lo que guarda el editor', () => {
     expect([1, '1', true, 'true'].map(esOculto)).toEqual([true, true, true, true]);
     expect([0, '0', false, null, undefined, ''].map(esOculto)).toEqual([false, false, false, false, false, false]);
+  });
+});
+
+describe('pedido de un físico (#43)', () => {
+  const producto = {
+    caracteristicas: [
+      { id: 10, nombre: 'Talle', opciones: [{ id: 1, nombre: 'S' }] },
+      { id: 20, nombre: 'Color', opciones: [{ id: 3, nombre: 'Negro' }] },
+    ],
+  };
+  const entrega = (overrides = {}) => ({
+    ...entregaVacia(),
+    calle: 'Av. Corrientes 1234', localidad: 'CABA', provincia: 'Córdoba', codigo_postal: '5000',
+    dias: ['lunes'], franjas: ['tarde'],
+    ...overrides,
+  });
+  const problema = (overrides = {}) => problemaDelPedido({
+    producto, seleccion: { 10: 1, 20: 3 }, telefono: '11 5555-1234', entrega: entrega(), ...overrides,
+  });
+
+  it('el total es precio × cantidad + envío, sin errores de redondeo', () => {
+    expect(totalDelPedido(2500, 2, 500)).toEqual({ subtotal: 5000, envio: 500, total: 5500 });
+    expect(totalDelPedido('10.10', 3, '0.20')).toEqual({ subtotal: 30.3, envio: 0.2, total: 30.5 });
+    expect(totalDelPedido(0, 3, 0).total).toBe(0);
+  });
+
+  it('las 24 provincias', () => {
+    expect(PROVINCIAS).toHaveLength(24);
+    expect(PROVINCIAS).toContain('Ciudad Autónoma de Buenos Aires');
+  });
+
+  it('el código postal: 4 números o el CPA', () => {
+    expect(['1414', 'C1414BAD', 'c 1414 bad'].map(codigoPostalValido)).toEqual([true, true, true]);
+    expect(['141', '14145', 'C1414BA', ''].map(codigoPostalValido)).toEqual([false, false, false, false]);
+  });
+
+  it('un pedido completo no tiene problemas', () => {
+    expect(problema()).toBeNull();
+  });
+
+  it('cada cosa que falta tiene su mensaje', () => {
+    expect(problema({ seleccion: { 10: 1 } })).toBe('Elegí color');
+    expect(problema({ telefono: '' })).toMatch(/Falta el teléfono/);
+    expect(problema({ telefono: '12' })).toBe('El teléfono no es válido');
+    expect(problema({ entrega: entrega({ calle: '' }) })).toBe('Falta la calle y el número');
+    expect(problema({ entrega: entrega({ provincia: 'Narnia' }) })).toBe('Elegí la provincia');
+    expect(problema({ entrega: entrega({ codigo_postal: 'x' }) })).toMatch(/no es válido/);
+    expect(problema({ entrega: entrega({ dias: [] }) })).toMatch(/al menos un día/);
+    expect(problema({ entrega: entrega({ franjas: [] }) })).toMatch(/al menos una franja/);
+  });
+
+  it('el cuerpo lleva las opciones en el orden de las características', () => {
+    const cuerpo = cuerpoDelPedido({ producto, seleccion: { 20: 3, 10: 1 }, cantidad: '2', entrega: entrega({ calle: ' Av. 1 ' }) });
+
+    expect(cuerpo.cantidad).toBe(2);
+    expect(cuerpo.opciones).toEqual([1, 3]);
+    expect(cuerpo.envio.calle).toBe('Av. 1');
+    expect(cuerpo.horarios).toEqual({ dias: ['lunes'], franjas: ['tarde'], comentario: '' });
+  });
+
+  it('los días y las franjas se leen', () => {
+    expect(describirClaves(['lunes', 'miercoles', 'domingo'])).toBe('Lunes, Miércoles y Domingo');
+    expect(describirClaves(['noche'], FRANJAS)).toBe('Noche');
+  });
+
+  it('un 409 de un físico dice lo que manda la API; el de un digital, que ya no está', () => {
+    expect(mensajeDeErrorDeCompra(409, 'No queda stock suficiente', true)).toBe('No queda stock suficiente');
+    expect(mensajeDeErrorDeCompra(409, 'No queda stock suficiente')).toBe('Este producto ya no está disponible.');
+    expect(mensajeDeErrorDeCompra(409, undefined, true)).toBe('Este producto ya no está disponible.');
+  });
+
+  it('comprarProducto suma el pedido al cuerpo', async () => {
+    const { llamadas } = mockFetch({ 'public/comprar-producto.php': { status: 201, body: { codigo: 'X', url: 'u' } } });
+
+    await comprarProducto({ apiUrl: 'http://api', linkId: 7, nombre: 'Ana', email: 'a@b.c', telefono: '1', pedido: { cantidad: 2 } });
+
+    expect(cuerpoDe(llamadaA(llamadas, 'comprar-producto.php'))).toEqual({
+      link_id: 7, nombre: 'Ana', email: 'a@b.c', telefono: '1', cantidad: 2,
+    });
   });
 });

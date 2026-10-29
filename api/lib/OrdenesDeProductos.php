@@ -38,26 +38,33 @@ class OrdenesDeProductos
     /**
      * El producto de ese link, o null si no hay nada que vender ahí.
      *
-     * Tiene que ser un link de un grupo "productos" y tener el archivo subido:
-     * sin archivo no hay nada que entregar. Sólo digitales: la compra de un
-     * físico, con envío, es otra (#43). Vuelve también si está oculto:
-     * quien llama decide con ProductosDigitales::aceptaPedidos().
+     * Tiene que ser un link de un grupo "productos". Un digital tiene que
+     * tener el archivo subido: sin archivo no hay nada que entregar. Un
+     * físico (#43) vuelve con sus características y su stock
+     * (ProductosFisicos::completar). Vuelve también si está oculto: quien
+     * llama decide con ProductosDigitales::aceptaPedidos().
      */
     public static function productoEnVenta($db, $linkId)
     {
         $stmt = $db->prepare('
             SELECT l.id, l.text, l.image_url, lg.page_id,
-                   dp.id AS producto_id, dp.oculto, dp.borrado_en,
-                   dp.precio, dp.archivo_ruta, dp.archivo_nombre, dp.archivo_bytes
+                   dp.id AS producto_id, dp.tipo, dp.oculto, dp.borrado_en,
+                   dp.precio, dp.costo_envio, dp.zona_envio, dp.stock,
+                   dp.archivo_ruta, dp.archivo_nombre, dp.archivo_bytes
             FROM links l
             INNER JOIN link_groups lg ON lg.id = l.group_id
             INNER JOIN digital_products dp ON dp.link_id = l.id
-            WHERE l.id = ? AND lg.type = "productos" AND dp.tipo = "digital" AND dp.archivo_ruta IS NOT NULL
+            WHERE l.id = ? AND lg.type = "productos"
+              AND (dp.tipo = "fisico" OR (dp.tipo = "digital" AND dp.archivo_ruta IS NOT NULL))
         ');
         $stmt->execute([(int) $linkId]);
         $fila = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        return $fila === false ? null : $fila;
+        if ($fila === false) {
+            return null;
+        }
+
+        return ProductosFisicos::esFisico($fila) ? ProductosFisicos::completar($db, [$fila])[0] : $fila;
     }
 
     // ------------------------------------------------------- pedidos gratis
@@ -123,9 +130,14 @@ class OrdenesDeProductos
      *
      * Un producto gratis nace pagado: no hay pago que esperar.
      *
+     * Un físico (#43) llega con $pedido: la foto (titulo, opciones_texto,
+     * opcion_ids, variante_id, precio_unitario, cantidad, costo_envio) y la
+     * entrega (envio, horarios). Todo se escribe en una transacción; si nace
+     * pagado, ahí mismo se descuenta el stock, como al acreditar.
+     *
      * @return array{id: int, codigo: string, token: string, estado: string}
      */
-    public static function crear($db, $productoId, array $comprador, $total, $ip = null)
+    public static function crear($db, $productoId, array $comprador, $total, $ip = null, ?array $pedido = null)
     {
         $total = round((float) $total, 2);
         $esGratis = $total <= 0;
@@ -134,12 +146,9 @@ class OrdenesDeProductos
         $estado = $esGratis ? 'pagada' : 'pendiente';
         $telefono = isset($comprador['telefono']) ? trim((string) $comprador['telefono']) : '';
 
-        $stmt = $db->prepare('
-            INSERT INTO product_orders
-                (codigo, product_id, nombre, email, telefono, total, estado, pagada_en, token_hash, token_cifrado, ip)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ');
-        $stmt->execute([
+        $columnas = ['codigo', 'product_id', 'nombre', 'email', 'telefono', 'total', 'estado', 'pagada_en',
+                     'token_hash', 'token_cifrado', 'ip'];
+        $valores = [
             $codigo,
             (int) $productoId,
             trim((string) $comprador['nombre']),
@@ -151,14 +160,87 @@ class OrdenesDeProductos
             self::hash($token),
             Cripto::cifrar($token),
             $ip === null || $ip === '' ? null : (string) $ip,
-        ]);
+        ];
+
+        if ($pedido !== null) {
+            $columnas = array_merge($columnas, ['producto_titulo', 'variante_id', 'opciones_texto', 'cantidad',
+                                                'precio_unitario', 'costo_envio']);
+            $valores = array_merge($valores, [
+                (string) $pedido['titulo'],
+                empty($pedido['variante_id']) ? null : (int) $pedido['variante_id'],
+                $pedido['opciones_texto'],
+                (int) $pedido['cantidad'],
+                round((float) $pedido['precio_unitario'], 2),
+                round((float) $pedido['costo_envio'], 2),
+            ]);
+
+            $db->beginTransaction();
+        }
+
+        try {
+            $stmt = $db->prepare('
+                INSERT INTO product_orders (' . implode(', ', $columnas) . ')
+                VALUES (' . implode(', ', array_fill(0, count($columnas), '?')) . ')
+            ');
+            $stmt->execute($valores);
+            $id = (int) $db->lastInsertId();
+
+            if ($pedido !== null) {
+                self::guardarEntrega($db, $id, $pedido);
+
+                if ($esGratis) {
+                    PedidosFisicos::descontarStock($db, [
+                        'id' => $id, 'product_id' => (int) $productoId, 'cantidad' => (int) $pedido['cantidad'],
+                    ]);
+                }
+
+                $db->commit();
+            }
+        } catch (Throwable $e) {
+            if ($pedido !== null && $db->inTransaction()) {
+                $db->rollBack();
+            }
+
+            throw $e;
+        }
 
         return [
-            'id'     => (int) $db->lastInsertId(),
+            'id'     => $id,
             'codigo' => $codigo,
             'token'  => $token,
             'estado' => $estado,
         ];
+    }
+
+    /** Las opciones elegidas, la dirección y los horarios de un pedido de un físico. */
+    private static function guardarEntrega($db, $ordenId, array $pedido)
+    {
+        foreach ($pedido['opcion_ids'] as $opcionId) {
+            $stmt = $db->prepare('INSERT INTO product_order_options (order_id, option_id) VALUES (?, ?)');
+            $stmt->execute([$ordenId, (int) $opcionId]);
+        }
+
+        $envio = $pedido['envio'];
+        $horarios = $pedido['horarios'];
+
+        $stmt = $db->prepare('
+            INSERT INTO product_order_envios
+                (order_id, calle, piso_depto, localidad, provincia, codigo_postal, indicaciones,
+                 dias, franjas, comentario_horario)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ');
+        $stmt->execute([
+            $ordenId,
+            $envio['calle'],
+            $envio['piso_depto'],
+            $envio['localidad'],
+            $envio['provincia'],
+            $envio['codigo_postal'],
+            $envio['indicaciones'],
+            implode(',', $horarios['dias']),
+            implode(',', $horarios['franjas']),
+            $horarios['comentario'],
+        ]);
     }
 
     /**
@@ -207,9 +289,12 @@ class OrdenesDeProductos
      * El producto puede estar borrado (link_id null) y hasta la página: lo que
      * necesita el comprador sale de la foto de digital_products, y lo que
      * falte (la imagen, la página) llega null.
+     *
+     * Un pedido de un físico tiene su propia foto del título
+     * (o.producto_titulo): si el producto se renombra, el pedido no cambia.
      */
     const DATOS_DEL_PRODUCTO = '
-        dp.link_id, COALESCE(l.text, dp.titulo) AS producto, l.image_url AS producto_imagen,
+        dp.link_id, dp.tipo, COALESCE(o.producto_titulo, l.text, dp.titulo) AS producto, l.image_url AS producto_imagen,
         dp.archivo_ruta, dp.archivo_nombre, dp.archivo_bytes,
         COALESCE(lg.page_id, dp.page_id) AS pagina_id,
         p.title AS pagina, p.url_slug';
@@ -220,13 +305,18 @@ class OrdenesDeProductos
         LEFT JOIN link_groups lg ON lg.id = l.group_id
         LEFT JOIN pages p ON p.id = COALESCE(lg.page_id, dp.page_id)';
 
-    /** Una orden por su código, con los datos del producto y de la página. */
+    /**
+     * Una orden por su código, con los datos del producto y de la página.
+     * duena_email es adonde va el "Pedido nuevo" de un físico si la página
+     * no tiene email de contacto.
+     */
     public static function orden($db, $codigo)
     {
         $stmt = $db->prepare('
-            SELECT o.*, ' . self::DATOS_DEL_PRODUCTO . ', p.email_contacto, p.meta_pixel_id
+            SELECT o.*, ' . self::DATOS_DEL_PRODUCTO . ', p.email_contacto, p.meta_pixel_id, u.email AS duena_email
             FROM product_orders o
             ' . self::JOINS_DEL_PRODUCTO . '
+            LEFT JOIN users u ON u.id = p.user_id
             WHERE o.codigo = ?
         ');
         $stmt->execute([(string) $codigo]);
@@ -244,7 +334,8 @@ class OrdenesDeProductos
      * mismo, para no revelar nada a quien prueba.
      *
      * El archivo se lee del producto en el momento: si se reemplazó, se baja
-     * el actual.
+     * el actual. El token de un pedido de un físico no sirve: no hay nada que
+     * bajar, y nunca sale de la base.
      */
     public static function pagadaPorToken($db, $token)
     {
@@ -262,7 +353,7 @@ class OrdenesDeProductos
         $stmt->execute([self::hash($token)]);
         $fila = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        if ($fila === false || $fila['estado'] !== 'pagada') {
+        if ($fila === false || $fila['estado'] !== 'pagada' || ProductosFisicos::esFisico($fila)) {
             return null;
         }
 
@@ -349,7 +440,7 @@ class OrdenesDeProductos
         $stmt = $db->prepare('
             SELECT o.id, o.codigo, o.nombre, o.email, o.telefono, o.total, o.estado,
                    o.creado_en, o.pagada_en, o.descargas, o.primera_descarga_en, o.ultima_descarga_en,
-                   dp.id AS producto_id, dp.link_id, COALESCE(l.text, dp.titulo) AS producto,
+                   dp.id AS producto_id, dp.link_id, COALESCE(o.producto_titulo, l.text, dp.titulo) AS producto,
                    dp.borrado_en AS producto_borrado_en
             FROM product_orders o
             INNER JOIN digital_products dp ON dp.id = o.product_id
@@ -470,9 +561,51 @@ class OrdenesDeProductos
      * Pago se puede reintentar con otra tarjeta después de un rechazo. Dejar
      * afuera a quien pagó en el segundo intento sería quedarse con su plata.
      *
+     * Un físico (#43) descuenta su stock en la misma transacción que marca la
+     * orden pagada (PedidosFisicos::descontarStock). Si ya no alcanza, la
+     * orden queda pagada igual y marcada sin_stock.
+     *
      * @return array{acreditada: bool, motivo: string}
      */
     public static function acreditarPago($db, $codigo, $pagoId, $estadoMp, array $detalle = [])
+    {
+        if ($estadoMp !== 'approved') {
+            return self::registrarPago($db, $codigo, $pagoId, $estadoMp, $detalle);
+        }
+
+        $db->beginTransaction();
+
+        try {
+            $resultado = self::registrarPago($db, $codigo, $pagoId, $estadoMp, $detalle);
+
+            if ($resultado['acreditada']) {
+                $stmt = $db->prepare("
+                    SELECT o.id, o.product_id, o.cantidad
+                    FROM product_orders o
+                    INNER JOIN digital_products dp ON dp.id = o.product_id
+                    WHERE dp.tipo = 'fisico' AND o.codigo = ?
+                ");
+                $stmt->execute([$codigo]);
+                $fisico = $stmt->fetch(PDO::FETCH_ASSOC);
+
+                if ($fisico !== false && !PedidosFisicos::descontarStock($db, $fisico)) {
+                    $resultado['sin_stock'] = true;
+                }
+            }
+
+            $db->commit();
+        } catch (Throwable $e) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+
+            throw $e;
+        }
+
+        return $resultado;
+    }
+
+    private static function registrarPago($db, $codigo, $pagoId, $estadoMp, array $detalle)
     {
         $stmt = $db->prepare('SELECT estado FROM product_orders WHERE codigo = ?');
         $stmt->execute([$codigo]);

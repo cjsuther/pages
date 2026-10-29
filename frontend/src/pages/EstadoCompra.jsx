@@ -1,12 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router';
 import { Helmet } from 'react-helmet-async';
-import { Check, Clock, X, Loader2, Mail } from 'lucide-react';
+import { Check, Clock, X, Loader2, Mail, MapPin, CalendarClock } from 'lucide-react';
 import BotonDescarga from '../components/BotonDescarga';
 import Sugerencias from '../components/Sugerencias';
 import { formatearPrecio } from '../utils/entradas';
-import { tokenDeDescarga } from '../utils/productos';
+import { DIAS, FRANJAS, describirClaves, tokenDeDescarga } from '../utils/productos';
 import { evento } from '../utils/metaPixel';
+
+/** Los estados de un pedido de un físico. Los demás llegan con #44. */
+const ESTADOS_DEL_PEDIDO = { ingresado: 'Ingresado' };
 
 /**
  * Pantalla a la que vuelve el comprador de un producto digital desde Mercado
@@ -18,6 +21,10 @@ import { evento } from '../utils/metaPixel';
  * Para descargar ahí mismo hace falta el token, que nunca va en la URL: se
  * guardó en este navegador antes de salir a pagar. Si no está —se pagó desde
  * otro dispositivo— el link llega por mail igual.
+ *
+ * Un pedido de un físico (#43) no tiene descarga: muestra el detalle, la
+ * dirección (la calle llega recortada de la API), los horarios y el estado
+ * del pedido.
  */
 function EstadoCompra({ apiUrl }) {
   const { codigo } = useParams();
@@ -68,7 +75,7 @@ function EstadoCompra({ apiUrl }) {
     evento(orden.meta_pixel_id, 'Purchase', {
       content_type: 'product',
       content_name: orden.producto,
-      num_items: 1,
+      num_items: orden.cantidad || 1,
       value: orden.total,
       currency: orden.moneda,
     });
@@ -103,12 +110,14 @@ function EstadoCompra({ apiUrl }) {
     );
   }
 
+  const fisico = orden.tipo === 'fisico';
+
   const estados = {
     pagada: {
       icono: <Check className="w-8 h-8 text-tinta" />,
       fondo: 'bg-verde',
-      titulo: '¡Listo!',
-      detalle: 'Tu pago está aprobado.',
+      titulo: fisico ? '¡Recibimos tu pedido!' : '¡Listo!',
+      detalle: fisico ? 'Tu pago está aprobado. Te mandamos el detalle por mail.' : 'Tu pago está aprobado.',
     },
     pendiente: {
       icono: <Clock className="w-8 h-8 text-tinta" />,
@@ -120,7 +129,9 @@ function EstadoCompra({ apiUrl }) {
       icono: <Clock className="w-8 h-8 text-tinta" />,
       fondo: 'bg-papel-hueso',
       titulo: 'La compra no se completó',
-      detalle: 'No recibimos el pago a tiempo. Si pagaste, te va a llegar el link por mail apenas se confirme.',
+      detalle: fisico
+        ? 'No recibimos el pago a tiempo. Si pagaste, te va a llegar el detalle por mail apenas se confirme.'
+        : 'No recibimos el pago a tiempo. Si pagaste, te va a llegar el link por mail apenas se confirme.',
     },
     rechazada: {
       icono: <X className="w-8 h-8 text-tinta" />,
@@ -147,19 +158,21 @@ function EstadoCompra({ apiUrl }) {
       <h1 className="text-3xl font-bold text-tinta mb-2">{estado.titulo}</h1>
       <p className="text-tinta-suave mb-8">{estado.detalle}</p>
 
-      <div className="border border-borde bg-white p-6 text-left mb-6">
-        <p className="text-xs text-tinta-suave tracking-wide mb-1">Producto</p>
-        <p className="text-tinta font-bold mb-4">{orden.producto}</p>
+      {fisico ? <Pedido orden={orden} /> : (
+        <div className="border border-borde bg-white p-6 text-left mb-6">
+          <p className="text-xs text-tinta-suave tracking-wide mb-1">Producto</p>
+          <p className="text-tinta font-bold mb-4">{orden.producto}</p>
 
-        <div className="border-t border-borde pt-4 flex justify-between text-sm">
-          <span className="text-tinta-suave">Compra {orden.codigo}</span>
-          {orden.total > 0 && (
-            <span className="text-tinta font-bold">{formatearPrecio(orden.total, orden.moneda)}</span>
-          )}
+          <div className="border-t border-borde pt-4 flex justify-between text-sm">
+            <span className="text-tinta-suave">Compra {orden.codigo}</span>
+            {orden.total > 0 && (
+              <span className="text-tinta font-bold">{formatearPrecio(orden.total, orden.moneda)}</span>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
-      {orden.estado === 'pagada' && (
+      {orden.estado === 'pagada' && !fisico && (
         token
           ? <div className="mb-6"><BotonDescarga apiUrl={apiUrl} token={token} /></div>
           : (
@@ -181,6 +194,68 @@ function EstadoCompra({ apiUrl }) {
         <Sugerencias tipo="producto" id={orden.link_id} apiUrl={apiUrl} className="mt-10 text-tinta" />
       )}
     </Marco>
+  );
+}
+
+/** El detalle de un pedido de un físico: lo comprado, la entrega y el estado. */
+function Pedido({ orden }) {
+  const envio = orden.envio;
+  const horarios = orden.horarios;
+
+  return (
+    <div className="border border-borde bg-white p-6 text-left mb-6 text-sm">
+      <p className="text-xs text-tinta-suave tracking-wide mb-1">Producto</p>
+      <p className="text-tinta font-bold text-base">{orden.producto}</p>
+      {orden.opciones && <p className="text-tinta-media">{orden.opciones}</p>}
+
+      <dl className="border-t border-borde mt-4 pt-4 space-y-1">
+        <div className="flex justify-between">
+          <dt className="text-tinta-suave">{formatearPrecio(orden.precio_unitario, orden.moneda)} × {orden.cantidad}</dt>
+          <dd>{formatearPrecio(orden.precio_unitario * orden.cantidad, orden.moneda)}</dd>
+        </div>
+        <div className="flex justify-between">
+          <dt className="text-tinta-suave">Envío</dt>
+          <dd>{orden.costo_envio > 0 ? formatearPrecio(orden.costo_envio, orden.moneda) : 'Incluido'}</dd>
+        </div>
+        <div className="flex justify-between font-bold">
+          <dt>Total</dt>
+          <dd>{orden.total > 0 ? formatearPrecio(orden.total, orden.moneda) : 'Gratis'}</dd>
+        </div>
+      </dl>
+
+      {envio && (
+        <div className="border-t border-borde mt-4 pt-4">
+          <p className="text-xs text-tinta-suave tracking-wide mb-1">Entrega</p>
+          <p className="flex items-start gap-2 text-tinta">
+            <MapPin className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
+            <span>
+              {envio.calle}
+              <span className="block text-tinta-media">
+                {envio.localidad}, {envio.provincia} ({envio.codigo_postal})
+              </span>
+            </span>
+          </p>
+          {horarios && (
+            <p className="flex items-start gap-2 text-tinta mt-2">
+              <CalendarClock className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
+              <span>
+                {describirClaves(horarios.dias, DIAS)} · {describirClaves(horarios.franjas, FRANJAS)}
+                {horarios.comentario && <span className="block text-tinta-media">{horarios.comentario}</span>}
+              </span>
+            </p>
+          )}
+        </div>
+      )}
+
+      <div className="border-t border-borde mt-4 pt-4 flex justify-between">
+        <span className="text-tinta-suave">Pedido {orden.codigo}</span>
+        {orden.estado_pedido && (
+          <span className="font-bold text-tinta">
+            Estado: {ESTADOS_DEL_PEDIDO[orden.estado_pedido] || orden.estado_pedido}
+          </span>
+        )}
+      </div>
+    </div>
   );
 }
 
