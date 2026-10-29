@@ -83,9 +83,33 @@ describe('telefono', () => {
     });
   });
 
+  /** Los casos del issue #38, tal como aparecen en Clientes. */
+  describe('casos de Clientes (#38)', () => {
+    it.each([
+      ['11 5555-5555', '5491155555555'],
+      ['011 15 5555-5555', '5491155555555'],
+      ['+54 9 11 5555 5555', '5491155555555'],
+      ['+54 11 5555 5555', '5491155555555'],
+      ['0351 15 555-5555', '5493515555555'],
+      ['+598 99 123 456', '59899123456'],
+    ])('%s → %s', (escrito, esperado) => {
+      expect(aWhatsApp(escrito)).toBe(esperado);
+    });
+
+    it.each(['555-5555', '15 5555 555', '+54 11 5555', '(011) 4444'])('%s no se puede normalizar', (escrito) => {
+      expect(aWhatsApp(escrito)).toBeNull();
+    });
+  });
+
   describe('urlDeWhatsApp', () => {
     it('arma la URL de wa.me', () => {
       expect(urlDeWhatsApp('11 2233-4455')).toBe(`https://wa.me/${ESPERADO}`);
+    });
+
+    it('con texto lo agrega codificado', () => {
+      expect(urlDeWhatsApp('11 2233-4455', 'Hola Ana & cía?')).toBe(
+        `https://wa.me/${ESPERADO}?text=Hola%20Ana%20%26%20c%C3%ADa%3F`
+      );
     });
 
     it('devuelve null si el teléfono no sirve', () => {

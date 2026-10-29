@@ -86,9 +86,17 @@ function conCodigoDePais(digitos) {
   return resto.length === LARGO_NACIONAL ? `549${resto}` : null;
 }
 
-/** URL de WhatsApp, o null si el teléfono no da para armar una. */
-export function urlDeWhatsApp(telefono) {
+/**
+ * URL de WhatsApp, o null si el teléfono no da para armar una.
+ *
+ * Con `texto`, el chat se abre con ese mensaje ya escrito.
+ */
+export function urlDeWhatsApp(telefono, texto = '') {
   const numero = aWhatsApp(telefono);
 
-  return numero ? `https://wa.me/${numero}` : null;
+  if (!numero) {
+    return null;
+  }
+
+  return texto ? `https://wa.me/${numero}?text=${encodeURIComponent(texto)}` : `https://wa.me/${numero}`;
 }
