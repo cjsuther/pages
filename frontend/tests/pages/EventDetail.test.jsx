@@ -1,6 +1,6 @@
 import React from 'react';
-import { describe, it, expect, vi } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { screen, waitFor, fireEvent } from '@testing-library/react';
 import EventDetail from '../../src/pages/EventDetail';
 import { renderConProviders, API_URL } from '../helpers/render';
 import { mockFetch } from '../helpers/api';
@@ -271,6 +271,51 @@ describe('EventDetail', () => {
       await renderEvento({ page_title: null });
 
       expect(screen.queryByText('Mi Página')).not.toBeInTheDocument();
+    });
+  });
+
+  // Como un producto (#51): el menú del sistema o, si no hay, copiar el link.
+  describe('compartir', () => {
+    afterEach(() => {
+      delete navigator.share;
+      delete navigator.clipboard;
+    });
+
+    async function renderEvento() {
+      mockFetch({ 'public/event.php': { event: evento() } });
+      render();
+      return screen.findByRole('heading', { name: 'Recital de Rock' });
+    }
+
+    it('muestra el botón Compartir', async () => {
+      await renderEvento();
+
+      expect(screen.getByRole('button', { name: 'Compartir' })).toBeInTheDocument();
+    });
+
+    it('con navigator.share comparte el link del evento con su título', async () => {
+      const share = vi.fn(() => Promise.resolve());
+      Object.defineProperty(navigator, 'share', { configurable: true, value: share });
+      await renderEvento();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Compartir' }));
+
+      await waitFor(() => expect(share).toHaveBeenCalledWith({
+        title: 'Recital de Rock',
+        url: `${window.location.origin}/evento/200`,
+      }));
+      expect(screen.queryByText('Link copiado')).not.toBeInTheDocument();
+    });
+
+    it('sin navigator.share copia el link y avisa "Link copiado"', async () => {
+      const writeText = vi.fn(() => Promise.resolve());
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+      await renderEvento();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Compartir' }));
+
+      expect(await screen.findByText('Link copiado')).toBeInTheDocument();
+      expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/evento/200`);
     });
   });
 

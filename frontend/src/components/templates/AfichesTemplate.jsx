@@ -10,11 +10,16 @@ import PrecioEvento from '../PrecioEvento';
 import RezonarBadge from '../RezonarBadge';
 import Sugerencias from '../Sugerencias';
 import DetalleProducto, { BotonComprar, tarjetaQueAbre } from '../DetalleProducto';
+import BotonCompartir from '../BotonCompartir';
+import BotonEnlaceDirecto from '../BotonEnlaceDirecto';
 import { MiniaturaGaleria, VisorGaleria } from '../MediaGaleria';
 import { textoSobre, paleta } from '../../utils/colores';
-import { describirPrecio } from '../../utils/productos';
+import { describirPrecio, linkDeProducto } from '../../utils/productos';
+import { linkDeEvento } from '../../utils/compartir';
 import { CLASES_ALREDEDOR, CLASES_CAJA, estiloDeAlrededor, estiloDeCaja, gruposPublicos } from '../../utils/plantillas';
-import { ExternalLink } from 'lucide-react';
+
+/** Dónde va el enlace directo en los afiches de eventos y de productos. */
+const POSICION_ENLACE = 'absolute top-4 right-4 z-10';
 
 /**
  * Cada link es un afiche: la imagen ocupa la ficha entera, enmarcada en el
@@ -138,15 +143,7 @@ function AfichesTemplate({ page }) {
                       className="rounded-2xl p-2 shadow-lg transition hover:-translate-y-0.5 cursor-pointer relative"
                       style={estiloMarco}
                     >
-                      <a
-                        href={`/evento/${link.id}`}
-                        onClick={e => e.stopPropagation()}
-                        className="absolute top-4 right-4 p-2 rounded-full shadow-md transition hover:scale-110 z-10"
-                        style={{ backgroundColor: colores.acento, color: textoSobre(colores.acento, colores.texto) }}
-                        title="Ver enlace directo"
-                      >
-                        <ExternalLink className="w-4 h-4" />
-                      </a>
+                      <BotonEnlaceDirecto href={`/evento/${link.id}`} colores={colores} className={POSICION_ENLACE} />
                       <img
                         src={link.image_url ?? 'https://images.pexels.com/photos/1190298/pexels-photo-1190298.jpeg?auto=compress&cs=tinysrgb&w=800'}
                         alt={link.text}
@@ -187,6 +184,7 @@ function AfichesTemplate({ page }) {
                       className="rounded-2xl p-2 shadow-lg transition hover:-translate-y-0.5 cursor-pointer relative"
                       style={estiloMarco}
                     >
+                      <BotonEnlaceDirecto href={linkDeProducto(producto.id)} colores={colores} className={POSICION_ENLACE} />
                       {producto.image_url && (
                         <img
                           src={producto.image_url}
@@ -375,6 +373,10 @@ function AfichesTemplate({ page }) {
                   {modalEvent.url_text || 'Más información →'}
                 </a>
               )}
+
+              <div className="mt-4">
+                <BotonCompartir url={linkDeEvento(modalEvent.id)} titulo={modalEvent.text} />
+              </div>
               <EventCollaborators event={modalEvent} currentPageId={page.id} color={primaryColor} />
 
               <Sugerencias tipo="evento" id={modalEvent.id} pagina={page.id} colores={colores} className="clear-both mt-8" />

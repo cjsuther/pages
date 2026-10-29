@@ -10,12 +10,14 @@ import PrecioEvento from '../PrecioEvento';
 import RezonarBadge from '../RezonarBadge';
 import Sugerencias from '../Sugerencias';
 import DetalleProducto, { BotonComprar, tarjetaQueAbre } from '../DetalleProducto';
+import BotonCompartir from '../BotonCompartir';
+import BotonEnlaceDirecto from '../BotonEnlaceDirecto';
 import { MiniaturaGaleria, VisorGaleria } from '../MediaGaleria';
-import { textoSobre, paleta } from '../../utils/colores';
-import { describirPrecio } from '../../utils/productos';
+import { paleta } from '../../utils/colores';
+import { describirPrecio, linkDeProducto } from '../../utils/productos';
+import { linkDeEvento } from '../../utils/compartir';
 import { CLASES_ALREDEDOR, CLASES_CAJA, estiloDeAlrededor, estiloDeCaja, gruposPublicos } from '../../utils/plantillas';
 import { localidadDe } from '../../utils/eventos';
-import { ExternalLink } from 'lucide-react';
 
 function CondensedTemplate({ page }) {
   const [modalImage, setModalImage] = useState(null);
@@ -172,22 +174,17 @@ function CondensedTemplate({ page }) {
                         )}
                         <PrecioEvento evento={link} enTarjeta className="mt-1" />
                       </div>
-                      <a
-                        href={`/evento/${link.id}`}
-                        onClick={e => e.stopPropagation()}
-                        className="absolute right-3 p-2 rounded-full shadow-md transition hover:scale-110"
-                        style={{ backgroundColor: colores.acento, color: textoSobre(colores.acento, colores.texto) }}
-                        title="Ver enlace directo"
-                      >
-                        <ExternalLink className="w-4 h-4" />
-                      </a>
+                      <BotonEnlaceDirecto href={`/evento/${link.id}`} colores={colores} className="absolute right-3" />
                     </div>
                   ))}
                 </div>
               ) : group.type === 'productos' ? (
-                // La píldora de los eventos, con el precio en lugar de la fecha
-                // y, donde iba el enlace directo, el botón de comprar: en la
-                // píldora no entra el texto, así que va el ícono con su nombre.
+                // La píldora de los eventos, con el precio en lugar de la fecha.
+                // El enlace directo va donde en los eventos (#51) y, a su lado,
+                // el botón de comprar: en la píldora no entra el texto, así que
+                // va el ícono con su nombre. Con dos botones a la derecha el
+                // texto se aparta de los dos lados, para que el título siga
+                // centrado respecto de toda la píldora.
                 <div className="space-y-2">
                   {(group.links || []).map((producto, i, productos) => (
                     <div
@@ -197,6 +194,7 @@ function CondensedTemplate({ page }) {
                       className={`${CLASES_PILDORA} cursor-pointer`}
                       style={estiloPildora}
                     >
+                      <BotonEnlaceDirecto href={linkDeProducto(producto.id)} colores={colores} className="absolute right-3" />
                       {producto.image_url && (
                         <img
                           src={producto.image_url}
@@ -204,7 +202,7 @@ function CondensedTemplate({ page }) {
                           className="absolute left-2 w-12 h-12 object-cover rounded-full"
                         />
                       )}
-                      <div className="flex-1 min-w-0 text-center">
+                      <div className="flex-1 min-w-0 text-center px-6">
                         <div className="font-semibold">{producto.text}</div>
                         <div className="text-sm opacity-70">{describirPrecio(producto.precio)}</div>
                       </div>
@@ -212,7 +210,7 @@ function CondensedTemplate({ page }) {
                         producto={producto}
                         colores={colores}
                         onComprar={() => setModalProducto({ productos, inicial: i, comprar: true })}
-                        className="absolute right-3 p-2 rounded-full shadow-md hover:scale-110"
+                        className="absolute right-14 p-2 rounded-full shadow-md hover:scale-110"
                         soloIcono
                       />
                     </div>
@@ -386,6 +384,10 @@ function CondensedTemplate({ page }) {
                   {modalEvent.url_text || 'Más información →'}
                 </a>
               )}
+
+              <div className="mt-4">
+                <BotonCompartir url={linkDeEvento(modalEvent.id)} titulo={modalEvent.text} />
+              </div>
               <EventCollaborators event={modalEvent} currentPageId={page.id} color={primaryColor} />
 
               <Sugerencias tipo="evento" id={modalEvent.id} pagina={page.id} colores={colores} className="clear-both mt-8" />

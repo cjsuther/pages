@@ -1,5 +1,5 @@
 import React from 'react';
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { screen, within, fireEvent } from '@testing-library/react';
 import MinimalTemplate from '../../../src/components/templates/MinimalTemplate';
 import ModernTemplate from '../../../src/components/templates/ModernTemplate';
@@ -161,12 +161,63 @@ describe.each(PLANTILLAS)('%s', (nombre, Plantilla) => {
       expect(within(delProducto).getByText('Guía secreta').className).toBe(screen.getByText('Mi Evento').className);
     });
 
-    it('sin el enlace directo de los eventos, y la descripción queda para el detalle', () => {
+    it('la descripción queda para el detalle', () => {
       renderConProviders(<Plantilla page={conProductos([producto()])} />);
 
-      const tarjeta = tarjetaDe('Guía secreta');
-      expect(within(tarjeta).queryByRole('link')).not.toBeInTheDocument();
-      expect(within(tarjeta).queryByText('Todo lo que hay que saber')).not.toBeInTheDocument();
+      expect(within(tarjetaDe('Guía secreta')).queryByText('Todo lo que hay que saber')).not.toBeInTheDocument();
+    });
+
+    // Eventos y productos se comparten igual (#51).
+    describe('enlace directo', () => {
+      const enlaceDe = (tarjeta) => within(tarjeta).getByRole('link', { name: 'Ver enlace directo' });
+
+      it('todos lo llevan, a /producto/:id: digitales y físicos, pagos y gratis', () => {
+        renderConProviders(
+          <Plantilla
+            page={conProductos([
+              producto(),
+              producto({ id: 401, text: 'Mapa', precio: 0 }),
+              producto({ id: 402, text: 'Remera', tipo: 'fisico', archivo_nombre: null, costo_envio: 0 }),
+              producto({ id: 403, text: 'Taza', tipo: 'fisico', archivo_nombre: null, precio: 0 }),
+            ])}
+          />
+        );
+
+        const origen = window.location.origin;
+        expect(enlaceDe(tarjetaDe('Guía secreta'))).toHaveAttribute('href', `${origen}/producto/400`);
+        expect(enlaceDe(tarjetaDe('Mapa'))).toHaveAttribute('href', `${origen}/producto/401`);
+        expect(enlaceDe(tarjetaDe('Remera'))).toHaveAttribute('href', `${origen}/producto/402`);
+        expect(enlaceDe(tarjetaDe('Taza'))).toHaveAttribute('href', `${origen}/producto/403`);
+      });
+
+      it('es el mismo botón que el de los eventos, en el mismo lugar', () => {
+        renderConProviders(<Plantilla page={conEventoYProducto()} />);
+
+        const delEvento = enlaceDe(tarjetaDelEvento());
+        const delProducto = enlaceDe(tarjetaDe('Guía secreta'));
+
+        expect(delProducto.className).toBe(delEvento.className);
+        expect(delProducto.getAttribute('style')).toBe(delEvento.getAttribute('style'));
+        expect(delProducto.innerHTML).toBe(delEvento.innerHTML);
+      });
+
+      it('tocarlo no abre el detalle', () => {
+        renderConProviders(<Plantilla page={conProductos([producto()])} />);
+
+        fireEvent.click(enlaceDe(tarjetaDe('Guía secreta')));
+
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      });
+
+      it('Enter o Espacio sobre él no abren el detalle', () => {
+        renderConProviders(<Plantilla page={conProductos([producto()])} />);
+        const enlace = enlaceDe(tarjetaDe('Guía secreta'));
+
+        fireEvent.keyDown(enlace, { key: 'Enter' });
+        fireEvent.keyDown(enlace, { key: ' ' });
+
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      });
     });
 
     it('la tarjeta sale de la paleta de la página', () => {
@@ -1146,6 +1197,40 @@ describe.each(PLANTILLAS)('%s', (nombre, Plantilla) => {
 
       expect(boton.style.backgroundColor).toBe('rgb(59, 130, 246)');
       expect(boton.style.color).not.toBe(boton.style.backgroundColor);
+    });
+
+    // Como el detalle de un producto (#51).
+    describe('compartir', () => {
+      afterEach(() => {
+        delete navigator.share;
+        delete navigator.clipboard;
+      });
+
+      it('comparte el link propio del evento con su título', async () => {
+        const share = vi.fn(() => Promise.resolve());
+        Object.defineProperty(navigator, 'share', { configurable: true, value: share });
+        renderConProviders(<Plantilla page={conEvento()} />);
+        abrir();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Compartir' }));
+
+        await vi.waitFor(() => expect(share).toHaveBeenCalledWith({
+          title: 'Mi Evento',
+          url: `${window.location.origin}/evento/200`,
+        }));
+      });
+
+      it('sin navigator.share copia el link y avisa "Link copiado"', async () => {
+        const writeText = vi.fn(() => Promise.resolve());
+        Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+        renderConProviders(<Plantilla page={conEvento()} />);
+        abrir();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Compartir' }));
+
+        expect(await screen.findByText('Link copiado')).toBeInTheDocument();
+        expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/evento/200`);
+      });
     });
   });
 
