@@ -6,10 +6,19 @@ import BotonDescarga from '../components/BotonDescarga';
 import Sugerencias from '../components/Sugerencias';
 import { formatearPrecio } from '../utils/entradas';
 import { DIAS, FRANJAS, describirClaves, tokenDeDescarga } from '../utils/productos';
+import { nombreDelEstado, describirEntrega } from '../utils/pedidos';
 import { evento } from '../utils/metaPixel';
 
-/** Los estados de un pedido de un físico. Los demás llegan con #44. */
-const ESTADOS_DEL_PEDIDO = { ingresado: 'Ingresado' };
+/**
+ * Lo que dice arriba un pedido de un físico pagado, según por dónde va (#44).
+ * Ingresado usa el de "pagada".
+ */
+const ENCABEZADOS_DEL_PEDIDO = {
+  con_fecha: { titulo: 'Tu pedido tiene fecha de entrega', detalle: 'Te avisamos por mail si cambia.' },
+  enviado: { titulo: 'Tu pedido está en camino', detalle: 'Te mandamos por mail los datos del envío.' },
+  entregado: { titulo: '¡Tu pedido fue entregado!', detalle: 'Que lo disfrutes.' },
+  cancelado: { titulo: 'Tu pedido se canceló', detalle: 'Te mandamos el motivo por mail.' },
+};
 
 /**
  * Pantalla a la que vuelve el comprador de un producto digital desde Mercado
@@ -24,7 +33,7 @@ const ESTADOS_DEL_PEDIDO = { ingresado: 'Ingresado' };
  *
  * Un pedido de un físico (#43) no tiene descarga: muestra el detalle, la
  * dirección (la calle llega recortada de la API), los horarios y el estado
- * del pedido.
+ * del pedido con su línea de tiempo (#44).
  */
 function EstadoCompra({ apiUrl }) {
   const { codigo } = useParams();
@@ -147,7 +156,16 @@ function EstadoCompra({ apiUrl }) {
     },
   };
 
-  const estado = estados[orden.estado] || estados.pendiente;
+  const encabezadoDelPedido = fisico && orden.estado === 'pagada' && ENCABEZADOS_DEL_PEDIDO[orden.estado_pedido];
+  const estado = encabezadoDelPedido
+    ? {
+      ...estados.pagada,
+      ...encabezadoDelPedido,
+      ...(orden.estado_pedido === 'cancelado'
+        ? { icono: <X className="w-8 h-8 text-tinta" />, fondo: 'bg-papel-hueso' }
+        : {}),
+    }
+    : estados[orden.estado] || estados.pendiente;
 
   return (
     <Marco>
@@ -251,11 +269,71 @@ function Pedido({ orden }) {
         <span className="text-tinta-suave">Pedido {orden.codigo}</span>
         {orden.estado_pedido && (
           <span className="font-bold text-tinta">
-            Estado: {ESTADOS_DEL_PEDIDO[orden.estado_pedido] || orden.estado_pedido}
+            Estado: {nombreDelEstado(orden.estado_pedido)}
           </span>
         )}
       </div>
+
+      {orden.linea_de_tiempo && orden.linea_de_tiempo.length > 0 && <LineaDeTiempo orden={orden} />}
     </div>
+  );
+}
+
+/** "30/10". */
+const diaYMes = (momento) => {
+  const [, mes, dia] = String(momento || '').slice(0, 10).split('-');
+  return dia ? `${dia}/${mes}` : '';
+};
+
+/**
+ * Los pasos del pedido (#44): los que ya pasaron con su fecha, el actual
+ * marcado y los que faltan en gris. Con fecha de entrega dice cuándo, y
+ * Enviado quién lo lleva.
+ */
+function LineaDeTiempo({ orden }) {
+  const pasos = orden.linea_de_tiempo;
+  const actual = pasos.findIndex((p) => p.estado === orden.estado_pedido);
+
+  const extra = (paso) => {
+    if (paso.estado === 'con_fecha' && orden.entrega_fecha) {
+      return describirEntrega(orden.entrega_fecha, orden.entrega_franja);
+    }
+    if (paso.estado === 'enviado' && orden.envio_empresa && paso.fecha) return `Lo lleva ${orden.envio_empresa}`;
+    return null;
+  };
+
+  return (
+    <ol aria-label="Seguimiento del pedido" className="border-t border-borde mt-4 pt-4 space-y-3">
+      {pasos.map((paso, i) => {
+        const hecho = i <= actual && (paso.fecha || i === actual);
+        const esActual = i === actual;
+
+        return (
+          <li
+            key={paso.estado}
+            aria-current={esActual ? 'step' : undefined}
+            className={`flex items-start gap-3 ${hecho ? 'text-tinta' : 'text-tinta-suave'}`}
+          >
+            <span
+              className={`mt-0.5 w-5 h-5 rounded-full flex items-center justify-center shrink-0 border ${
+                hecho
+                  ? paso.estado === 'cancelado' ? 'bg-red-700 border-red-700' : 'bg-verde border-verde'
+                  : 'bg-white border-borde-fuerte'
+              }`}
+            >
+              {hecho && (paso.estado === 'cancelado'
+                ? <X className="w-3 h-3 text-white" aria-hidden="true" />
+                : <Check className="w-3 h-3 text-tinta" aria-hidden="true" />)}
+            </span>
+            <span className="flex-1">
+              <span className={esActual ? 'font-bold' : ''}>{paso.etiqueta}</span>
+              {paso.fecha && <span className="text-tinta-suave"> · {diaYMes(paso.fecha)}</span>}
+              {extra(paso) && <span className="block text-tinta-media">{extra(paso)}</span>}
+            </span>
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 

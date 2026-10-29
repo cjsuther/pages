@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import { renderConProviders } from '../helpers/render';
 import EstadoCompra from '../../src/pages/EstadoCompra';
 import { guardarTokenDeDescarga } from '../../src/utils/productos';
@@ -210,6 +210,99 @@ describe('EstadoCompra', () => {
 
       expect(screen.getByText('Estamos confirmando tu pago')).toBeInTheDocument();
       expect(screen.queryByText(/^Estado:/)).not.toBeInTheDocument();
+      expect(screen.queryByRole('list', { name: 'Seguimiento del pedido' })).not.toBeInTheDocument();
+    });
+  });
+
+  describe('la línea de tiempo del pedido (#44)', () => {
+    const paso = (estado, etiqueta, fecha = null) => ({ estado, etiqueta, fecha });
+    const PEDIDO = {
+      ...ORDEN,
+      tipo: 'fisico',
+      producto: 'Remera',
+      cantidad: 1,
+      precio_unitario: 2500,
+      costo_envio: 0,
+      envio: null,
+      horarios: null,
+    };
+
+    it('marca los pasos hechos con su fecha y el actual, con la fecha de entrega', async () => {
+      await montar({
+        ...PEDIDO,
+        estado_pedido: 'con_fecha',
+        entrega_fecha: '2026-11-03',
+        entrega_franja: 'tarde',
+        linea_de_tiempo: [
+          paso('ingresado', 'Ingresado', '2026-10-30 10:00:00'),
+          paso('con_fecha', 'Con fecha de entrega', '2026-10-31 09:00:00'),
+          paso('enviado', 'Enviado'),
+          paso('entregado', 'Entregado'),
+        ],
+      });
+
+      expect(screen.getByText('Tu pedido tiene fecha de entrega')).toBeInTheDocument();
+      const linea = screen.getByRole('list', { name: 'Seguimiento del pedido' });
+      const pasos = within(linea).getAllByRole('listitem');
+      expect(pasos.map((li) => li.textContent)).toEqual([
+        'Ingresado · 30/10',
+        'Con fecha de entrega · 31/10martes 03/11 · Tarde',
+        'Enviado',
+        'Entregado',
+      ]);
+      expect(pasos[1]).toHaveAttribute('aria-current', 'step');
+      expect(pasos[0]).not.toHaveAttribute('aria-current');
+    });
+
+    it('enviado dice quién lo lleva', async () => {
+      await montar({
+        ...PEDIDO,
+        estado_pedido: 'enviado',
+        envio_empresa: 'Correo Argentino',
+        linea_de_tiempo: [
+          paso('ingresado', 'Ingresado', '2026-10-30 10:00:00'),
+          paso('con_fecha', 'Con fecha de entrega'),
+          paso('enviado', 'Enviado', '2026-11-01 09:00:00'),
+          paso('entregado', 'Entregado'),
+        ],
+      });
+
+      expect(screen.getByText('Tu pedido está en camino')).toBeInTheDocument();
+      expect(screen.getByText('Lo lleva Correo Argentino')).toBeInTheDocument();
+    });
+
+    it('cancelado lo dice arriba y corta el recorrido', async () => {
+      await montar({
+        ...PEDIDO,
+        estado_pedido: 'cancelado',
+        linea_de_tiempo: [
+          paso('ingresado', 'Ingresado', '2026-10-30 10:00:00'),
+          paso('cancelado', 'Cancelado', '2026-10-31 10:00:00'),
+        ],
+      });
+
+      expect(screen.getByText('Tu pedido se canceló')).toBeInTheDocument();
+      expect(screen.getByText('Te mandamos el motivo por mail.')).toBeInTheDocument();
+      expect(screen.queryByText('¡Recibimos tu pedido!')).not.toBeInTheDocument();
+      const pasos = within(screen.getByRole('list', { name: 'Seguimiento del pedido' })).getAllByRole('listitem');
+      expect(pasos).toHaveLength(2);
+      expect(pasos[1]).toHaveAttribute('aria-current', 'step');
+    });
+
+    it('entregado es el final feliz', async () => {
+      await montar({
+        ...PEDIDO,
+        estado_pedido: 'entregado',
+        linea_de_tiempo: [
+          paso('ingresado', 'Ingresado', '2026-10-30 10:00:00'),
+          paso('con_fecha', 'Con fecha de entrega'),
+          paso('enviado', 'Enviado'),
+          paso('entregado', 'Entregado', '2026-10-31 10:00:00'),
+        ],
+      });
+
+      expect(screen.getByText('¡Tu pedido fue entregado!')).toBeInTheDocument();
+      expect(screen.getByText('Estado: Entregado')).toBeInTheDocument();
     });
   });
 });
