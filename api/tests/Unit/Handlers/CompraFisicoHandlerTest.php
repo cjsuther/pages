@@ -330,6 +330,10 @@ class CompraFisicoHandlerTest extends HandlerTestCase
         // Nace pagado: el stock se descuenta en la misma transacción.
         $this->assertSame([2, 41], $this->db->paramsFor('UPDATE digital_products SET stock = stock - ?'));
         $this->assertTrue($this->db->committed);
+        // #44: confirmado, queda Ingresado en la misma transacción.
+        $this->assertTrue($this->db->ran("SET estado_pedido = 'ingresado'"));
+        $sqls = array_column($this->db->log(), 'sql');
+        $this->assertLessThan($this->indiceDe($sqls, "SET estado_pedido = 'ingresado'"), $this->indiceDe($sqls, 'INSERT INTO product_orders'));
     }
 
     public function testUnPedidoGratisRespetaElLimitePorEmail()
@@ -382,7 +386,9 @@ class CompraFisicoHandlerTest extends HandlerTestCase
             'cantidad' => 2, 'precio_unitario' => '2500.00', 'costo_envio' => '500.00', 'sin_stock' => 0,
             'archivo_ruta' => null, 'archivo_nombre' => null, 'archivo_bytes' => null,
             'pagina' => 'La Sala', 'url_slug' => 'la-sala', 'email_contacto' => null, 'meta_pixel_id' => null,
-            'duena_email' => 'duena@example.com',
+            'duena_email' => 'duena@example.com', 'mp_payment_id' => null,
+            'estado_pedido' => null, 'entrega_fecha' => null, 'entrega_franja' => null,
+            'envio_empresa' => null, 'envio_seguimiento' => null, 'cancelado_motivo' => null,
         ], $overrides);
     }
 
@@ -399,6 +405,7 @@ class CompraFisicoHandlerTest extends HandlerTestCase
         $this->db->onSelect("WHERE dp.tipo = 'fisico' AND o.codigo = ?", [['id' => 7, 'product_id' => 40, 'cantidad' => 2]]);
         $this->db->onSelect('SELECT option_id FROM product_order_options', [['option_id' => 12], ['option_id' => 21]]);
         $this->db->onSelect('FROM product_variants WHERE product_id = ? AND clave = ? FOR UPDATE', [['stock' => $stock]]);
+        $this->db->onWrite("SET estado_pedido = 'ingresado'", 1);
 
         return (new FakeHttpClient())->responde('/v1/payments/', 200, [
             'status' => 'approved', 'external_reference' => self::CODIGO, 'transaction_amount' => 5500.0,
@@ -422,6 +429,32 @@ class CompraFisicoHandlerTest extends HandlerTestCase
         $sqls = array_column($this->db->log(), 'sql');
         $pagada = $this->indiceDe($sqls, "SET estado = 'pagada'");
         $this->assertLessThan($this->indiceDe($sqls, 'FOR UPDATE'), $pagada);
+    }
+
+    /** #44: pagado, el pedido queda Ingresado y lo anota el sistema, en la misma transacción. */
+    public function testAlAcreditarElPedidoQuedaIngresadoConSuHistorial()
+    {
+        $http = $this->hayPagoAprobadoDelPedido(5);
+        $aviso = new Request('POST', ['data' => ['id' => '555']], ['orden' => self::CODIGO]);
+
+        CompraProductoHandler::aviso($this->db, $aviso, $http, new FakeMailer());
+
+        $this->assertSame([7], $this->db->paramsFor("SET estado_pedido = 'ingresado' WHERE id = ? AND estado_pedido IS NULL"));
+        $this->assertSame([7, 'ingresado', null, null], $this->db->paramsFor('INSERT INTO product_order_historial'));
+        $sqls = array_column($this->db->log(), 'sql');
+        $this->assertLessThan($this->indiceDe($sqls, 'INSERT INTO product_order_historial'), $this->indiceDe($sqls, "SET estado = 'pagada'"));
+        $this->assertTrue($this->db->committed);
+    }
+
+    /** Sin stock también entra en la gestión: lo resuelve quien vende. */
+    public function testSinStockTambienQuedaIngresado()
+    {
+        $http = $this->hayPagoAprobadoDelPedido(1);
+
+        CompraProductoHandler::aviso($this->db, new Request('POST', ['data' => ['id' => '556']], ['orden' => self::CODIGO]), $http, new FakeMailer());
+
+        $this->assertTrue($this->db->ran("SET estado_pedido = 'ingresado'"));
+        $this->assertTrue($this->db->ran('INSERT INTO product_order_historial'));
     }
 
     /** Dos compraron la última unidad: el segundo pago se acredita igual, marcado sin stock. */
@@ -473,9 +506,9 @@ class CompraFisicoHandlerTest extends HandlerTestCase
 
     // --------------------------------------------------------- orden pública
 
-    private function hayPedidoPagado()
+    private function hayPedidoPagado(array $orden = ['estado_pedido' => 'ingresado'])
     {
-        $this->db->onSelect('WHERE o.codigo = ?', [$this->ordenFisica(['estado' => 'pagada'])]);
+        $this->db->onSelect('WHERE o.codigo = ?', [$this->ordenFisica(['estado' => 'pagada'] + $orden)]);
         $this->db->onSelect('FROM product_order_envios WHERE order_id = ?', [[
             'order_id' => 7, 'calle' => 'Av. Corrientes 1234', 'piso_depto' => '3° B', 'localidad' => 'CABA',
             'provincia' => 'Ciudad Autónoma de Buenos Aires', 'codigo_postal' => '1043', 'indicaciones' => 'Timbre B',
@@ -501,6 +534,71 @@ class CompraFisicoHandlerTest extends HandlerTestCase
         $this->assertSame(['lunes', 'sabado'], $orden['horarios']['dias']);
         $this->assertSame('Después de las 18', $orden['horarios']['comentario']);
         $this->assertSame('CABA', $orden['envio']['localidad']);
+    }
+
+    /** #44: el estado actual y los pasos, con la fecha de cada uno que ya pasó. */
+    public function testLaOrdenPublicaMuestraLaLineaDeTiempoDelPedido()
+    {
+        $this->hayPedidoPagado([
+            'estado_pedido' => 'enviado', 'entrega_fecha' => '2026-11-03', 'entrega_franja' => 'tarde',
+            'envio_empresa' => 'Correo Argentino', 'envio_seguimiento' => 'CA123456789AR',
+        ]);
+        $this->db->onSelect('FROM product_order_historial h', [
+            ['id' => 1, 'estado' => 'ingresado', 'datos' => null, 'creado_en' => '2026-10-30 10:00:00', 'user_id' => null, 'quien' => null],
+            ['id' => 2, 'estado' => 'con_fecha', 'datos' => '{"fecha":"2026-11-02","franja":null}',
+             'creado_en' => '2026-10-30 11:00:00', 'user_id' => 1, 'quien' => 'Vendedora'],
+            ['id' => 3, 'estado' => 'con_fecha', 'datos' => '{"fecha":"2026-11-03","franja":"tarde"}',
+             'creado_en' => '2026-10-31 09:00:00', 'user_id' => 1, 'quien' => 'Vendedora'],
+            ['id' => 4, 'estado' => 'enviado', 'datos' => '{"empresa":"Correo Argentino","seguimiento":"CA123456789AR"}',
+             'creado_en' => '2026-11-02 08:00:00', 'user_id' => 1, 'quien' => 'Vendedora'],
+        ]);
+
+        $r = CompraProductoHandler::orden($this->db, new Request('GET', [], ['codigo' => self::CODIGO]));
+        $orden = $r->body['orden'];
+
+        $this->assertSame('enviado', $orden['estado_pedido']);
+        $this->assertSame([
+            ['estado' => 'ingresado', 'etiqueta' => 'Ingresado', 'fecha' => '2026-10-30 10:00:00'],
+            ['estado' => 'con_fecha', 'etiqueta' => 'Con fecha de entrega', 'fecha' => '2026-10-31 09:00:00'],
+            ['estado' => 'enviado', 'etiqueta' => 'Enviado', 'fecha' => '2026-11-02 08:00:00'],
+            ['estado' => 'entregado', 'etiqueta' => 'Entregado', 'fecha' => null],
+        ], $orden['linea_de_tiempo']);
+        $this->assertSame('2026-11-03', $orden['entrega_fecha']);
+        $this->assertSame('tarde', $orden['entrega_franja']);
+        $this->assertSame('Correo Argentino', $orden['envio_empresa']);
+        // Ni el seguimiento ni quién lo hizo: el código no es una credencial.
+        $json = json_encode($r->body, JSON_UNESCAPED_UNICODE);
+        $this->assertStringNotContainsString('CA123456789AR', $json);
+        $this->assertStringNotContainsString('Vendedora', $json);
+    }
+
+    public function testUnPedidoCanceladoCortaLaLineaDeTiempoYNoMuestraElMotivo()
+    {
+        $this->hayPedidoPagado(['estado_pedido' => 'cancelado', 'cancelado_motivo' => 'Me quedé sin la tela']);
+        $this->db->onSelect('FROM product_order_historial h', [
+            ['id' => 1, 'estado' => 'ingresado', 'datos' => null, 'creado_en' => '2026-10-30 10:00:00', 'user_id' => null, 'quien' => null],
+            ['id' => 2, 'estado' => 'cancelado', 'datos' => '{"motivo":"Me quedé sin la tela"}',
+             'creado_en' => '2026-10-31 10:00:00', 'user_id' => 1, 'quien' => 'Vendedora'],
+        ]);
+
+        $r = CompraProductoHandler::orden($this->db, new Request('GET', [], ['codigo' => self::CODIGO]));
+
+        $this->assertSame(['ingresado', 'cancelado'], array_column($r->body['orden']['linea_de_tiempo'], 'estado'));
+        $this->assertStringNotContainsString('tela', json_encode($r->body, JSON_UNESCAPED_UNICODE));
+    }
+
+    /** Sin pagar no hay estado de pedido, aunque la columna diga otra cosa. */
+    public function testUnPedidoSinPagarNoTieneEstadoNiLineaDeTiempo()
+    {
+        $this->db->onSelect('WHERE o.codigo = ?', [$this->ordenFisica([
+            'estado' => 'cancelada', 'estado_pedido' => null,
+        ])]);
+
+        $r = CompraProductoHandler::orden($this->db, new Request('GET', [], ['codigo' => self::CODIGO]));
+
+        $this->assertNull($r->body['orden']['estado_pedido']);
+        $this->assertSame([], $r->body['orden']['linea_de_tiempo']);
+        $this->assertFalse($this->db->ran('product_order_historial'));
     }
 
     /** El código no es una credencial: nada de contacto, y la calle a medias. */

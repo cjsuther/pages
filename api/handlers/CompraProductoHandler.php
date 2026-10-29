@@ -482,10 +482,15 @@ class CompraProductoHandler
      * pedido, la dirección y los horarios. Nunca el teléfono ni el email, y la
      * calle a medias, para que un código filtrado no exponga el domicilio.
      * El piso y las indicaciones tampoco: no hacen falta para reconocerla.
+     *
+     * El estado del pedido (#44) va con su línea de tiempo, la fecha de
+     * entrega y quién lo lleva. El número de seguimiento y el motivo de una
+     * cancelación no: llegan por mail.
      */
     private static function pedidoPublico($db, array $orden)
     {
         $envio = PedidosFisicos::envioDe($db, $orden['id']);
+        $estadoPedido = $orden['estado'] === 'pagada' && !empty($orden['estado_pedido']) ? $orden['estado_pedido'] : null;
 
         return [
             'tipo'            => 'fisico',
@@ -495,8 +500,13 @@ class CompraProductoHandler
             'cantidad'        => (int) $orden['cantidad'],
             'precio_unitario' => round((float) $orden['precio_unitario'], 2),
             'costo_envio'     => round((float) $orden['costo_envio'], 2),
-            // Los estados del pedido llegan con #44; pagado, está ingresado.
-            'estado_pedido'   => $orden['estado'] === 'pagada' ? 'ingresado' : null,
+            'estado_pedido'   => $estadoPedido,
+            'linea_de_tiempo' => $estadoPedido === null
+                ? []
+                : EstadosDePedidos::lineaDeTiempo($estadoPedido, EstadosDePedidos::historial($db, $orden['id'])),
+            'entrega_fecha'   => $estadoPedido === null ? null : $orden['entrega_fecha'],
+            'entrega_franja'  => $estadoPedido === null ? null : $orden['entrega_franja'],
+            'envio_empresa'   => $estadoPedido === null ? null : $orden['envio_empresa'],
             'envio'           => $envio === null ? null : [
                 'calle'         => PedidosFisicos::calleParcial($envio['calle']),
                 'localidad'     => $envio['localidad'],

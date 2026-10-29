@@ -192,6 +192,7 @@ class OrdenesDeProductos
                     PedidosFisicos::descontarStock($db, [
                         'id' => $id, 'product_id' => (int) $productoId, 'cantidad' => (int) $pedido['cantidad'],
                     ]);
+                    EstadosDePedidos::ingresar($db, $id);
                 }
 
                 $db->commit();
@@ -423,10 +424,33 @@ class OrdenesDeProductos
      * Lo que sale es para quien administra la página: datos de contacto sí,
      * pero nunca el token ni nada con lo que se pueda descargar.
      *
+     * Los físicos (#44) traen además la foto del pedido, la localidad y el
+     * estado del pedido; el resumen de arriba es el de los digitales, y el de
+     * los físicos va aparte (resumen_fisicos).
+     *
      * @param string $alcance 'link' o 'pagina'
-     * @return array{ordenes: array, resumen: array}
+     * @return array{ordenes: array, resumen: array, resumen_fisicos: array}
      */
     public static function ventas($db, $alcance, $id)
+    {
+        $ordenes = array_map([self::class, 'venta'], self::filasDeVentas($db, $alcance, $id));
+        $digitales = array_values(array_filter($ordenes, function ($o) { return $o['tipo'] !== 'fisico'; }));
+        $fisicos = array_values(array_filter($ordenes, function ($o) { return $o['tipo'] === 'fisico'; }));
+
+        return [
+            'ordenes'         => $ordenes,
+            'resumen'         => self::resumenDeVentas($digitales),
+            'resumen_fisicos' => self::resumenDeVentas($fisicos),
+        ];
+    }
+
+    /**
+     * Las filas de ventas como salen de la base, con la dirección completa de
+     * los físicos: la lista usa sólo la localidad; el Excel de pedidos, todo.
+     *
+     * @param string $alcance 'link' o 'pagina'
+     */
+    public static function filasDeVentas($db, $alcance, $id)
     {
         $filtros = [
             'link'   => 'dp.link_id = ?',
@@ -440,25 +464,27 @@ class OrdenesDeProductos
         $stmt = $db->prepare('
             SELECT o.id, o.codigo, o.nombre, o.email, o.telefono, o.total, o.estado,
                    o.creado_en, o.pagada_en, o.descargas, o.primera_descarga_en, o.ultima_descarga_en,
-                   dp.id AS producto_id, dp.link_id, COALESCE(o.producto_titulo, l.text, dp.titulo) AS producto,
-                   dp.borrado_en AS producto_borrado_en
+                   o.opciones_texto, o.cantidad, o.sin_stock, o.estado_pedido, o.entrega_fecha, o.entrega_franja,
+                   dp.id AS producto_id, dp.link_id, dp.tipo, COALESCE(o.producto_titulo, l.text, dp.titulo) AS producto,
+                   dp.borrado_en AS producto_borrado_en,
+                   e.calle, e.piso_depto, e.localidad, e.provincia, e.codigo_postal, e.indicaciones,
+                   e.dias, e.franjas, e.comentario_horario
             FROM product_orders o
             INNER JOIN digital_products dp ON dp.id = o.product_id
             LEFT JOIN links l ON l.id = dp.link_id
+            LEFT JOIN product_order_envios e ON e.order_id = o.id
             WHERE ' . $filtros[$alcance] . '
             ORDER BY o.id DESC
         ');
         $stmt->execute([(int) $id]);
 
-        $ordenes = array_map([self::class, 'venta'], $stmt->fetchAll(PDO::FETCH_ASSOC));
-
-        return ['ordenes' => $ordenes, 'resumen' => self::resumenDeVentas($ordenes)];
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
     /** Una fila de la lista de ventas, con los tipos que espera el frontend. */
     private static function venta(array $fila)
     {
-        return [
+        $venta = [
             'id'                  => (int) $fila['id'],
             'codigo'              => $fila['codigo'],
             'nombre'              => $fila['nombre'],
@@ -476,7 +502,84 @@ class OrdenesDeProductos
             'link_id'             => $fila['link_id'] === null ? null : (int) $fila['link_id'],
             'producto'            => $fila['producto'],
             'producto_borrado'    => !empty($fila['producto_borrado_en']),
+            'tipo'                => isset($fila['tipo']) && $fila['tipo'] === 'fisico' ? 'fisico' : 'digital',
         ];
+
+        if ($venta['tipo'] !== 'fisico') {
+            return $venta;
+        }
+
+        // La dirección completa queda para el detalle y el Excel: en la lista
+        // alcanza con la localidad.
+        return $venta + [
+            'opciones'       => $fila['opciones_texto'],
+            'cantidad'       => (int) $fila['cantidad'],
+            'sin_stock'      => !empty($fila['sin_stock']),
+            'estado_pedido'  => $fila['estado_pedido'],
+            'entrega_fecha'  => $fila['entrega_fecha'],
+            'entrega_franja' => $fila['entrega_franja'],
+            'localidad'      => isset($fila['localidad']) ? $fila['localidad'] : null,
+        ];
+    }
+
+    /**
+     * Los pedidos de físicos en un Excel, para armar el recorrido de entrega:
+     * sólo los que están en gestión (pagados o gratis confirmados), con la
+     * dirección completa y los horarios. Con $estadoPedido, sólo los de ese
+     * estado.
+     *
+     * @param array $filas las de filasDeVentas()
+     * @return string el contenido del .xlsx
+     */
+    public static function excelDePedidos(array $filas, $estadoPedido = null)
+    {
+        $datos = [];
+
+        foreach ($filas as $f) {
+            if (!isset($f['tipo']) || $f['tipo'] !== 'fisico' || empty($f['estado_pedido'])) {
+                continue;
+            }
+
+            if ($estadoPedido !== null && $f['estado_pedido'] !== $estadoPedido) {
+                continue;
+            }
+
+            $dias = trim((string) $f['dias']) === '' ? [] : explode(',', $f['dias']);
+            $franjas = trim((string) $f['franjas']) === '' ? [] : explode(',', $f['franjas']);
+
+            $datos[] = [
+                $f['codigo'],
+                $f['creado_en'],
+                EstadosDePedidos::ESTADOS[$f['estado_pedido']],
+                $f['entrega_fecha'],
+                empty($f['entrega_franja']) ? null : PedidosFisicos::describirFranjas([$f['entrega_franja']]),
+                $f['producto'],
+                $f['opciones_texto'],
+                (int) $f['cantidad'],
+                (float) $f['total'],
+                empty($f['sin_stock']) ? 'No' : 'Sí',
+                $f['nombre'],
+                $f['telefono'],
+                $f['email'],
+                $f['calle'],
+                $f['piso_depto'],
+                $f['localidad'],
+                $f['provincia'],
+                $f['codigo_postal'],
+                $f['indicaciones'],
+                PedidosFisicos::describirDias($dias),
+                PedidosFisicos::describirFranjas($franjas),
+                $f['comentario_horario'],
+            ];
+        }
+
+        return Excel::tabla(
+            ['Código', 'Fecha', 'Estado', 'Fecha de entrega', 'Franja de entrega', 'Producto', 'Opciones', 'Cantidad',
+             'Total', 'Sin stock', 'Nombre', 'Teléfono', 'Email', 'Calle y número', 'Piso y depto', 'Localidad',
+             'Provincia', 'Código postal', 'Indicaciones', 'Días', 'Franjas', 'Horario'],
+            $datos,
+            'Pedidos'
+        );
     }
 
     /** Ventas pagadas, lo recaudado con ellas y cuántas ya se descargaron. */
@@ -563,7 +666,8 @@ class OrdenesDeProductos
      *
      * Un físico (#43) descuenta su stock en la misma transacción que marca la
      * orden pagada (PedidosFisicos::descontarStock). Si ya no alcanza, la
-     * orden queda pagada igual y marcada sin_stock.
+     * orden queda pagada igual y marcada sin_stock. Y queda Ingresado
+     * (EstadosDePedidos::ingresar), con o sin stock: lo resuelve quien vende.
      *
      * @return array{acreditada: bool, motivo: string}
      */
@@ -588,8 +692,13 @@ class OrdenesDeProductos
                 $stmt->execute([$codigo]);
                 $fisico = $stmt->fetch(PDO::FETCH_ASSOC);
 
-                if ($fisico !== false && !PedidosFisicos::descontarStock($db, $fisico)) {
-                    $resultado['sin_stock'] = true;
+                if ($fisico !== false) {
+                    if (!PedidosFisicos::descontarStock($db, $fisico)) {
+                        $resultado['sin_stock'] = true;
+                    }
+
+                    // Pagado, el pedido entra en la gestión de quien vende (#44).
+                    EstadosDePedidos::ingresar($db, $fisico['id']);
                 }
             }
 
