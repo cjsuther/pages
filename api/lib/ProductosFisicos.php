@@ -45,6 +45,19 @@ class ProductosFisicos
 
     const ERROR_STOCK = 'El stock tiene que ser un número entero igual o mayor que 0, o quedar vacío';
 
+    /**
+     * Las formas de entrega (#53), en el orden en que se ofrecen, con la
+     * columna de digital_products que dice si está habilitada.
+     */
+    const FORMAS_DE_ENTREGA = ['envio' => 'entrega_envio', 'retiro' => 'entrega_retiro', 'coordinar' => 'entrega_coordinar'];
+
+    /** El largo de retiro_direccion y de retiro_indicaciones. */
+    const MAX_RETIRO = 255;
+
+    const ERROR_SIN_FORMAS = 'Elegí al menos una forma de entrega: envío a domicilio, retiro o coordinar después de la compra';
+
+    const ERROR_RETIRO_SIN_DIRECCION = 'Falta la dirección del retiro: elegila de las sugerencias de Google Maps';
+
     // ------------------------------------------------------------ valores
 
     /**
@@ -120,6 +133,237 @@ class ProductosFisicos
         }
 
         return mb_strlen($zona) > self::MAX_ZONA ? false : $zona;
+    }
+
+    /**
+     * Las formas de entrega habilitadas de un producto (fila de
+     * digital_products, o con sus columnas), en el orden de
+     * FORMAS_DE_ENTREGA. Una fila sin las columnas es de antes de #53: sólo
+     * envío, como funcionaba.
+     *
+     * @return string[]
+     */
+    public static function formasDeEntrega(array $producto)
+    {
+        $formas = [];
+
+        foreach (self::FORMAS_DE_ENTREGA as $forma => $columna) {
+            $habilitada = array_key_exists($columna, $producto) && $producto[$columna] !== null
+                ? (bool) (int) $producto[$columna]
+                : $forma === 'envio';
+
+            if ($habilitada) {
+                $formas[] = $forma;
+            }
+        }
+
+        return $formas;
+    }
+
+    /**
+     * Una casilla que llega del editor: 1 o 0. null si no es ni sí ni no.
+     *
+     * @return int|null
+     */
+    public static function bandera($valor)
+    {
+        if ($valor === true || $valor === 1 || $valor === '1' || $valor === 'true') {
+            return 1;
+        }
+
+        if ($valor === false || $valor === 0 || $valor === '0' || $valor === 'false' || $valor === null || $valor === '') {
+            return 0;
+        }
+
+        return null;
+    }
+
+    /**
+     * Un texto opcional de hasta $maximo letras: sin espacios de más, null si
+     * queda vacío, false si no es texto o es más largo.
+     *
+     * @return string|null|false
+     */
+    private static function textoOpcional($valor, $maximo)
+    {
+        if ($valor === null) {
+            return null;
+        }
+
+        if (!is_string($valor)) {
+            return false;
+        }
+
+        $texto = trim($valor);
+
+        if ($texto === '') {
+            return null;
+        }
+
+        return mb_strlen($texto, 'UTF-8') > $maximo ? false : $texto;
+    }
+
+    /**
+     * Una coordenada dentro de ±$limite, null si viene vacía, false si no sirve.
+     *
+     * @return float|null|false
+     */
+    private static function coordenada($valor, $limite)
+    {
+        if ($valor === null || $valor === '') {
+            return null;
+        }
+
+        if (!is_numeric($valor) || abs((float) $valor) > $limite) {
+            return false;
+        }
+
+        return round((float) $valor, 8);
+    }
+
+    /**
+     * El link de Google Maps del punto de retiro. Sólo http o https: se
+     * muestra como link en la página, en el pedido y en los mails.
+     *
+     * @return string|null|false
+     */
+    private static function urlDeMaps($valor)
+    {
+        if ($valor === null || $valor === '') {
+            return null;
+        }
+
+        if (!is_string($valor)) {
+            return false;
+        }
+
+        $url = trim($valor);
+
+        if ($url === '') {
+            return null;
+        }
+
+        return strlen($url) <= 2048 && preg_match('#^https?://[^\s<>"]+$#i', $url) === 1 ? $url : false;
+    }
+
+    /** El link a Google Maps de una dirección, para cuando no vino el de la sugerencia. */
+    public static function mapsDeLaDireccion($direccion, $latitud = null, $longitud = null)
+    {
+        $consulta = $latitud !== null && $longitud !== null ? $latitud . ',' . $longitud : (string) $direccion;
+
+        return 'https://www.google.com/maps/search/?api=1&query=' . rawurlencode($consulta);
+    }
+
+    /**
+     * Las formas de entrega y el punto de retiro que llegan del editor (#53),
+     * validados. Sólo las claves que llegaron, como el resto de
+     * datosDelPedido(). La regla de al menos una forma, y de la dirección si
+     * hay retiro, se mira contra cómo queda el producto: lo que llegó encima
+     * de lo que ya tenía ($actual, null en el alta).
+     *
+     * @return array [datos, null] o [null, mensaje de error]
+     */
+    public static function datosDeEntrega(array $cuerpo, ?array $actual = null)
+    {
+        $datos = [];
+
+        foreach (self::FORMAS_DE_ENTREGA as $columna) {
+            if (array_key_exists($columna, $cuerpo)) {
+                $valor = self::bandera($cuerpo[$columna]);
+
+                if ($valor === null) {
+                    return [null, 'Las formas de entrega no tienen el formato esperado'];
+                }
+
+                $datos[$columna] = $valor;
+            }
+        }
+
+        $textos = [
+            'retiro_direccion'    => 'La dirección del retiro',
+            'retiro_indicaciones' => 'Los días, horarios e indicaciones para retirar',
+        ];
+
+        foreach ($textos as $campo => $nombre) {
+            if (array_key_exists($campo, $cuerpo)) {
+                $texto = self::textoOpcional($cuerpo[$campo], self::MAX_RETIRO);
+
+                if ($texto === false) {
+                    return [null, $nombre . ' puede tener hasta ' . self::MAX_RETIRO . ' caracteres'];
+                }
+
+                $datos[$campo] = $texto;
+            }
+        }
+
+        foreach (['retiro_latitud' => 90, 'retiro_longitud' => 180] as $campo => $limite) {
+            if (array_key_exists($campo, $cuerpo)) {
+                $coordenada = self::coordenada($cuerpo[$campo], $limite);
+
+                if ($coordenada === false) {
+                    return [null, 'Las coordenadas del retiro no son válidas: elegí la dirección de las sugerencias de Google Maps'];
+                }
+
+                $datos[$campo] = $coordenada;
+            }
+        }
+
+        if (array_key_exists('retiro_maps_url', $cuerpo)) {
+            $url = self::urlDeMaps($cuerpo['retiro_maps_url']);
+
+            if ($url === false) {
+                return [null, 'El link de Google Maps del retiro no es válido'];
+            }
+
+            $datos['retiro_maps_url'] = $url;
+        }
+
+        // Cómo queda el producto. En el alta, lo que pone la base: sólo envío.
+        $queda = $datos + ($actual === null ? [] : $actual);
+
+        if (empty(self::formasDeEntrega($queda))) {
+            return [null, self::ERROR_SIN_FORMAS];
+        }
+
+        if (in_array('retiro', self::formasDeEntrega($queda), true)) {
+            $direccion = isset($queda['retiro_direccion']) ? trim((string) $queda['retiro_direccion']) : '';
+
+            if ($direccion === '') {
+                return [null, self::ERROR_RETIRO_SIN_DIRECCION];
+            }
+
+            // Siempre con un link a Maps: el pedido lo copia y la página lo muestra.
+            if (empty($queda['retiro_maps_url'])) {
+                $datos['retiro_maps_url'] = self::mapsDeLaDireccion(
+                    $direccion,
+                    isset($queda['retiro_latitud']) ? $queda['retiro_latitud'] : null,
+                    isset($queda['retiro_longitud']) ? $queda['retiro_longitud'] : null
+                );
+            }
+        }
+
+        return [$datos, null];
+    }
+
+    /**
+     * El punto de retiro de un producto como lo ve quien compra, o null si no
+     * tiene el retiro habilitado.
+     *
+     * @return array{direccion: string, maps_url: string, indicaciones: ?string}|null
+     */
+    public static function retiro(array $producto)
+    {
+        if (!in_array('retiro', self::formasDeEntrega($producto), true) || empty($producto['retiro_direccion'])) {
+            return null;
+        }
+
+        return [
+            'direccion'    => $producto['retiro_direccion'],
+            'maps_url'     => empty($producto['retiro_maps_url'])
+                ? self::mapsDeLaDireccion($producto['retiro_direccion'])
+                : $producto['retiro_maps_url'],
+            'indicaciones' => empty($producto['retiro_indicaciones']) ? null : $producto['retiro_indicaciones'],
+        ];
     }
 
     /** Con qué se comparan dos nombres: sin espacios a los costados y sin mayúsculas. */
@@ -303,11 +547,18 @@ class ProductosFisicos
      * no se toca. Si vienen características sin variantes, el stock por
      * combinación queda vacío (sin límite).
      *
+     * Las formas de entrega (#53) se validan contra cómo queda el producto:
+     * $actual es su fila de digital_products en una edición, null en el alta.
+     *
      * @return array [datos, null] o [null, mensaje de error]
      */
-    public static function datosDelPedido(array $cuerpo)
+    public static function datosDelPedido(array $cuerpo, ?array $actual = null)
     {
-        $datos = [];
+        list($datos, $error) = self::datosDeEntrega($cuerpo, $actual);
+
+        if ($error !== null) {
+            return [null, $error];
+        }
 
         if (array_key_exists('costo_envio', $cuerpo)) {
             $costo = ProductosDigitales::precio($cuerpo['costo_envio']);
@@ -381,7 +632,11 @@ class ProductosFisicos
         $asignaciones = [];
         $valores = [];
 
-        foreach (['costo_envio', 'zona_envio', 'stock'] as $campo) {
+        $campos = array_merge(['costo_envio', 'zona_envio', 'stock'], array_values(self::FORMAS_DE_ENTREGA), [
+            'retiro_direccion', 'retiro_latitud', 'retiro_longitud', 'retiro_maps_url', 'retiro_indicaciones',
+        ]);
+
+        foreach ($campos as $campo) {
             if (array_key_exists($campo, $datos)) {
                 $asignaciones[] = $campo . ' = ?';
                 $valores[] = $datos[$campo];

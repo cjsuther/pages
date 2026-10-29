@@ -187,6 +187,44 @@ class PublicHandlerTest extends HandlerTestCase
         $this->assertStringNotContainsString('25', json_encode($producto['caracteristicas']));
     }
 
+    /**
+     * Las formas de entrega (#53) y el punto de retiro: es de quien vende,
+     * como la dirección de un evento. Las coordenadas no hacen falta afuera.
+     */
+    public function testUnFisicoSaleConSusFormasDeEntregaYElPuntoDeRetiro()
+    {
+        $res = $this->paginaConProductos([$this->productoDeLaBase([
+            'producto_id' => 30, 'tipo' => 'fisico', 'archivo_nombre' => null, 'archivo_bytes' => null,
+            'costo_envio' => '500.00', 'zona_envio' => null, 'stock' => null,
+            'entrega_envio' => '0', 'entrega_retiro' => '1', 'entrega_coordinar' => '1',
+            'retiro_direccion' => 'Av. Corrientes 1234, CABA', 'retiro_latitud' => '-34.60370000',
+            'retiro_longitud' => '-58.38160000', 'retiro_maps_url' => 'https://maps.google.com/?cid=1',
+            'retiro_indicaciones' => 'Lunes a viernes de 10 a 18',
+        ])]);
+
+        $producto = $res->body['page']['groups'][0]['links'][0];
+        $this->assertSame(['retiro', 'coordinar'], $producto['formas_entrega']);
+        $this->assertSame([
+            'direccion' => 'Av. Corrientes 1234, CABA',
+            'maps_url' => 'https://maps.google.com/?cid=1',
+            'indicaciones' => 'Lunes a viernes de 10 a 18',
+        ], $producto['retiro']);
+        $this->assertStringNotContainsString('-34.6037', json_encode($producto));
+    }
+
+    public function testUnFisicoSinRetiroNoMuestraElPunto()
+    {
+        $res = $this->paginaConProductos([$this->productoDeLaBase([
+            'producto_id' => 30, 'tipo' => 'fisico', 'archivo_nombre' => null, 'archivo_bytes' => null,
+            'entrega_envio' => '1', 'entrega_retiro' => '0', 'entrega_coordinar' => '0',
+            'retiro_direccion' => 'Un lugar de antes',
+        ])]);
+
+        $producto = $res->body['page']['groups'][0]['links'][0];
+        $this->assertSame(['envio'], $producto['formas_entrega']);
+        $this->assertNull($producto['retiro']);
+    }
+
     public function testUnDigitalSaleSinLoDeLosFisicos()
     {
         $res = $this->paginaConProductos([$this->productoDeLaBase()]);

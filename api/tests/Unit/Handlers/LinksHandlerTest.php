@@ -1106,6 +1106,14 @@ class LinksHandlerTest extends HandlerTestCase
                 ['nombre' => 'color', 'opciones' => ['Azul']],
             ]], 'dos características'],
             'opciones duplicadas' => [['caracteristicas' => [['nombre' => 'Talle', 'opciones' => ['M', 'M']]]], 'repetida'],
+            'casilla de entrega que no es sí ni no' => [['entrega_retiro' => 'quizás'], 'formas de entrega'],
+            'link de Maps que no es http' => [[
+                'entrega_retiro' => 1, 'retiro_direccion' => 'Corrientes 1234', 'retiro_maps_url' => 'javascript:alert(1)',
+            ], 'Google Maps'],
+            'indicaciones del retiro muy largas' => [[
+                'entrega_retiro' => 1, 'retiro_direccion' => 'Corrientes 1234', 'retiro_indicaciones' => str_repeat('a', 256),
+            ], '255'],
+            'latitud fuera de rango' => [['entrega_retiro' => 1, 'retiro_direccion' => 'Corrientes 1234', 'retiro_latitud' => 95], 'coordenadas'],
             'stock por combinación negativo' => [[
                 'caracteristicas' => [['nombre' => 'Talle', 'opciones' => ['S']]],
                 'variantes' => [['opciones' => ['S'], 'stock' => -1]],
@@ -1183,6 +1191,96 @@ class LinksHandlerTest extends HandlerTestCase
 
         $this->assertError(400, $res, 'stock');
         $this->assertNoWrites();
+    }
+
+    // ---------------------------------------------------- formas de entrega (#53)
+
+    public function testCrearUnFisicoConRetiroYCoordinar()
+    {
+        $this->grupoDeProductos();
+
+        $res = LinksHandler::index($this->db, $this->post([
+            'group_id' => 7, 'url' => '', 'text' => 'Disco', 'tipo' => 'fisico',
+            'entrega_envio' => false, 'entrega_retiro' => true, 'entrega_coordinar' => true,
+            'retiro_direccion' => 'Av. Corrientes 1234, CABA', 'retiro_latitud' => -34.6037, 'retiro_longitud' => -58.3816,
+            'retiro_maps_url' => 'https://maps.google.com/?cid=1', 'retiro_indicaciones' => 'Lunes a viernes de 10 a 18, timbre 3',
+        ], $this->user()));
+
+        $this->assertStatus(201, $res);
+        $this->assertSame(
+            [0, 1, 1, 'Av. Corrientes 1234, CABA', -34.6037, -58.3816, 'https://maps.google.com/?cid=1',
+             'Lunes a viernes de 10 a 18, timbre 3', 55],
+            $this->db->paramsFor('UPDATE digital_products SET entrega_envio = ?')
+        );
+    }
+
+    public function testUnFisicoSinNingunaFormaDeEntregaNoSeCrea()
+    {
+        $this->grupoDeProductos();
+
+        $res = LinksHandler::index($this->db, $this->post([
+            'group_id' => 7, 'url' => '', 'text' => 'Disco', 'tipo' => 'fisico', 'entrega_envio' => 0,
+        ], $this->user()));
+
+        $this->assertError(400, $res, 'al menos una forma de entrega');
+        $this->assertNoWrites();
+    }
+
+    public function testElRetiroSinDireccionNoSeCrea()
+    {
+        $this->grupoDeProductos();
+
+        $res = LinksHandler::index($this->db, $this->post([
+            'group_id' => 7, 'url' => '', 'text' => 'Disco', 'tipo' => 'fisico', 'entrega_retiro' => 1, 'retiro_direccion' => '  ',
+        ], $this->user()));
+
+        $this->assertError(400, $res, 'dirección del retiro');
+        $this->assertNoWrites();
+    }
+
+    /** Destildar el envío de un producto que sólo tenía envío lo dejaría sin forma. */
+    public function testEditarNoDejaUnFisicoSinFormasDeEntrega()
+    {
+        $this->esProducto();
+        $this->db->onSelect('SELECT * FROM digital_products WHERE link_id', [[
+            'id' => 30, 'link_id' => 5, 'tipo' => 'fisico', 'entrega_envio' => 1, 'entrega_retiro' => 0, 'entrega_coordinar' => 0,
+        ]]);
+
+        $res = LinksHandler::detail($this->db, $this->put(['entrega_envio' => false], $this->user(), ['id' => '5']));
+
+        $this->assertError(400, $res, 'al menos una forma de entrega');
+        $this->assertNoWrites();
+    }
+
+    /** Tildar el retiro en la edición pide la dirección, salvo que ya la tenga guardada. */
+    public function testEditarElRetiroUsaLaDireccionQueYaTenia()
+    {
+        $this->esProducto();
+        $this->db->onSelect('SELECT * FROM digital_products WHERE link_id', [[
+            'id' => 30, 'link_id' => 5, 'tipo' => 'fisico', 'entrega_envio' => 1, 'entrega_retiro' => 0, 'entrega_coordinar' => 0,
+            'retiro_direccion' => 'Av. Corrientes 1234, CABA', 'retiro_maps_url' => 'https://maps.google.com/?cid=1',
+        ]]);
+
+        $res = LinksHandler::detail($this->db, $this->put(['entrega_retiro' => true], $this->user(), ['id' => '5']));
+
+        $this->assertStatus(200, $res);
+        $this->assertSame([1, 5], $this->db->paramsFor('UPDATE digital_products SET entrega_retiro = ?'));
+    }
+
+    /** Si al cliquear la sugerencia de Google no llegó el link, se arma uno con las coordenadas. */
+    public function testSinLinkDeMapsSeArmaUnoConLasCoordenadas()
+    {
+        $this->grupoDeProductos();
+
+        LinksHandler::index($this->db, $this->post([
+            'group_id' => 7, 'url' => '', 'text' => 'Disco', 'tipo' => 'fisico', 'entrega_retiro' => 1,
+            'retiro_direccion' => 'Av. Corrientes 1234, CABA', 'retiro_latitud' => '-34.6', 'retiro_longitud' => '-58.38',
+        ], $this->user()));
+
+        $this->assertContains(
+            'https://www.google.com/maps/search/?api=1&query=-34.6%2C-58.38',
+            $this->db->paramsFor('UPDATE digital_products SET entrega_retiro = ?')
+        );
     }
 
     /** Si falla una característica, no queda nada a medias. */
