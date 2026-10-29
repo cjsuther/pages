@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { X, Loader2, Check, Truck } from 'lucide-react';
+import { X, Loader2, Check, Truck, Handshake } from 'lucide-react';
 import Campo from './CampoDeCompra';
 import DatosDeEntrega from './DatosDeEntrega';
+import PuntoDeRetiro from './PuntoDeRetiro';
 import SelectorDeCaracteristicas from './SelectorDeCaracteristicas';
 import {
-  MAX_CANTIDAD, comprarProducto, cuerpoDelPedido, describirPrecio, entregaVacia, esFisico, esPago,
-  pesos, problemaDelPedido, totalDelPedido,
+  AVISO_COORDINAR, FORMAS_DE_ENTREGA, MAX_CANTIDAD, comprarProducto, costoDeEnvio, cuerpoDelPedido,
+  describirFormaDeEnvio, describirPrecio, entregaVacia, esFisico, esPago, formasDeEntrega, pesos,
+  problemaDelPedido, totalDelPedido,
 } from '../utils/productos';
 import { esEmailValido, sugerenciaDeEmail } from '../utils/email';
 import { textoSobre } from '../utils/colores';
@@ -25,20 +27,28 @@ import useBloqueoDeScroll from '../hooks/useBloqueoDeScroll';
  * horarios de entrega, con el teléfono obligatorio, y muestra el total con
  * envío antes de pagar. `seleccionInicial` son las opciones que ya se
  * eligieron en el detalle.
+ *
+ * Si quien vende habilitó más de una forma de entrega (#53), quien compra
+ * elige una. La dirección y los horarios se piden sólo con envío, y el envío
+ * se cobra sólo ahí.
  */
 function ComprarProducto({ producto, apiUrl, color = '#3B82F6', seleccionInicial = {}, onCerrar }) {
+  const fisico = esFisico(producto);
+  const formas = fisico ? formasDeEntrega(producto) : [];
+
   const [datos, setDatos] = useState({ nombre: '', email: '', telefono: '' });
   const [seleccion, setSeleccion] = useState(seleccionInicial || {});
   const [cantidad, setCantidad] = useState(1);
   const [entrega, setEntrega] = useState(entregaVacia);
+  // Con una sola forma no se pregunta: es ésa.
+  const [forma, setForma] = useState(formas.length === 1 ? formas[0] : null);
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState(null);
   const [avisoEmail, setAvisoEmail] = useState(null);
   const [sugerencia, setSugerencia] = useState(null);
   const [pedido, setPedido] = useState(null);
 
-  const fisico = esFisico(producto);
-  const cuentas = totalDelPedido(producto.precio, fisico ? cantidad : 1, fisico ? producto.costo_envio : 0);
+  const cuentas = totalDelPedido(producto.precio, fisico ? cantidad : 1, fisico ? costoDeEnvio(producto, forma) : 0);
   const pago = cuentas.total > 0;
 
   useBloqueoDeScroll(true);
@@ -84,7 +94,7 @@ function ComprarProducto({ producto, apiUrl, color = '#3B82F6', seleccionInicial
     }
 
     if (fisico) {
-      const problema = problemaDelPedido({ producto, seleccion, telefono: datos.telefono, entrega });
+      const problema = problemaDelPedido({ producto, seleccion, telefono: datos.telefono, entrega, forma });
       if (problema) {
         setError(problema);
         return;
@@ -101,7 +111,7 @@ function ComprarProducto({ producto, apiUrl, color = '#3B82F6', seleccionInicial
         nombre: datos.nombre.trim(),
         email: datos.email.trim(),
         telefono: datos.telefono.trim(),
-        pedido: fisico ? cuerpoDelPedido({ producto, seleccion, cantidad, entrega }) : undefined,
+        pedido: fisico ? cuerpoDelPedido({ producto, seleccion, cantidad, entrega, forma }) : undefined,
       });
 
       if (respuesta.url) {
@@ -157,7 +167,9 @@ function ComprarProducto({ producto, apiUrl, color = '#3B82F6', seleccionInicial
             </h3>
             <p className="text-tinta-media mb-6">
               {fisico
-                ? `Te mandamos el detalle a ${datos.email.trim()}. Quien vende se va a poner en contacto para coordinar la entrega.`
+                ? `Te mandamos el detalle a ${datos.email.trim()}. ${forma === 'retiro'
+                  ? 'Te avisamos por mail cuando esté listo para retirar.'
+                  : 'Quien vende se va a poner en contacto para coordinar la entrega.'}`
                 : `Revisá tu casilla (${datos.email.trim()}). Si no lo ves en unos minutos, mirá en spam.`}
             </p>
             {fisico && pedido.codigo && (
@@ -184,13 +196,6 @@ function ComprarProducto({ producto, apiUrl, color = '#3B82F6', seleccionInicial
             <p className="text-tinta-suave text-sm mb-6">
               {producto.text} · {describirPrecio(producto.precio)}
             </p>
-
-            {fisico && producto.zona_envio && (
-              <p className="flex items-start gap-2 text-sm bg-papel-hueso border border-borde px-4 py-3 mb-6">
-                <Truck className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
-                <span><span className="font-semibold">Zona de envío:</span> {producto.zona_envio}</span>
-              </p>
-            )}
 
             <form onSubmit={enviar} className="space-y-4">
               {fisico && (
@@ -282,8 +287,36 @@ function ComprarProducto({ producto, apiUrl, color = '#3B82F6', seleccionInicial
                 required={fisico}
               />
 
-              {fisico && (
+              {fisico && formas.length > 1 && (
+                <ElegirForma
+                  formas={formas}
+                  producto={producto}
+                  forma={forma}
+                  color={color}
+                  onElegir={(nueva) => { setForma(nueva); setError(null); }}
+                />
+              )}
+
+              {fisico && forma === 'envio' && producto.zona_envio && (
+                <p className="flex items-start gap-2 text-sm bg-papel-hueso border border-borde px-4 py-3">
+                  <Truck className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
+                  <span><span className="font-semibold">Zona de envío:</span> {producto.zona_envio}</span>
+                </p>
+              )}
+
+              {fisico && forma === 'envio' && (
                 <DatosDeEntrega entrega={entrega} onCambiar={(nueva) => { setEntrega(nueva); setError(null); }} />
+              )}
+
+              {fisico && forma === 'retiro' && (
+                <PuntoDeRetiro retiro={producto.retiro} className="bg-papel-hueso border border-borde px-4 py-3" />
+              )}
+
+              {fisico && forma === 'coordinar' && (
+                <p className="flex items-start gap-2 text-sm bg-papel-hueso border border-borde px-4 py-3">
+                  <Handshake className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
+                  <span>{AVISO_COORDINAR}.</span>
+                </p>
               )}
 
               {fisico ? (
@@ -292,10 +325,12 @@ function ComprarProducto({ producto, apiUrl, color = '#3B82F6', seleccionInicial
                     <dt className="text-tinta-media">{describirPrecio(producto.precio)} × {cantidad}</dt>
                     <dd>{pesos(cuentas.subtotal)}</dd>
                   </div>
-                  <div className="flex justify-between">
-                    <dt className="text-tinta-media">Envío</dt>
-                    <dd>{cuentas.envio > 0 ? pesos(cuentas.envio) : 'Incluido'}</dd>
-                  </div>
+                  {forma === 'envio' && (
+                    <div className="flex justify-between">
+                      <dt className="text-tinta-media">Envío</dt>
+                      <dd>{cuentas.envio > 0 ? pesos(cuentas.envio) : 'Incluido'}</dd>
+                    </div>
+                  )}
                   <div className="flex items-baseline justify-between pt-2">
                     <dt className="text-tinta-media">Total</dt>
                     <dd className="text-2xl font-bold">{pago ? pesos(cuentas.total) : 'Gratis'}</dd>
@@ -337,6 +372,41 @@ function ComprarProducto({ producto, apiUrl, color = '#3B82F6', seleccionInicial
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Cómo quiere recibir el pedido quien compra, con botones-píldora. Se
+ * muestra sólo si quien vende habilitó más de una forma.
+ */
+function ElegirForma({ formas, producto, forma, color, onElegir }) {
+  const nombre = (clave) => (clave === 'envio'
+    ? describirFormaDeEnvio(producto.costo_envio)
+    : FORMAS_DE_ENTREGA.find((f) => f.clave === clave)?.nombre);
+
+  return (
+    <fieldset className="border-t border-borde pt-4">
+      <legend className="text-sm font-bold tracking-wide pr-2 mb-2">¿CÓMO LO RECIBÍS?</legend>
+      <div className="flex flex-wrap gap-2">
+        {formas.map((clave) => {
+          const elegida = forma === clave;
+          return (
+            <button
+              key={clave}
+              type="button"
+              onClick={() => onElegir(clave)}
+              aria-pressed={elegida}
+              className={`text-sm px-4 py-2 rounded-full border transition-colors ${
+                elegida ? 'font-semibold' : 'bg-white text-tinta border-borde-fuerte hover:border-tinta'
+              }`}
+              style={elegida ? { backgroundColor: color, borderColor: color, color: textoSobre(color) } : undefined}
+            >
+              {nombre(clave)}
+            </button>
+          );
+        })}
+      </div>
+    </fieldset>
   );
 }
 

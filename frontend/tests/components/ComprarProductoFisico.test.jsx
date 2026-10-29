@@ -71,13 +71,20 @@ describe('Comprar un producto físico', () => {
     window.localStorage.clear();
   });
 
-  it('muestra la zona de envío arriba del formulario', () => {
+  it('muestra la zona de envío arriba de la dirección', () => {
     montar();
 
     const zona = screen.getByText(/Zona de envío/).closest('p');
     expect(zona).toHaveTextContent('Sólo CABA y GBA');
-    expect(zona.compareDocumentPosition(screen.getByLabelText('EMAIL').closest('form')))
+    expect(zona.compareDocumentPosition(screen.getByLabelText('CALLE Y NÚMERO')))
       .toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
+  it('con una sola forma de entrega no pregunta cuál', () => {
+    montar();
+
+    expect(screen.queryByRole('group', { name: '¿CÓMO LO RECIBÍS?' })).not.toBeInTheDocument();
+    expect(screen.getByLabelText('CALLE Y NÚMERO')).toBeInTheDocument();
   });
 
   it('sin zona de envío no muestra el aviso', () => {
@@ -213,6 +220,7 @@ describe('Comprar un producto físico', () => {
       telefono: '11 5555-1234',
       cantidad: 2,
       opciones: [2, 3],
+      forma_entrega: 'envio',
       envio: {
         calle: 'Av. Corrientes 1234', piso_depto: '3° B', localidad: 'CABA',
         provincia: 'Ciudad Autónoma de Buenos Aires', codigo_postal: 'C1043AAZ', indicaciones: 'Timbre B',
@@ -248,6 +256,107 @@ describe('Comprar un producto físico', () => {
     const listo = await screen.findByRole('status');
     expect(listo).toHaveTextContent('Recibimos tu pedido');
     expect(within(listo).getByRole('link', { name: 'Seguir mi pedido' })).toHaveAttribute('href', '/compra/AAAABBBBCCCC');
+  });
+
+  // ------------------------------------------------ formas de entrega (#53)
+
+  describe('formas de entrega', () => {
+    const retiro = {
+      direccion: 'Av. Corrientes 1234, CABA',
+      maps_url: 'https://maps.google.com/?cid=1',
+      indicaciones: 'Lunes a viernes de 10 a 18, timbre 3',
+    };
+    const conTres = (overrides = {}) => remera({ formas_entrega: ['envio', 'retiro', 'coordinar'], retiro, ...overrides });
+    const formas = () => screen.getByRole('group', { name: '¿CÓMO LO RECIBÍS?' });
+    const elegir = (nombre) => fireEvent.click(within(formas()).getByRole('button', { name: nombre }));
+
+    it('con varias, se elige una con píldoras y hasta entonces no se pide dirección', () => {
+      montar(conTres());
+
+      expect(within(formas()).getAllByRole('button').map((b) => b.textContent)).toEqual([
+        'Envío a domicilio ($ 500)', 'Retiro en un lugar', 'Coordinar después de la compra',
+      ]);
+      expect(screen.queryByLabelText('CALLE Y NÚMERO')).not.toBeInTheDocument();
+
+      elegir('Envío a domicilio ($ 500)');
+      expect(within(formas()).getByRole('button', { name: 'Envío a domicilio ($ 500)' })).toHaveAttribute('aria-pressed', 'true');
+      expect(screen.getByLabelText('CALLE Y NÚMERO')).toBeRequired();
+    });
+
+    it('sin elegir la forma no se puede enviar', () => {
+      mockFetch({});
+      montar(conTres());
+      fireEvent.click(opcion('Talle', 'M'));
+      fireEvent.click(opcion('Color', 'Negro'));
+      escribir('NOMBRE Y APELLIDO', 'Ana Gómez');
+      escribir('EMAIL', 'ana@example.com');
+      escribir('TELÉFONO', '11 5555-1234');
+      enviar();
+
+      expect(screen.getByRole('alert')).toHaveTextContent('Elegí cómo querés recibir el pedido');
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it('con retiro muestra el punto, no pide dirección y no suma el envío', () => {
+      montar(conTres());
+      elegir('Retiro en un lugar');
+
+      expect(screen.queryByLabelText('CALLE Y NÚMERO')).not.toBeInTheDocument();
+      expect(screen.queryByText(/Zona de envío/)).not.toBeInTheDocument();
+      expect(screen.getByRole('link', { name: retiro.direccion })).toHaveAttribute('href', retiro.maps_url);
+      expect(screen.getByText(retiro.indicaciones)).toBeInTheDocument();
+      expect(resumen()).not.toHaveTextContent('Envío');
+      expect(resumen()).toHaveTextContent('Total$ 2.500');
+    });
+
+    it('con coordinar avisa que quien vende contacta y no suma el envío', () => {
+      montar(conTres());
+      elegir('Coordinar después de la compra');
+
+      expect(screen.getByText(/quien vende te contacta para coordinar la entrega/)).toBeInTheDocument();
+      expect(screen.queryByLabelText('CALLE Y NÚMERO')).not.toBeInTheDocument();
+      expect(screen.getByLabelText('TELÉFONO')).toBeRequired();
+      expect(resumen()).toHaveTextContent('Total$ 2.500');
+    });
+
+    it('el resumen suma el envío sólo si se eligió envío', () => {
+      montar(conTres());
+
+      elegir('Envío a domicilio ($ 500)');
+      expect(resumen()).toHaveTextContent('Envío$ 500');
+      expect(resumen()).toHaveTextContent('Total$ 3.000');
+
+      elegir('Retiro en un lugar');
+      expect(resumen()).toHaveTextContent('Total$ 2.500');
+    });
+
+    it('con una sola forma que no es envío se usa ésa sin preguntar', () => {
+      montar(remera({ formas_entrega: ['retiro'], retiro }));
+
+      expect(screen.queryByRole('group', { name: '¿CÓMO LO RECIBÍS?' })).not.toBeInTheDocument();
+      expect(screen.getByRole('link', { name: retiro.direccion })).toBeInTheDocument();
+      expect(resumen()).toHaveTextContent('Total$ 2.500');
+    });
+
+    it('con retiro manda la forma sin dirección ni horarios', async () => {
+      const { llamadas } = mockFetch({
+        'public/comprar-producto.php': { status: 201, body: { codigo: 'AAAABBBBCCCC', url: 'https://mp.test/pagar' } },
+      });
+      montar(conTres());
+      elegir('Retiro en un lugar');
+      fireEvent.click(opcion('Talle', 'M'));
+      fireEvent.click(opcion('Color', 'Negro'));
+      escribir('NOMBRE Y APELLIDO', 'Ana Gómez');
+      escribir('EMAIL', 'ana@example.com');
+      escribir('TELÉFONO', '11 5555-1234');
+      enviar();
+
+      await vi.waitFor(() => expect(window.location.href).toBe('https://mp.test/pagar'));
+      expect(cuerpoDe(llamadaA(llamadas, 'comprar-producto.php'))).toEqual({
+        link_id: 500, nombre: 'Ana Gómez', email: 'ana@example.com', telefono: '11 5555-1234',
+        cantidad: 1, opciones: [2, 3], forma_entrega: 'retiro',
+      });
+    });
   });
 
   it('si ya no queda stock suficiente, muestra lo que dice la API', async () => {

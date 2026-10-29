@@ -1,12 +1,15 @@
 import React, { useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, Download, FileText, ShoppingBag, Truck } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, FileText, Handshake, ShoppingBag, Truck } from 'lucide-react';
 import { AuthContext } from '../App';
 import BotonCompartir from './BotonCompartir';
 import ComprarProducto from './ComprarProducto';
+import PuntoDeRetiro from './PuntoDeRetiro';
 import Sugerencias from './Sugerencias';
 import useBloqueoDeScroll from '../hooks/useBloqueoDeScroll';
 import SelectorDeCaracteristicas from './SelectorDeCaracteristicas';
-import { describirEnvio, describirPrecio, esFisico, esPago, linkDeProducto } from '../utils/productos';
+import {
+  describirFormaDeEnvio, describirPrecio, esFisico, esPago, formasDeEntrega, linkDeProducto,
+} from '../utils/productos';
 import { describirPeso } from '../utils/imagenes';
 import { textoSobre } from '../utils/colores';
 
@@ -389,15 +392,7 @@ export function Producto({ producto, colores, onComprar, Titulo = 'h2', colorTit
         </p>
       )}
 
-      {fisico && (
-        <div className="mb-4 text-sm opacity-80 flex items-start gap-1.5">
-          <Truck className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
-          <span>
-            {describirEnvio(producto.costo_envio)}
-            {producto.zona_envio && <span className="block">{producto.zona_envio}</span>}
-          </span>
-        </div>
-      )}
+      {fisico && <FormasDeEntrega producto={producto} />}
 
       {caracteristicas.length > 0 && !producto.agotado && (
         <SelectorDeCaracteristicas
@@ -428,6 +423,37 @@ export function Producto({ producto, colores, onComprar, Titulo = 'h2', colorTit
         <BotonCompartir url={linkDeProducto(producto.id)} titulo={producto.text} />
       </div>
     </>
+  );
+}
+
+/**
+ * Cómo se puede recibir un físico (#53): envío con su costo y su zona, el
+ * punto de retiro con su link a Google Maps, o coordinar con quien vende.
+ */
+function FormasDeEntrega({ producto }) {
+  const formas = formasDeEntrega(producto);
+
+  return (
+    <ul aria-label="Formas de entrega" className="mb-4 space-y-2 text-sm opacity-90">
+      {formas.includes('envio') && (
+        <li className="flex items-start gap-2">
+          <Truck className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
+          <span>
+            {describirFormaDeEnvio(producto.costo_envio)}
+            {producto.zona_envio && <span className="block opacity-80">{producto.zona_envio}</span>}
+          </span>
+        </li>
+      )}
+      {formas.includes('retiro') && producto.retiro && (
+        <li><PuntoDeRetiro retiro={producto.retiro} /></li>
+      )}
+      {formas.includes('coordinar') && (
+        <li className="flex items-start gap-2">
+          <Handshake className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
+          <span>Coordinás la entrega con quien vende</span>
+        </li>
+      )}
+    </ul>
   );
 }
 
