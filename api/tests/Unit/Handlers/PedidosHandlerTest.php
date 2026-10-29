@@ -301,5 +301,57 @@ class PedidosHandlerTest extends HandlerTestCase
         $this->assertSame('Sistema', $p['historial'][0]['quien']);
         $this->assertFalse($p['sin_stock']);
         $this->assertArrayNotHasKey('token_cifrado', $p);
+        $this->assertSame('envio', $p['forma_entrega']);
+        $this->assertNull($p['retiro']);
+    }
+
+    // =================================================== formas de entrega (#53)
+
+    private function retiro(array $extra = [])
+    {
+        return [
+            'forma_entrega' => 'retiro', 'retiro_direccion' => 'Av. Corrientes 1234, CABA',
+            'retiro_maps_url' => 'https://maps.google.com/?cid=1', 'retiro_indicaciones' => 'Timbre 3',
+        ] + $extra;
+    }
+
+    public function testElDetalleDeUnRetiroTraeElPuntoYLosNombresDelRetiro()
+    {
+        $this->hayPedido($this->retiro(['estado_pedido' => 'enviado']));
+        $this->db->onSelect('FROM product_order_historial h', [
+            ['id' => 1, 'estado' => 'ingresado', 'datos' => null, 'creado_en' => '2026-10-29 10:05:00', 'user_id' => null, 'quien' => null],
+            ['id' => 2, 'estado' => 'enviado', 'datos' => null, 'creado_en' => '2026-10-30 10:05:00', 'user_id' => 3, 'quien' => 'Vendedora'],
+        ]);
+
+        $p = PedidosHandler::detalle($this->db, $this->get(['codigo' => self::CODIGO], $this->user(3)))->body['pedido'];
+
+        $this->assertSame('retiro', $p['forma_entrega']);
+        $this->assertSame('Av. Corrientes 1234, CABA', $p['retiro']['direccion']);
+        $this->assertNull($p['envio']);
+        $this->assertSame('Listo para retirar', $p['historial'][1]['etiqueta']);
+    }
+
+    /** Listo para retirar no lleva empresa ni seguimiento, aunque lleguen. */
+    public function testListoParaRetirarNoGuardaEmpresaNiSeguimiento()
+    {
+        $this->hayPedido($this->retiro());
+        $this->despues($this->retiro(['estado_pedido' => 'enviado']));
+
+        $res = $this->cambiar(['estado' => 'enviado', 'empresa' => 'Andreani', 'seguimiento' => 'AN1']);
+
+        $this->assertStatus(200, $res);
+        $this->assertSame(['enviado', null, null, 7, 'ingresado'], $this->db->paramsFor('SET estado_pedido = ?, envio_empresa = ?'));
+        $this->assertSame('Tu pedido está listo para retirar: Remera', $this->mailer->enviados[0]['asunto']);
+    }
+
+    public function testElDetalleDeCoordinarTraeElTelefono()
+    {
+        $this->hayPedido(['forma_entrega' => 'coordinar']);
+
+        $p = PedidosHandler::detalle($this->db, $this->get(['codigo' => self::CODIGO], $this->user(3)))->body['pedido'];
+
+        $this->assertSame('coordinar', $p['forma_entrega']);
+        $this->assertSame('11 5555-1234', $p['telefono']);
+        $this->assertNull($p['retiro']);
     }
 }

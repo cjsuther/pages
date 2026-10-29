@@ -553,6 +553,64 @@ class ProductosHandlerTest extends HandlerTestCase
         $this->assertStringNotContainsString('Ana', $hoja);
     }
 
+    /** #53: la forma de entrega en la lista, una columna en el Excel y su filtro. */
+    public function testLaListaTraeLaFormaDeEntregaYUnPedidoViejoEsEnvio()
+    {
+        $this->db->onSelect('FROM pages p WHERE p.id = ?', [['1' => 1]]);
+        $this->db->onSelect('WHERE dp.page_id = ?', [
+            $this->pedido(['forma_entrega' => 'coordinar']),
+            $this->pedido(['id' => 9, 'forma_entrega' => null]),
+        ]);
+
+        $ordenes = $this->verVentas(['page_id' => 9])->body['ordenes'];
+
+        $this->assertSame(['coordinar', 'envio'], array_column($ordenes, 'forma_entrega'));
+    }
+
+    public function testElExcelDePedidosTraeLaFormaYElPuntoDeRetiro()
+    {
+        $this->db->onSelect('FROM pages p WHERE p.id = ?', [['1' => 1]]);
+        $this->db->onSelect('WHERE dp.page_id = ?', [
+            $this->pedido([
+                'nombre' => 'Ana', 'forma_entrega' => 'retiro', 'estado_pedido' => 'enviado',
+                'retiro_direccion' => 'Humboldt 1500, CABA', 'retiro_indicaciones' => 'Timbre 3',
+                'calle' => null, 'piso_depto' => null, 'localidad' => null, 'provincia' => null, 'codigo_postal' => null,
+                'indicaciones' => null, 'dias' => null, 'franjas' => null, 'comentario_horario' => null,
+            ]),
+            $this->pedido(['id' => 9, 'nombre' => 'Beto', 'forma_entrega' => 'envio']),
+        ]);
+
+        $hoja = $this->hojaDelExcel($this->verVentas(['page_id' => 9, 'formato' => 'excel', 'tipo' => 'fisico'])->raw);
+
+        foreach (['Forma de entrega', 'Punto de retiro', 'Retiro', 'Envío a domicilio', 'Listo para retirar',
+                  'Humboldt 1500, CABA — Timbre 3'] as $texto) {
+            $this->assertStringContainsString($texto, $hoja);
+        }
+    }
+
+    public function testElExcelDePedidosRespetaElFiltroDeForma()
+    {
+        $this->db->onSelect('FROM pages p WHERE p.id = ?', [['1' => 1]]);
+        $this->db->onSelect('WHERE dp.page_id = ?', [
+            $this->pedido(['nombre' => 'Ana', 'forma_entrega' => 'envio']),
+            $this->pedido(['id' => 9, 'nombre' => 'Beto', 'forma_entrega' => 'coordinar']),
+        ]);
+
+        $hoja = $this->hojaDelExcel($this->verVentas([
+            'page_id' => 9, 'formato' => 'excel', 'tipo' => 'fisico', 'forma_entrega' => 'coordinar',
+        ])->raw);
+
+        $this->assertStringContainsString('Beto', $hoja);
+        $this->assertStringNotContainsString('Ana', $hoja);
+    }
+
+    public function testUnFiltroDeFormaInventadoNoVale()
+    {
+        $this->db->onSelect('FROM pages p WHERE p.id = ?', [['1' => 1]]);
+
+        $this->assertError(400, $this->verVentas(['page_id' => 9, 'formato' => 'excel', 'tipo' => 'fisico', 'forma_entrega' => 'dron']));
+    }
+
     public function testUnFiltroDeEstadoInventadoNoVale()
     {
         $this->db->onSelect('FROM pages p WHERE p.id = ?', [['1' => 1]]);

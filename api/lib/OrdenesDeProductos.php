@@ -50,6 +50,8 @@ class OrdenesDeProductos
             SELECT l.id, l.text, l.image_url, lg.page_id,
                    dp.id AS producto_id, dp.tipo, dp.oculto, dp.borrado_en,
                    dp.precio, dp.costo_envio, dp.zona_envio, dp.stock,
+                   dp.entrega_envio, dp.entrega_retiro, dp.entrega_coordinar,
+                   dp.retiro_direccion, dp.retiro_maps_url, dp.retiro_indicaciones,
                    dp.archivo_ruta, dp.archivo_nombre, dp.archivo_bytes
             FROM links l
             INNER JOIN link_groups lg ON lg.id = l.group_id
@@ -132,8 +134,10 @@ class OrdenesDeProductos
      *
      * Un físico (#43) llega con $pedido: la foto (titulo, opciones_texto,
      * opcion_ids, variante_id, precio_unitario, cantidad, costo_envio) y la
-     * entrega (envio, horarios). Todo se escribe en una transacción; si nace
-     * pagado, ahí mismo se descuenta el stock, como al acreditar.
+     * entrega: la forma (#53) y, según ella, la dirección y los horarios
+     * (envio, horarios) o la foto del punto de retiro (retiro). Todo se
+     * escribe en una transacción; si nace pagado, ahí mismo se descuenta el
+     * stock, como al acreditar.
      *
      * @return array{id: int, codigo: string, token: string, estado: string}
      */
@@ -163,8 +167,12 @@ class OrdenesDeProductos
         ];
 
         if ($pedido !== null) {
+            $forma = isset($pedido['forma_entrega']) ? $pedido['forma_entrega'] : 'envio';
+            $retiro = $forma === 'retiro' && !empty($pedido['retiro']) ? $pedido['retiro'] : null;
+
             $columnas = array_merge($columnas, ['producto_titulo', 'variante_id', 'opciones_texto', 'cantidad',
-                                                'precio_unitario', 'costo_envio']);
+                                                'precio_unitario', 'costo_envio', 'forma_entrega',
+                                                'retiro_direccion', 'retiro_maps_url', 'retiro_indicaciones']);
             $valores = array_merge($valores, [
                 (string) $pedido['titulo'],
                 empty($pedido['variante_id']) ? null : (int) $pedido['variante_id'],
@@ -172,6 +180,10 @@ class OrdenesDeProductos
                 (int) $pedido['cantidad'],
                 round((float) $pedido['precio_unitario'], 2),
                 round((float) $pedido['costo_envio'], 2),
+                $forma,
+                $retiro === null ? null : $retiro['direccion'],
+                $retiro === null ? null : $retiro['maps_url'],
+                $retiro === null ? null : $retiro['indicaciones'],
             ]);
 
             $db->beginTransaction();
@@ -213,12 +225,19 @@ class OrdenesDeProductos
         ];
     }
 
-    /** Las opciones elegidas, la dirección y los horarios de un pedido de un físico. */
+    /**
+     * Las opciones elegidas y, si se manda, la dirección y los horarios de un
+     * pedido de un físico. Retirar o coordinar (#53) no tienen dirección.
+     */
     private static function guardarEntrega($db, $ordenId, array $pedido)
     {
         foreach ($pedido['opcion_ids'] as $opcionId) {
             $stmt = $db->prepare('INSERT INTO product_order_options (order_id, option_id) VALUES (?, ?)');
             $stmt->execute([$ordenId, (int) $opcionId]);
+        }
+
+        if (empty($pedido['envio'])) {
+            return;
         }
 
         $envio = $pedido['envio'];
@@ -465,6 +484,7 @@ class OrdenesDeProductos
             SELECT o.id, o.codigo, o.nombre, o.email, o.telefono, o.total, o.estado,
                    o.creado_en, o.pagada_en, o.descargas, o.primera_descarga_en, o.ultima_descarga_en,
                    o.opciones_texto, o.cantidad, o.sin_stock, o.estado_pedido, o.entrega_fecha, o.entrega_franja,
+                   o.forma_entrega, o.retiro_direccion, o.retiro_indicaciones,
                    dp.id AS producto_id, dp.link_id, dp.tipo, COALESCE(o.producto_titulo, l.text, dp.titulo) AS producto,
                    dp.borrado_en AS producto_borrado_en,
                    e.calle, e.piso_depto, e.localidad, e.provincia, e.codigo_postal, e.indicaciones,
@@ -510,11 +530,12 @@ class OrdenesDeProductos
         }
 
         // La dirección completa queda para el detalle y el Excel: en la lista
-        // alcanza con la localidad.
+        // alcanza con la localidad y la forma de entrega (#53).
         return $venta + [
             'opciones'       => $fila['opciones_texto'],
             'cantidad'       => (int) $fila['cantidad'],
             'sin_stock'      => !empty($fila['sin_stock']),
+            'forma_entrega'  => PedidosFisicos::formaDe($fila),
             'estado_pedido'  => $fila['estado_pedido'],
             'entrega_fecha'  => $fila['entrega_fecha'],
             'entrega_franja' => $fila['entrega_franja'],
@@ -526,12 +547,13 @@ class OrdenesDeProductos
      * Los pedidos de físicos en un Excel, para armar el recorrido de entrega:
      * sólo los que están en gestión (pagados o gratis confirmados), con la
      * dirección completa y los horarios. Con $estadoPedido, sólo los de ese
-     * estado.
+     * estado; con $forma, sólo los de esa forma de entrega (#53). Un retiro
+     * lleva el punto de retiro en vez de la dirección.
      *
      * @param array $filas las de filasDeVentas()
      * @return string el contenido del .xlsx
      */
-    public static function excelDePedidos(array $filas, $estadoPedido = null)
+    public static function excelDePedidos(array $filas, $estadoPedido = null, $forma = null)
     {
         $datos = [];
 
@@ -544,13 +566,23 @@ class OrdenesDeProductos
                 continue;
             }
 
-            $dias = trim((string) $f['dias']) === '' ? [] : explode(',', $f['dias']);
-            $franjas = trim((string) $f['franjas']) === '' ? [] : explode(',', $f['franjas']);
+            $formaDelPedido = PedidosFisicos::formaDe($f);
+
+            if ($forma !== null && $formaDelPedido !== $forma) {
+                continue;
+            }
+
+            $dias = trim((string) (isset($f['dias']) ? $f['dias'] : '')) === '' ? [] : explode(',', $f['dias']);
+            $franjas = trim((string) (isset($f['franjas']) ? $f['franjas'] : '')) === '' ? [] : explode(',', $f['franjas']);
+            $retiro = $formaDelPedido === 'retiro' && !empty($f['retiro_direccion'])
+                ? $f['retiro_direccion'] . (empty($f['retiro_indicaciones']) ? '' : ' — ' . $f['retiro_indicaciones'])
+                : null;
 
             $datos[] = [
                 $f['codigo'],
                 $f['creado_en'],
-                EstadosDePedidos::ESTADOS[$f['estado_pedido']],
+                EstadosDePedidos::etiqueta($f['estado_pedido'], $formaDelPedido),
+                PedidosFisicos::FORMAS[$formaDelPedido],
                 $f['entrega_fecha'],
                 empty($f['entrega_franja']) ? null : PedidosFisicos::describirFranjas([$f['entrega_franja']]),
                 $f['producto'],
@@ -570,13 +602,15 @@ class OrdenesDeProductos
                 PedidosFisicos::describirDias($dias),
                 PedidosFisicos::describirFranjas($franjas),
                 $f['comentario_horario'],
+                $retiro,
             ];
         }
 
         return Excel::tabla(
-            ['Código', 'Fecha', 'Estado', 'Fecha de entrega', 'Franja de entrega', 'Producto', 'Opciones', 'Cantidad',
-             'Total', 'Sin stock', 'Nombre', 'Teléfono', 'Email', 'Calle y número', 'Piso y depto', 'Localidad',
-             'Provincia', 'Código postal', 'Indicaciones', 'Días', 'Franjas', 'Horario'],
+            ['Código', 'Fecha', 'Estado', 'Forma de entrega', 'Fecha de entrega', 'Franja de entrega', 'Producto',
+             'Opciones', 'Cantidad', 'Total', 'Sin stock', 'Nombre', 'Teléfono', 'Email', 'Calle y número',
+             'Piso y depto', 'Localidad', 'Provincia', 'Código postal', 'Indicaciones', 'Días', 'Franjas', 'Horario',
+             'Punto de retiro'],
             $datos,
             'Pedidos'
         );

@@ -76,6 +76,41 @@ class PedidosFisicos
         return strlen(preg_replace('/\D/', '', $telefono)) < 6 ? 'El teléfono no es válido' : null;
     }
 
+    /** Cómo se lee cada forma de entrega (#53) en el panel, el Excel y los mails. */
+    const FORMAS = ['envio' => 'Envío a domicilio', 'retiro' => 'Retiro', 'coordinar' => 'A coordinar'];
+
+    const MENSAJE_FORMA_NO_HABILITADA = 'Esa forma de entrega no está disponible para este producto';
+
+    /**
+     * La forma de entrega que eligió quien compra (#53), contra las que
+     * habilitó quien vende. Si hay una sola, es ésa aunque no venga: el
+     * formulario no pregunta.
+     *
+     * @param array $producto la fila de OrdenesDeProductos::productoEnVenta()
+     * @return array [forma, null] o [null, error]
+     */
+    public static function forma(array $producto, $elegida)
+    {
+        $habilitadas = ProductosFisicos::formasDeEntrega($producto);
+
+        // Un retiro sin dirección no se puede ofrecer: no hay adónde ir.
+        if (ProductosFisicos::retiro($producto) === null) {
+            $habilitadas = array_values(array_diff($habilitadas, ['retiro']));
+        }
+
+        if ($elegida === null || $elegida === '') {
+            return count($habilitadas) === 1
+                ? [$habilitadas[0], null]
+                : [null, 'Elegí cómo querés recibir el pedido'];
+        }
+
+        if (!is_string($elegida) || !in_array($elegida, $habilitadas, true)) {
+            return [null, self::MENSAJE_FORMA_NO_HABILITADA];
+        }
+
+        return [$elegida, null];
+    }
+
     /**
      * La dirección de envío que llega del formulario, validada.
      *
@@ -281,6 +316,15 @@ class PedidosFisicos
         return round(round((float) $precioUnitario, 2) * (int) $cantidad + round((float) $costoEnvio, 2), 2);
     }
 
+    /**
+     * Lo que se cobra de envío según la forma (#53): el costo del producto
+     * sólo si se manda; retirar o coordinar no lo pagan.
+     */
+    public static function costoDeEnvio(array $producto, $forma)
+    {
+        return $forma === 'envio' ? round((float) (isset($producto['costo_envio']) ? $producto['costo_envio'] : 0), 2) : 0.0;
+    }
+
     // ------------------------------------------------------------- stock
 
     /**
@@ -361,6 +405,36 @@ class PedidosFisicos
             'dias'          => self::lista($fila['dias']),
             'franjas'       => self::lista($fila['franjas']),
             'comentario'    => $fila['comentario_horario'],
+        ];
+    }
+
+    /**
+     * La forma de entrega de un pedido (#53). Uno sin forma es de antes, y
+     * antes todo era envío.
+     */
+    public static function formaDe(array $orden)
+    {
+        $forma = isset($orden['forma_entrega']) ? $orden['forma_entrega'] : null;
+
+        return is_string($forma) && isset(ProductosFisicos::FORMAS_DE_ENTREGA[$forma]) ? $forma : 'envio';
+    }
+
+    /**
+     * La foto del punto de retiro de un pedido, como estaba al comprar, o
+     * null si no es un retiro.
+     *
+     * @return array{direccion: string, maps_url: ?string, indicaciones: ?string}|null
+     */
+    public static function retiroDe(array $orden)
+    {
+        if (self::formaDe($orden) !== 'retiro' || empty($orden['retiro_direccion'])) {
+            return null;
+        }
+
+        return [
+            'direccion'    => $orden['retiro_direccion'],
+            'maps_url'     => empty($orden['retiro_maps_url']) ? null : $orden['retiro_maps_url'],
+            'indicaciones' => empty($orden['retiro_indicaciones']) ? null : $orden['retiro_indicaciones'],
         ];
     }
 

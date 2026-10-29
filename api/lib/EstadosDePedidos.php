@@ -28,6 +28,26 @@ class EstadosDePedidos
         'cancelado' => 'Cancelado',
     ];
 
+    /**
+     * Los mismos estados con otro nombre según la forma de entrega (#53). Lo
+     * que no está acá se llama como en ESTADOS: envío y coordinar usan esos.
+     */
+    const ESTADOS_DEL_RETIRO = [
+        'con_fecha' => 'Con fecha de retiro',
+        'enviado'   => 'Listo para retirar',
+        'entregado' => 'Retirado',
+    ];
+
+    /** Cómo se llama un estado en un pedido de esa forma de entrega. */
+    public static function etiqueta($estado, $forma = 'envio')
+    {
+        if ($forma === 'retiro' && isset(self::ESTADOS_DEL_RETIRO[$estado])) {
+            return self::ESTADOS_DEL_RETIRO[$estado];
+        }
+
+        return isset(self::ESTADOS[$estado]) ? self::ESTADOS[$estado] : (string) $estado;
+    }
+
     /** A dónde se puede pasar desde cada estado. */
     const SIGUIENTES = [
         'ingresado' => ['con_fecha', 'enviado', 'entregado', 'cancelado'],
@@ -338,9 +358,9 @@ class EstadosDePedidos
     /**
      * El historial de un pedido, del primero al último, con quién hizo cada
      * cambio (su nombre o, si no tiene, su email). "Sistema" cuando entró
-     * solo, al acreditarse el pago.
+     * solo, al acreditarse el pago. Los nombres, los de la forma de entrega.
      */
-    public static function historial($db, $ordenId)
+    public static function historial($db, $ordenId, $forma = 'envio')
     {
         $stmt = $db->prepare('
             SELECT h.id, h.estado, h.datos, h.creado_en, h.user_id,
@@ -352,12 +372,12 @@ class EstadosDePedidos
         ');
         $stmt->execute([(int) $ordenId]);
 
-        return array_map(function ($fila) {
+        return array_map(function ($fila) use ($forma) {
             $datos = $fila['datos'] === null ? [] : json_decode($fila['datos'], true);
 
             return [
                 'estado'    => $fila['estado'],
-                'etiqueta'  => isset(self::ESTADOS[$fila['estado']]) ? self::ESTADOS[$fila['estado']] : $fila['estado'],
+                'etiqueta'  => self::etiqueta($fila['estado'], $forma),
                 'datos'     => is_array($datos) ? $datos : [],
                 'creado_en' => $fila['creado_en'],
                 'quien'     => $fila['user_id'] === null ? 'Sistema' : $fila['quien'],
@@ -372,9 +392,10 @@ class EstadosDePedidos
      * el código del pedido no es una credencial. Un cancelado corta el
      * recorrido donde estaba.
      *
+     * @param string $forma la forma de entrega, que le pone nombre a los pasos (#53)
      * @return array [['estado' => ..., 'etiqueta' => ..., 'fecha' => ?], ...]
      */
-    public static function lineaDeTiempo($estadoActual, array $historial)
+    public static function lineaDeTiempo($estadoActual, array $historial, $forma = 'envio')
     {
         $cuando = [];
 
@@ -392,10 +413,10 @@ class EstadosDePedidos
             $recorrido[] = 'cancelado';
         }
 
-        return array_map(function ($estado) use ($cuando) {
+        return array_map(function ($estado) use ($cuando, $forma) {
             return [
                 'estado'   => $estado,
-                'etiqueta' => self::ESTADOS[$estado],
+                'etiqueta' => self::etiqueta($estado, $forma),
                 'fecha'    => isset($cuando[$estado]) ? $cuando[$estado] : null,
             ];
         }, $recorrido);

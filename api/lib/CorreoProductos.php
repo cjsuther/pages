@@ -397,11 +397,12 @@ class CorreoProductos
 
     /**
      * El detalle de un pedido como renglones [etiqueta, valor]: producto,
-     * opciones, cantidad por precio, envío y total.
+     * opciones, cantidad por precio, envío (sólo si se manda, #53) y total.
      */
     private static function renglonesDelPedido(array $orden)
     {
         $cantidad = (int) $orden['cantidad'];
+        $forma = PedidosFisicos::formaDe($orden);
         $renglones = [['Producto', $orden['producto']]];
 
         if (!empty($orden['opciones_texto'])) {
@@ -409,10 +410,75 @@ class CorreoProductos
         }
 
         $renglones[] = ['Cantidad', $cantidad . ' × ' . self::pesos($orden['precio_unitario'])];
-        $renglones[] = ['Envío', (float) $orden['costo_envio'] > 0 ? self::pesos($orden['costo_envio']) : 'Incluido'];
+        $renglones[] = $forma === 'envio'
+            ? ['Envío', (float) $orden['costo_envio'] > 0 ? self::pesos($orden['costo_envio']) : 'Incluido']
+            : ['Entrega', PedidosFisicos::FORMAS[$forma]];
         $renglones[] = ['Total', (float) $orden['total'] > 0 ? self::pesos($orden['total']) : 'Gratis'];
 
         return $renglones;
+    }
+
+    /**
+     * Lo de la entrega que cambia con la forma (#53):
+     *
+     * - comprador: lo que se le dice a quien compró después del saludo;
+     * - vendedor: lo mismo para quien vende, o null;
+     * - renglones: la sección ENTREGA;
+     * - maps: el link a Google Maps del punto de retiro, o null.
+     *
+     * @param array|null $envio la de PedidosFisicos::envioDe()
+     */
+    public static function entregaDelPedido(array $orden, $envio)
+    {
+        $forma = PedidosFisicos::formaDe($orden);
+        $pagina = (string) $orden['pagina'];
+
+        if ($forma === 'retiro') {
+            $retiro = PedidosFisicos::retiroDe($orden);
+            $renglones = $retiro === null ? [] : [['Retiro en', $retiro['direccion']]];
+
+            if ($retiro !== null && $retiro['indicaciones'] !== null) {
+                $renglones[] = ['Días y horarios', $retiro['indicaciones']];
+            }
+
+            return [
+                'comprador' => $retiro === null
+                    ? $pagina . ' te va a avisar dónde retirarlo.'
+                    : 'Lo retirás en ' . $retiro['direccion'] . '. Te avisamos por mail cuando esté listo para retirar.',
+                'vendedor'  => 'Quien compró lo retira en tu punto de retiro.',
+                'renglones' => $renglones,
+                'maps'      => $retiro === null ? null : $retiro['maps_url'],
+            ];
+        }
+
+        if ($forma === 'coordinar') {
+            $telefono = (string) $orden['telefono'];
+
+            return [
+                'comprador' => 'Quien vende te va a contactar al ' . $telefono . ' para coordinar la entrega.',
+                'vendedor'  => 'Coordiná la entrega con ' . $orden['nombre'] . ' al ' . $telefono . '.',
+                'renglones' => [['Entrega', 'A coordinar con quien compró']],
+                'maps'      => null,
+            ];
+        }
+
+        return [
+            'comprador' => $pagina . ' se va a poner en contacto para coordinar la entrega.',
+            'vendedor'  => null,
+            'renglones' => self::renglonesDeEntrega($envio),
+            'maps'      => null,
+        ];
+    }
+
+    /** El link a Google Maps del punto de retiro, en un mail. */
+    private static function linkDeMapsHtml($url)
+    {
+        if (empty($url)) {
+            return '';
+        }
+
+        return '<p style="margin:8px 0 0"><a href="' . htmlspecialchars((string) $url, ENT_QUOTES, 'UTF-8')
+            . '" style="color:#000000;font-weight:700">Ver en Google Maps</a></p>';
     }
 
     /** La dirección completa y los horarios, como renglones. */
@@ -480,17 +546,18 @@ class CorreoProductos
     {
         $e = function ($valor) { return htmlspecialchars((string) $valor, ENT_QUOTES, 'UTF-8'); };
         $url = self::urlDelPedido($orden['codigo']);
-        $entrega = self::renglonesDeEntrega($envio);
+        $entrega = self::entregaDelPedido($orden, $envio);
 
         $bloqueContacto = CorreoEntradas::contacto($orden) === null
             ? ''
             : ' Si tenés alguna duda, respondé este mail y le llega a ' . $e($orden['pagina']) . '.';
 
         $cuerpo = '<p style="margin:0 0 16px;color:#444444;font-size:15px">Hola ' . $e($orden['nombre'])
-            . ', ya está tu pedido. ' . $e($orden['pagina']) . ' se va a poner en contacto para coordinar la entrega.</p>'
+            . ', ya está tu pedido. ' . $e($entrega['comprador']) . '</p>'
             . self::tablaHtml(self::renglonesDelPedido($orden))
-            . (empty($entrega) ? '' : '<p style="margin:20px 0 8px;color:#000000;font-size:13px;font-weight:700;letter-spacing:1px">ENTREGA</p>'
-                . self::tablaHtml($entrega))
+            . (empty($entrega['renglones']) ? '' : '<p style="margin:20px 0 8px;color:#000000;font-size:13px;font-weight:700;letter-spacing:1px">ENTREGA</p>'
+                . self::tablaHtml($entrega['renglones']))
+            . self::linkDeMapsHtml($entrega['maps'])
             . '<p style="text-align:center;margin:24px 0 0"><a href="' . $e($url) . '"
        style="display:inline-block;padding:14px 28px;background:#000000;color:#ffffff;
               text-decoration:none;font-weight:700;border-radius:4px">SEGUIR MI PEDIDO</a></p>'
@@ -502,17 +569,19 @@ class CorreoProductos
 
     private static function textoDelPedido(array $orden, $envio)
     {
+        $entrega = self::entregaDelPedido($orden, $envio);
+
         $lineas = array_merge(
             [
                 'RECIBIMOS TU PEDIDO: ' . mb_strtoupper($orden['producto']),
                 '',
-                'Hola ' . $orden['nombre'] . ', ya está tu pedido. ' . $orden['pagina']
-                    . ' se va a poner en contacto para coordinar la entrega.',
+                'Hola ' . $orden['nombre'] . ', ya está tu pedido. ' . $entrega['comprador'],
                 '',
             ],
             self::textoDeRenglones(self::renglonesDelPedido($orden)),
             [''],
-            self::textoDeRenglones(self::renglonesDeEntrega($envio)),
+            self::textoDeRenglones($entrega['renglones']),
+            $entrega['maps'] === null ? [] : ['Google Maps: ' . $entrega['maps']],
             ['', 'Seguí tu pedido: ' . self::urlDelPedido($orden['codigo']), 'Código de pedido: ' . $orden['codigo']]
         );
 
@@ -599,6 +668,12 @@ class CorreoProductos
     {
         $pagina = (string) $orden['pagina'];
 
+        // Un retiro (#53) tiene sus propios nombres: Con fecha de retiro,
+        // Listo para retirar y Retirado. Envío y coordinar usan los de siempre.
+        if (PedidosFisicos::formaDe($orden) === 'retiro' && in_array($estado, ['con_fecha', 'enviado', 'entregado'], true)) {
+            return self::contenidoDelRetiro($orden, $estado, $correccion);
+        }
+
         if ($estado === 'con_fecha') {
             $franja = empty($orden['entrega_franja']) || !isset(PedidosFisicos::FRANJAS[$orden['entrega_franja']])
                 ? null
@@ -661,15 +736,72 @@ class CorreoProductos
         return null;
     }
 
+    /** Los avisos de un pedido que se retira (#53), con el punto de retiro y su link a Maps. */
+    private static function contenidoDelRetiro(array $orden, $estado, $correccion)
+    {
+        $pagina = (string) $orden['pagina'];
+        $retiro = PedidosFisicos::retiroDe($orden);
+        $donde = $retiro === null ? '' : ' en ' . $retiro['direccion'];
+
+        $lugar = [];
+        if ($retiro !== null) {
+            $lugar[] = ['Retiro en', $retiro['direccion']];
+
+            if ($retiro['indicaciones'] !== null) {
+                $lugar[] = ['Días y horarios', $retiro['indicaciones']];
+            }
+        }
+
+        $maps = $retiro === null ? null : $retiro['maps_url'];
+
+        if ($estado === 'con_fecha') {
+            $franja = empty($orden['entrega_franja']) || !isset(PedidosFisicos::FRANJAS[$orden['entrega_franja']])
+                ? null
+                : mb_strtolower(PedidosFisicos::FRANJAS[$orden['entrega_franja']], 'UTF-8');
+            $cuando = self::fechaLarga($orden['entrega_fecha']) . ($franja === null ? '' : ', a la ' . $franja);
+
+            return [
+                'encabezado' => $correccion ? 'CAMBIÓ LA FECHA DE RETIRO' : 'FECHA DE RETIRO',
+                'asunto'     => $correccion ? 'Cambió la fecha de retiro de tu pedido' : 'Tu pedido ya tiene fecha de retiro',
+                'parrafo'    => ($correccion ? 'Cambió la fecha: ' : '') . 'Podés retirarlo el ' . $cuando
+                    . ($franja === null || $donde === '' ? '' : ',') . $donde . '.',
+                'renglones'  => array_merge(
+                    [['Fecha', self::fechaLarga($orden['entrega_fecha'])]],
+                    $franja === null ? [] : [['Franja', PedidosFisicos::FRANJAS[$orden['entrega_franja']]]],
+                    $lugar
+                ),
+                'maps'       => $maps,
+            ];
+        }
+
+        if ($estado === 'enviado') {
+            return [
+                'encabezado' => 'TU PEDIDO ESTÁ LISTO PARA RETIRAR',
+                'asunto'     => 'Tu pedido está listo para retirar',
+                'parrafo'    => 'Ya podés retirar tu pedido' . $donde . '.',
+                'renglones'  => $lugar,
+                'maps'       => $maps,
+            ];
+        }
+
+        return [
+            'encabezado' => 'PEDIDO RETIRADO',
+            'asunto'     => 'Retiraste tu pedido',
+            'parrafo'    => $pagina . ' marcó tu pedido como retirado. ¡Que lo disfrutes!',
+            'renglones'  => [],
+        ];
+    }
+
     private static function htmlDelEstado(array $orden, array $contenido)
     {
         $e = function ($valor) { return htmlspecialchars((string) $valor, ENT_QUOTES, 'UTF-8'); };
         $url = self::urlDelPedido($orden['codigo']);
 
-        $bloqueSeguimiento = empty($contenido['link'])
+        $bloqueSeguimiento = (empty($contenido['link'])
             ? ''
             : '<p style="text-align:center;margin:16px 0 0"><a href="' . $e($contenido['link'])
-                . '" style="color:#000000;font-weight:700">Ver el seguimiento del envío</a></p>';
+                . '" style="color:#000000;font-weight:700">Ver el seguimiento del envío</a></p>')
+            . (empty($contenido['maps']) ? '' : self::linkDeMapsHtml($contenido['maps']));
 
         $bloqueContacto = CorreoEntradas::contacto($orden) === null
             ? ''
@@ -693,6 +825,7 @@ class CorreoProductos
         $lineas = array_merge(
             [$contenido['encabezado'] . ': ' . mb_strtoupper($orden['producto']), '', 'Hola ' . $orden['nombre'] . '. ' . $contenido['parrafo']],
             empty($contenido['renglones']) ? [] : array_merge([''], self::textoDeRenglones($contenido['renglones'])),
+            empty($contenido['maps']) ? [] : ['Google Maps: ' . $contenido['maps']],
             ['', 'Seguí tu pedido: ' . self::urlDelPedido($orden['codigo']), 'Código de pedido: ' . $orden['codigo']]
         );
 
@@ -727,6 +860,7 @@ class CorreoProductos
     {
         $e = function ($valor) { return htmlspecialchars((string) $valor, ENT_QUOTES, 'UTF-8'); };
         $sinStock = self::avisoSinStock($orden);
+        $entrega = self::entregaDelPedido($orden, $envio);
         $titulo = function ($texto) {
             return '<p style="margin:20px 0 8px;color:#000000;font-size:13px;font-weight:700;letter-spacing:1px">' . $texto . '</p>';
         };
@@ -734,9 +868,11 @@ class CorreoProductos
         $cuerpo = ($sinStock === null ? '' : '<p style="margin:0 0 16px;padding:12px;background:#fef2f2;color:#991b1b;font-size:14px">'
                 . $e($sinStock) . '</p>')
             . '<p style="margin:0 0 16px;color:#444444;font-size:15px">Entró un pedido en ' . $e($orden['pagina'])
-            . '. Si respondés este mail, le llega a quien compró.</p>'
+            . '. Si respondés este mail, le llega a quien compró.'
+            . ($entrega['vendedor'] === null ? '' : ' <strong>' . $e($entrega['vendedor']) . '</strong>') . '</p>'
             . self::tablaHtml(self::renglonesDelPedido($orden))
-            . $titulo('ENTREGA') . self::tablaHtml(self::renglonesDeEntrega($envio))
+            . $titulo('ENTREGA') . self::tablaHtml($entrega['renglones'])
+            . self::linkDeMapsHtml($entrega['maps'])
             . $titulo('QUIÉN COMPRÓ') . self::tablaHtml(self::renglonesDelComprador($orden))
             . '<p style="margin:24px 0 0;color:#999999;font-size:12px;border-top:1px solid #eeeeee;padding-top:16px">'
             . 'Código de pedido: ' . $e($orden['codigo']) . '.</p>';
@@ -747,14 +883,18 @@ class CorreoProductos
     private static function textoDelAviso(array $orden, $envio)
     {
         $sinStock = self::avisoSinStock($orden);
+        $entrega = self::entregaDelPedido($orden, $envio);
 
         return implode("\n", array_merge(
             ['PEDIDO NUEVO: ' . mb_strtoupper($orden['producto']), ''],
             $sinStock === null ? [] : [$sinStock, ''],
-            ['Entró un pedido en ' . $orden['pagina'] . '. Si respondés este mail, le llega a quien compró.', ''],
+            ['Entró un pedido en ' . $orden['pagina'] . '. Si respondés este mail, le llega a quien compró.'],
+            $entrega['vendedor'] === null ? [] : [$entrega['vendedor']],
+            [''],
             self::textoDeRenglones(self::renglonesDelPedido($orden)),
             ['', 'ENTREGA'],
-            self::textoDeRenglones(self::renglonesDeEntrega($envio)),
+            self::textoDeRenglones($entrega['renglones']),
+            $entrega['maps'] === null ? [] : ['Google Maps: ' . $entrega['maps']],
             ['', 'QUIÉN COMPRÓ'],
             self::textoDeRenglones(self::renglonesDelComprador($orden)),
             ['', 'Código de pedido: ' . $orden['codigo']]
