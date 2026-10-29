@@ -175,9 +175,9 @@ class CompraFisicoHandlerTest extends HandlerTestCase
 
         $orden = $this->db->paramsFor('INSERT INTO product_orders');
         $this->assertSame(
-            ['Remera', 77, 'Talle M · Color Negro', 2, 2500.0, 500.0],
+            ['Remera', 77, 'Talle M · Color Negro', 2, 2500.0, 500.0, 'envio', null, null, null],
             array_slice($orden, 11),
-            'título, variante, opciones, cantidad, precio unitario y envío'
+            'título, variante, opciones, cantidad, precio unitario, envío y la forma (#53), sin retiro'
         );
         $this->assertSame('11 5555-1234', $orden[4]);
 

@@ -45,17 +45,50 @@ const grupo = (nombre) => screen.getByRole('radiogroup', { name: nombre });
 const opcion = (grupoNombre, nombre) => within(grupo(grupoNombre)).getByRole('radio', { name: new RegExp(`^${nombre}`) });
 
 describe('Producto físico en la página', () => {
-  it('dice "Envío incluido" cuando el envío cuesta 0, y la zona', () => {
+  it('dice "Envío a domicilio (incluido)" cuando el envío cuesta 0, y la zona', () => {
     montar(fisico({ zona_envio: 'Sólo CABA y GBA' }));
 
-    expect(screen.getByText('Envío incluido')).toBeInTheDocument();
+    expect(screen.getByText('Envío a domicilio (incluido)')).toBeInTheDocument();
     expect(screen.getByText('Sólo CABA y GBA')).toBeInTheDocument();
   });
 
   it('con costo de envío lo dice', () => {
     montar(fisico({ costo_envio: 1500 }));
 
-    expect(screen.getByText('Envío: $ 1.500')).toBeInTheDocument();
+    expect(screen.getByText('Envío a domicilio ($ 1.500)')).toBeInTheDocument();
+  });
+
+  // ------------------------------------------------ formas de entrega (#53)
+
+  const retiro = {
+    direccion: 'Av. Corrientes 1234, CABA',
+    maps_url: 'https://maps.google.com/?cid=1',
+    indicaciones: 'Lunes a viernes de 10 a 18, timbre 3',
+  };
+
+  it('muestra las formas habilitadas: el retiro con su link a Maps y los horarios, y coordinar', () => {
+    montar(fisico({ formas_entrega: ['retiro', 'coordinar'], retiro }));
+
+    const formas = screen.getByRole('list', { name: 'Formas de entrega' });
+    expect(within(formas).queryByText(/Envío a domicilio/)).not.toBeInTheDocument();
+    expect(within(formas).getByText(/Retiro en/)).toBeInTheDocument();
+    expect(within(formas).getByRole('link', { name: retiro.direccion })).toHaveAttribute('href', retiro.maps_url);
+    expect(within(formas).getByText(retiro.indicaciones)).toBeInTheDocument();
+    expect(within(formas).getByText('Coordinás la entrega con quien vende')).toBeInTheDocument();
+  });
+
+  it('las tres formas a la vez', () => {
+    montar(fisico({ costo_envio: 500, formas_entrega: ['envio', 'retiro', 'coordinar'], retiro }));
+
+    expect(screen.getAllByRole('listitem')).toHaveLength(3);
+    expect(screen.getByText('Envío a domicilio ($ 500)')).toBeInTheDocument();
+  });
+
+  it('un link de Maps que no es web no se vuelve link', () => {
+    montar(fisico({ formas_entrega: ['retiro'], retiro: { ...retiro, maps_url: 'javascript:alert(1)' } }));
+
+    expect(screen.queryByRole('link', { name: retiro.direccion })).not.toBeInTheDocument();
+    expect(screen.getByText(retiro.direccion)).toBeInTheDocument();
   });
 
   it('sin características no pide elegir nada', () => {

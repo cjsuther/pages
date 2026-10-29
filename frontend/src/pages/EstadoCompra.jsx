@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router';
 import { Helmet } from 'react-helmet-async';
-import { Check, Clock, X, Loader2, Mail, MapPin, CalendarClock } from 'lucide-react';
+import { Check, Clock, X, Loader2, Mail, MapPin, CalendarClock, Handshake } from 'lucide-react';
 import BotonDescarga from '../components/BotonDescarga';
+import PuntoDeRetiro from '../components/PuntoDeRetiro';
 import Sugerencias from '../components/Sugerencias';
 import { formatearPrecio } from '../utils/entradas';
-import { DIAS, FRANJAS, describirClaves, tokenDeDescarga } from '../utils/productos';
+import { DIAS, FRANJAS, NOMBRES_DE_FORMAS, describirClaves, tokenDeDescarga } from '../utils/productos';
 import { nombreDelEstado, describirEntrega } from '../utils/pedidos';
 import { evento } from '../utils/metaPixel';
 
@@ -18,6 +19,13 @@ const ENCABEZADOS_DEL_PEDIDO = {
   enviado: { titulo: 'Tu pedido está en camino', detalle: 'Te mandamos por mail los datos del envío.' },
   entregado: { titulo: '¡Tu pedido fue entregado!', detalle: 'Que lo disfrutes.' },
   cancelado: { titulo: 'Tu pedido se canceló', detalle: 'Te mandamos el motivo por mail.' },
+};
+
+/** Los de un pedido que se retira (#53). */
+const ENCABEZADOS_DEL_RETIRO = {
+  con_fecha: { titulo: 'Tu pedido tiene fecha de retiro', detalle: 'Te avisamos por mail si cambia.' },
+  enviado: { titulo: 'Tu pedido está listo para retirar', detalle: 'Ya podés pasar a buscarlo.' },
+  entregado: { titulo: '¡Retiraste tu pedido!', detalle: 'Que lo disfrutes.' },
 };
 
 /**
@@ -156,7 +164,10 @@ function EstadoCompra({ apiUrl }) {
     },
   };
 
-  const encabezadoDelPedido = fisico && orden.estado === 'pagada' && ENCABEZADOS_DEL_PEDIDO[orden.estado_pedido];
+  const encabezadoDelPedido = fisico && orden.estado === 'pagada' && (
+    (orden.forma_entrega === 'retiro' && ENCABEZADOS_DEL_RETIRO[orden.estado_pedido])
+    || ENCABEZADOS_DEL_PEDIDO[orden.estado_pedido]
+  );
   const estado = encabezadoDelPedido
     ? {
       ...estados.pagada,
@@ -215,9 +226,14 @@ function EstadoCompra({ apiUrl }) {
   );
 }
 
-/** El detalle de un pedido de un físico: lo comprado, la entrega y el estado. */
+/**
+ * El detalle de un pedido de un físico: lo comprado, la entrega y el estado.
+ * La entrega según la forma (#53): con envío, la dirección de quien compró
+ * (recortada por la API); con retiro, el punto entero con su mapa.
+ */
 function Pedido({ orden }) {
-  const envio = orden.envio;
+  const forma = orden.forma_entrega || 'envio';
+  const envio = forma === 'envio' ? orden.envio : null;
   const horarios = orden.horarios;
 
   return (
@@ -231,15 +247,29 @@ function Pedido({ orden }) {
           <dt className="text-tinta-suave">{formatearPrecio(orden.precio_unitario, orden.moneda)} × {orden.cantidad}</dt>
           <dd>{formatearPrecio(orden.precio_unitario * orden.cantidad, orden.moneda)}</dd>
         </div>
-        <div className="flex justify-between">
-          <dt className="text-tinta-suave">Envío</dt>
-          <dd>{orden.costo_envio > 0 ? formatearPrecio(orden.costo_envio, orden.moneda) : 'Incluido'}</dd>
-        </div>
+        {forma === 'envio' && (
+          <div className="flex justify-between">
+            <dt className="text-tinta-suave">Envío</dt>
+            <dd>{orden.costo_envio > 0 ? formatearPrecio(orden.costo_envio, orden.moneda) : 'Incluido'}</dd>
+          </div>
+        )}
         <div className="flex justify-between font-bold">
           <dt>Total</dt>
           <dd>{orden.total > 0 ? formatearPrecio(orden.total, orden.moneda) : 'Gratis'}</dd>
         </div>
       </dl>
+
+      <div className="border-t border-borde mt-4 pt-4">
+        <p className="text-xs text-tinta-suave tracking-wide mb-1">Forma de entrega</p>
+        <p className="font-semibold text-tinta">{NOMBRES_DE_FORMAS[forma]}</p>
+        {forma === 'retiro' && <PuntoDeRetiro retiro={orden.retiro} className="text-tinta mt-2" />}
+        {forma === 'coordinar' && (
+          <p className="flex items-start gap-2 text-tinta mt-2">
+            <Handshake className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
+            <span>Quien vende te contacta para coordinar la entrega.</span>
+          </p>
+        )}
+      </div>
 
       {envio && (
         <div className="border-t border-borde mt-4 pt-4">
@@ -269,7 +299,7 @@ function Pedido({ orden }) {
         <span className="text-tinta-suave">Pedido {orden.codigo}</span>
         {orden.estado_pedido && (
           <span className="font-bold text-tinta">
-            Estado: {nombreDelEstado(orden.estado_pedido)}
+            Estado: {nombreDelEstado(orden.estado_pedido, forma)}
           </span>
         )}
       </div>

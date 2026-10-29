@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router';
 import { AuthContext } from '../App';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -13,6 +13,7 @@ import EleccionDePrecio, { eleccionDesdePrecio, precioDeEleccion, problemaDeElec
 import { analizarEmbed, EJEMPLOS_EMBED } from '../utils/embeds';
 import { MAX_BYTES, excesoImagenEvento } from '../utils/imagenes';
 import EditorCaracteristicas from '../components/EditorCaracteristicas';
+import EditorFormasDeEntrega from '../components/EditorFormasDeEntrega';
 import InterruptorActivo from '../components/InterruptorActivo';
 import {
   subirArchivoDeProducto,
@@ -21,6 +22,7 @@ import {
   caracteristicasParaEditar,
   caracteristicasParaGuardar,
   problemaDeCaracteristicas,
+  problemaDeFormas,
   stockParaEditar,
   stockValido,
 } from '../utils/productos';
@@ -202,6 +204,12 @@ function ItemEditor() {
     }
   };
 
+  // Las formas de entrega de un físico (#53): sólo lo que cambió.
+  const cambiarEntrega = useCallback((cambios) => {
+    setItem((actual) => ({ ...actual, ...cambios }));
+    setErrorFisico(null);
+  }, []);
+
   const handlePlaceSelect = (placeData) => {
     setItem({
       ...item,
@@ -281,7 +289,8 @@ function ItemEditor() {
     }
 
     if (group.type === 'productos' && esFisico(item)) {
-      const problema = problemaDeCaracteristicas(caracteristicas)
+      const problema = problemaDeFormas(item)
+        || problemaDeCaracteristicas(caracteristicas)
         || (Object.values(stockGrilla).every(stockValido) && stockValido(item.stock ?? '')
           ? null
           : 'El stock tiene que ser un número entero igual o mayor que 0, o quedar vacío');
@@ -758,38 +767,7 @@ function ItemEditor() {
                     Se manda o se entrega: no lleva archivo. El tipo no se cambia después de crearlo.
                   </p>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label htmlFor="costo-envio" className="block text-sm font-semibold text-tinta mb-1.5">
-                        Costo de envío
-                      </label>
-                      <input
-                        id="costo-envio"
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={item.costo_envio ?? ''}
-                        onChange={(e) => setItem({ ...item, costo_envio: e.target.value })}
-                        placeholder="0"
-                        className="w-full px-4 py-3 rounded-xl bg-white border border-borde-fuerte text-tinta placeholder-tinta-suave focus:border-verde-oscuro focus:outline-none transition-colors"
-                      />
-                      <p className="text-xs text-tinta-suave mt-1">En pesos. 0 = envío incluido.</p>
-                    </div>
-                    <div>
-                      <label htmlFor="zona-envio" className="block text-sm font-semibold text-tinta mb-1.5">
-                        Zona de envío (opcional)
-                      </label>
-                      <input
-                        id="zona-envio"
-                        type="text"
-                        maxLength={255}
-                        value={item.zona_envio ?? ''}
-                        onChange={(e) => setItem({ ...item, zona_envio: e.target.value })}
-                        placeholder="Sólo CABA y GBA"
-                        className="w-full px-4 py-3 rounded-xl bg-white border border-borde-fuerte text-tinta placeholder-tinta-suave focus:border-verde-oscuro focus:outline-none transition-colors"
-                      />
-                    </div>
-                  </div>
+                  <EditorFormasDeEntrega item={item} onChange={cambiarEntrega} />
 
                   <EditorCaracteristicas
                     caracteristicas={caracteristicas}

@@ -70,6 +70,11 @@ class PedidosHandler
             return $error;
         }
 
+        // Listo para retirar (#53) no lleva empresa ni seguimiento: no viaja.
+        if ($hacia === 'enviado' && PedidosFisicos::formaDe($orden) === 'retiro') {
+            $datos = ['empresa' => null, 'seguimiento' => null];
+        }
+
         $cambio = EstadosDePedidos::cambiar($db, (int) $orden['id'], $hacia, $datos, $req->userId());
 
         if (!$cambio['ok']) {
@@ -117,10 +122,15 @@ class PedidosHandler
         return [$orden, null];
     }
 
-    /** Todo lo del pedido que necesita quien vende para entregarlo. */
+    /**
+     * Todo lo del pedido que necesita quien vende para entregarlo: con envío,
+     * la dirección y los horarios; con retiro, el punto como estaba al
+     * comprar; para coordinar, el teléfono, que ya va con quien compró (#53).
+     */
     private static function armar($db, array $orden)
     {
         $envio = PedidosFisicos::envioDe($db, $orden['id']);
+        $forma = PedidosFisicos::formaDe($orden);
         $estadoPedido = empty($orden['estado_pedido']) ? null : $orden['estado_pedido'];
 
         return [
@@ -138,6 +148,8 @@ class PedidosHandler
             'cantidad'          => (int) $orden['cantidad'],
             'precio_unitario'   => round((float) $orden['precio_unitario'], 2),
             'costo_envio'       => round((float) $orden['costo_envio'], 2),
+            'forma_entrega'     => $forma,
+            'retiro'            => PedidosFisicos::retiroDe($orden),
             'total'             => round((float) $orden['total'], 2),
             'moneda'            => 'ARS',
             'entrega_fecha'     => $orden['entrega_fecha'],
@@ -161,7 +173,7 @@ class PedidosHandler
                 'franjas'    => $envio['franjas'],
                 'comentario' => $envio['comentario'],
             ],
-            'historial'         => $estadoPedido === null ? [] : EstadosDePedidos::historial($db, $orden['id']),
+            'historial'         => $estadoPedido === null ? [] : EstadosDePedidos::historial($db, $orden['id'], $forma),
             'siguientes'        => $estadoPedido === null || $orden['estado'] !== 'pagada'
                 ? []
                 : EstadosDePedidos::siguientes($estadoPedido),

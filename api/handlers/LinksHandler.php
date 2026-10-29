@@ -329,7 +329,8 @@ class LinksHandler
                 }
 
                 if ($tipoActual === 'fisico') {
-                    list($fisico, $error) = ProductosFisicos::datosDelPedido($req->body);
+                    // Las formas de entrega se miran contra lo que ya tiene (#53).
+                    list($fisico, $error) = ProductosFisicos::datosDelPedido($req->body, $producto);
 
                     if ($error !== null) {
                         return Response::error(400, $error);

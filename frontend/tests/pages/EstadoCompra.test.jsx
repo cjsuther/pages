@@ -212,6 +212,43 @@ describe('EstadoCompra', () => {
       expect(screen.queryByText(/^Estado:/)).not.toBeInTheDocument();
       expect(screen.queryByRole('list', { name: 'Seguimiento del pedido' })).not.toBeInTheDocument();
     });
+
+    // ---------------------------------------------- formas de entrega (#53)
+
+    it('con envío dice la forma y la dirección de quien compró, recortada', async () => {
+      await montar({ ...PEDIDO, forma_entrega: 'envio', retiro: null });
+
+      expect(screen.getByText('Envío a domicilio')).toBeInTheDocument();
+      expect(screen.getByText('Av. Corrientes 1…')).toBeInTheDocument();
+    });
+
+    it('con retiro muestra el punto entero con su link a Maps, sin envío', async () => {
+      await montar({
+        ...PEDIDO,
+        forma_entrega: 'retiro',
+        costo_envio: 0,
+        total: 5000,
+        envio: null,
+        horarios: null,
+        estado_pedido: 'enviado',
+        retiro: { direccion: 'Humboldt 1500, CABA', maps_url: 'https://maps.google.com/?cid=1', indicaciones: 'Timbre 3' },
+      });
+
+      expect(screen.getByText('Retiro')).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Humboldt 1500, CABA' })).toHaveAttribute('href', 'https://maps.google.com/?cid=1');
+      expect(screen.getByText('Timbre 3')).toBeInTheDocument();
+      expect(screen.queryByText('Envío')).not.toBeInTheDocument();
+      expect(screen.getByText('Tu pedido está listo para retirar')).toBeInTheDocument();
+      expect(screen.getByText('Estado: Listo para retirar')).toBeInTheDocument();
+    });
+
+    it('con coordinar dice que quien vende contacta', async () => {
+      await montar({ ...PEDIDO, forma_entrega: 'coordinar', envio: null, horarios: null, retiro: null, costo_envio: 0 });
+
+      expect(screen.getByText('A coordinar')).toBeInTheDocument();
+      expect(screen.getByText('Quien vende te contacta para coordinar la entrega.')).toBeInTheDocument();
+      expect(screen.queryByText('Envío')).not.toBeInTheDocument();
+    });
   });
 
   describe('la línea de tiempo del pedido (#44)', () => {

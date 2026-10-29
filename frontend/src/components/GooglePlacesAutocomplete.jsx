@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 
-function GooglePlacesAutocomplete({ value, onChange, onPlaceSelect, placeholder, required = false }) {
+function GooglePlacesAutocomplete({ id, value, onChange, onPlaceSelect, placeholder, required = false }) {
   const inputRef = useRef(null);
   const autocompleteRef = useRef(null);
   const [hasSelectedPlace, setHasSelectedPlace] = useState(false);
@@ -56,6 +56,7 @@ function GooglePlacesAutocomplete({ value, onChange, onPlaceSelect, placeholder,
     <div>
       <input
         ref={inputRef}
+        id={id}
         type="text"
         value={value}
         onChange={handleChange}

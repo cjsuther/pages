@@ -4,10 +4,10 @@ import { Boton, Campo, Selector, Etiqueta, AreaTexto, Aviso, Cargando } from './
 import { IconoDeMarca } from './IconosRedes';
 import { formatearPrecio } from '../utils/entradas';
 import { urlDeWhatsApp } from '../utils/telefono';
-import { DIAS, FRANJAS, describirClaves } from '../utils/productos';
+import PuntoDeRetiro from './PuntoDeRetiro';
+import { DIAS, FRANJAS, NOMBRES_DE_FORMAS, describirClaves } from '../utils/productos';
 import {
-  ACCIONES,
-  CORREGIR_FECHA,
+  accionHacia,
   describirEntrega,
   esLink,
   hoy,
@@ -71,12 +71,15 @@ function DetallePedido({ codigo, apiUrl, token, alVolver, alCambiar }) {
       ? { tipo: 'ok', texto: `Listo: le avisamos por mail a ${respuesta.pedido.email}.` }
       : {
         tipo: 'atencion',
-        texto: `El pedido quedó ${nombreDelEstado(respuesta.pedido.estado_pedido).toLowerCase()}, pero no pudimos `
+        texto: `El pedido quedó ${nombreDelEstado(respuesta.pedido.estado_pedido, respuesta.pedido.forma_entrega || 'envio').toLowerCase()}, pero no pudimos `
           + `mandarle el mail a quien compró${respuesta.aviso_error ? ` (${respuesta.aviso_error})` : ''}. Avisale vos.`,
       });
 
     if (alCambiar) alCambiar(respuesta.pedido);
   };
+
+  // La forma de entrega (#53) cambia lo que se muestra y cómo se llaman los estados.
+  const forma = pedido?.forma_entrega || 'envio';
 
   return (
     <div className="space-y-6">
@@ -98,9 +101,12 @@ function DetallePedido({ codigo, apiUrl, token, alVolver, alCambiar }) {
             <h3 className="text-xl font-bold text-tinta">Pedido {pedido.codigo}</h3>
             {pedido.estado_pedido && (
               <span className={`text-xs px-2 py-0.5 rounded border font-semibold ${tonoDelEstado(pedido.estado_pedido)}`}>
-                {nombreDelEstado(pedido.estado_pedido)}
+                {nombreDelEstado(pedido.estado_pedido, forma)}
               </span>
             )}
+            <span className="text-xs px-2 py-0.5 rounded border border-borde text-tinta-media">
+              {NOMBRES_DE_FORMAS[forma]}
+            </span>
             {pedido.sin_stock && (
               <span className="text-xs px-2 py-0.5 rounded border font-semibold bg-red-50 text-red-800 border-red-200">
                 Sin stock
@@ -135,15 +141,32 @@ function DetallePedido({ codigo, apiUrl, token, alVolver, alCambiar }) {
               {pedido.opciones && <p className="text-tinta-media">{pedido.opciones}</p>}
               <p className="text-tinta-media">
                 {pedido.cantidad} × {formatearPrecio(pedido.precio_unitario, pedido.moneda)}
-                {' · Envío '}
-                {pedido.costo_envio > 0 ? formatearPrecio(pedido.costo_envio, pedido.moneda) : 'incluido'}
+                {forma === 'envio' && (
+                  <>
+                    {' · Envío '}
+                    {pedido.costo_envio > 0 ? formatearPrecio(pedido.costo_envio, pedido.moneda) : 'incluido'}
+                  </>
+                )}
               </p>
               <p className="font-bold text-tinta">
                 Total {pedido.total > 0 ? formatearPrecio(pedido.total, pedido.moneda) : 'Gratis'}
               </p>
             </Bloque>
 
-            {pedido.envio && (
+            {forma === 'retiro' && (
+              <Bloque titulo="Dónde lo retira">
+                <PuntoDeRetiro retiro={pedido.retiro} prefijo="En" className="text-tinta" />
+              </Bloque>
+            )}
+
+            {forma === 'coordinar' && (
+              <Bloque titulo="Entrega a coordinar">
+                <p className="text-tinta">Coordiná la entrega con {pedido.nombre}:</p>
+                {pedido.telefono && <Telefono telefono={pedido.telefono} nombre={pedido.nombre} />}
+              </Bloque>
+            )}
+
+            {forma === 'envio' && pedido.envio && (
               <Bloque titulo="Adónde">
                 <p className="flex items-start gap-2 text-tinta">
                   <MapPin className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
@@ -161,7 +184,7 @@ function DetallePedido({ codigo, apiUrl, token, alVolver, alCambiar }) {
               </Bloque>
             )}
 
-            {pedido.horarios && (
+            {forma === 'envio' && pedido.horarios && (
               <Bloque titulo="Cuándo puede recibir">
                 <p className="flex items-start gap-2 text-tinta">
                   <CalendarClock className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
@@ -176,7 +199,7 @@ function DetallePedido({ codigo, apiUrl, token, alVolver, alCambiar }) {
             )}
           </div>
 
-          <DatosDelEstado pedido={pedido} />
+          <DatosDelEstado pedido={pedido} forma={forma} />
 
           {pedido.siguientes.length > 0 && (
             <div>
@@ -191,7 +214,7 @@ function DetallePedido({ codigo, apiUrl, token, alVolver, alCambiar }) {
                     onClick={() => { setAccion(estado); setAviso(null); }}
                     aria-pressed={accion === estado}
                   >
-                    {estado === 'con_fecha' && pedido.estado_pedido === 'con_fecha' ? CORREGIR_FECHA : ACCIONES[estado]}
+                    {accionHacia(estado, pedido.estado_pedido, forma)}
                   </Boton>
                 ))}
               </div>
@@ -202,6 +225,7 @@ function DetallePedido({ codigo, apiUrl, token, alVolver, alCambiar }) {
             <FormularioDeEstado
               key={accion}
               estado={accion}
+              forma={forma}
               pedido={pedido}
               apiUrl={apiUrl}
               token={token}
@@ -227,7 +251,7 @@ function Bloque({ titulo, children }) {
 }
 
 /** El teléfono abre WhatsApp, como en Clientes (#38); si no se puede armar el número, llama. */
-function Telefono({ telefono, nombre }) {
+export function Telefono({ telefono, nombre }) {
   const whatsapp = urlDeWhatsApp(telefono);
 
   if (whatsapp) {
@@ -254,11 +278,11 @@ function Telefono({ telefono, nombre }) {
 }
 
 /** La fecha de entrega, quién lo lleva o por qué se canceló, según el estado. */
-function DatosDelEstado({ pedido }) {
+function DatosDelEstado({ pedido, forma }) {
   const filas = [];
 
   if (pedido.entrega_fecha) {
-    filas.push(['Entrega', describirEntrega(pedido.entrega_fecha, pedido.entrega_franja)]);
+    filas.push([forma === 'retiro' ? 'Retiro' : 'Entrega', describirEntrega(pedido.entrega_fecha, pedido.entrega_franja)]);
   }
 
   if (pedido.envio_empresa) filas.push(['Lo lleva', pedido.envio_empresa]);
@@ -288,7 +312,8 @@ function DatosDelEstado({ pedido }) {
 }
 
 /** Lo que pide cada paso antes de guardarlo. */
-function FormularioDeEstado({ estado, pedido, apiUrl, token, alCancelar, alGuardar }) {
+function FormularioDeEstado({ estado, forma, pedido, apiUrl, token, alCancelar, alGuardar }) {
+  const retiro = forma === 'retiro';
   const [datos, setDatos] = useState(() => (estado === 'con_fecha'
     ? { fecha: pedido.entrega_fecha || '', franja: pedido.entrega_franja || '' }
     : { empresa: '', seguimiento: '', motivo: '' }));
@@ -301,7 +326,7 @@ function FormularioDeEstado({ estado, pedido, apiUrl, token, alCancelar, alGuard
     e.preventDefault();
 
     if (estado === 'con_fecha' && !datos.fecha) {
-      setError('Elegí la fecha de entrega');
+      setError(retiro ? 'Elegí la fecha de retiro' : 'Elegí la fecha de entrega');
       return;
     }
 
@@ -335,11 +360,11 @@ function FormularioDeEstado({ estado, pedido, apiUrl, token, alCancelar, alGuard
   };
 
   return (
-    <form onSubmit={enviar} className="border border-borde-fuerte bg-white p-4 space-y-4" aria-label={ACCIONES[estado]}>
+    <form onSubmit={enviar} className="border border-borde-fuerte bg-white p-4 space-y-4" aria-label={accionHacia(estado, null, forma)}>
       {estado === 'con_fecha' && (
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <Etiqueta htmlFor="pedido-fecha">Fecha de entrega</Etiqueta>
+            <Etiqueta htmlFor="pedido-fecha">{retiro ? 'Fecha de retiro' : 'Fecha de entrega'}</Etiqueta>
             <Campo id="pedido-fecha" type="date" min={hoy()} value={datos.fecha} onChange={cambiar('fecha')} />
           </div>
           <div>
@@ -352,7 +377,14 @@ function FormularioDeEstado({ estado, pedido, apiUrl, token, alCancelar, alGuard
         </div>
       )}
 
-      {estado === 'enviado' && (
+      {/* Listo para retirar no viaja: sin empresa ni seguimiento. */}
+      {estado === 'enviado' && retiro && (
+        <p className="text-sm text-tinta-media">
+          Le avisamos a quien compró que ya puede pasar a buscarlo.
+        </p>
+      )}
+
+      {estado === 'enviado' && !retiro && (
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <Etiqueta htmlFor="pedido-empresa">Empresa o cadete (opcional)</Etiqueta>
@@ -367,7 +399,7 @@ function FormularioDeEstado({ estado, pedido, apiUrl, token, alCancelar, alGuard
 
       {estado === 'entregado' && (
         <p className="text-sm text-tinta-media">
-          Entregado es el último paso: después ya no se puede cambiar.
+          {retiro ? 'Retirado' : 'Entregado'} es el último paso: después ya no se puede cambiar.
         </p>
       )}
 

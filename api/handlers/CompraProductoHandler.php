@@ -184,16 +184,30 @@ class CompraProductoHandler
             return [null, 400, $problema];
         }
 
-        list($envio, $problema) = PedidosFisicos::envio($req->input('envio'));
+        // La forma tiene que ser una de las que habilitó quien vende (#53).
+        list($forma, $problema) = PedidosFisicos::forma($producto, $req->input('forma_entrega'));
 
         if ($problema !== null) {
             return [null, 400, $problema];
         }
 
-        list($horarios, $problema) = PedidosFisicos::horarios($req->input('horarios'));
+        // La dirección y los horarios son del envío: al retirar o coordinar
+        // no se piden y, si llegan, no se guardan.
+        $envio = null;
+        $horarios = null;
 
-        if ($problema !== null) {
-            return [null, 400, $problema];
+        if ($forma === 'envio') {
+            list($envio, $problema) = PedidosFisicos::envio($req->input('envio'));
+
+            if ($problema !== null) {
+                return [null, 400, $problema];
+            }
+
+            list($horarios, $problema) = PedidosFisicos::horarios($req->input('horarios'));
+
+            if ($problema !== null) {
+                return [null, 400, $problema];
+            }
         }
 
         if (!empty($producto['agotado'])) {
@@ -213,9 +227,12 @@ class CompraProductoHandler
             'variante_id'     => self::varianteId($db, (int) $producto['producto_id'], $opciones['ids']),
             'cantidad'        => $cantidad,
             'precio_unitario' => round((float) $producto['precio'], 2),
-            'costo_envio'     => round((float) (isset($producto['costo_envio']) ? $producto['costo_envio'] : 0), 2),
+            'costo_envio'     => PedidosFisicos::costoDeEnvio($producto, $forma),
+            'forma_entrega'   => $forma,
             'envio'           => $envio,
             'horarios'        => $horarios,
+            // La foto del punto de retiro: si después cambia, el pedido no.
+            'retiro'          => $forma === 'retiro' ? ProductosFisicos::retiro($producto) : null,
         ], null, null];
     }
 
@@ -235,7 +252,8 @@ class CompraProductoHandler
 
     /**
      * Lo que ve quien paga en Mercado Pago: el producto por la cantidad y,
-     * aparte, el envío. Un renglón en 0 no va: Mercado Pago no lo acepta.
+     * aparte, el envío, sólo si se manda (#53). Un renglón en 0 no va:
+     * Mercado Pago no lo acepta.
      */
     private static function itemsDelPedido(array $pedido)
     {
@@ -246,7 +264,7 @@ class CompraProductoHandler
             $items[] = ['titulo' => $titulo, 'cantidad' => $pedido['cantidad'], 'precio' => $pedido['precio_unitario']];
         }
 
-        if ($pedido['costo_envio'] > 0) {
+        if ($pedido['forma_entrega'] === 'envio' && $pedido['costo_envio'] > 0) {
             $items[] = ['titulo' => 'Envío', 'cantidad' => 1, 'precio' => $pedido['costo_envio']];
         }
 
@@ -486,10 +504,14 @@ class CompraProductoHandler
      * El estado del pedido (#44) va con su línea de tiempo, la fecha de
      * entrega y quién lo lleva. El número de seguimiento y el motivo de una
      * cancelación no: llegan por mail.
+     *
+     * La forma de entrega (#53) va siempre. El punto de retiro sale entero:
+     * es de quien vende, no de quien compra, así que no se recorta.
      */
     private static function pedidoPublico($db, array $orden)
     {
         $envio = PedidosFisicos::envioDe($db, $orden['id']);
+        $forma = PedidosFisicos::formaDe($orden);
         $estadoPedido = $orden['estado'] === 'pagada' && !empty($orden['estado_pedido']) ? $orden['estado_pedido'] : null;
 
         return [
@@ -500,10 +522,12 @@ class CompraProductoHandler
             'cantidad'        => (int) $orden['cantidad'],
             'precio_unitario' => round((float) $orden['precio_unitario'], 2),
             'costo_envio'     => round((float) $orden['costo_envio'], 2),
+            'forma_entrega'   => $forma,
+            'retiro'          => PedidosFisicos::retiroDe($orden),
             'estado_pedido'   => $estadoPedido,
             'linea_de_tiempo' => $estadoPedido === null
                 ? []
-                : EstadosDePedidos::lineaDeTiempo($estadoPedido, EstadosDePedidos::historial($db, $orden['id'])),
+                : EstadosDePedidos::lineaDeTiempo($estadoPedido, EstadosDePedidos::historial($db, $orden['id']), $forma),
             'entrega_fecha'   => $estadoPedido === null ? null : $orden['entrega_fecha'],
             'entrega_franja'  => $estadoPedido === null ? null : $orden['entrega_franja'],
             'envio_empresa'   => $estadoPedido === null ? null : $orden['envio_empresa'],

@@ -15,9 +15,26 @@ export const ESTADOS_DEL_PEDIDO = [
   { clave: 'cancelado', nombre: 'Cancelado', plural: 'Cancelados' },
 ];
 
-/** "Con fecha de entrega", o la clave si no se conoce. */
-export function nombreDelEstado(clave) {
-  const estado = ESTADOS_DEL_PEDIDO.find((e) => e.clave === clave);
+/**
+ * Un retiro (#53) tiene los mismos estados con otros nombres, como en
+ * EstadosDePedidos::ESTADOS_DEL_RETIRO. Envío y coordinar usan los de arriba.
+ */
+const DEL_RETIRO = {
+  con_fecha: { nombre: 'Con fecha de retiro', plural: 'Con fecha', accion: 'Poner fecha de retiro' },
+  enviado: { nombre: 'Listo para retirar', plural: 'Listos para retirar', accion: 'Marcar listo para retirar' },
+  entregado: { nombre: 'Retirado', plural: 'Retirados', accion: 'Marcar retirado' },
+};
+
+/** Los estados con los nombres de esa forma de entrega, en el orden del recorrido. */
+export function estadosDelPedido(forma = 'envio') {
+  return ESTADOS_DEL_PEDIDO.map((e) => (forma === 'retiro' && DEL_RETIRO[e.clave]
+    ? { ...e, nombre: DEL_RETIRO[e.clave].nombre, plural: DEL_RETIRO[e.clave].plural }
+    : e));
+}
+
+/** "Con fecha de entrega" (o "Con fecha de retiro"), o la clave si no se conoce. */
+export function nombreDelEstado(clave, forma = 'envio') {
+  const estado = estadosDelPedido(forma).find((e) => e.clave === clave);
   return estado ? estado.nombre : clave || '';
 }
 
@@ -31,6 +48,25 @@ export const ACCIONES = {
 
 /** Lo mismo cuando ya tiene fecha y se vuelve a elegir. */
 export const CORREGIR_FECHA = 'Cambiar la fecha de entrega';
+
+/** El botón que lleva a `estado` desde `actual`, con los nombres de la forma. */
+export function accionHacia(estado, actual, forma = 'envio') {
+  const retiro = forma === 'retiro';
+  if (estado === 'con_fecha' && actual === 'con_fecha') {
+    return retiro ? 'Cambiar la fecha de retiro' : CORREGIR_FECHA;
+  }
+  return retiro && DEL_RETIRO[estado] ? DEL_RETIRO[estado].accion : ACCIONES[estado];
+}
+
+/** Cuántos pedidos en gestión hay de cada forma de entrega, para el filtro (#53). */
+export function contarPorForma(pedidos = []) {
+  const cuenta = { envio: 0, retiro: 0, coordinar: 0 };
+  pedidos.forEach((p) => {
+    const forma = p.forma_entrega || 'envio';
+    if (forma in cuenta) cuenta[forma] += 1;
+  });
+  return cuenta;
+}
 
 const TONOS = {
   ingresado: 'bg-amber-50 text-amber-900 border-amber-200',

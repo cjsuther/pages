@@ -242,6 +242,70 @@ class ProductosFisicosTest extends HandlerTestCase
         ];
     }
 
+    // ====================================================== formas de entrega
+
+    /** Un físico de antes de #53 no tiene las columnas: es sólo envío. */
+    public function testSinLasColumnasEsSoloEnvio()
+    {
+        $this->assertSame(['envio'], ProductosFisicos::formasDeEntrega(['tipo' => 'fisico']));
+    }
+
+    public function testLasFormasHabilitadasEnOrden()
+    {
+        $this->assertSame(['envio', 'retiro', 'coordinar'], ProductosFisicos::formasDeEntrega([
+            'entrega_envio' => '1', 'entrega_retiro' => '1', 'entrega_coordinar' => '1',
+        ]));
+        $this->assertSame(['coordinar'], ProductosFisicos::formasDeEntrega([
+            'entrega_envio' => 0, 'entrega_retiro' => '0', 'entrega_coordinar' => 1,
+        ]));
+    }
+
+    public function testEnElAltaHaceFaltaAlMenosUnaForma()
+    {
+        list($datos, $error) = ProductosFisicos::datosDelPedido(['entrega_envio' => false]);
+
+        $this->assertNull($datos);
+        $this->assertSame(ProductosFisicos::ERROR_SIN_FORMAS, $error);
+    }
+
+    /** Lo que no llega queda como estaba: se suma a lo que llega para mirar la regla. */
+    public function testEnLaEdicionLaReglaMiraComoQuedaElProducto()
+    {
+        $actual = ['entrega_envio' => 1, 'entrega_retiro' => 0, 'entrega_coordinar' => 1];
+
+        $this->assertSame([['entrega_envio' => 0], null], ProductosFisicos::datosDelPedido(['entrega_envio' => 0], $actual));
+        $this->assertSame(
+            [null, ProductosFisicos::ERROR_SIN_FORMAS],
+            ProductosFisicos::datosDelPedido(['entrega_envio' => 0, 'entrega_coordinar' => 0], $actual)
+        );
+    }
+
+    public function testConRetiroLaDireccionEsObligatoria()
+    {
+        $this->assertSame(
+            [null, ProductosFisicos::ERROR_RETIRO_SIN_DIRECCION],
+            ProductosFisicos::datosDelPedido(['entrega_retiro' => 1])
+        );
+
+        // Destildado, la dirección no hace falta.
+        list(, $error) = ProductosFisicos::datosDelPedido(['entrega_retiro' => 0, 'retiro_direccion' => '']);
+        $this->assertNull($error);
+    }
+
+    public function testElPuntoDeRetiroComoLoVeQuienCompra()
+    {
+        $producto = [
+            'entrega_retiro' => 1, 'retiro_direccion' => 'Corrientes 1234', 'retiro_maps_url' => null, 'retiro_indicaciones' => '',
+        ];
+
+        $this->assertSame([
+            'direccion' => 'Corrientes 1234',
+            'maps_url' => 'https://www.google.com/maps/search/?api=1&query=Corrientes%201234',
+            'indicaciones' => null,
+        ], ProductosFisicos::retiro($producto));
+        $this->assertNull(ProductosFisicos::retiro(['entrega_retiro' => 0] + $producto));
+    }
+
     // ================================================================ guardar
 
     /** El producto 30, del link 5, sin características guardadas. */

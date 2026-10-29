@@ -33,7 +33,9 @@ class ProductosDigitales
      * los físicos (#42) lo completa ProductosFisicos::completar().
      */
     const COLUMNAS_PUBLICAS = 'COALESCE(dp.precio, 0) AS precio, COALESCE(dp.oculto, 0) AS oculto, dp.archivo_nombre, dp.archivo_bytes, dp.archivo_tipo, '
-        . 'dp.id AS producto_id, COALESCE(dp.tipo, \'digital\') AS tipo, COALESCE(dp.costo_envio, 0) AS costo_envio, dp.zona_envio, dp.stock';
+        . 'dp.id AS producto_id, COALESCE(dp.tipo, \'digital\') AS tipo, COALESCE(dp.costo_envio, 0) AS costo_envio, dp.zona_envio, dp.stock, '
+        . 'dp.entrega_envio, dp.entrega_retiro, dp.entrega_coordinar, dp.retiro_direccion, dp.retiro_latitud, dp.retiro_longitud, '
+        . 'dp.retiro_maps_url, dp.retiro_indicaciones';
 
     /**
      * Lo que tiene que cumplir un producto para mostrarse en la página pública

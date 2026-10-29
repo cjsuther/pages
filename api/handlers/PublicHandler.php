@@ -148,7 +148,7 @@ class PublicHandler
     }
 
     /**
-     * Lo que sale de un físico (#42): el envío, las características para
+     * Lo que sale de un físico (#42): las formas de entrega, las características para
      * elegir y qué está agotado. Las cantidades de stock no salen: a quien
      * compra le alcanza con saber si hay o no.
      */
@@ -165,6 +165,10 @@ class PublicHandler
         return [
             'costo_envio' => round((float) (isset($fila['costo_envio']) ? $fila['costo_envio'] : 0), 2),
             'zona_envio' => isset($fila['zona_envio']) ? $fila['zona_envio'] : null,
+            // Cómo se puede recibir (#53) y, si se retira, dónde: es un dato de
+            // quien vende, público como la ubicación de un evento.
+            'formas_entrega' => ProductosFisicos::formasDeEntrega($fila),
+            'retiro' => ProductosFisicos::retiro($fila),
             'caracteristicas' => isset($fila['caracteristicas']) ? $fila['caracteristicas'] : [],
             'agotadas' => $agotadas,
             'agotado' => !empty($fila['agotado']),

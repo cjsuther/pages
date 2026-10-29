@@ -162,22 +162,32 @@ class ProductosHandler
 
     /**
      * Los pedidos de físicos con su dirección, para armar el recorrido de
-     * entrega (#44). Con ?estado_pedido=X, sólo los de ese estado: el filtro
-     * que se está mirando en el panel.
+     * entrega (#44). Con ?estado_pedido=X, sólo los de ese estado, y con
+     * ?forma_entrega=Y, sólo los de esa forma (#53): los filtros que se están
+     * mirando en el panel.
      */
     private static function excelDePedidos($db, array $alcance, Request $req)
     {
         $estado = $req->param('estado_pedido');
+        $forma = $req->param('forma_entrega');
 
         if ($estado !== null && $estado !== '' && !isset(EstadosDePedidos::ESTADOS[$estado])) {
             return Response::error(400, 'Estado de pedido desconocido');
+        }
+
+        if ($forma !== null && $forma !== '' && !isset(PedidosFisicos::FORMAS[$forma])) {
+            return Response::error(400, 'Forma de entrega desconocida');
         }
 
         $filas = OrdenesDeProductos::filasDeVentas($db, $alcance[0], $alcance[1]);
 
         return Response::raw(
             200,
-            OrdenesDeProductos::excelDePedidos($filas, $estado === null || $estado === '' ? null : $estado),
+            OrdenesDeProductos::excelDePedidos(
+                $filas,
+                $estado === null || $estado === '' ? null : $estado,
+                $forma === null || $forma === '' ? null : $forma
+            ),
             Excel::cabeceras(self::nombreDelExcel($req->param('nombre', ''), 'pedidos'))
         );
     }
