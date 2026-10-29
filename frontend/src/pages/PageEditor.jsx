@@ -14,7 +14,8 @@ import PixelDeMeta from '../components/PixelDeMeta';
 import ArchivoDeProducto from '../components/ArchivoDeProducto';
 import AvisoMercadoPago from '../components/AvisoMercadoPago';
 import EleccionDePrecio, { eleccionDesdePrecio, precioDeEleccion, problemaDeEleccion } from '../components/EleccionDePrecio';
-import { describirPrecio, esOculto, excesoArchivoProducto, subirArchivoDeProducto } from '../utils/productos';
+import { describirEnvio, describirPrecio, esFisico, esOculto, excesoArchivoProducto, subirArchivoDeProducto } from '../utils/productos';
+import InterruptorActivo from '../components/InterruptorActivo';
 import { analizarEmbed, portadaDe } from '../utils/embeds';
 import { paleta } from '../utils/colores';
 import { MAX_BYTES, excesoImagenEvento } from '../utils/imagenes';
@@ -627,6 +628,8 @@ function PageEditor() {
     }
 
     const esProducto = selectedGroup.type === 'productos';
+    // Digital o físico (#42): se elige acá y no se cambia después.
+    const fisico = esProducto && newLink.tipo === 'fisico';
     const cuerpo = esProducto
       ? {
           group_id: selectedGroup.id,
@@ -635,6 +638,8 @@ function PageEditor() {
           description: newLink.description,
           image_url: newLink.image_url,
           precio: newLink.precio ?? '',
+          tipo: fisico ? 'fisico' : 'digital',
+          ...(fisico ? { costo_envio: newLink.costo_envio ?? '', zona_envio: newLink.zona_envio ?? '' } : {}),
         }
       : selectedGroup.type === 'eventos'
         ? { ...newLink, group_id: selectedGroup.id, precio_desde: precioDeEleccion(eleccionPrecio) }
@@ -659,7 +664,7 @@ function PageEditor() {
         alert(data.error || 'No se pudo crear el evento');
       }
       if (response.ok) {
-        if (esProducto && archivoNuevo) {
+        if (esProducto && archivoNuevo && !fisico) {
           const data = await response.json();
           await subirArchivoNuevo(data.link.id);
         }
@@ -793,6 +798,33 @@ function PageEditor() {
       console.error('Error reordering links:', err);
     } finally {
       setGlobalLoading(false);
+    }
+  };
+
+  /**
+   * Activa o desactiva un producto desde la lista, sin entrar (#42). Se
+   * muestra el cambio en el acto y se vuelve atrás si la API no lo acepta.
+   */
+  const cambiarActivo = async (linkId, activo) => {
+    const marcar = (oculto) => setPage((actual) => ({
+      ...actual,
+      groups: actual.groups.map((g) => ({
+        ...g,
+        links: (g.links || []).map((l) => (l.id === linkId ? { ...l, oculto } : l)),
+      })),
+    }));
+
+    marcar(activo ? 0 : 1);
+    try {
+      const r = await fetch(`${apiUrl}/links/detail.php?id=${linkId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ oculto: !activo }),
+      });
+      if (!r.ok) throw new Error('No se pudo cambiar');
+    } catch (err) {
+      marcar(activo ? 1 : 0);
+      alert(activo ? 'No se pudo activar el producto' : 'No se pudo desactivar el producto');
     }
   };
 
@@ -1378,9 +1410,10 @@ function PageEditor() {
                     en grande.
                   </li>
                   <li>
-                    <strong className="text-tinta-media">Productos digitales —</strong> archivos
+                    <strong className="text-tinta-media">Productos —</strong> archivos
                     para vender o regalar: un PDF, plantillas, un pack de fotos, un audio.
-                    Se compran desde tu página y el link de descarga llega por mail.
+                    Se compran desde tu página y el link de descarga llega por mail. También
+                    productos físicos, como remeras o discos, con talles, colores y stock.
                   </li>
                 </ul>
                 <p className="text-xs text-tinta-suave mt-3">
@@ -1410,7 +1443,7 @@ function PageEditor() {
                             }`}>
                             {group.type === 'galeria' ? 'Galería' :
                               group.type === 'eventos' ? 'Eventos' :
-                                group.type === 'productos' ? 'Productos digitales' :
+                                group.type === 'productos' ? 'Productos' :
                                   'Links'}
                           </span>
                         </div>
@@ -1538,16 +1571,30 @@ function PageEditor() {
                                 )}
                                 {group.type === 'productos' && (
                                   <p className="text-xs text-tinta-media mt-1">
+                                    {esFisico(link) ? 'Físico' : 'Digital'}
+                                    {' · '}
                                     {describirPrecio(link.precio)}
                                     {' · '}
-                                    {link.archivo_nombre || <span className="text-red-700">Sin archivo</span>}
+                                    {esFisico(link)
+                                      ? (link.agotado ? <span className="text-red-700">Agotado</span> : describirEnvio(link.costo_envio))
+                                      : (link.archivo_nombre || <span className="text-red-700">Sin archivo</span>)}
                                   </p>
                                 )}
                                 {group.type === 'productos' && esOculto(link.oculto) && (
                                   <p className="text-xs text-tinta-suave mt-1 inline-flex items-center gap-1">
                                     <EyeOff className="w-3.5 h-3.5" aria-hidden="true" />
-                                    Oculto: no se muestra en tu página
+                                    Inactivo: no se muestra en tu página
                                   </p>
+                                )}
+                                {group.type === 'productos' && (
+                                  <div className="mt-2">
+                                    <InterruptorActivo
+                                      chico
+                                      activo={!esOculto(link.oculto)}
+                                      onChange={(activo) => cambiarActivo(link.id, activo)}
+                                      etiqueta={`${link.text}: activo`}
+                                    />
+                                  </div>
                                 )}
                                 {link.event_due == '1' && (
                                   <p className="text-sm text-red-600 font-semibold mt-1">¡Evento vencido!</p>
@@ -1658,13 +1705,13 @@ function PageEditor() {
                   <option value="links">Links</option>
                   <option value="galeria">Galería</option>
                   <option value="eventos">Eventos</option>
-                  <option value="productos">Productos digitales</option>
+                  <option value="productos">Productos</option>
                 </select>
                 <p className="text-xs text-tinta-suave mt-2">
                   {newGroup.type === 'links' && 'Lista de enlaces con descripción'}
                   {newGroup.type === 'galeria' && 'Cuadrícula de imágenes'}
                   {newGroup.type === 'eventos' && 'Eventos con fecha, hora y ubicación'}
-                  {newGroup.type === 'productos' && 'Archivos para vender o regalar desde tu página. El link de descarga llega por mail.'}
+                  {newGroup.type === 'productos' && 'Archivos para vender o regalar desde tu página (el link de descarga llega por mail) y productos físicos.'}
                 </p>
               </div>
               <div className="flex gap-3 pt-4">
@@ -1735,6 +1782,41 @@ function PageEditor() {
                 : 'Nuevo link'}
             </h2>
             <form onSubmit={createLink} className="space-y-6">
+              {selectedGroup.type === 'productos' && (
+                <fieldset>
+                  <legend className="block text-sm font-semibold text-tinta mb-1.5">Tipo de producto</legend>
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      { valor: 'digital', etiqueta: 'Digital', ayuda: 'Un archivo para descargar' },
+                      { valor: 'fisico', etiqueta: 'Físico', ayuda: 'Se manda o se entrega' },
+                    ].map((t) => {
+                      const elegido = (newLink.tipo || 'digital') === t.valor;
+                      return (
+                        <label
+                          key={t.valor}
+                          className={`flex items-start gap-2 p-3 rounded-xl border cursor-pointer transition ${
+                            elegido ? 'border-verde-oscuro bg-verde-claro' : 'border-borde-fuerte'
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="tipo-de-producto"
+                            value={t.valor}
+                            checked={elegido}
+                            onChange={() => setNewLink({ ...newLink, tipo: t.valor })}
+                            className="mt-1 accent-verde-oscuro"
+                          />
+                          <span>
+                            <span className="block text-sm font-semibold text-tinta">{t.etiqueta}</span>
+                            <span className="block text-xs text-tinta-suave">{t.ayuda}</span>
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <p className="text-xs text-tinta-suave mt-1">No se puede cambiar después de crearlo.</p>
+                </fieldset>
+              )}
               {selectedGroup.type !== 'galeria' && (
                 <>
                   <div>
@@ -1989,11 +2071,51 @@ function PageEditor() {
 
                   <AvisoMercadoPago pageId={id} apiUrl={apiUrl} token={token} precio={newLink.precio} />
 
-                  <ArchivoDeProducto
-                    archivo={archivoNuevo ? { nombre: archivoNuevo.name, bytes: archivoNuevo.size } : null}
-                    subiendo={subiendoArchivo}
-                    onElegir={elegirArchivoNuevo}
-                  />
+                  {newLink.tipo === 'fisico' ? (
+                    <>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label htmlFor="nuevo-costo-envio" className="block text-sm font-semibold text-tinta mb-1.5">
+                            Costo de envío
+                          </label>
+                          <input
+                            id="nuevo-costo-envio"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={newLink.costo_envio ?? ''}
+                            onChange={(e) => setNewLink({ ...newLink, costo_envio: e.target.value })}
+                            placeholder="0"
+                            className="w-full px-4 py-3 rounded-xl bg-white border border-borde-fuerte text-tinta placeholder-tinta-suave focus:border-verde-oscuro focus:outline-none transition-colors"
+                          />
+                          <p className="text-xs text-tinta-suave mt-1">0 = envío incluido.</p>
+                        </div>
+                        <div>
+                          <label htmlFor="nueva-zona-envio" className="block text-sm font-semibold text-tinta mb-1.5">
+                            Zona de envío (opcional)
+                          </label>
+                          <input
+                            id="nueva-zona-envio"
+                            type="text"
+                            maxLength={255}
+                            value={newLink.zona_envio ?? ''}
+                            onChange={(e) => setNewLink({ ...newLink, zona_envio: e.target.value })}
+                            placeholder="Sólo CABA y GBA"
+                            className="w-full px-4 py-3 rounded-xl bg-white border border-borde-fuerte text-tinta placeholder-tinta-suave focus:border-verde-oscuro focus:outline-none transition-colors"
+                          />
+                        </div>
+                      </div>
+                      <p className="text-xs text-tinta-suave">
+                        Talles, colores y stock se cargan después, desde Editar.
+                      </p>
+                    </>
+                  ) : (
+                    <ArchivoDeProducto
+                      archivo={archivoNuevo ? { nombre: archivoNuevo.name, bytes: archivoNuevo.size } : null}
+                      subiendo={subiendoArchivo}
+                      onElegir={elegirArchivoNuevo}
+                    />
+                  )}
                 </>
               )}
 

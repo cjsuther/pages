@@ -12,7 +12,18 @@ import AvisoMercadoPago from '../components/AvisoMercadoPago';
 import EleccionDePrecio, { eleccionDesdePrecio, precioDeEleccion, problemaDeEleccion } from '../components/EleccionDePrecio';
 import { analizarEmbed, EJEMPLOS_EMBED } from '../utils/embeds';
 import { MAX_BYTES, excesoImagenEvento } from '../utils/imagenes';
-import { subirArchivoDeProducto, esOculto } from '../utils/productos';
+import EditorCaracteristicas from '../components/EditorCaracteristicas';
+import InterruptorActivo from '../components/InterruptorActivo';
+import {
+  subirArchivoDeProducto,
+  esOculto,
+  esFisico,
+  caracteristicasParaEditar,
+  caracteristicasParaGuardar,
+  problemaDeCaracteristicas,
+  stockParaEditar,
+  stockValido,
+} from '../utils/productos';
 
 /**
  * Edición de un item (link, imagen o evento) en pantalla completa.
@@ -49,6 +60,11 @@ function ItemEditor() {
   const [pageSearchQuery, setPageSearchQuery] = useState('');
   const [pageSearchResults, setPageSearchResults] = useState([]);
   const [searchingPages, setSearchingPages] = useState(false);
+  // Lo de un producto físico (#42): sus características y el stock de cada
+  // combinación, como los edita EditorCaracteristicas.
+  const [caracteristicas, setCaracteristicas] = useState([]);
+  const [stockGrilla, setStockGrilla] = useState({});
+  const [errorFisico, setErrorFisico] = useState(null);
 
   // A dónde vuelve todo: al editor, en la solapa donde estaba el item.
   const volverA = `/page/${id}?s=contenido`;
@@ -79,6 +95,11 @@ function ItemEditor() {
           if (grupo.type === 'eventos') {
             setEleccionPrecio(eleccionDesdePrecio(encontrado.precio_desde));
             setVendePorRezonar(await vendeEntradasPorRezonar(encontrado.id));
+          }
+
+          if (grupo.type === 'productos' && esFisico(encontrado)) {
+            setCaracteristicas(caracteristicasParaEditar(encontrado.caracteristicas));
+            setStockGrilla(stockParaEditar(encontrado.variantes));
           }
         }
       }
@@ -257,6 +278,28 @@ function ItemEditor() {
         }
         cuerpo = { ...item, precio_desde: precioDeEleccion(eleccionPrecio) };
       }
+    }
+
+    if (group.type === 'productos' && esFisico(item)) {
+      const problema = problemaDeCaracteristicas(caracteristicas)
+        || (Object.values(stockGrilla).every(stockValido) && stockValido(item.stock ?? '')
+          ? null
+          : 'El stock tiene que ser un número entero igual o mayor que 0, o quedar vacío');
+      if (problema) {
+        setErrorFisico(problema);
+        return;
+      }
+      setErrorFisico(null);
+
+      // Lo que calcula la API (agotado, variantes con su clave) no vuelve.
+      const resto = { ...item };
+      delete resto.agotado;
+      delete resto.variantes;
+      cuerpo = {
+        ...resto,
+        stock: caracteristicas.length ? '' : (item.stock ?? ''),
+        ...caracteristicasParaGuardar(caracteristicas, stockGrilla),
+      };
     }
 
     try {
@@ -689,33 +732,101 @@ function ItemEditor() {
 
               <AvisoMercadoPago pageId={id} apiUrl={apiUrl} token={token} precio={item.precio} />
 
-              <label htmlFor="oculto-producto" className="flex items-start gap-3 cursor-pointer">
-                <input
-                  id="oculto-producto"
-                  type="checkbox"
-                  checked={esOculto(item.oculto)}
-                  onChange={(e) => setItem({ ...item, oculto: e.target.checked })}
-                  className="mt-1 h-4 w-4 accent-verde-oscuro"
+              <div>
+                <InterruptorActivo
+                  activo={!esOculto(item.oculto)}
+                  onChange={(activo) => setItem({ ...item, oculto: !activo })}
+                  etiqueta="Activo"
                 />
-                <span>
-                  <span className="block text-sm font-semibold text-tinta">Oculto</span>
-                  <span className="block text-xs text-tinta-suave">
-                    Oculto: no se muestra y no acepta pedidos nuevos. Quienes ya compraron pueden seguir descargando.
-                  </span>
-                </span>
-              </label>
+                <p className="text-xs text-tinta-suave mt-1">
+                  {esFisico(item)
+                    ? 'Inactivo: no se muestra en tu página ni en su link y no acepta pedidos nuevos. Los pedidos que ya existen siguen su curso.'
+                    : 'Inactivo: no se muestra en tu página ni en su link y no acepta pedidos nuevos. Quienes ya compraron pueden seguir descargando.'}
+                </p>
+              </div>
 
-              <ArchivoDeProducto
-                archivo={item.archivo_nombre ? { nombre: item.archivo_nombre, bytes: item.archivo_bytes } : null}
-                subiendo={subiendoArchivo}
-                onElegir={subirArchivo}
-                error={errorArchivo}
-              />
+              {esFisico(item) ? (
+                <>
+                  <p className="text-sm text-tinta-media">
+                    <span className="font-semibold text-tinta">Producto físico.</span>{' '}
+                    Se manda o se entrega: no lleva archivo. El tipo no se cambia después de crearlo.
+                  </p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label htmlFor="costo-envio" className="block text-sm font-semibold text-tinta mb-1.5">
+                        Costo de envío
+                      </label>
+                      <input
+                        id="costo-envio"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={item.costo_envio ?? ''}
+                        onChange={(e) => setItem({ ...item, costo_envio: e.target.value })}
+                        placeholder="0"
+                        className="w-full px-4 py-3 rounded-xl bg-white border border-borde-fuerte text-tinta placeholder-tinta-suave focus:border-verde-oscuro focus:outline-none transition-colors"
+                      />
+                      <p className="text-xs text-tinta-suave mt-1">En pesos. 0 = envío incluido.</p>
+                    </div>
+                    <div>
+                      <label htmlFor="zona-envio" className="block text-sm font-semibold text-tinta mb-1.5">
+                        Zona de envío (opcional)
+                      </label>
+                      <input
+                        id="zona-envio"
+                        type="text"
+                        maxLength={255}
+                        value={item.zona_envio ?? ''}
+                        onChange={(e) => setItem({ ...item, zona_envio: e.target.value })}
+                        placeholder="Sólo CABA y GBA"
+                        className="w-full px-4 py-3 rounded-xl bg-white border border-borde-fuerte text-tinta placeholder-tinta-suave focus:border-verde-oscuro focus:outline-none transition-colors"
+                      />
+                    </div>
+                  </div>
+
+                  <EditorCaracteristicas
+                    caracteristicas={caracteristicas}
+                    onChange={(nuevas) => { setCaracteristicas(nuevas); setErrorFisico(null); }}
+                    stock={stockGrilla}
+                    onStockChange={(nuevo) => { setStockGrilla(nuevo); setErrorFisico(null); }}
+                  />
+
+                  {caracteristicas.length === 0 && (
+                    <div>
+                      <label htmlFor="stock-producto" className="block text-sm font-semibold text-tinta mb-1.5">
+                        Stock (opcional)
+                      </label>
+                      <input
+                        id="stock-producto"
+                        type="number"
+                        min="0"
+                        step="1"
+                        inputMode="numeric"
+                        value={item.stock ?? ''}
+                        onChange={(e) => { setItem({ ...item, stock: e.target.value }); setErrorFisico(null); }}
+                        placeholder="Sin límite"
+                        className="w-full px-4 py-3 rounded-xl bg-white border border-borde-fuerte text-tinta placeholder-tinta-suave focus:border-verde-oscuro focus:outline-none transition-colors"
+                      />
+                      <p className="text-xs text-tinta-suave mt-1">Vacío es sin límite. Con 0 se muestra "Agotado".</p>
+                    </div>
+                  )}
+
+                  {errorFisico && <p role="alert" className="text-sm text-red-700">{errorFisico}</p>}
+                </>
+              ) : (
+                <ArchivoDeProducto
+                  archivo={item.archivo_nombre ? { nombre: item.archivo_nombre, bytes: item.archivo_bytes } : null}
+                  subiendo={subiendoArchivo}
+                  onElegir={subirArchivo}
+                  error={errorArchivo}
+                />
+              )}
 
               <LinkDeProducto
                 linkId={item.id}
                 oculto={esOculto(item.oculto)}
-                conArchivo={Boolean(item.archivo_nombre)}
+                conArchivo={esFisico(item) || Boolean(item.archivo_nombre)}
               />
             </>
           )}

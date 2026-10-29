@@ -168,7 +168,138 @@ export async function subirArchivoDeProducto({ apiUrl, token, linkId, file }) {
 /**
  * Si un producto está oculto. La API lo devuelve como 0/1 (a veces como
  * texto) y el editor lo guarda como booleano.
+ *
+ * En el editor se dice "Inactivo" (#42): es la misma columna.
  */
 export function esOculto(valor) {
   return valor === true || valor === 1 || valor === '1' || valor === 'true';
 }
+
+// ------------------------------------------------------- productos físicos (#42)
+
+/** Si un producto es físico: sin archivo, con envío, características y stock. */
+export const esFisico = (producto) => producto?.tipo === 'fisico';
+
+/** Los nombres que se sugieren para una característica. */
+export const SUGERENCIAS_DE_CARACTERISTICA = ['Talle', 'Color', 'Otra'];
+
+export const MAX_CARACTERISTICAS = 3;
+
+/** El costo de envío como se lee: 0 es "Envío incluido". */
+export function describirEnvio(costo) {
+  if (!(Number(costo) > 0)) return 'Envío incluido';
+  return `Envío: $ ${Number(costo).toLocaleString('es-AR', { maximumFractionDigits: 2 })}`;
+}
+
+/** La clave de una combinación, como la arma la API: ids de menor a mayor, con guiones. */
+export function claveDeCombinacion(opcionIds) {
+  return opcionIds.map(Number).sort((a, b) => a - b).join('-');
+}
+
+/**
+ * Todas las combinaciones de opciones, en el orden de las características:
+ * [[S, Rojo], [S, Azul], [M, Rojo], ...]. Sin características, ninguna.
+ */
+export function combinaciones(caracteristicas) {
+  if (!caracteristicas?.length) return [];
+  return caracteristicas.reduce(
+    (parciales, c) => parciales.flatMap((p) => (c.opciones || []).map((o) => [...p, o])),
+    [[]],
+  );
+}
+
+/**
+ * Si una opción se puede elegir en el detalle público, con lo que ya se
+ * eligió en las otras características: alguna combinación que la incluya
+ * tiene que no estar agotada. `seleccion` es { [caracteristicaId]: opcionId }.
+ */
+export function opcionDisponible(producto, caracteristicaId, opcionId, seleccion = {}) {
+  const agotadas = new Set(producto.agotadas || []);
+  const elegidas = { ...seleccion, [caracteristicaId]: opcionId };
+
+  return combinaciones(producto.caracteristicas)
+    .filter((combo) => combo.every((o, i) => {
+      const id = producto.caracteristicas[i].id;
+      return elegidas[id] === undefined || elegidas[id] === o.id;
+    }))
+    .some((combo) => !agotadas.has(claveDeCombinacion(combo.map((o) => o.id))));
+}
+
+/**
+ * Las características que llegan de la API, listas para el editor: cada
+ * característica y cada opción con una clave local que no cambia al
+ * renombrarla. La de lo que ya existe sale de su id; la de lo nuevo, de un
+ * contador.
+ */
+let contadorDeClaves = 0;
+export const claveNueva = () => `n${++contadorDeClaves}`;
+
+export function caracteristicasParaEditar(caracteristicas = []) {
+  return (caracteristicas || []).map((c) => ({
+    clave: `c${c.id}`,
+    id: c.id,
+    nombre: c.nombre,
+    opciones: (c.opciones || []).map((o) => ({ clave: `o${o.id}`, id: o.id, nombre: o.nombre })),
+  }));
+}
+
+/**
+ * La clave de una fila de la grilla de stock: las claves locales de sus
+ * opciones, ordenadas, así no cambia al reordenar las características.
+ */
+export const claveDeFila = (combo) => combo.map((o) => o.clave).sort().join('|');
+
+/** El stock por combinación de la API ({ clave: '3-7', stock }) como lo usa la grilla. */
+export function stockParaEditar(variantes = []) {
+  const grilla = {};
+  (variantes || []).forEach((v) => {
+    const clave = String(v.clave).split('-').map((id) => `o${id}`).sort().join('|');
+    grilla[clave] = v.stock === null || v.stock === undefined ? '' : String(v.stock);
+  });
+  return grilla;
+}
+
+/**
+ * Lo que se le manda a la API de las características y del stock: las
+ * opciones por nombre, que es como la API reconoce las nuevas, y sólo las
+ * combinaciones con stock cargado.
+ */
+export function caracteristicasParaGuardar(caracteristicas, grilla) {
+  const lista = caracteristicas.map((c) => ({
+    ...(c.id ? { id: c.id } : {}),
+    nombre: c.nombre.trim(),
+    opciones: c.opciones.map((o) => ({ ...(o.id ? { id: o.id } : {}), nombre: o.nombre.trim() })),
+  }));
+
+  const variantes = combinaciones(caracteristicas)
+    .map((combo) => ({ opciones: combo.map((o) => o.nombre.trim()), stock: grilla[claveDeFila(combo)] ?? '' }))
+    .filter((v) => v.stock !== '');
+
+  return { caracteristicas: lista, variantes };
+}
+
+/**
+ * Qué está mal en las características antes de mandarlas, o null. La API
+ * valida lo mismo; esto es para avisar sin ir y volver.
+ */
+export function problemaDeCaracteristicas(caracteristicas) {
+  const nombres = new Set();
+  for (const c of caracteristicas) {
+    const nombre = c.nombre.trim();
+    if (!nombre) return 'Cada característica necesita un nombre';
+    if (nombres.has(nombre.toLowerCase())) return `Hay dos características que se llaman "${nombre}"`;
+    nombres.add(nombre.toLowerCase());
+    if (!c.opciones.length) return `"${nombre}" necesita al menos una opción`;
+    const opciones = new Set();
+    for (const o of c.opciones) {
+      const opcion = o.nombre.trim();
+      if (!opcion) return `Hay una opción vacía en "${nombre}"`;
+      if (opciones.has(opcion.toLowerCase())) return `La opción "${opcion}" está repetida en "${nombre}"`;
+      opciones.add(opcion.toLowerCase());
+    }
+  }
+  return null;
+}
+
+/** Un stock válido: vacío (sin límite) o un entero >= 0. */
+export const stockValido = (valor) => valor === '' || valor === null || valor === undefined || /^\d+$/.test(String(valor).trim());
