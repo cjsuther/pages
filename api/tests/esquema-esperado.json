@@ -66,7 +66,11 @@
         "link_id": "migration_productos_digitales.sql",
         "titulo": "migration_ordenes_de_productos.sql",
         "page_id": "migration_ordenes_de_productos.sql",
+        "tipo": "migration_productos_fisicos.sql",
         "precio": "migration_productos_digitales.sql",
+        "costo_envio": "migration_productos_fisicos.sql",
+        "zona_envio": "migration_productos_fisicos.sql",
+        "stock": "migration_productos_fisicos.sql",
         "oculto": "migration_ordenes_de_productos.sql",
         "archivo_ruta": "migration_productos_digitales.sql",
         "archivo_nombre": "migration_productos_digitales.sql",
@@ -367,6 +371,24 @@
         "template": "migration_add_template_field.sql",
         "origen": "migration_importador.sql"
     },
+    "product_attribute_options": {
+        "id": "migration_productos_fisicos.sql",
+        "attribute_id": "migration_productos_fisicos.sql",
+        "nombre": "migration_productos_fisicos.sql",
+        "posicion": "migration_productos_fisicos.sql",
+        "activa": "migration_productos_fisicos.sql"
+    },
+    "product_attributes": {
+        "id": "migration_productos_fisicos.sql",
+        "product_id": "migration_productos_fisicos.sql",
+        "nombre": "migration_productos_fisicos.sql",
+        "posicion": "migration_productos_fisicos.sql",
+        "activa": "migration_productos_fisicos.sql"
+    },
+    "product_order_options": {
+        "order_id": "migration_productos_fisicos.sql",
+        "option_id": "migration_productos_fisicos.sql"
+    },
     "product_orders": {
         "id": "migration_ordenes_de_productos.sql",
         "codigo": "migration_ordenes_de_productos.sql",
@@ -392,6 +414,12 @@
         "mail_intentos": "migration_ordenes_de_productos.sql",
         "mail_error": "migration_ordenes_de_productos.sql",
         "creado_en": "migration_ordenes_de_productos.sql"
+    },
+    "product_variants": {
+        "id": "migration_productos_fisicos.sql",
+        "product_id": "migration_productos_fisicos.sql",
+        "clave": "migration_productos_fisicos.sql",
+        "stock": "migration_productos_fisicos.sql"
     },
     "push_deliveries": {
         "id": "migration_push_notifications.sql",

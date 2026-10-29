@@ -46,3 +46,4 @@ migration_productos_digitales.sql
 migration_ordenes_de_productos.sql
 migration_smtp_de_paginas.sql
 migration_envios_a_clientes.sql
+migration_productos_fisicos.sql
