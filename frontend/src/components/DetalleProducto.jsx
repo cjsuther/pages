@@ -46,24 +46,25 @@ export function tarjetaQueAbre(abrir) {
  * la plantilla pida otro fondo porque ése se perdería sobre su tarjeta.
  */
 export function BotonComprar({ producto, colores, onComprar, className = '', soloIcono = false, fondo }) {
-  // Un físico todavía no se compra: la compra con envío es #43. Si no queda
-  // nada, dice "Agotado".
-  if (esFisico(producto)) {
-    const texto = producto.agotado ? 'Agotado' : 'Próximamente';
+  const fisico = esFisico(producto);
+
+  // Un físico sin nada que elegir dice "Agotado" y no abre nada.
+  if (fisico && producto.agotado) {
     return (
       <button
         type="button"
         disabled
         onClick={(e) => e.stopPropagation()}
-        title={texto}
+        title="Agotado"
         className={`inline-flex items-center justify-center gap-1.5 font-bold opacity-60 cursor-not-allowed border border-current ${className}`}
       >
-        {texto}
+        Agotado
       </button>
     );
   }
 
-  const pago = esPago(producto.precio);
+  // Un físico siempre se compra, aunque sea gratis: hay que mandarlo (#43).
+  const pago = fisico || esPago(producto.precio);
   const texto = pago ? 'Comprar' : 'Descargar gratis';
   const Icono = pago ? ShoppingBag : Download;
   const color = fondo || colores.boton;
@@ -195,6 +196,8 @@ function DetalleProducto({
 }) {
   const { apiUrl } = useContext(AuthContext);
   const [comprando, setComprando] = useState(comprar ? productos[inicial] : null);
+  // Las opciones de un físico que ya se eligieron en el detalle.
+  const [seleccion, setSeleccion] = useState({});
   const carrusel = useCarrusel(productos.length, inicial);
   const caja = useRef(null);
 
@@ -229,6 +232,7 @@ function DetalleProducto({
       producto={comprando}
       apiUrl={apiUrl}
       color={colores.boton}
+      seleccionInicial={seleccion}
       onCerrar={comprar ? onCerrar : () => setComprando(null)}
     />
   );
@@ -284,7 +288,14 @@ function DetalleProducto({
                     aria-label={`${i + 1} de ${productos.length}`}
                     className="w-full shrink-0 snap-center px-1"
                   >
-                    <Producto producto={producto} colores={colores} onComprar={() => setComprando(producto)} />
+                    <Producto
+                      producto={producto}
+                      colores={colores}
+                      onComprar={(elegidas) => {
+                        setSeleccion(elegidas || {});
+                        setComprando(producto);
+                      }}
+                    />
                   </div>
                 ))}
               </div>
@@ -373,6 +384,9 @@ export function BotonCompartir({ producto }) {
  * Un producto entero: imagen, título, descripción, archivo, precio y los
  * botones. Es lo que muestra el detalle de la página y también /producto/:id,
  * que lo usa con un h1 y el color de títulos de la página.
+ *
+ * En un físico, onComprar recibe las opciones ya elegidas, para que el
+ * formulario de compra las traiga marcadas.
  */
 export function Producto({ producto, colores, onComprar, Titulo = 'h2', colorTitulo }) {
   const [seleccion, setSeleccion] = useState({});
@@ -432,7 +446,12 @@ export function Producto({ producto, colores, onComprar, Titulo = 'h2', colorTit
 
       <div className="flex flex-wrap items-center justify-between gap-4 mt-6">
         <span className="text-2xl font-bold">{describirPrecio(producto.precio)}</span>
-        <BotonComprar producto={producto} colores={colores} onComprar={onComprar} className="px-5 py-3 rounded-lg" />
+        <BotonComprar
+          producto={producto}
+          colores={colores}
+          onComprar={() => onComprar(fisico ? seleccion : undefined)}
+          className="px-5 py-3 rounded-lg"
+        />
       </div>
 
       <div className="mt-4">
