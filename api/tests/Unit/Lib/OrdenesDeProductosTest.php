@@ -219,7 +219,8 @@ class OrdenesDeProductosTest extends TestCase
         $sql = $this->db->callsFor('WHERE o.codigo = ?')[0]['sql'];
         $this->assertStringContainsString('INNER JOIN digital_products dp ON dp.id = o.product_id', $sql);
         $this->assertStringContainsString('LEFT JOIN links l', $sql);
-        $this->assertStringContainsString('COALESCE(l.text, dp.titulo) AS producto', $sql);
+        // Primero la foto del pedido de un físico (#43): un digital no la tiene.
+        $this->assertStringContainsString('COALESCE(o.producto_titulo, l.text, dp.titulo) AS producto', $sql);
         $this->assertStringContainsString('COALESCE(lg.page_id, dp.page_id) AS pagina_id', $sql);
     }
 

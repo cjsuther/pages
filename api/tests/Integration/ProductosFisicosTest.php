@@ -275,8 +275,8 @@ class ProductosFisicosTest extends IntegracionTestCase
         $this->assertTrue($res->body['link']['agotado']);
     }
 
-    /** Hasta la compra con envío (#43), un físico no acepta pedidos. */
-    public function testUnFisicoTodaviaNoSeVende()
+    /** Un físico se compra con teléfono, dirección y horarios (#43): sin eso no hay pedido. */
+    public function testUnFisicoNoSeCompraSinLosDatosDeEnvio()
     {
         $link = $this->crear(['precio' => '0'])->body['link'];
 
@@ -284,7 +284,7 @@ class ProductosFisicosTest extends IntegracionTestCase
             'link_id' => $link['id'], 'nombre' => 'Ana Compradora', 'email' => 'ana@test.local',
         ]), new FakeHttpClient(), new FakeMailer());
 
-        $this->assertStatus(404, $res);
+        $this->assertStatus(400, $res);
         $this->assertSame('0', (string) $this->valor('SELECT COUNT(*) FROM product_orders'));
     }
 }
