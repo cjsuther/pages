@@ -48,6 +48,51 @@ export function insertarEnCursor(texto, inicio, fin, agregado) {
   };
 }
 
+/**
+ * Hasta dónde llega el texto de un link de WhatsApp, ya codificado. wa.me no
+ * publica un límite, pero con mucho más los navegadores y la app lo cortan.
+ */
+export const LARGO_MAXIMO_WHATSAPP = 2000;
+
+const PUNTOS = '…';
+
+// Una mitad de surrogate suelta hace fallar a encodeURIComponent.
+const SURROGATE_SUELTO = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
+
+/** Recorta `texto` con "…" para que codificado no pase de `maximo`. */
+export function recortarParaWhatsApp(texto, maximo = LARGO_MAXIMO_WHATSAPP) {
+  const limpio = String(texto || '').replace(SURROGATE_SUELTO, '�');
+
+  if (encodeURIComponent(limpio).length <= maximo) {
+    return { texto: limpio, recortado: false };
+  }
+
+  const lugar = maximo - encodeURIComponent(PUNTOS).length;
+  let largo = 0;
+  let corte = '';
+
+  // De a caracteres enteros, para no partir un emoji o una letra con tilde.
+  for (const caracter of limpio) {
+    largo += encodeURIComponent(caracter).length;
+    if (largo > lugar) break;
+    corte += caracter;
+  }
+
+  return { texto: `${corte.trimEnd()}${PUNTOS}`, recortado: true };
+}
+
+/**
+ * El texto de WhatsApp de un mensaje guardado para un cliente (#38): el cuerpo
+ * sin el asunto, con el nombre reemplazado como en el mail.
+ */
+export function textoParaWhatsApp(mensaje, nombre) {
+  if (!mensaje) return { texto: '', recortado: false };
+
+  const texto = reemplazarVariables(mensaje.cuerpo, nombre, mensaje.reemplazo_nombre).trim();
+
+  return recortarParaWhatsApp(texto);
+}
+
 export const ESTADOS_DE_ENVIO = {
   en_curso: 'En curso',
   pausado: 'Pausado',
