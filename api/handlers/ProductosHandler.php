@@ -129,23 +129,57 @@ class ProductosHandler
                 return Response::error(400, 'Ese item no es un producto digital');
             }
 
-            $ventas = OrdenesDeProductos::ventas($db, 'link', $linkId);
+            $alcance = ['link', $linkId];
         } elseif ($pageId) {
             if (!PageAccess::canManage($db, $pageId, $req->userId())) {
                 return Response::error(403, 'No podés ver las ventas de esta página');
             }
 
-            $ventas = OrdenesDeProductos::ventas($db, 'pagina', $pageId);
+            $alcance = ['pagina', $pageId];
         } else {
             return Response::error(400, 'link_id o page_id requerido');
         }
 
+        $tipo = $req->param('tipo');
+
+        if ($req->param('formato') === 'excel' && $tipo === 'fisico') {
+            return self::excelDePedidos($db, $alcance, $req);
+        }
+
+        $ventas = OrdenesDeProductos::ventas($db, $alcance[0], $alcance[1]);
+
         if ($req->param('formato') === 'excel') {
-            return Response::raw(200, OrdenesDeProductos::excel($ventas['ordenes']),
+            $ordenes = $tipo === 'digital'
+                ? array_values(array_filter($ventas['ordenes'], function ($o) { return $o['tipo'] === 'digital'; }))
+                : $ventas['ordenes'];
+
+            return Response::raw(200, OrdenesDeProductos::excel($ordenes),
                 Excel::cabeceras(self::nombreDelExcel($req->param('nombre', ''))));
         }
 
         return Response::ok($ventas);
+    }
+
+    /**
+     * Los pedidos de físicos con su dirección, para armar el recorrido de
+     * entrega (#44). Con ?estado_pedido=X, sólo los de ese estado: el filtro
+     * que se está mirando en el panel.
+     */
+    private static function excelDePedidos($db, array $alcance, Request $req)
+    {
+        $estado = $req->param('estado_pedido');
+
+        if ($estado !== null && $estado !== '' && !isset(EstadosDePedidos::ESTADOS[$estado])) {
+            return Response::error(400, 'Estado de pedido desconocido');
+        }
+
+        $filas = OrdenesDeProductos::filasDeVentas($db, $alcance[0], $alcance[1]);
+
+        return Response::raw(
+            200,
+            OrdenesDeProductos::excelDePedidos($filas, $estado === null || $estado === '' ? null : $estado),
+            Excel::cabeceras(self::nombreDelExcel($req->param('nombre', ''), 'pedidos'))
+        );
     }
 
     /**
@@ -199,14 +233,14 @@ class ProductosHandler
         return Response::error(502, 'No pudimos mandar el mail: ' . $resultado['motivo']);
     }
 
-    /** "ventas-guia-de-viaje.xlsx", como el de las entradas. */
-    private static function nombreDelExcel($nombre)
+    /** "ventas-guia-de-viaje.xlsx", como el de las entradas; "pedidos-…" el de los físicos. */
+    private static function nombreDelExcel($nombre, $prefijo = 'ventas')
     {
         $limpio = strtolower(trim((string) $nombre));
         $limpio = strtr($limpio, ['á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ñ' => 'n']);
         $limpio = trim(preg_replace('/[^a-z0-9]+/', '-', $limpio), '-');
 
-        return 'ventas' . ($limpio === '' ? '-productos' : '-' . substr($limpio, 0, 60)) . '.xlsx';
+        return $prefijo . ($limpio === '' ? '-productos' : '-' . substr($limpio, 0, 60)) . '.xlsx';
     }
 
     private static function esProducto($db, $linkId)

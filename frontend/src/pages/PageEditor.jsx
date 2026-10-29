@@ -1261,8 +1261,8 @@ function PageEditor() {
           <div className="bg-white border border-borde rounded-2xl p-6 sm:p-8 mb-8">
             <h2 className="text-2xl font-bold mb-2 tracking-tight">Ventas de productos</h2>
             <p className="text-sm text-tinta-suave mb-6">
-              Las ventas de todos los productos digitales de la página, incluidos los que ya
-              borraste, y quién ya descargó su archivo.
+              Las ventas de todos los productos de la página, incluidos los que ya borraste: en
+              Digitales, quién ya descargó su archivo; en Físicos, los pedidos para entregar.
             </p>
             <PanelVentasProductos pageId={id} apiUrl={apiUrl} token={token} nombre={page.url_slug} />
           </div>

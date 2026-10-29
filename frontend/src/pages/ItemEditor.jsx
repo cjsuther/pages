@@ -489,7 +489,13 @@ function ItemEditor() {
         )}
 
         {tab === 'ventas' && group.type === 'productos' && (
-          <PanelVentasProductos linkId={item.id} apiUrl={apiUrl} token={token} nombre={item.text} />
+          <PanelVentasProductos
+            linkId={item.id}
+            apiUrl={apiUrl}
+            token={token}
+            nombre={item.text}
+            tipo={esFisico(item) ? 'fisico' : 'digital'}
+          />
         )}
 
         {(tab === 'datos' || !pestanas) && (
