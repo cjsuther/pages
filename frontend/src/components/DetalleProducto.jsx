@@ -1,10 +1,11 @@
 import React, { useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, Download, FileText, Share2, ShoppingBag } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, FileText, Share2, ShoppingBag, Truck } from 'lucide-react';
 import { AuthContext } from '../App';
 import ComprarProducto from './ComprarProducto';
 import Sugerencias from './Sugerencias';
 import useBloqueoDeScroll from '../hooks/useBloqueoDeScroll';
-import { compartirLink, describirPrecio, esPago, linkDeProducto } from '../utils/productos';
+import SelectorDeCaracteristicas from './SelectorDeCaracteristicas';
+import { compartirLink, describirEnvio, describirPrecio, esFisico, esPago, linkDeProducto } from '../utils/productos';
 import { describirPeso } from '../utils/imagenes';
 import { textoSobre } from '../utils/colores';
 
@@ -45,6 +46,23 @@ export function tarjetaQueAbre(abrir) {
  * la plantilla pida otro fondo porque ése se perdería sobre su tarjeta.
  */
 export function BotonComprar({ producto, colores, onComprar, className = '', soloIcono = false, fondo }) {
+  // Un físico todavía no se compra: la compra con envío es #43. Si no queda
+  // nada, dice "Agotado".
+  if (esFisico(producto)) {
+    const texto = producto.agotado ? 'Agotado' : 'Próximamente';
+    return (
+      <button
+        type="button"
+        disabled
+        onClick={(e) => e.stopPropagation()}
+        title={texto}
+        className={`inline-flex items-center justify-center gap-1.5 font-bold opacity-60 cursor-not-allowed border border-current ${className}`}
+      >
+        {texto}
+      </button>
+    );
+  }
+
   const pago = esPago(producto.precio);
   const texto = pago ? 'Comprar' : 'Descargar gratis';
   const Icono = pago ? ShoppingBag : Download;
@@ -357,6 +375,12 @@ export function BotonCompartir({ producto }) {
  * que lo usa con un h1 y el color de títulos de la página.
  */
 export function Producto({ producto, colores, onComprar, Titulo = 'h2', colorTitulo }) {
+  const [seleccion, setSeleccion] = useState({});
+  const fisico = esFisico(producto);
+  const caracteristicas = fisico ? (producto.caracteristicas || []) : [];
+  // Hay que elegir una opción de cada característica antes de comprar.
+  const faltan = caracteristicas.filter((c) => seleccion[c.id] === undefined);
+
   return (
     <>
       {producto.image_url && (
@@ -378,6 +402,31 @@ export function Producto({ producto, colores, onComprar, Titulo = 'h2', colorTit
           {producto.archivo_bytes > 0 && (
             <span className="shrink-0">· {describirPeso(producto.archivo_bytes)}</span>
           )}
+        </p>
+      )}
+
+      {fisico && (
+        <div className="mb-4 text-sm opacity-80 flex items-start gap-1.5">
+          <Truck className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
+          <span>
+            {describirEnvio(producto.costo_envio)}
+            {producto.zona_envio && <span className="block">{producto.zona_envio}</span>}
+          </span>
+        </div>
+      )}
+
+      {caracteristicas.length > 0 && !producto.agotado && (
+        <SelectorDeCaracteristicas
+          producto={producto}
+          seleccion={seleccion}
+          onCambiar={setSeleccion}
+          color={colores.boton}
+        />
+      )}
+
+      {faltan.length > 0 && !producto.agotado && (
+        <p className="mt-3 text-sm opacity-70">
+          Elegí {faltan.map((c) => c.nombre.toLowerCase()).join(' y ')}.
         </p>
       )}
 
