@@ -46,6 +46,12 @@ describe('textoParaWhatsApp', () => {
 });
 
 describe('recortarParaWhatsApp', () => {
+  it('cambia una mitad de surrogate suelta por "�" y deja los emojis enteros', () => {
+    expect(recortarParaWhatsApp('a\uD83Db')).toEqual({ texto: 'a\uFFFDb', recortado: false });
+    expect(recortarParaWhatsApp('a\uDE00b')).toEqual({ texto: 'a\uFFFDb', recortado: false });
+    expect(recortarParaWhatsApp('Hola 😀')).toEqual({ texto: 'Hola 😀', recortado: false });
+  });
+
   it('un texto corto queda igual', () => {
     expect(recortarParaWhatsApp('Hola')).toEqual({ texto: 'Hola', recortado: false });
   });
