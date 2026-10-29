@@ -159,4 +159,57 @@ describe('EstadoCompra', () => {
       expect(screen.getByText('No encontramos tu compra')).toBeInTheDocument();
     });
   });
+
+  describe('un pedido de un físico (#43)', () => {
+    const PEDIDO = {
+      ...ORDEN,
+      tipo: 'fisico',
+      producto: 'Remera',
+      opciones: 'Talle M · Color Negro',
+      cantidad: 2,
+      precio_unitario: 2500,
+      costo_envio: 500,
+      total: 5500,
+      estado_pedido: 'ingresado',
+      archivo_nombre: null,
+      envio: { calle: 'Av. Corrientes 1…', localidad: 'CABA', provincia: 'Ciudad Autónoma de Buenos Aires', codigo_postal: '1043' },
+      horarios: { dias: ['lunes', 'sabado'], franjas: ['tarde', 'noche'], comentario: 'Después de las 18' },
+    };
+
+    it('muestra el detalle, la dirección recortada, los horarios y el estado', async () => {
+      await montar(PEDIDO);
+
+      expect(screen.getByText('¡Recibimos tu pedido!')).toBeInTheDocument();
+      expect(screen.getByText('Talle M · Color Negro')).toBeInTheDocument();
+      expect(screen.getByText(/× 2/)).toBeInTheDocument();
+      expect(screen.getByText(/5\.500/)).toBeInTheDocument();
+      expect(screen.getByText('Av. Corrientes 1…')).toBeInTheDocument();
+      expect(screen.getByText(/CABA, Ciudad Autónoma de Buenos Aires \(1043\)/)).toBeInTheDocument();
+      expect(screen.getByText(/Lunes y Sábado · Tarde y Noche/)).toBeInTheDocument();
+      expect(screen.getByText('Después de las 18')).toBeInTheDocument();
+      expect(screen.getByText('Estado: Ingresado')).toBeInTheDocument();
+    });
+
+    it('no ofrece descarga, aunque haya un token guardado', async () => {
+      guardarTokenDeDescarga(CODIGO, TOKEN);
+
+      await montar(PEDIDO);
+
+      expect(screen.queryByRole('button', { name: /Descargar/ })).not.toBeInTheDocument();
+      expect(screen.queryByText(/link de descarga/)).not.toBeInTheDocument();
+    });
+
+    it('con envío incluido lo dice', async () => {
+      await montar({ ...PEDIDO, costo_envio: 0, total: 5000 });
+
+      expect(screen.getByText('Incluido')).toBeInTheDocument();
+    });
+
+    it('mientras se confirma el pago no muestra estado del pedido', async () => {
+      await montar({ ...PEDIDO, estado: 'pendiente', estado_pedido: null });
+
+      expect(screen.getByText('Estamos confirmando tu pago')).toBeInTheDocument();
+      expect(screen.queryByText(/^Estado:/)).not.toBeInTheDocument();
+    });
+  });
 });
