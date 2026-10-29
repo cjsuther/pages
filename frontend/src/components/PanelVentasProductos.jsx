@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Download, RefreshCw, Send } from 'lucide-react';
 import { formatearPrecio, etiquetaDeEstado, colorDeEstado } from '../utils/entradas';
 import { fechaCorta } from './PanelVentas';
+import PanelPedidosFisicos from './PanelPedidosFisicos';
 
 /** "No", o "Sí · 1 vez" / "Sí · 3 veces". Lo mismo que dice el Excel. */
 export function describirDescargas(descargas) {
@@ -26,20 +27,24 @@ export function nombreDelExcel(nombre) {
 const etiquetaDe = (estado) => (estado === 'pendiente' ? 'Pendiente' : etiquetaDeEstado(estado));
 
 /**
- * Las ventas de productos digitales: las de un producto (linkId), en su
- * pestaña Ventas, o las de todos los productos de la página (pageId), los
- * borrados incluidos.
+ * Las ventas de productos: las de un producto (linkId), en su pestaña Ventas,
+ * o las de todos los productos de la página (pageId), los borrados incluidos.
+ *
+ * Por página van en dos pestañas, Digitales y Físicos (#44). En un producto,
+ * la de su tipo: los pedidos de un físico se gestionan igual que desde la
+ * página, filtrados a ese producto.
  *
  * Muestra datos de contacto de quienes compraron, así que el servidor sólo lo
  * responde a quien administra la página. Lo que no muestra nunca es el link de
  * descarga: el reenvío lo manda por mail a quien compró, sin pasar por acá.
  */
-function PanelVentasProductos({ linkId = null, pageId = null, apiUrl, token, nombre = '' }) {
+function PanelVentasProductos({ linkId = null, pageId = null, apiUrl, token, nombre = '', tipo = null }) {
   const [datos, setDatos] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
   const [reenviando, setReenviando] = useState(null);
   const [aviso, setAviso] = useState(null);
+  const [pestana, setPestana] = useState(tipo === 'fisico' ? 'fisicos' : 'digitales');
 
   const porPagina = !linkId;
   const filtro = porPagina ? `page_id=${pageId}` : `link_id=${linkId}`;
@@ -79,7 +84,7 @@ function PanelVentasProductos({ linkId = null, pageId = null, apiUrl, token, nom
 
     try {
       const r = await fetch(
-        `${apiUrl}/productos/ventas.php?${filtro}&formato=excel&nombre=${encodeURIComponent(nombre)}`,
+        `${apiUrl}/productos/ventas.php?${filtro}&formato=excel&tipo=digital&nombre=${encodeURIComponent(nombre)}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
@@ -133,10 +138,56 @@ function PanelVentasProductos({ linkId = null, pageId = null, apiUrl, token, nom
     return <p className="text-sm text-red-700 bg-red-50 border border-red-200 px-4 py-3">{error}</p>;
   }
 
-  const { ordenes = [], resumen = {} } = datos || {};
+  const { ordenes: todas = [], resumen = {}, resumen_fisicos: resumenFisicos = {} } = datos || {};
+  const fisicos = todas.filter((o) => o.tipo === 'fisico');
+  const ordenes = todas.filter((o) => o.tipo !== 'fisico');
+
+  const pestanas = porPagina && (
+    <div role="tablist" aria-label="Tipo de producto" className="flex gap-1 border-b border-borde">
+      {[['digitales', 'Digitales'], ['fisicos', 'Físicos']].map(([clave, etiqueta]) => (
+        <button
+          key={clave}
+          type="button"
+          role="tab"
+          aria-selected={pestana === clave}
+          onClick={() => setPestana(clave)}
+          className={`px-4 py-2 text-sm font-semibold -mb-px border-b-2 ${
+            pestana === clave ? 'border-tinta text-tinta' : 'border-transparent text-tinta-suave hover:text-tinta'
+          }`}
+        >
+          {etiqueta}
+        </button>
+      ))}
+    </div>
+  );
+
+  if (pestana === 'fisicos') {
+    return (
+      <div className="space-y-6">
+        {pestanas}
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Dato etiqueta="PEDIDOS PAGADOS" valor={resumenFisicos.pagadas || 0} />
+          <Dato etiqueta="RECAUDADO" valor={formatearPrecio(resumenFisicos.recaudado)} />
+        </div>
+
+        <PanelPedidosFisicos
+          pedidos={fisicos}
+          filtro={filtro}
+          apiUrl={apiUrl}
+          token={token}
+          nombre={nombre}
+          porPagina={porPagina}
+          onRecargar={cargar}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
+      {pestanas}
+
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Dato etiqueta="VENTAS PAGADAS" valor={resumen.pagadas || 0} />
         <Dato etiqueta="RECAUDADO" valor={formatearPrecio(resumen.recaudado)} />
