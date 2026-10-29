@@ -476,6 +476,108 @@ class ProductosHandlerTest extends HandlerTestCase
         $this->assertStringContainsString('ana@test.local', $hoja);
     }
 
+    // ========================================================= físicos (#44)
+
+    private function pedido(array $extra = [])
+    {
+        return $this->venta(array_merge([
+            'id' => 8, 'codigo' => 'FFFF00001111', 'tipo' => 'fisico', 'producto' => 'Remera', 'total' => '5500.00',
+            'telefono' => '11 5555-1234', 'opciones_texto' => 'Talle M', 'cantidad' => '2', 'sin_stock' => '0',
+            'estado_pedido' => 'ingresado', 'entrega_fecha' => null, 'entrega_franja' => null,
+            'calle' => 'Av. Corrientes 1234', 'piso_depto' => '3° B', 'localidad' => 'CABA',
+            'provincia' => 'Ciudad Autónoma de Buenos Aires', 'codigo_postal' => '1043', 'indicaciones' => 'Timbre B',
+            'dias' => 'lunes,sabado', 'franjas' => 'tarde', 'comentario_horario' => 'Después de las 18',
+        ], $extra));
+    }
+
+    public function testLaListaDeUnFisicoTraeElPedidoYLaLocalidadNoLaDireccion()
+    {
+        $this->db->onSelect('FROM pages p WHERE p.id = ?', [['1' => 1]]);
+        $this->db->onSelect('WHERE dp.page_id = ?', [$this->pedido(['sin_stock' => '1']), $this->venta()]);
+
+        $res = $this->verVentas(['page_id' => 9]);
+
+        $this->assertStatus(200, $res);
+        list($fisico, $digital) = $res->body['ordenes'];
+        $this->assertSame('fisico', $fisico['tipo']);
+        $this->assertSame('ingresado', $fisico['estado_pedido']);
+        $this->assertSame('Talle M', $fisico['opciones']);
+        $this->assertSame(2, $fisico['cantidad']);
+        $this->assertSame('CABA', $fisico['localidad']);
+        $this->assertTrue($fisico['sin_stock']);
+        $this->assertArrayNotHasKey('calle', $fisico);
+        $this->assertStringNotContainsString('Corrientes', json_encode($res->body));
+        $this->assertSame('digital', $digital['tipo']);
+        $this->assertArrayNotHasKey('estado_pedido', $digital);
+        // Cada resumen con lo suyo.
+        $this->assertSame(['pagadas' => 1, 'recaudado' => 2500.0, 'descargaron' => 0], $res->body['resumen']);
+        $this->assertSame(5500.0, $res->body['resumen_fisicos']['recaudado']);
+    }
+
+    public function testElExcelDePedidosTraeLaDireccionCompletaYLosHorarios()
+    {
+        $this->db->onSelect('FROM pages p WHERE p.id = ?', [['1' => 1]]);
+        $this->db->onSelect('WHERE dp.page_id = ?', [
+            $this->pedido(['estado_pedido' => 'con_fecha', 'entrega_fecha' => '2026-11-03', 'entrega_franja' => 'tarde']),
+            // Sin pagar no está en gestión; un digital no se entrega.
+            $this->pedido(['id' => 9, 'codigo' => 'SINPAGAR0000', 'estado' => 'pendiente', 'estado_pedido' => null, 'nombre' => 'Beto']),
+            $this->venta(['nombre' => 'Carla']),
+        ]);
+
+        $res = $this->verVentas(['page_id' => 9, 'formato' => 'excel', 'tipo' => 'fisico', 'nombre' => 'La Sala']);
+
+        $this->assertStatus(200, $res);
+        $this->assertStringContainsString('pedidos-la-sala.xlsx', implode("\n", $res->headers));
+        $hoja = $this->hojaDelExcel($res->raw);
+        foreach (['Av. Corrientes 1234', '3° B', 'Timbre B', 'Lunes y Sábado', 'Después de las 18',
+                  'Con fecha de entrega', '2026-11-03', 'Tarde', 'Calle y número'] as $texto) {
+            $this->assertStringContainsString($texto, $hoja);
+        }
+        $this->assertStringNotContainsString('Beto', $hoja);
+        $this->assertStringNotContainsString('Carla', $hoja);
+    }
+
+    public function testElExcelDePedidosRespetaElFiltroDeEstado()
+    {
+        $this->db->onSelect('FROM pages p WHERE p.id = ?', [['1' => 1]]);
+        $this->db->onSelect('WHERE dp.page_id = ?', [
+            $this->pedido(['nombre' => 'Ana']),
+            $this->pedido(['id' => 9, 'nombre' => 'Beto', 'estado_pedido' => 'entregado']),
+        ]);
+
+        $hoja = $this->hojaDelExcel($this->verVentas([
+            'page_id' => 9, 'formato' => 'excel', 'tipo' => 'fisico', 'estado_pedido' => 'entregado',
+        ])->raw);
+
+        $this->assertStringContainsString('Beto', $hoja);
+        $this->assertStringNotContainsString('Ana', $hoja);
+    }
+
+    public function testUnFiltroDeEstadoInventadoNoVale()
+    {
+        $this->db->onSelect('FROM pages p WHERE p.id = ?', [['1' => 1]]);
+
+        $this->assertError(400, $this->verVentas(['page_id' => 9, 'formato' => 'excel', 'tipo' => 'fisico', 'estado_pedido' => 'x']));
+    }
+
+    /** Sin permiso no hay Excel de pedidos: tiene direcciones. */
+    public function testElExcelDePedidosExigeLaPagina()
+    {
+        $this->assertError(403, $this->verVentas(['page_id' => 9, 'formato' => 'excel', 'tipo' => 'fisico']));
+        $this->assertFalse($this->db->ran('product_order_envios'));
+    }
+
+    public function testElExcelDeDigitalesDejaAfueraLosFisicos()
+    {
+        $this->db->onSelect('FROM pages p WHERE p.id = ?', [['1' => 1]]);
+        $this->db->onSelect('WHERE dp.page_id = ?', [$this->pedido(['nombre' => 'Beto']), $this->venta(['nombre' => 'Carla'])]);
+
+        $hoja = $this->hojaDelExcel($this->verVentas(['page_id' => 9, 'formato' => 'excel', 'tipo' => 'digital'])->raw);
+
+        $this->assertStringContainsString('Carla', $hoja);
+        $this->assertStringNotContainsString('Beto', $hoja);
+    }
+
     private function hojaDelExcel($contenido)
     {
         $ruta = tempnam(sys_get_temp_dir(), 'test');
