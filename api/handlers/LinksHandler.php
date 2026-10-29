@@ -175,11 +175,13 @@ class LinksHandler
     const ERROR_PRECIO = 'El precio tiene que ser un número igual o mayor que 0';
 
     /**
-     * Alta de un producto digital: el link y su fila de producto, juntos.
+     * Alta de un producto: el link y su fila de producto, juntos.
      *
-     * El archivo no viene acá: se sube después a productos/archivo.php, que
-     * necesita el id del producto. La URL queda vacía, como en los eventos:
-     * un producto no lleva a ninguna parte, se compra.
+     * El archivo de un digital no viene acá: se sube después a
+     * productos/archivo.php, que necesita el id del producto. Un físico no
+     * tiene archivo; trae su envío, características y stock (#42). La URL
+     * queda vacía, como en los eventos: un producto no lleva a ninguna parte,
+     * se compra.
      */
     private static function crearProducto($db, Request $req)
     {
@@ -187,6 +189,23 @@ class LinksHandler
 
         if ($precio === null) {
             return Response::error(400, self::ERROR_PRECIO);
+        }
+
+        // Digital o físico (#42): se elige acá y no cambia más.
+        $tipo = ProductosFisicos::tipo($req->input('tipo'));
+
+        if ($tipo === null) {
+            return Response::error(400, ProductosFisicos::ERROR_TIPO);
+        }
+
+        $fisico = null;
+
+        if ($tipo === 'fisico') {
+            list($fisico, $error) = ProductosFisicos::datosDelPedido($req->body);
+
+            if ($error !== null) {
+                return Response::error(400, $error);
+            }
         }
 
         $db->beginTransaction();
@@ -205,6 +224,11 @@ class LinksHandler
             $linkId = $db->lastInsertId();
             ProductosDigitales::guardarPrecio($db, $linkId, $precio);
             ProductosDigitales::actualizarFoto($db, $linkId);
+
+            if ($fisico !== null) {
+                ProductosFisicos::marcarFisico($db, $linkId);
+                ProductosFisicos::guardar($db, $linkId, $fisico);
+            }
 
             if ($req->has('oculto')) {
                 ProductosDigitales::guardarOculto($db, $linkId, self::esVerdadero($req->input('oculto')));
@@ -292,41 +316,56 @@ class LinksHandler
                 }
             }
 
+            $fisico = null;
+
+            if ($esProducto) {
+                $producto = ProductosDigitales::delLink($db, $linkId);
+                $tipoActual = ProductosFisicos::esFisico($producto) ? 'fisico' : 'digital';
+
+                // El editor manda el item entero, con su tipo: si es el mismo
+                // no pasa nada; si es otro, no se cambia (#42).
+                if ($req->has('tipo') && ProductosFisicos::tipo($req->input('tipo')) !== $tipoActual) {
+                    return Response::error(400, ProductosFisicos::ERROR_CAMBIO_DE_TIPO);
+                }
+
+                if ($tipoActual === 'fisico') {
+                    list($fisico, $error) = ProductosFisicos::datosDelPedido($req->body);
+
+                    if ($error !== null) {
+                        return Response::error(400, $error);
+                    }
+
+                    $fisico = empty($fisico) ? null : $fisico;
+                }
+            }
+
             list($fields, $values) = self::camposAActualizar($req);
 
-            // A un producto se le puede cambiar sólo el precio o si está
-            // oculto, que no son columnas de links.
-            if (empty($fields) && $precio === null && $oculto === null) {
+            // A un producto se le puede cambiar sólo el precio, si está
+            // oculto o lo de un físico, que no son columnas de links.
+            if (empty($fields) && $precio === null && $oculto === null && $fisico === null) {
                 return Response::error(400, 'No fields to update');
             }
 
-            if (!empty($fields)) {
-                $values[] = $linkId;
-                $stmt = $db->prepare('UPDATE links SET ' . implode(', ', $fields) . ' WHERE id = ?');
-                $stmt->execute($values);
-
-                // Lo que se toca a mano queda congelado: el importador diario
-                // actualiza el resto pero no vuelve a pisar esto. Sin la marca,
-                // corregir el título de un show importado duraría hasta la
-                // madrugada siguiente.
-                Importador::marcarEditados($db, $linkId, self::nombresDeCampos($fields));
+            // Las características de un físico se tocan en varias consultas:
+            // o se guarda todo, o nada.
+            if ($fisico !== null) {
+                $db->beginTransaction();
             }
 
-            if ($precio !== null) {
-                ProductosDigitales::guardarPrecio($db, $linkId, $precio);
-            }
+            try {
+                self::guardarEdicion($db, $linkId, $fields, $values, $esProducto, $precio, $oculto, $fisico);
 
-            if ($oculto !== null) {
-                ProductosDigitales::guardarOculto($db, $linkId, $oculto);
-            }
+                if ($fisico !== null) {
+                    $db->commit();
+                }
+            } catch (Exception $e) {
+                if ($fisico !== null) {
+                    $db->rollBack();
+                }
 
-            if ($esProducto) {
-                ProductosDigitales::actualizarFoto($db, $linkId);
+                throw $e;
             }
-
-            // Si el evento vende, su registro guarda el título y la fecha
-            // nuevos: son los que se van a ver si algún día se borra.
-            Clientes::actualizarEvento($db, $linkId);
 
             if ($esProducto) {
                 return Response::ok(['link' => ProductosDigitales::linkConProducto($db, $linkId)]);
@@ -341,6 +380,42 @@ class LinksHandler
         } catch (Exception $e) {
             return Response::serverError($e->getMessage());
         }
+    }
+
+    /** Las escrituras de update(), en orden. */
+    private static function guardarEdicion($db, $linkId, array $fields, array $values, $esProducto, $precio, $oculto, $fisico)
+    {
+        if (!empty($fields)) {
+            $values[] = $linkId;
+            $stmt = $db->prepare('UPDATE links SET ' . implode(', ', $fields) . ' WHERE id = ?');
+            $stmt->execute($values);
+
+            // Lo que se toca a mano queda congelado: el importador diario
+            // actualiza el resto pero no vuelve a pisar esto. Sin la marca,
+            // corregir el título de un show importado duraría hasta la
+            // madrugada siguiente.
+            Importador::marcarEditados($db, $linkId, self::nombresDeCampos($fields));
+        }
+
+        if ($precio !== null) {
+            ProductosDigitales::guardarPrecio($db, $linkId, $precio);
+        }
+
+        if ($oculto !== null) {
+            ProductosDigitales::guardarOculto($db, $linkId, $oculto);
+        }
+
+        if ($fisico !== null) {
+            ProductosFisicos::guardar($db, $linkId, $fisico);
+        }
+
+        if ($esProducto) {
+            ProductosDigitales::actualizarFoto($db, $linkId);
+        }
+
+        // Si el evento vende, su registro guarda el título y la fecha
+        // nuevos: son los que se van a ver si algún día se borra.
+        Clientes::actualizarEvento($db, $linkId);
     }
 
     private static function destroy($db, Request $req, $linkId, FileStorage $storage)

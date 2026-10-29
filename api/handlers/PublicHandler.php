@@ -28,7 +28,7 @@ class PublicHandler
      * lo que sí: la ruta del archivo en disco no puede salir nunca, tampoco
      * si mañana se agrega una columna a links o a digital_products.
      */
-    const CAMPOS_DE_PRODUCTO = ['id', 'group_id', 'text', 'description', 'image_url', 'position', 'precio', 'archivo_nombre', 'archivo_bytes'];
+    const CAMPOS_DE_PRODUCTO = ['id', 'group_id', 'text', 'description', 'image_url', 'position', 'precio', 'archivo_nombre', 'archivo_bytes', 'tipo'];
 
     /**
      * Lo que sale de la página junto a un producto con link propio: con qué
@@ -138,8 +138,37 @@ class PublicHandler
         $producto['id'] = (int) $producto['id'];
         $producto['precio'] = round((float) $producto['precio'], 2);
         $producto['archivo_bytes'] = $producto['archivo_bytes'] === null ? null : (int) $producto['archivo_bytes'];
+        $producto['tipo'] = ProductosFisicos::esFisico($fila) ? 'fisico' : 'digital';
+
+        if ($producto['tipo'] === 'fisico') {
+            $producto += self::loDeUnFisico($fila);
+        }
 
         return $producto;
+    }
+
+    /**
+     * Lo que sale de un físico (#42): el envío, las características para
+     * elegir y qué está agotado. Las cantidades de stock no salen: a quien
+     * compra le alcanza con saber si hay o no.
+     */
+    private static function loDeUnFisico(array $fila)
+    {
+        $agotadas = [];
+
+        foreach (isset($fila['variantes']) ? $fila['variantes'] : [] as $v) {
+            if ($v['stock'] !== null && (int) $v['stock'] <= 0) {
+                $agotadas[] = $v['clave'];
+            }
+        }
+
+        return [
+            'costo_envio' => round((float) (isset($fila['costo_envio']) ? $fila['costo_envio'] : 0), 2),
+            'zona_envio' => isset($fila['zona_envio']) ? $fila['zona_envio'] : null,
+            'caracteristicas' => isset($fila['caracteristicas']) ? $fila['caracteristicas'] : [],
+            'agotadas' => $agotadas,
+            'agotado' => !empty($fila['agotado']),
+        ];
     }
 
     /** La página pública sólo muestra eventos futuros. */
@@ -340,7 +369,7 @@ class PublicHandler
             return Response::notFound(ProductosDigitales::MENSAJE_NO_DISPONIBLE);
         }
 
-        $producto = self::productoPublico($fila);
+        $producto = self::productoPublico(ProductosFisicos::completar($db, [$fila])[0]);
 
         foreach (self::CAMPOS_DE_PAGINA_DEL_PRODUCTO as $campo) {
             $producto[$campo] = isset($fila[$campo]) ? $fila[$campo] : null;
