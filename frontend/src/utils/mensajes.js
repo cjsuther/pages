@@ -56,12 +56,19 @@ export const LARGO_MAXIMO_WHATSAPP = 2000;
 
 const PUNTOS = '…';
 
-// Una mitad de surrogate suelta hace fallar a encodeURIComponent.
-const SURROGATE_SUELTO = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
+/**
+ * Una mitad de surrogate suelta hace fallar a encodeURIComponent: se cambia
+ * por "�". Sin lookbehind en una regex: Safari anterior a 16.4 no lo entiende
+ * y no carga el bundle entero. Array.from recorre por code points, así que un
+ * par válido llega junto (largo 2) y una mitad suelta, sola (largo 1).
+ */
+function sinSurrogatesSueltos(texto) {
+  return Array.from(texto, (c) => (c.length === 1 && c >= '\uD800' && c <= '\uDFFF' ? '\uFFFD' : c)).join('');
+}
 
 /** Recorta `texto` con "…" para que codificado no pase de `maximo`. */
 export function recortarParaWhatsApp(texto, maximo = LARGO_MAXIMO_WHATSAPP) {
-  const limpio = String(texto || '').replace(SURROGATE_SUELTO, '�');
+  const limpio = sinSurrogatesSueltos(String(texto || ''));
 
   if (encodeURIComponent(limpio).length <= maximo) {
     return { texto: limpio, recortado: false };
