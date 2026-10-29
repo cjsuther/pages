@@ -48,3 +48,4 @@ migration_smtp_de_paginas.sql
 migration_envios_a_clientes.sql
 migration_productos_fisicos.sql
 migration_pedidos_fisicos.sql
+migration_estados_de_pedidos.sql

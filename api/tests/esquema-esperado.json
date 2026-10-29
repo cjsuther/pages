@@ -397,6 +397,14 @@
         "franjas": "migration_pedidos_fisicos.sql",
         "comentario_horario": "migration_pedidos_fisicos.sql"
     },
+    "product_order_historial": {
+        "id": "migration_estados_de_pedidos.sql",
+        "order_id": "migration_estados_de_pedidos.sql",
+        "estado": "migration_estados_de_pedidos.sql",
+        "datos": "migration_estados_de_pedidos.sql",
+        "user_id": "migration_estados_de_pedidos.sql",
+        "creado_en": "migration_estados_de_pedidos.sql"
+    },
     "product_order_options": {
         "order_id": "migration_productos_fisicos.sql",
         "option_id": "migration_productos_fisicos.sql"
@@ -421,6 +429,12 @@
         "mp_comision_cobrada": "migration_ordenes_de_productos.sql",
         "estado": "migration_ordenes_de_productos.sql",
         "sin_stock": "migration_pedidos_fisicos.sql",
+        "estado_pedido": "migration_estados_de_pedidos.sql",
+        "entrega_fecha": "migration_estados_de_pedidos.sql",
+        "entrega_franja": "migration_estados_de_pedidos.sql",
+        "envio_empresa": "migration_estados_de_pedidos.sql",
+        "envio_seguimiento": "migration_estados_de_pedidos.sql",
+        "cancelado_motivo": "migration_estados_de_pedidos.sql",
         "mp_preference_id": "migration_ordenes_de_productos.sql",
         "mp_payment_id": "migration_ordenes_de_productos.sql",
         "pagada_en": "migration_ordenes_de_productos.sql",
