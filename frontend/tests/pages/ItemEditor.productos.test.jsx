@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { screen, fireEvent, waitFor } from '@testing-library/react';
+import { screen, fireEvent, waitFor, act } from '@testing-library/react';
 import ItemEditor from '../../src/pages/ItemEditor';
 import { renderConProviders, crearAuth, usuarioDePrueba } from '../helpers/render';
 import { mockFetch, cuerpoDe, respuesta } from '../helpers/api';
@@ -459,6 +459,147 @@ describe('ItemEditor — productos digitales', () => {
 
       expect(screen.getByRole('switch', { name: 'Activo' })).not.toBeChecked();
       expect(screen.getByText(/Los pedidos que ya existen siguen su curso/)).toBeInTheDocument();
+    });
+
+    // ---------------------------------------------- formas de entrega (#53)
+
+    describe('formas de entrega', () => {
+      const casilla = (nombre) => screen.getByRole('checkbox', { name: nombre });
+
+      afterEach(() => {
+        delete window.google;
+      });
+
+      /** Un Google Maps de mentira: deja "elegir" una sugerencia. */
+      function googleFalso(lugar) {
+        const falso = { elegir: null };
+        window.google = {
+          maps: {
+            places: {
+              Autocomplete: class {
+                addListener(_, cb) { falso.elegir = cb; }
+                getPlace() { return lugar; }
+              },
+            },
+            event: { clearInstanceListeners: vi.fn() },
+          },
+        };
+        return falso;
+      }
+
+      it('un físico de antes tiene sólo envío tildado, con su costo y su zona', async () => {
+        await render({ item: fisico() });
+
+        expect(casilla('Envío a domicilio')).toBeChecked();
+        expect(casilla('Retiro en un lugar')).not.toBeChecked();
+        expect(casilla('Coordinar después de la compra')).not.toBeChecked();
+        expect(screen.getByLabelText('Costo de envío')).toBeInTheDocument();
+        expect(screen.queryByLabelText(/Dirección del retiro/)).not.toBeInTheDocument();
+      });
+
+      it('el costo y la zona se muestran sólo con envío tildado', async () => {
+        await render({ item: fisico({ entrega_envio: '1', entrega_coordinar: '1' }) });
+
+        fireEvent.click(casilla('Envío a domicilio'));
+
+        expect(screen.queryByLabelText('Costo de envío')).not.toBeInTheDocument();
+        expect(screen.queryByLabelText('Zona de envío (opcional)')).not.toBeInTheDocument();
+      });
+
+      it('el retiro pide la dirección de Google y los horarios, de hasta 255', async () => {
+        await render({ item: fisico() });
+
+        fireEvent.click(casilla('Retiro en un lugar'));
+
+        expect(screen.getByLabelText(/Dirección del retiro/)).toBeRequired();
+        expect(screen.getByLabelText('Días, horarios e indicaciones para retirar (opcional)'))
+          .toHaveAttribute('maxLength', '255');
+      });
+
+      it('coordinar no tiene campos', async () => {
+        await render({ item: fisico() });
+
+        fireEvent.click(casilla('Coordinar después de la compra'));
+
+        expect(screen.getByText(/Quien compra deja su teléfono/)).toBeInTheDocument();
+      });
+
+      it('sin ninguna forma avisa y no guarda', async () => {
+        const { llamadas } = await render({ item: fisico() });
+
+        fireEvent.click(casilla('Envío a domicilio'));
+        fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+
+        expect(await screen.findByRole('alert')).toHaveTextContent('Elegí al menos una forma de entrega');
+        expect(llamadas.some((l) => l.options.method === 'PUT')).toBe(false);
+      });
+
+      it('con retiro y sin dirección avisa y no guarda', async () => {
+        const { llamadas } = await render({ item: fisico() });
+
+        fireEvent.click(casilla('Retiro en un lugar'));
+        // El campo es required: el navegador ya frena el envío. Igual se valida.
+        expect(screen.getByLabelText(/Dirección del retiro/)).toBeRequired();
+        fireEvent.submit(screen.getByRole('button', { name: 'Guardar' }).closest('form'));
+
+        expect(await screen.findByRole('alert')).toHaveTextContent('Falta la dirección del retiro');
+        expect(llamadas.some((l) => l.options.method === 'PUT')).toBe(false);
+      });
+
+      it('una dirección escrita a mano, sin elegirla de Google, no sirve', async () => {
+        const { llamadas } = await render({ item: fisico() });
+
+        fireEvent.click(casilla('Retiro en un lugar'));
+        fireEvent.change(screen.getByLabelText(/Dirección del retiro/), { target: { value: 'Corrientes 1234' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+
+        expect(await screen.findByRole('alert')).toHaveTextContent('sugerencias de Google Maps');
+        expect(llamadas.some((l) => l.options.method === 'PUT')).toBe(false);
+      });
+
+      it('guarda las formas y el lugar elegido, como la ubicación de un evento', async () => {
+        const google = googleFalso({
+          formatted_address: 'Av. Corrientes 1234, CABA',
+          url: 'https://maps.google.com/?cid=1',
+          geometry: { location: { lat: () => -34.6037, lng: () => -58.3816 } },
+        });
+        const { llamadas } = await render({ item: fisico() });
+
+        fireEvent.click(casilla('Envío a domicilio'));
+        fireEvent.click(casilla('Retiro en un lugar'));
+        fireEvent.click(casilla('Coordinar después de la compra'));
+        act(() => google.elegir());
+        fireEvent.change(screen.getByLabelText('Días, horarios e indicaciones para retirar (opcional)'), {
+          target: { value: 'Lunes a viernes de 10 a 18, timbre 3' },
+        });
+
+        const cuerpo = await guardar(llamadas);
+        expect(cuerpo).toMatchObject({
+          entrega_envio: false,
+          entrega_retiro: true,
+          entrega_coordinar: true,
+          retiro_direccion: 'Av. Corrientes 1234, CABA',
+          retiro_latitud: -34.6037,
+          retiro_longitud: -58.3816,
+          retiro_maps_url: 'https://maps.google.com/?cid=1',
+          retiro_indicaciones: 'Lunes a viernes de 10 a 18, timbre 3',
+        });
+      });
+
+      it('carga el retiro guardado', async () => {
+        await render({
+          item: fisico({
+            entrega_envio: '0', entrega_retiro: '1', entrega_coordinar: '0',
+            retiro_direccion: 'Humboldt 1500, CABA', retiro_latitud: '-34.58', retiro_longitud: '-58.43',
+            retiro_maps_url: 'https://maps.google.com/?cid=2', retiro_indicaciones: 'Timbre 3',
+          }),
+        });
+
+        expect(casilla('Retiro en un lugar')).toBeChecked();
+        expect(casilla('Envío a domicilio')).not.toBeChecked();
+        expect(screen.getByLabelText(/Dirección del retiro/)).toHaveValue('Humboldt 1500, CABA');
+        expect(screen.getByLabelText('Días, horarios e indicaciones para retirar (opcional)')).toHaveValue('Timbre 3');
+      });
     });
   });
 

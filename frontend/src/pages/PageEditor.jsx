@@ -14,7 +14,7 @@ import PixelDeMeta from '../components/PixelDeMeta';
 import ArchivoDeProducto from '../components/ArchivoDeProducto';
 import AvisoMercadoPago from '../components/AvisoMercadoPago';
 import EleccionDePrecio, { eleccionDesdePrecio, precioDeEleccion, problemaDeEleccion } from '../components/EleccionDePrecio';
-import { describirEnvio, describirPrecio, esFisico, esOculto, excesoArchivoProducto, subirArchivoDeProducto } from '../utils/productos';
+import { describirEntregas, describirPrecio, esFisico, esOculto, excesoArchivoProducto, subirArchivoDeProducto } from '../utils/productos';
 import InterruptorActivo from '../components/InterruptorActivo';
 import { analizarEmbed, portadaDe } from '../utils/embeds';
 import { paleta } from '../utils/colores';
@@ -1576,7 +1576,7 @@ function PageEditor() {
                                     {describirPrecio(link.precio)}
                                     {' · '}
                                     {esFisico(link)
-                                      ? (link.agotado ? <span className="text-red-700">Agotado</span> : describirEnvio(link.costo_envio))
+                                      ? (link.agotado ? <span className="text-red-700">Agotado</span> : describirEntregas(link))
                                       : (link.archivo_nombre || <span className="text-red-700">Sin archivo</span>)}
                                   </p>
                                 )}

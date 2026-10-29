@@ -175,6 +175,80 @@ export function describirEnvio(costo) {
   return `Envío: $ ${Number(costo).toLocaleString('es-AR', { maximumFractionDigits: 2 })}`;
 }
 
+// ---------------------------------------------- formas de entrega (#53)
+
+/**
+ * Las formas de entrega de un físico, en el orden en que se ofrecen, con la
+ * columna que dice si quien vende la habilitó. Las mismas que
+ * ProductosFisicos::FORMAS_DE_ENTREGA en la API.
+ */
+export const FORMAS_DE_ENTREGA = [
+  { clave: 'envio', columna: 'entrega_envio', nombre: 'Envío a domicilio' },
+  { clave: 'retiro', columna: 'entrega_retiro', nombre: 'Retiro en un lugar' },
+  { clave: 'coordinar', columna: 'entrega_coordinar', nombre: 'Coordinar después de la compra' },
+];
+
+/** Cómo se lee la forma de un pedido en el panel y en /compra/:codigo. */
+export const NOMBRES_DE_FORMAS = { envio: 'Envío a domicilio', retiro: 'Retiro', coordinar: 'A coordinar' };
+
+/** Lo que dice quien compra cuando elige coordinar. */
+export const AVISO_COORDINAR = 'Después de la compra, quien vende te contacta para coordinar la entrega';
+
+const habilitada = (valor) => valor === true || valor === 1 || valor === '1' || valor === 'true';
+
+/**
+ * Si una forma está tildada en el editor. La API manda 0/1 (o como texto); un
+ * producto sin la columna es de antes de #53, y esos sólo tienen envío.
+ */
+export function formaHabilitada(item, forma) {
+  const valor = item?.[forma.columna];
+  if (valor === undefined || valor === null) return forma.clave === 'envio';
+  return habilitada(valor);
+}
+
+/**
+ * Las claves de las formas habilitadas de un producto. El público ya las trae
+ * en formas_entrega; el del editor, en sus columnas.
+ */
+export function formasDeEntrega(producto) {
+  if (Array.isArray(producto?.formas_entrega)) return producto.formas_entrega;
+  return FORMAS_DE_ENTREGA.filter((f) => formaHabilitada(producto, f)).map((f) => f.clave);
+}
+
+/**
+ * Qué falta en las formas de entrega del editor, o null. La API valida lo
+ * mismo: esto es para avisar sin ir y volver.
+ */
+export function problemaDeFormas(item) {
+  const formas = formasDeEntrega(item);
+  if (!formas.length) return 'Elegí al menos una forma de entrega';
+  if (formas.includes('retiro')) {
+    if (!String(item.retiro_direccion || '').trim()) return 'Falta la dirección del retiro';
+    if (!item.retiro_latitud || !item.retiro_longitud) {
+      return 'Elegí la dirección del retiro de las sugerencias de Google Maps';
+    }
+  }
+  return null;
+}
+
+/** "Envío a domicilio ($ 500)" o "Envío a domicilio (incluido)". */
+export function describirFormaDeEnvio(costo) {
+  return `Envío a domicilio (${Number(costo) > 0 ? pesos(costo) : 'incluido'})`;
+}
+
+/**
+ * Cómo se entrega, en la lista del editor: con sólo envío, el costo como
+ * siempre ("Envío incluido"); con más, las formas ("Envío · Retiro · A coordinar").
+ */
+export function describirEntregas(producto) {
+  const formas = formasDeEntrega(producto);
+  if (formas.length === 1 && formas[0] === 'envio') return describirEnvio(producto.costo_envio);
+  return formas.map((f) => (f === 'envio' ? 'Envío' : NOMBRES_DE_FORMAS[f])).join(' · ');
+}
+
+/** Lo que se cobra de envío con esta forma: sólo si se manda. */
+export const costoDeEnvio = (producto, forma) => (forma === 'envio' ? producto.costo_envio : 0);
+
 /** La clave de una combinación, como la arma la API: ids de menor a mayor, con guiones. */
 export function claveDeCombinacion(opcionIds) {
   return opcionIds.map(Number).sort((a, b) => a - b).join('-');
@@ -344,13 +418,18 @@ export const codigoPostalValido = (cp) => /^(\d{4}|[A-Za-z]\d{4}[A-Za-z]{3})$/.t
  * Qué falta o está mal en el pedido de un físico antes de mandarlo, o null.
  * La API valida lo mismo: esto es para avisar sin ir y volver.
  */
-export function problemaDelPedido({ producto, seleccion = {}, telefono, entrega }) {
+export function problemaDelPedido({ producto, seleccion = {}, telefono, entrega, forma = 'envio' }) {
   const falta = (producto.caracteristicas || []).filter((c) => seleccion[c.id] === undefined);
   if (falta.length) return `Elegí ${falta.map((c) => c.nombre.toLowerCase()).join(' y ')}`;
+
+  if (!forma) return 'Elegí cómo querés recibir el pedido';
 
   const digitos = String(telefono || '').replace(/\D/g, '');
   if (!String(telefono || '').trim()) return 'Falta el teléfono: lo necesitamos para coordinar la entrega';
   if (digitos.length < 6) return 'El teléfono no es válido';
+
+  // La dirección y los horarios son del envío (#53).
+  if (forma !== 'envio') return null;
 
   if (!entrega.calle.trim()) return 'Falta la calle y el número';
   if (!entrega.localidad.trim()) return 'Falta la localidad';
@@ -365,11 +444,21 @@ export function problemaDelPedido({ producto, seleccion = {}, telefono, entrega 
   return null;
 }
 
-/** Lo que se le manda a la API del pedido de un físico. */
-export function cuerpoDelPedido({ producto, seleccion = {}, cantidad, entrega }) {
-  return {
+/**
+ * Lo que se le manda a la API del pedido de un físico. La dirección y los
+ * horarios van sólo con envío (#53).
+ */
+export function cuerpoDelPedido({ producto, seleccion = {}, cantidad, entrega, forma = 'envio' }) {
+  const cuerpo = {
     cantidad: Number(cantidad),
     opciones: (producto.caracteristicas || []).map((c) => seleccion[c.id]),
+    forma_entrega: forma,
+  };
+
+  if (forma !== 'envio') return cuerpo;
+
+  return {
+    ...cuerpo,
     envio: {
       calle: entrega.calle.trim(),
       piso_depto: entrega.piso_depto.trim(),
