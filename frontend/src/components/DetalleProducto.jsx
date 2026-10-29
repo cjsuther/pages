@@ -1,11 +1,12 @@
 import React, { useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, Download, FileText, Share2, ShoppingBag, Truck } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, FileText, ShoppingBag, Truck } from 'lucide-react';
 import { AuthContext } from '../App';
+import BotonCompartir from './BotonCompartir';
 import ComprarProducto from './ComprarProducto';
 import Sugerencias from './Sugerencias';
 import useBloqueoDeScroll from '../hooks/useBloqueoDeScroll';
 import SelectorDeCaracteristicas from './SelectorDeCaracteristicas';
-import { compartirLink, describirEnvio, describirPrecio, esFisico, esPago, linkDeProducto } from '../utils/productos';
+import { describirEnvio, describirPrecio, esFisico, esPago, linkDeProducto } from '../utils/productos';
 import { describirPeso } from '../utils/imagenes';
 import { textoSobre } from '../utils/colores';
 
@@ -350,37 +351,6 @@ function DetalleProducto({
 }
 
 /**
- * Compartir el link propio del producto: el menú del sistema donde exista y,
- * si no, copiarlo con un aviso.
- */
-export function BotonCompartir({ producto }) {
-  const [aviso, setAviso] = useState(null);
-
-  const compartir = async () => {
-    try {
-      const resultado = await compartirLink({ url: linkDeProducto(producto.id), titulo: producto.text });
-      setAviso(resultado === 'copiado' ? 'Link copiado' : null);
-    } catch (e) {
-      setAviso('No se pudo copiar el link');
-    }
-  };
-
-  return (
-    <span className="inline-flex items-center gap-2">
-      <button
-        type="button"
-        onClick={compartir}
-        className="inline-flex items-center gap-1.5 text-sm font-semibold opacity-80 hover:opacity-100 transition"
-      >
-        <Share2 className="w-4 h-4 shrink-0" aria-hidden="true" />
-        Compartir
-      </button>
-      <span role="status" className="text-sm opacity-70">{aviso}</span>
-    </span>
-  );
-}
-
-/**
  * Un producto entero: imagen, título, descripción, archivo, precio y los
  * botones. Es lo que muestra el detalle de la página y también /producto/:id,
  * que lo usa con un h1 y el color de títulos de la página.
@@ -455,7 +425,7 @@ export function Producto({ producto, colores, onComprar, Titulo = 'h2', colorTit
       </div>
 
       <div className="mt-4">
-        <BotonCompartir producto={producto} />
+        <BotonCompartir url={linkDeProducto(producto.id)} titulo={producto.text} />
       </div>
     </>
   );
