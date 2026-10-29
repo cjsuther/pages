@@ -2,12 +2,14 @@ import React, { useState, useEffect, useContext } from 'react';
 import { useParams, Link } from 'react-router';
 import { Calendar, MapPin, ExternalLink, ArrowLeft } from 'lucide-react';
 import { AuthContext } from '../App';
+import BotonCompartir from '../components/BotonCompartir';
 import BotonEntradas, { vendeEntradas } from '../components/BotonEntradas';
 import FondoDeLaCaja from '../components/FondoDeLaCaja';
 import PrecioEvento from '../components/PrecioEvento';
 import RezonarBadge from '../components/RezonarBadge';
 import Sugerencias from '../components/Sugerencias';
 import { paleta, conAlfa, textoSobre } from '../utils/colores';
+import { linkDeEvento } from '../utils/compartir';
 import { vista, evento } from '../utils/metaPixel';
 import { CLASES_ALREDEDOR, CLASES_CAJA, estiloDeAlrededor, estiloDeCaja } from '../utils/plantillas';
 
@@ -185,6 +187,10 @@ function EventDetail() {
             {event.url_text || 'Más información'}
           </a>
         )}
+
+        <div className="mt-6">
+          <BotonCompartir url={linkDeEvento(event.id)} titulo={event.text} />
+        </div>
         </div>
 
         <Sugerencias tipo="evento" id={event.id} colores={colores} className="mt-8" />
