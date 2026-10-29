@@ -1,33 +1,43 @@
 import React, { useState } from 'react';
 import { Download, ChevronRight } from 'lucide-react';
-import DetallePedido from './DetallePedido';
+import DetallePedido, { Telefono } from './DetallePedido';
 import { formatearPrecio, etiquetaDeEstado, colorDeEstado } from '../utils/entradas';
 import { fechaCorta } from './PanelVentas';
+import { NOMBRES_DE_FORMAS } from '../utils/productos';
 import {
-  ESTADOS_DEL_PEDIDO,
   contarPorEstado,
+  contarPorForma,
   describirLoPedido,
+  estadosDelPedido,
   nombreDelEstado,
   nombreDelExcelDePedidos,
   tonoDelEstado,
 } from '../utils/pedidos';
+
+const formaDe = (pedido) => pedido.forma_entrega || 'envio';
 
 /**
  * Los pedidos de productos físicos (#44): un filtro por estado con su
  * contador, la lista para ver de un vistazo qué hay que despachar y el
  * detalle de cada uno, donde se lo pasa al estado siguiente.
  *
+ * Con las formas de entrega (#53), además un filtro por forma, la forma de
+ * cada pedido y, para coordinar, el teléfono a mano.
+ *
  * Recibe los pedidos ya cargados (los de la página o los de un producto) y
  * pide recargar con onRecargar cuando uno cambia.
  */
 function PanelPedidosFisicos({ pedidos, filtro, apiUrl, token, nombre = '', porPagina = false, onRecargar }) {
   const [estado, setEstado] = useState('');
+  const [forma, setForma] = useState('');
   const [abierto, setAbierto] = useState(null);
   const [error, setError] = useState(null);
 
-  const cuenta = contarPorEstado(pedidos);
-  const enGestion = pedidos.filter((p) => p.estado_pedido);
-  const visibles = estado ? pedidos.filter((p) => p.estado_pedido === estado) : pedidos;
+  const deLaForma = forma ? pedidos.filter((p) => formaDe(p) === forma) : pedidos;
+  const cuenta = contarPorEstado(deLaForma);
+  const cuentaPorForma = contarPorForma(pedidos);
+  const enGestion = deLaForma.filter((p) => p.estado_pedido);
+  const visibles = estado ? deLaForma.filter((p) => p.estado_pedido === estado) : deLaForma;
 
   if (abierto) {
     return (
@@ -47,7 +57,8 @@ function PanelPedidosFisicos({ pedidos, filtro, apiUrl, token, nombre = '', porP
     try {
       const r = await fetch(
         `${apiUrl}/productos/ventas.php?${filtro}&formato=excel&tipo=fisico`
-          + `${estado ? `&estado_pedido=${estado}` : ''}&nombre=${encodeURIComponent(nombre)}`,
+          + `${estado ? `&estado_pedido=${estado}` : ''}${forma ? `&forma_entrega=${forma}` : ''}`
+          + `&nombre=${encodeURIComponent(nombre)}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
@@ -73,11 +84,23 @@ function PanelPedidosFisicos({ pedidos, filtro, apiUrl, token, nombre = '', porP
 
   return (
     <div className="space-y-4">
+      <div role="group" aria-label="Filtrar por forma de entrega" className="flex flex-wrap gap-2">
+        <BotonDeFiltro activo={forma === ''} onClick={() => setForma('')}>
+          Todas las formas
+        </BotonDeFiltro>
+        {Object.entries(NOMBRES_DE_FORMAS).map(([clave, nombreDeForma]) => (
+          <BotonDeFiltro key={clave} activo={forma === clave} onClick={() => setForma(clave)}>
+            {nombreDeForma} {cuentaPorForma[clave]}
+          </BotonDeFiltro>
+        ))}
+      </div>
+
       <div role="group" aria-label="Filtrar por estado" className="flex flex-wrap gap-2">
         <BotonDeFiltro activo={estado === ''} onClick={() => setEstado('')}>
-          Todos {pedidos.length}
+          Todos {deLaForma.length}
         </BotonDeFiltro>
-        {ESTADOS_DEL_PEDIDO.map((e) => (
+        {/* Filtrando retiros, los estados se llaman como en un retiro. */}
+        {estadosDelPedido(forma || 'envio').map((e) => (
           <BotonDeFiltro key={e.clave} activo={estado === e.clave} onClick={() => setEstado(e.clave)}>
             {e.plural} {cuenta[e.clave]}
           </BotonDeFiltro>
@@ -101,7 +124,9 @@ function PanelPedidosFisicos({ pedidos, filtro, apiUrl, token, nombre = '', porP
 
       {visibles.length === 0 ? (
         <p className="text-tinta-suave text-sm border border-borde bg-white p-6">
-          {estado ? `Ningún pedido en “${nombreDelEstado(estado)}”.` : 'Todavía no hay pedidos de productos físicos.'}
+          {estado
+            ? `Ningún pedido en “${nombreDelEstado(estado, forma || 'envio')}”.`
+            : forma ? `Ningún pedido con “${NOMBRES_DE_FORMAS[forma]}”.` : 'Todavía no hay pedidos de productos físicos.'}
         </p>
       ) : (
         <div className="overflow-x-auto border border-borde">
@@ -112,7 +137,7 @@ function PanelPedidosFisicos({ pedidos, filtro, apiUrl, token, nombre = '', porP
                 <th className="px-3 py-2 font-bold">Comprador</th>
                 <th className="px-3 py-2 font-bold">Producto</th>
                 <th className="px-3 py-2 font-bold text-right">Total</th>
-                <th className="px-3 py-2 font-bold">Localidad</th>
+                <th className="px-3 py-2 font-bold">Entrega</th>
                 <th className="px-3 py-2 font-bold">Estado</th>
                 <th className="px-3 py-2"><span className="sr-only">Acciones</span></th>
               </tr>
@@ -132,11 +157,18 @@ function PanelPedidosFisicos({ pedidos, filtro, apiUrl, token, nombre = '', porP
                   <td className="px-3 py-2 text-tinta text-right whitespace-nowrap">
                     {Number(p.total) > 0 ? formatearPrecio(p.total, p.moneda) : 'Gratis'}
                   </td>
-                  <td className="px-3 py-2 text-tinta-media">{p.localidad || '—'}</td>
+                  <td className="px-3 py-2 text-tinta-media">
+                    <span className="block text-tinta">{NOMBRES_DE_FORMAS[formaDe(p)]}</span>
+                    {formaDe(p) === 'envio' && <span className="block text-xs">{p.localidad || '—'}</span>}
+                    {/* Para coordinar hay que llamar: el teléfono, a mano. */}
+                    {formaDe(p) === 'coordinar' && p.telefono && (
+                      <span className="block text-xs"><Telefono telefono={p.telefono} nombre={p.nombre} /></span>
+                    )}
+                  </td>
                   <td className="px-3 py-2 whitespace-nowrap">
                     {p.estado_pedido ? (
                       <span className={`text-xs px-2 py-0.5 rounded border ${tonoDelEstado(p.estado_pedido)}`}>
-                        {nombreDelEstado(p.estado_pedido)}
+                        {nombreDelEstado(p.estado_pedido, formaDe(p))}
                       </span>
                     ) : (
                       // Sin pagar: todavía no está en gestión.

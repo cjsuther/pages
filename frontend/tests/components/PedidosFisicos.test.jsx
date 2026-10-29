@@ -149,7 +149,7 @@ describe('Ventas de productos físicos (#44)', () => {
       await irAFisicos();
 
       expect(screen.getAllByRole('columnheader').map((th) => th.textContent)).toEqual(
-        ['Fecha', 'Comprador', 'Producto', 'Total', 'Localidad', 'Estado', 'Acciones']
+        ['Fecha', 'Comprador', 'Producto', 'Total', 'Entrega', 'Estado', 'Acciones']
       );
       const fila = screen.getByText('Beto').closest('tr');
       expect(within(fila).getByText('28/10/2026')).toBeInTheDocument();
@@ -432,6 +432,108 @@ describe('Ventas de productos físicos (#44)', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Confirmar y avisar' }));
 
       expect(await screen.findByRole('alert')).toHaveTextContent('El pedido ya está entregado: no se puede cambiar');
+    });
+  });
+
+  // ------------------------------------------------ formas de entrega (#53)
+
+  describe('formas de entrega', () => {
+    const CON_FORMAS = [
+      pedido({ forma_entrega: 'envio' }),
+      pedido({ id: 2, codigo: 'AAAA00000002', nombre: 'Beto', forma_entrega: 'retiro', estado_pedido: 'enviado', localidad: null }),
+      pedido({ id: 3, codigo: 'AAAA00000003', nombre: 'Carla', forma_entrega: 'coordinar', telefono: '11 4444-9999', localidad: null }),
+    ];
+
+    const montarConFormas = (detalle = DETALLE) => montarPagina({
+      'productos/ventas.php': ventas(CON_FORMAS),
+      'productos/pedido.php': { pedido: detalle },
+    });
+
+    it('cada pedido dice su forma, y para coordinar el teléfono va a mano', async () => {
+      montarConFormas();
+      await irAFisicos();
+
+      expect(within(screen.getByText('Ana Compradora').closest('tr')).getByText('Envío a domicilio')).toBeInTheDocument();
+      const beto = screen.getByText('Beto').closest('tr');
+      expect(within(beto).getByText('Retiro')).toBeInTheDocument();
+      expect(within(beto).getByText('Listo para retirar')).toBeInTheDocument();
+      const carla = screen.getByText('Carla').closest('tr');
+      expect(within(carla).getByText('A coordinar')).toBeInTheDocument();
+      expect(within(carla).getByRole('link', { name: 'Escribirle por WhatsApp a Carla' }))
+        .toHaveAttribute('href', expect.stringContaining('wa.me/5491144449999'));
+    });
+
+    it('filtra por forma, además de por estado', async () => {
+      montarConFormas();
+      await irAFisicos();
+
+      const formas = screen.getByRole('group', { name: 'Filtrar por forma de entrega' });
+      expect(within(formas).getAllByRole('button').map((b) => b.textContent)).toEqual([
+        'Todas las formas', 'Envío a domicilio 1', 'Retiro 1', 'A coordinar 1',
+      ]);
+
+      fireEvent.click(within(formas).getByRole('button', { name: 'Retiro 1' }));
+
+      expect(screen.getByText('Beto')).toBeInTheDocument();
+      expect(screen.queryByText('Ana Compradora')).not.toBeInTheDocument();
+      expect(screen.queryByText('Carla')).not.toBeInTheDocument();
+      // Mirando retiros, los estados se llaman como en un retiro.
+      expect(within(screen.getByRole('group', { name: 'Filtrar por estado' })).getAllByRole('button').map((b) => b.textContent))
+        .toEqual(['Todos 1', 'Ingresados 0', 'Con fecha 0', 'Listos para retirar 1', 'Retirados 0', 'Cancelados 0']);
+    });
+
+    it('el Excel lleva el filtro de forma', async () => {
+      const { llamadas } = montarConFormas();
+      await irAFisicos();
+      fireEvent.click(screen.getByRole('button', { name: 'A coordinar 1' }));
+
+      global.URL.createObjectURL = vi.fn(() => 'blob:x');
+      global.URL.revokeObjectURL = vi.fn();
+      vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+      global.fetch = vi.fn((url, opciones) => {
+        llamadas.push({ url, options: opciones });
+        return Promise.resolve({ ok: true, blob: () => Promise.resolve(new Blob(['x'])) });
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: /Exportar pedidos a Excel/ }));
+
+      await waitFor(() => expect(global.URL.createObjectURL).toHaveBeenCalled());
+      expect(llamadas.find((l) => l.url.includes('formato=excel')).url).toContain('&forma_entrega=coordinar');
+    });
+
+    const RETIRO = {
+      ...DETALLE,
+      forma_entrega: 'retiro',
+      costo_envio: 0,
+      total: 5000,
+      envio: null,
+      horarios: null,
+      retiro: { direccion: 'Humboldt 1500, CABA', maps_url: 'https://maps.google.com/?cid=1', indicaciones: 'Timbre 3' },
+    };
+
+    it('el detalle de un retiro muestra el punto y las acciones con sus nombres', async () => {
+      montarConFormas(RETIRO);
+      await abrirElDeAna();
+
+      expect(screen.getByText('Retiro')).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Humboldt 1500, CABA' })).toHaveAttribute('href', 'https://maps.google.com/?cid=1');
+      expect(screen.queryByText(/Av\. Corrientes/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Envío/)).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Poner fecha de retiro' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Marcar retirado' })).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Marcar listo para retirar' }));
+      expect(screen.queryByLabelText('Empresa o cadete (opcional)')).not.toBeInTheDocument();
+      expect(screen.getByText(/ya puede pasar a buscarlo/)).toBeInTheDocument();
+    });
+
+    it('el detalle de coordinar pone el teléfono para coordinar', async () => {
+      montarConFormas({ ...DETALLE, forma_entrega: 'coordinar', envio: null, horarios: null, retiro: null });
+      await abrirElDeAna();
+
+      expect(screen.getByText('A coordinar')).toBeInTheDocument();
+      expect(screen.getByText('Coordiná la entrega con Ana Compradora:')).toBeInTheDocument();
+      expect(screen.getAllByRole('link', { name: 'Escribirle por WhatsApp a Ana Compradora' })).toHaveLength(2);
     });
   });
 });
