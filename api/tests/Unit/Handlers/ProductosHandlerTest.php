@@ -65,6 +65,18 @@ class ProductosHandlerTest extends HandlerTestCase
         $this->assertSame([], $this->disco->movidos);
     }
 
+    /** Un físico se manda, no se descarga (#42). */
+    public function testRechazaElArchivoDeUnProductoFisico()
+    {
+        $this->esProducto(['tipo' => 'fisico']);
+
+        $res = $this->subir($this->archivo());
+
+        $this->assertError(400, $res, 'físico no lleva archivo');
+        $this->assertSame([], $this->disco->movidos);
+        $this->assertNoWrites();
+    }
+
     // ============================================================ tamaño
 
     public function testUnArchivoDeMasDe50MbSeRechazaDiciendoElMaximo()

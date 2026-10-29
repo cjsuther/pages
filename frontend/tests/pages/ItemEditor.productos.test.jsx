@@ -168,26 +168,28 @@ describe('ItemEditor — productos digitales', () => {
     expect(cuerpo.precio).toBe('2500');
   });
 
-  describe('oculto', () => {
-    it('explica qué hace ocultarlo', async () => {
+  // #42: el checkbox "Oculto" pasó a ser un interruptor Activo / Inactivo.
+  describe('activo / inactivo', () => {
+    it('explica qué hace desactivarlo', async () => {
       await render();
 
-      expect(screen.getByLabelText(/^Oculto/)).not.toBeChecked();
+      expect(screen.getByRole('switch', { name: 'Activo' })).toBeChecked();
       expect(screen.getByText(
-        'Oculto: no se muestra y no acepta pedidos nuevos. Quienes ya compraron pueden seguir descargando.'
+        'Inactivo: no se muestra en tu página ni en su link y no acepta pedidos nuevos. Quienes ya compraron pueden seguir descargando.'
       )).toBeInTheDocument();
     });
 
-    it('un producto oculto llega marcado', async () => {
+    it('un producto oculto llega inactivo', async () => {
       await render({ item: producto({ oculto: '1' }) });
 
-      expect(screen.getByLabelText(/^Oculto/)).toBeChecked();
+      expect(screen.getByRole('switch', { name: 'Activo' })).not.toBeChecked();
+      expect(screen.getByRole('switch', { name: 'Activo' })).toHaveTextContent('Inactivo');
     });
 
     it('al guardar manda si está oculto', async () => {
       const { llamadas } = await render();
 
-      fireEvent.click(screen.getByLabelText(/^Oculto/));
+      fireEvent.click(screen.getByRole('switch', { name: 'Activo' }));
       fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
 
       expect(await screen.findByText('Editor de la página')).toBeInTheDocument();
@@ -232,10 +234,10 @@ describe('ItemEditor — productos digitales', () => {
       expect(await screen.findByRole('alert')).toHaveTextContent('copialo a mano');
     });
 
-    it('si está oculto, avisa que el link todavía no muestra el producto', async () => {
+    it('si está inactivo, avisa que el link todavía no muestra el producto', async () => {
       await render({ item: conArchivo({ oculto: '1' }) });
 
-      expect(screen.getByText(/está oculto: hasta que lo vuelvas a mostrar, el link dice que no está disponible/)).toBeInTheDocument();
+      expect(screen.getByText(/está inactivo: hasta que lo actives, el link dice que no está disponible/)).toBeInTheDocument();
     });
 
     it('sin archivo, avisa que el link todavía no muestra el producto', async () => {
@@ -282,6 +284,181 @@ describe('ItemEditor — productos digitales', () => {
       fireEvent.change(screen.getByLabelText('Precio'), { target: { value: '100' } });
 
       expect(await screen.findByText(/Para cobrar tenés que conectar Mercado Pago/)).toBeInTheDocument();
+    });
+  });
+
+  // #42: un físico no tiene archivo; tiene envío, características y stock.
+  describe('producto físico', () => {
+    const fisico = (overrides = {}) => producto({
+      tipo: 'fisico', precio: '9000.00', costo_envio: '0.00', zona_envio: null, stock: null,
+      caracteristicas: [], variantes: [], agotado: false, ...overrides,
+    });
+
+    const conTalle = () => fisico({
+      caracteristicas: [{ id: 70, nombre: 'Talle', opciones: [{ id: 100, nombre: 'S' }, { id: 101, nombre: 'M' }] }],
+      variantes: [{ clave: '101', stock: 0 }],
+    });
+
+    const guardar = async (llamadas) => {
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+      expect(await screen.findByText('Editor de la página')).toBeInTheDocument();
+      return cuerpoDe(llamadas.find((l) => l.url.includes('links/detail.php') && l.options.method === 'PUT'));
+    };
+
+    it('no pide archivo y pide envío, zona y stock', async () => {
+      await render({ item: fisico() });
+
+      expect(screen.queryByLabelText('Archivo')).not.toBeInTheDocument();
+      expect(screen.getByText(/Producto físico\./).closest('p')).toHaveTextContent('El tipo no se cambia después de crearlo');
+      expect(screen.getByLabelText('Costo de envío')).toHaveValue(0);
+      expect(screen.getByText('En pesos. 0 = envío incluido.')).toBeInTheDocument();
+      expect(screen.getByLabelText('Zona de envío (opcional)')).toBeInTheDocument();
+      const stock = screen.getByLabelText('Stock (opcional)');
+      expect(stock).toHaveAttribute('placeholder', 'Sin límite');
+      // Entero y >= 0: el navegador no deja mandar otra cosa.
+      expect(stock).toHaveAttribute('min', '0');
+      expect(stock).toHaveAttribute('step', '1');
+      expect(screen.queryByText(/todavía no tiene archivo/)).not.toBeInTheDocument();
+    });
+
+    it('sin características guarda el stock único, el envío y la zona', async () => {
+      const { llamadas } = await render({ item: fisico() });
+
+      fireEvent.change(screen.getByLabelText('Costo de envío'), { target: { value: '1500' } });
+      fireEvent.change(screen.getByLabelText('Zona de envío (opcional)'), { target: { value: 'Sólo CABA y GBA' } });
+      fireEvent.change(screen.getByLabelText('Stock (opcional)'), { target: { value: '12' } });
+
+      const cuerpo = await guardar(llamadas);
+      expect(cuerpo).toMatchObject({
+        tipo: 'fisico', costo_envio: '1500', zona_envio: 'Sólo CABA y GBA', stock: '12', caracteristicas: [], variantes: [],
+      });
+      expect(cuerpo).not.toHaveProperty('agotado');
+    });
+
+    it('agrega una característica con sus opciones y arma la grilla de stock', async () => {
+      const { llamadas } = await render({ item: fisico() });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Agregar característica' }));
+      fireEvent.change(screen.getByLabelText('Nombre de la característica 1'), { target: { value: 'Talle' } });
+      const nueva = screen.getByLabelText('Nueva opción de Talle');
+      fireEvent.change(nueva, { target: { value: 'S' } });
+      fireEvent.keyDown(nueva, { key: 'Enter' });
+      fireEvent.change(nueva, { target: { value: 'M' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Agregar opción' }));
+
+      // Con características, el stock va por combinación.
+      expect(screen.queryByLabelText('Stock (opcional)')).not.toBeInTheDocument();
+      expect(screen.getByText('Stock por combinación')).toBeInTheDocument();
+      fireEvent.change(screen.getByLabelText('Stock de M'), { target: { value: '0' } });
+      expect(screen.getByLabelText('Stock de S')).toHaveValue(null);
+      expect(screen.getByText('Agotado')).toBeInTheDocument();
+
+      const cuerpo = await guardar(llamadas);
+      expect(cuerpo.caracteristicas).toEqual([{ nombre: 'Talle', opciones: [{ nombre: 'S' }, { nombre: 'M' }] }]);
+      expect(cuerpo.variantes).toEqual([{ opciones: ['M'], stock: '0' }]);
+      expect(cuerpo.stock).toBe('');
+    });
+
+    it('sugiere Talle, Color y Otra como nombres', async () => {
+      await render({ item: fisico() });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Agregar característica' }));
+
+      const sugerencias = [...document.querySelectorAll('#sugerencias-de-caracteristica option')].map((o) => o.value);
+      expect(sugerencias).toEqual(['Talle', 'Color', 'Otra']);
+      expect(screen.getByLabelText('Nombre de la característica 1')).toHaveAttribute('list', 'sugerencias-de-caracteristica');
+    });
+
+    it('carga las guardadas con su stock, y renombrar conserva el id y el stock', async () => {
+      const { llamadas } = await render({ item: conTalle() });
+
+      expect(screen.getByLabelText('Nombre de la característica 1')).toHaveValue('Talle');
+      expect(screen.getByLabelText('Stock de M')).toHaveValue(0);
+
+      fireEvent.change(screen.getByLabelText('Opción 2 de Talle'), { target: { value: 'Mediano' } });
+      expect(screen.getByLabelText('Stock de Mediano')).toHaveValue(0);
+
+      const cuerpo = await guardar(llamadas);
+      expect(cuerpo.caracteristicas).toEqual([
+        { id: 70, nombre: 'Talle', opciones: [{ id: 100, nombre: 'S' }, { id: 101, nombre: 'Mediano' }] },
+      ]);
+      expect(cuerpo.variantes).toEqual([{ opciones: ['Mediano'], stock: '0' }]);
+    });
+
+    it('reordena y quita opciones y características', async () => {
+      const { llamadas } = await render({ item: conTalle() });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Mover M antes' }));
+      expect(screen.getByLabelText('Opción 1 de Talle')).toHaveValue('M');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Quitar S' }));
+      expect(screen.queryByDisplayValue('S')).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Agregar característica' }));
+      fireEvent.change(screen.getByLabelText('Nombre de la característica 2'), { target: { value: 'Color' } });
+      fireEvent.change(screen.getByLabelText('Nueva opción de Color'), { target: { value: 'Negro' } });
+      fireEvent.click(screen.getAllByRole('button', { name: 'Agregar opción' })[1]);
+      fireEvent.click(screen.getByRole('button', { name: 'Subir Color' }));
+      expect(screen.getByLabelText('Nombre de la característica 1')).toHaveValue('Color');
+
+      // Con otra característica las combinaciones son otras: su stock empieza vacío.
+      fireEvent.change(screen.getByLabelText('Stock de Negro / M'), { target: { value: '4' } });
+
+      // Reordenar no pierde el stock cargado.
+      fireEvent.click(screen.getByRole('button', { name: 'Bajar Color' }));
+      expect(screen.getByLabelText('Stock de M / Negro')).toHaveValue(4);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Quitar Talle' }));
+      expect(screen.queryByDisplayValue('Talle')).not.toBeInTheDocument();
+
+      const cuerpo = await guardar(llamadas);
+      expect(cuerpo.caracteristicas).toEqual([{ nombre: 'Color', opciones: [{ nombre: 'Negro' }] }]);
+      expect(cuerpo.variantes).toEqual([]);
+    });
+
+    it('no deja agregar más de 3 características', async () => {
+      await render({ item: fisico() });
+
+      for (let i = 0; i < 3; i += 1) {
+        fireEvent.click(screen.getByRole('button', { name: 'Agregar característica' }));
+      }
+
+      expect(screen.queryByRole('button', { name: 'Agregar característica' })).not.toBeInTheDocument();
+    });
+
+    it.each([
+      ['una característica sin nombre', () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Agregar característica' }));
+      }, 'Cada característica necesita un nombre'],
+      ['una característica sin opciones', () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Agregar característica' }));
+        fireEvent.change(screen.getByLabelText('Nombre de la característica 1'), { target: { value: 'Color' } });
+      }, '"Color" necesita al menos una opción'],
+    ])('con %s avisa y no guarda', async (_, preparar, mensaje) => {
+      const { llamadas } = await render({ item: fisico() });
+
+      preparar();
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(mensaje);
+      expect(llamadas.some((l) => l.url.includes('links/detail.php') && l.options.method === 'PUT')).toBe(false);
+    });
+
+    it('una opción repetida avisa y no guarda', async () => {
+      const { llamadas } = await render({ item: conTalle() });
+
+      fireEvent.change(screen.getByLabelText('Opción 2 de Talle'), { target: { value: 's' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('La opción "s" está repetida en "Talle"');
+      expect(llamadas.some((l) => l.options.method === 'PUT')).toBe(false);
+    });
+
+    it('el interruptor Activo explica que los pedidos existentes siguen', async () => {
+      await render({ item: fisico({ oculto: '1' }) });
+
+      expect(screen.getByRole('switch', { name: 'Activo' })).not.toBeChecked();
+      expect(screen.getByText(/Los pedidos que ya existen siguen su curso/)).toBeInTheDocument();
     });
   });
 

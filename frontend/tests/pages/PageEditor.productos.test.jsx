@@ -39,6 +39,7 @@ function mockearEditor({ page = pagina([grupoDeProductos()]), cobros = { configu
     'collaborations/index.php': { pending: [], collaborations: [] },
     'groups/index.php': { group: grupoDeProductos() },
     'links/index.php': { status: 201, body: { link: { id: 77, text: 'Guía' } } },
+    'links/detail.php': { link: { id: 2 } },
     'productos/archivo.php': subida || { link: { id: 77, archivo_nombre: 'guia.pdf' } },
     'entradas/credenciales.php': { cobros },
     'upload/image.php': { url: 'https://img/tapa.png' },
@@ -101,10 +102,10 @@ describe('PageEditor — productos digitales', () => {
       });
     });
 
-    it('el grupo se identifica como de productos digitales', async () => {
+    it('el grupo se identifica como de productos', async () => {
       await render();
 
-      expect(screen.getByText('Productos digitales', { selector: 'span' })).toBeInTheDocument();
+      expect(screen.getByText('Productos', { selector: 'span' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: '+ Producto' })).toBeInTheDocument();
     });
 
@@ -120,7 +121,7 @@ describe('PageEditor — productos digitales', () => {
       expect(screen.getByText(/Gratis/)).toHaveTextContent('Sin archivo');
     });
 
-    it('un producto oculto se distingue en la lista', async () => {
+    it('un producto inactivo se distingue en la lista', async () => {
       await render({
         page: pagina([grupoDeProductos([
           { id: 1, text: 'Guía', precio: '2500.00', archivo_nombre: 'guia.pdf', oculto: '1', position: 0 },
@@ -128,10 +129,81 @@ describe('PageEditor — productos digitales', () => {
         ])]),
       });
 
-      expect(screen.getAllByText(/Oculto: no se muestra en tu página/)).toHaveLength(1);
-      const guia = screen.getByRole('link', { name: 'Guía' }).closest('div.flex');
-      expect(guia).toHaveTextContent('Oculto');
-      expect(screen.getByRole('link', { name: 'Mapa' }).closest('div.flex')).not.toHaveTextContent('Oculto');
+      expect(screen.getAllByText(/Inactivo: no se muestra en tu página/)).toHaveLength(1);
+      expect(screen.getByRole('switch', { name: 'Guía: activo' })).not.toBeChecked();
+      expect(screen.getByRole('switch', { name: 'Mapa: activo' })).toBeChecked();
+    });
+
+    // #42: se activa o desactiva desde la lista, sin entrar al producto.
+    it('el interruptor de la lista desactiva el producto sin entrar', async () => {
+      const { llamadas } = await render({
+        page: pagina([grupoDeProductos([
+          { id: 2, text: 'Mapa', precio: '0.00', archivo_nombre: 'mapa.pdf', oculto: '0', position: 0 },
+        ])]),
+      });
+
+      fireEvent.click(screen.getByRole('switch', { name: 'Mapa: activo' }));
+
+      expect(screen.getByRole('switch', { name: 'Mapa: activo' })).not.toBeChecked();
+      await waitFor(() => {
+        const put = llamadas.find((l) => l.url.includes('links/detail.php?id=2') && l.options.method === 'PUT');
+        expect(cuerpoDe(put)).toEqual({ oculto: true });
+      });
+      expect(screen.getByText(/Inactivo: no se muestra en tu página/)).toBeInTheDocument();
+    });
+
+    it('el interruptor de la lista activa un producto inactivo', async () => {
+      const { llamadas } = await render({
+        page: pagina([grupoDeProductos([
+          { id: 2, text: 'Remera', tipo: 'fisico', precio: '9000.00', costo_envio: '0.00', oculto: '1', position: 0 },
+        ])]),
+      });
+
+      fireEvent.click(screen.getByRole('switch', { name: 'Remera: activo' }));
+
+      await waitFor(() => {
+        const put = llamadas.find((l) => l.url.includes('links/detail.php?id=2') && l.options.method === 'PUT');
+        expect(cuerpoDe(put)).toEqual({ oculto: false });
+      });
+      expect(screen.getByRole('switch', { name: 'Remera: activo' })).toBeChecked();
+    });
+
+    it('si la API no acepta el cambio, el interruptor vuelve atrás', async () => {
+      mockFetch({
+        'pages/detail.php': { page: pagina([grupoDeProductos([
+          { id: 2, text: 'Mapa', precio: '0.00', archivo_nombre: 'mapa.pdf', oculto: '0', position: 0 },
+        ])]) },
+        'admins/index.php': { admins: [] },
+        'collaborations/index.php': { pending: [], collaborations: [] },
+        'notifications/index.php': { notifications: [], unread_count: 0 },
+        'links/detail.php': { status: 500, body: { error: 'falló' } },
+      });
+      renderConProviders(<PageEditor />, {
+        auth: crearAuth({ token: 'tok-123', user: usuarioDePrueba() }),
+        route: '/page/5?s=contenido',
+        path: '/page/:id',
+      });
+      await screen.findByRole('heading', { name: 'Grupos de links' });
+
+      fireEvent.click(screen.getByRole('switch', { name: 'Mapa: activo' }));
+
+      await waitFor(() => expect(window.alert).toHaveBeenCalledWith('No se pudo desactivar el producto'));
+      expect(screen.getByRole('switch', { name: 'Mapa: activo' })).toBeChecked();
+    });
+
+    it('un físico dice que es físico y su envío, y si está agotado', async () => {
+      await render({
+        page: pagina([grupoDeProductos([
+          { id: 1, text: 'Remera', tipo: 'fisico', precio: '9000.00', costo_envio: '0.00', agotado: false, position: 0 },
+          { id: 2, text: 'Buzo', tipo: 'fisico', precio: '20000.00', costo_envio: '1500.00', agotado: true, position: 1 },
+          { id: 3, text: 'Guía', tipo: 'digital', precio: '0.00', archivo_nombre: 'guia.pdf', position: 2 },
+        ])]),
+      });
+
+      expect(screen.getByText(/\$ 9\.000/)).toHaveTextContent('Físico · $ 9.000 · Envío incluido');
+      expect(screen.getByText(/\$ 20\.000/)).toHaveTextContent('Físico · $ 20.000 · Agotado');
+      expect(screen.getByText(/guia\.pdf/)).toHaveTextContent('Digital · Gratis · guia.pdf');
+      expect(screen.queryByText('Sin archivo')).not.toBeInTheDocument();
     });
   });
 
@@ -196,7 +268,7 @@ describe('PageEditor — productos digitales', () => {
         expect(llamadaA(llamadas, 'productos/archivo.php?link_id=77')).not.toBeNull();
       });
       expect(cuerpoDe(llamadaA(llamadas, 'links/index.php'))).toEqual({
-        group_id: 10, url: '', text: 'Guía', description: '', image_url: '', precio: '1500',
+        group_id: 10, url: '', text: 'Guía', description: '', image_url: '', precio: '1500', tipo: 'digital',
       });
       expect(llamadaA(llamadas, 'productos/archivo.php').options.body.get('archivo').name).toBe('guia.pdf');
       await waitFor(() => {
@@ -274,6 +346,42 @@ describe('PageEditor — productos digitales', () => {
       fireEvent.change(screen.getByLabelText('Precio'), { target: { value: '1500' } });
 
       expect(await screen.findByText(/Para cobrar tenés que conectar Mercado Pago/)).toBeInTheDocument();
+    });
+
+    // #42: digital o físico se elige al crearlo.
+    it('por defecto es digital, y al elegir físico pide el envío en lugar del archivo', async () => {
+      await render();
+      await abrirAlta();
+
+      expect(screen.getByRole('radio', { name: /Digital/ })).toBeChecked();
+      expect(screen.getByText('No se puede cambiar después de crearlo.')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('radio', { name: /Físico/ }));
+
+      expect(screen.queryByLabelText('Archivo')).not.toBeInTheDocument();
+      expect(screen.getByLabelText('Costo de envío')).toBeInTheDocument();
+      expect(screen.getByLabelText('Zona de envío (opcional)')).toBeInTheDocument();
+    });
+
+    it('crea un físico con su envío y sin subir archivo', async () => {
+      const { llamadas } = await render();
+      await abrirAlta();
+
+      fireEvent.change(campoArchivo(), { target: { files: [archivo()] } });
+      fireEvent.click(screen.getByRole('radio', { name: /Físico/ }));
+      fireEvent.change(screen.getByLabelText('Título'), { target: { value: 'Remera' } });
+      fireEvent.change(screen.getByLabelText('Precio'), { target: { value: '9000' } });
+      fireEvent.change(screen.getByLabelText('Costo de envío'), { target: { value: '0' } });
+      fireEvent.change(screen.getByLabelText('Zona de envío (opcional)'), { target: { value: 'Sólo CABA y GBA' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Crear' }));
+
+      await waitFor(() => {
+        expect(screen.queryByRole('heading', { name: 'Nuevo producto' })).not.toBeInTheDocument();
+      });
+      expect(cuerpoDe(llamadaA(llamadas, 'links/index.php'))).toMatchObject({
+        text: 'Remera', precio: '9000', tipo: 'fisico', costo_envio: '0', zona_envio: 'Sólo CABA y GBA',
+      });
+      expect(llamadaA(llamadas, 'productos/archivo.php')).toBeNull();
     });
 
     it('gratis no avisa de Mercado Pago', async () => {

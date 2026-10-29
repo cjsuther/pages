@@ -39,7 +39,8 @@ class OrdenesDeProductos
      * El producto de ese link, o null si no hay nada que vender ahí.
      *
      * Tiene que ser un link de un grupo "productos" y tener el archivo subido:
-     * sin archivo no hay nada que entregar. Vuelve también si está oculto:
+     * sin archivo no hay nada que entregar. Sólo digitales: la compra de un
+     * físico, con envío, es otra (#43). Vuelve también si está oculto:
      * quien llama decide con ProductosDigitales::aceptaPedidos().
      */
     public static function productoEnVenta($db, $linkId)
@@ -51,7 +52,7 @@ class OrdenesDeProductos
             FROM links l
             INNER JOIN link_groups lg ON lg.id = l.group_id
             INNER JOIN digital_products dp ON dp.link_id = l.id
-            WHERE l.id = ? AND lg.type = "productos" AND dp.archivo_ruta IS NOT NULL
+            WHERE l.id = ? AND lg.type = "productos" AND dp.tipo = "digital" AND dp.archivo_ruta IS NOT NULL
         ');
         $stmt->execute([(int) $linkId]);
         $fila = $stmt->fetch(PDO::FETCH_ASSOC);

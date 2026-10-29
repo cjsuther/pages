@@ -150,9 +150,50 @@ class PublicHandlerTest extends HandlerTestCase
         $this->assertStringNotContainsString('archivo_ruta', $json);
         $this->assertStringNotContainsString(str_repeat('a', 32), $json);
         $this->assertSame(
-            ['id', 'group_id', 'text', 'description', 'image_url', 'position', 'precio', 'archivo_nombre', 'archivo_bytes'],
+            ['id', 'group_id', 'text', 'description', 'image_url', 'position', 'precio', 'archivo_nombre', 'archivo_bytes', 'tipo'],
             array_keys($res->body['page']['groups'][0]['links'][0])
         );
+    }
+
+    /**
+     * Un físico (#42) sale con su envío, sus características y qué está
+     * agotado, pero no con cuántas unidades quedan.
+     */
+    public function testUnFisicoSaleConCaracteristicasYAgotadasSinCantidades()
+    {
+        $this->db->onSelect('FROM product_attributes a', [
+            ['atributo_id' => 70, 'product_id' => 30, 'atributo' => 'Talle', 'opcion_id' => 100, 'opcion' => 'S'],
+            ['atributo_id' => 70, 'product_id' => 30, 'atributo' => 'Talle', 'opcion_id' => 101, 'opcion' => 'M'],
+        ]);
+        $this->db->onSelect('FROM product_variants', [
+            ['product_id' => 30, 'clave' => '100', 'stock' => '0'],
+            ['product_id' => 30, 'clave' => '101', 'stock' => '25'],
+        ]);
+
+        $res = $this->paginaConProductos([$this->productoDeLaBase([
+            'producto_id' => 30, 'tipo' => 'fisico', 'archivo_nombre' => null, 'archivo_bytes' => null,
+            'costo_envio' => '0.00', 'zona_envio' => 'Sólo CABA', 'stock' => null,
+        ])]);
+
+        $producto = $res->body['page']['groups'][0]['links'][0];
+        $this->assertSame('fisico', $producto['tipo']);
+        $this->assertSame(0.0, $producto['costo_envio']);
+        $this->assertSame('Sólo CABA', $producto['zona_envio']);
+        $this->assertSame('Talle', $producto['caracteristicas'][0]['nombre']);
+        $this->assertSame(['100'], $producto['agotadas']);
+        $this->assertFalse($producto['agotado']);
+        $this->assertArrayNotHasKey('stock', $producto);
+        $this->assertArrayNotHasKey('variantes', $producto);
+        $this->assertStringNotContainsString('25', json_encode($producto['caracteristicas']));
+    }
+
+    public function testUnDigitalSaleSinLoDeLosFisicos()
+    {
+        $res = $this->paginaConProductos([$this->productoDeLaBase()]);
+
+        $producto = $res->body['page']['groups'][0]['links'][0];
+        $this->assertSame('digital', $producto['tipo']);
+        $this->assertArrayNotHasKey('caracteristicas', $producto);
     }
 
     public function testPageDevuelveCeroSeguidoresSiNoHayFilas()

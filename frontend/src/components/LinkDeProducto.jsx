@@ -6,7 +6,7 @@ import { linkDeProducto } from '../utils/productos';
  * El link público de un producto, para que quien organiza lo copie y lo
  * comparta por WhatsApp o redes. Es /producto/<id>, como /evento/<id>.
  *
- * Mientras el producto esté oculto o no tenga archivo, el link existe pero
+ * Mientras el producto esté inactivo o no tenga archivo, el link existe pero
  * dice "no disponible": se avisa, para que no lo mande antes de tiempo.
  */
 function LinkDeProducto({ linkId, oculto, conArchivo }) {
@@ -25,9 +25,9 @@ function LinkDeProducto({ linkId, oculto, conArchivo }) {
   };
 
   const aviso = oculto && !conArchivo
-    ? 'El producto está oculto y todavía no tiene archivo: hasta que lo muestres y le subas el archivo, el link dice que no está disponible.'
+    ? 'El producto está inactivo y todavía no tiene archivo: hasta que lo actives y le subas el archivo, el link dice que no está disponible.'
     : oculto
-      ? 'El producto está oculto: hasta que lo vuelvas a mostrar, el link dice que no está disponible.'
+      ? 'El producto está inactivo: hasta que lo actives, el link dice que no está disponible.'
       : !conArchivo
         ? 'El producto todavía no tiene archivo: hasta que lo subas, el link dice que no está disponible.'
         : null;

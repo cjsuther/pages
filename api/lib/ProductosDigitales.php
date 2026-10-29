@@ -28,17 +28,22 @@ class ProductosDigitales
     /** El techo de DECIMAL(12,2). */
     const PRECIO_MAXIMO = 9999999999.99;
 
-    /** Lo que el editor ve de un producto; archivo_ruta queda afuera. */
-    const COLUMNAS_PUBLICAS = 'COALESCE(dp.precio, 0) AS precio, COALESCE(dp.oculto, 0) AS oculto, dp.archivo_nombre, dp.archivo_bytes, dp.archivo_tipo';
+    /**
+     * Lo que el editor ve de un producto; archivo_ruta queda afuera. Lo de
+     * los físicos (#42) lo completa ProductosFisicos::completar().
+     */
+    const COLUMNAS_PUBLICAS = 'COALESCE(dp.precio, 0) AS precio, COALESCE(dp.oculto, 0) AS oculto, dp.archivo_nombre, dp.archivo_bytes, dp.archivo_tipo, '
+        . 'dp.id AS producto_id, COALESCE(dp.tipo, \'digital\') AS tipo, COALESCE(dp.costo_envio, 0) AS costo_envio, dp.zona_envio, dp.stock';
 
     /**
      * Lo que tiene que cumplir un producto para mostrarse en la página pública
-     * y aceptar pedidos: con link (no borrado), no oculto y con archivo.
+     * y aceptar pedidos: con link (no borrado), no oculto y, si es digital,
+     * con archivo. Un físico no tiene archivo (#42).
      *
      * Sobre el alias dp de digital_products. La página pública (parte 3 de
      * #18) filtra con esto, o con publicosDelGrupo().
      */
-    const CONDICION_EN_VENTA = 'dp.link_id IS NOT NULL AND dp.borrado_en IS NULL AND dp.oculto = 0 AND dp.archivo_ruta IS NOT NULL';
+    const CONDICION_EN_VENTA = 'dp.link_id IS NOT NULL AND dp.borrado_en IS NULL AND dp.oculto = 0 AND (dp.tipo = \'fisico\' OR dp.archivo_ruta IS NOT NULL)';
 
     const MENSAJE_NO_DISPONIBLE = 'Este producto ya no está disponible.';
 
@@ -240,7 +245,7 @@ class ProductosDigitales
         ');
         $stmt->execute([(int) $groupId]);
 
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        return ProductosFisicos::completar($db, $stmt->fetchAll(PDO::FETCH_ASSOC));
     }
 
     /** Deja asociado el archivo nuevo. */
@@ -275,7 +280,7 @@ class ProductosDigitales
         $stmt->execute([(int) $linkId]);
         $fila = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        return $fila ?: null;
+        return $fila ? ProductosFisicos::completar($db, [$fila])[0] : null;
     }
 
     /** Los productos de un grupo, para el editor. */
@@ -290,7 +295,7 @@ class ProductosDigitales
         ');
         $stmt->execute([(int) $groupId]);
 
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        return ProductosFisicos::completar($db, $stmt->fetchAll(PDO::FETCH_ASSOC));
     }
 
     // ------------------------------------------------------------ borrado

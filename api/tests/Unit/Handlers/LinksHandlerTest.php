@@ -1010,4 +1010,219 @@ class LinksHandlerTest extends HandlerTestCase
         $this->assertStatus(500, $res);
         $this->assertSame([], $disco->borrados);
     }
+
+    // ======================================================= productos físicos
+
+    public function testCrearUnFisicoSinCaracteristicas()
+    {
+        $this->grupoDeProductos();
+
+        $res = LinksHandler::index($this->db, $this->post([
+            'group_id' => 7, 'url' => '', 'text' => 'Remera', 'precio' => '12000', 'tipo' => 'fisico',
+            'costo_envio' => '0', 'zona_envio' => 'Sólo CABA y GBA', 'stock' => '15',
+        ], $this->user()));
+
+        $this->assertStatus(201, $res);
+        $this->assertSame([55, 12000.0], $this->db->paramsFor('INSERT INTO digital_products'));
+        $this->assertSame(['fisico', 55], $this->db->paramsFor('UPDATE digital_products SET tipo = ?'));
+        $this->assertSame([0.0, 'Sólo CABA y GBA', 15, 55], $this->db->paramsFor('UPDATE digital_products SET costo_envio = ?'));
+        $this->assertFalse($this->db->ran('product_attributes'));
+        $this->assertTrue($this->db->committed);
+    }
+
+    public function testCrearUnFisicoConCaracteristicasYStockPorCombinacion()
+    {
+        $this->grupoDeProductos();
+        $this->db->onSelect('SELECT * FROM digital_products WHERE link_id', [['id' => 30, 'link_id' => 55, 'tipo' => 'fisico']]);
+        $this->db->onInsert('INSERT INTO product_attributes', 70);
+        $this->db->onInsert('INSERT INTO product_attribute_options', 100);
+        $this->db->onInsert('INSERT INTO product_attribute_options', 101);
+
+        $res = LinksHandler::index($this->db, $this->post([
+            'group_id' => 7, 'url' => '', 'text' => 'Remera', 'tipo' => 'fisico', 'stock' => '15',
+            'caracteristicas' => [['nombre' => 'Talle', 'opciones' => ['S', 'M']]],
+            'variantes' => [['opciones' => ['M'], 'stock' => 0]],
+        ], $this->user()));
+
+        $this->assertStatus(201, $res);
+        $this->assertSame([null, 55], $this->db->paramsFor('UPDATE digital_products SET stock = ?'), 'con características, el stock general se vacía');
+        $this->assertSame([30, 'Talle', 0], $this->db->paramsFor('INSERT INTO product_attributes'));
+        $this->assertSame([30, '101', 0], $this->db->paramsFor('INSERT INTO product_variants'));
+        $this->assertTrue($this->db->committed);
+    }
+
+    public function testUnDigitalNoGuardaNadaDeFisico()
+    {
+        $this->grupoDeProductos();
+
+        LinksHandler::index($this->db, $this->post([
+            'group_id' => 7, 'url' => '', 'text' => 'Guía', 'stock' => 3, 'caracteristicas' => [['nombre' => 'Talle', 'opciones' => ['S']]],
+        ], $this->user()));
+
+        $this->assertFalse($this->db->ran('SET tipo'));
+        $this->assertFalse($this->db->ran('stock = ?'));
+        $this->assertFalse($this->db->ran('product_attributes'));
+    }
+
+    public function testUnTipoDesconocidoNoSeCrea()
+    {
+        $this->grupoDeProductos();
+
+        $res = LinksHandler::index($this->db, $this->post(
+            ['group_id' => 7, 'url' => '', 'text' => 'Curso', 'tipo' => 'servicio'],
+            $this->user()
+        ));
+
+        $this->assertError(400, $res, 'digital o físico');
+        $this->assertNoWrites();
+    }
+
+    /**
+     * @dataProvider fisicosInvalidos
+     */
+    public function testUnFisicoInvalidoNoSeCrea(array $extra, $fragmento)
+    {
+        $this->grupoDeProductos();
+
+        $res = LinksHandler::index($this->db, $this->post(
+            ['group_id' => 7, 'url' => '', 'text' => 'Remera', 'tipo' => 'fisico'] + $extra,
+            $this->user()
+        ));
+
+        $this->assertError(400, $res, $fragmento);
+        $this->assertNoWrites();
+    }
+
+    public function fisicosInvalidos()
+    {
+        return [
+            'stock negativo' => [['stock' => '-1'], 'stock'],
+            'stock decimal' => [['stock' => '2.5'], 'stock'],
+            'costo de envío negativo' => [['costo_envio' => '-100'], 'costo de envío'],
+            'característica sin nombre' => [['caracteristicas' => [['nombre' => ' ', 'opciones' => ['S']]]], 'nombre'],
+            'opción vacía' => [['caracteristicas' => [['nombre' => 'Talle', 'opciones' => ['S', '']]]], 'opción vacía'],
+            'características duplicadas' => [['caracteristicas' => [
+                ['nombre' => 'Color', 'opciones' => ['Rojo']],
+                ['nombre' => 'color', 'opciones' => ['Azul']],
+            ]], 'dos características'],
+            'opciones duplicadas' => [['caracteristicas' => [['nombre' => 'Talle', 'opciones' => ['M', 'M']]]], 'repetida'],
+            'stock por combinación negativo' => [[
+                'caracteristicas' => [['nombre' => 'Talle', 'opciones' => ['S']]],
+                'variantes' => [['opciones' => ['S'], 'stock' => -1]],
+            ], 'stock'],
+        ];
+    }
+
+    /** Un link de productos, autorizado, con su fila de digital_products. */
+    private function esProductoDeTipo($tipo)
+    {
+        $this->esProducto();
+        $this->db->onSelect('SELECT * FROM digital_products WHERE link_id', [['id' => 30, 'link_id' => 5, 'tipo' => $tipo]]);
+    }
+
+    public function testEditarUnFisico()
+    {
+        $this->esProductoDeTipo('fisico');
+        $this->db->onSelect('SELECT * FROM digital_products WHERE link_id', [['id' => 30, 'link_id' => 5, 'tipo' => 'fisico']]);
+        $this->db->onSelect('SELECT id, nombre FROM product_attributes', [['id' => 70, 'nombre' => 'Talle']]);
+        $this->db->onSelect('FROM product_attribute_options o', [
+            ['id' => 100, 'attribute_id' => 70, 'nombre' => 'S', 'usada' => 0],
+        ]);
+        $this->db->onInsert('INSERT INTO product_attribute_options', 101);
+
+        $res = LinksHandler::detail($this->db, $this->put([
+            'text' => 'Remera negra', 'tipo' => 'fisico', 'precio' => '9000', 'costo_envio' => '2000', 'zona_envio' => '',
+            'caracteristicas' => [['id' => 70, 'nombre' => 'Talle', 'opciones' => [['id' => 100, 'nombre' => 'S'], 'M']]],
+            'variantes' => [['opciones' => ['S'], 'stock' => '4'], ['opciones' => ['M'], 'stock' => '']],
+        ], $this->user(), ['id' => '5']));
+
+        $this->assertStatus(200, $res);
+        $this->assertSame(['Remera negra', 5], $this->db->paramsFor('UPDATE links SET'));
+        $this->assertSame([2000.0, null, null, 5], $this->db->paramsFor('UPDATE digital_products SET costo_envio = ?'));
+        $this->assertSame([70, 'M', 1], $this->db->paramsFor('INSERT INTO product_attribute_options'));
+        $this->assertSame([[30, '100', 4]], array_column($this->db->callsFor('INSERT INTO product_variants'), 'params'));
+        $this->assertTrue($this->db->committed);
+    }
+
+    /** Las órdenes de cada tipo son distintas: el tipo no cambia después del alta. */
+    public function testElTipoDeUnProductoNoSeCambia()
+    {
+        $this->esProductoDeTipo('digital');
+
+        $res = LinksHandler::detail($this->db, $this->put(['tipo' => 'fisico', 'text' => 'Remera'], $this->user(), ['id' => '5']));
+
+        $this->assertError(400, $res, 'no se puede cambiar');
+        $this->assertNoWrites();
+    }
+
+    public function testMandarElMismoTipoNoMolesta()
+    {
+        $this->esProductoDeTipo('digital');
+
+        $res = LinksHandler::detail($this->db, $this->put(['tipo' => 'digital', 'text' => 'Guía'], $this->user(), ['id' => '5']));
+
+        $this->assertStatus(200, $res);
+    }
+
+    /** A un digital el stock y las características no le significan nada. */
+    public function testEditarUnDigitalIgnoraLoDeFisico()
+    {
+        $this->esProductoDeTipo('digital');
+
+        $res = LinksHandler::detail($this->db, $this->put(['stock' => 5, 'caracteristicas' => []], $this->user(), ['id' => '5']));
+
+        $this->assertError(400, $res, 'No fields to update');
+        $this->assertNoWrites();
+    }
+
+    public function testUnFisicoConStockInvalidoNoCambiaNada()
+    {
+        $this->esProductoDeTipo('fisico');
+
+        $res = LinksHandler::detail($this->db, $this->put(['text' => 'Remera', 'stock' => 'muchos'], $this->user(), ['id' => '5']));
+
+        $this->assertError(400, $res, 'stock');
+        $this->assertNoWrites();
+    }
+
+    /** Si falla una característica, no queda nada a medias. */
+    public function testSiFallaGuardarLasCaracteristicasSeDeshaceTodo()
+    {
+        $this->esProductoDeTipo('fisico');
+        $this->db->onSelect('SELECT * FROM digital_products WHERE link_id', [['id' => 30, 'link_id' => 5, 'tipo' => 'fisico']]);
+        $this->db->failOn('INSERT INTO product_attributes', 'sin conexión');
+
+        $res = LinksHandler::detail($this->db, $this->put([
+            'text' => 'Remera', 'caracteristicas' => [['nombre' => 'Talle', 'opciones' => ['S']]],
+        ], $this->user(), ['id' => '5']));
+
+        $this->assertStatus(500, $res);
+        $this->assertTrue($this->db->rolledBack);
+        $this->assertFalse($this->db->committed);
+    }
+
+    // ---------------------------------------------------------- activo/inactivo
+
+    /** "Activo" en el editor es oculto = 0: se reutiliza la columna. */
+    public function testActivarUnProductoDesdeLaLista()
+    {
+        $this->esProductoDeTipo('fisico');
+
+        $res = LinksHandler::detail($this->db, $this->put(['oculto' => false], $this->user(), ['id' => '5']));
+
+        $this->assertStatus(200, $res);
+        $this->assertSame([0, 5], $this->db->paramsFor('UPDATE digital_products SET oculto = ?'));
+        $this->assertFalse($this->db->ran('UPDATE links SET'));
+        $this->assertFalse($this->db->ran('product_attributes'), 'activar no toca las características');
+    }
+
+    public function testDesactivarUnProductoDigitalDesdeLaLista()
+    {
+        $this->esProductoDeTipo('digital');
+
+        $res = LinksHandler::detail($this->db, $this->put(['oculto' => '1'], $this->user(), ['id' => '5']));
+
+        $this->assertStatus(200, $res);
+        $this->assertSame([1, 5], $this->db->paramsFor('UPDATE digital_products SET oculto = ?'));
+    }
 }

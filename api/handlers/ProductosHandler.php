@@ -39,6 +39,13 @@ class ProductosHandler
             return Response::error(400, 'Ese item no es un producto digital');
         }
 
+        $anterior = ProductosDigitales::delLink($db, $linkId);
+
+        // Un físico se manda, no se descarga (#42).
+        if (ProductosFisicos::esFisico($anterior)) {
+            return Response::error(400, 'Un producto físico no lleva archivo');
+        }
+
         $archivo = isset($req->files['archivo']) ? $req->files['archivo'] : null;
         $error = self::errorDeSubida($archivo, $req);
 
@@ -59,7 +66,6 @@ class ProductosHandler
             return Response::serverError('No pudimos guardar el archivo');
         }
 
-        $anterior = ProductosDigitales::delLink($db, $linkId);
         $tipo = $storage->tipoMime($destino);
 
         try {
