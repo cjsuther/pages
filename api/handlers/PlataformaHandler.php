@@ -39,10 +39,11 @@ class PlataformaHandler
 
         list($where, $params) = self::rango($req);
 
-        // Entradas y productos digitales se cobran igual (misma comisión, mismo
-        // Mercado Pago) pero viven en tablas distintas. Se consulta cada una
-        // por su lado y se suman acá: las consultas de entradas quedan como
-        // estaban, y sus números no pueden cambiar por sumar productos.
+        // Entradas, productos digitales y físicos se cobran igual (misma
+        // comisión, mismo Mercado Pago) pero se cuentan por separado. Se
+        // consulta cada tipo por su lado y se suman acá: las consultas de
+        // entradas quedan como estaban, y sus números no pueden cambiar por
+        // sumar productos.
         $porTipo = [];
         $meses = [];
         $paginas = [];
@@ -69,12 +70,19 @@ class PlataformaHandler
     /**
      * De dónde sale cada tipo de venta. Las claves son las de por_tipo.
      *
+     * `tipo` es lo que separa una fuente de otra en la misma tabla: digitales
+     * y físicos viven los dos en product_orders, y se distinguen por el tipo
+     * del producto, que no cambia después de crearlo. Va en todas las
+     * consultas, también en las que no necesitan la página.
+     *
      * Un producto borrado ya no tiene link: su página sale de la foto que
-     * guarda digital_products. Lo mismo su nombre.
+     * guarda digital_products. Lo mismo su nombre; el de un físico sale de la
+     * foto del pedido.
      */
     const FUENTES = [
         'entradas' => [
             'tabla' => 'ticket_orders',
+            'tipo'  => '',
             'item'  => 'l.text',
             'joins' => '
             INNER JOIN links l ON l.id = o.link_id
@@ -83,14 +91,26 @@ class PlataformaHandler
         ],
         'productos' => [
             'tabla' => 'product_orders',
+            'tipo'  => "INNER JOIN digital_products dp ON dp.id = o.product_id AND dp.tipo = 'digital'",
             'item'  => 'COALESCE(l.text, dp.titulo)',
-            'joins' => '
-            INNER JOIN digital_products dp ON dp.id = o.product_id
-            LEFT JOIN links l ON l.id = dp.link_id
-            LEFT JOIN link_groups lg ON lg.id = l.group_id
-            INNER JOIN pages p ON p.id = COALESCE(lg.page_id, dp.page_id)',
+            'joins' => self::JOINS_PRODUCTO,
+        ],
+        'fisicos' => [
+            'tabla' => 'product_orders',
+            'tipo'  => "INNER JOIN digital_products dp ON dp.id = o.product_id AND dp.tipo = 'fisico'",
+            'item'  => 'COALESCE(o.producto_titulo, l.text, dp.titulo)',
+            'joins' => self::JOINS_PRODUCTO,
         ],
     ];
+
+    /** La página de un producto, digital o físico, con o sin link. */
+    const JOINS_PRODUCTO = '
+            LEFT JOIN links l ON l.id = dp.link_id
+            LEFT JOIN link_groups lg ON lg.id = l.group_id
+            INNER JOIN pages p ON p.id = COALESCE(lg.page_id, dp.page_id)';
+
+    /** Cómo se nombra una venta de cada tipo en la lista a revisar. */
+    const SINGULAR = ['entradas' => 'entrada', 'productos' => 'producto', 'fisicos' => 'fisico'];
 
     /** Lo que se suma de una fila. */
     const SUMABLES = ['ventas', 'recaudado', 'pedida', 'cobrada', 'sin_dato'];
@@ -140,7 +160,7 @@ class PlataformaHandler
 
     private static function resumen($db, array $fuente, $where, array $params)
     {
-        $stmt = $db->prepare('SELECT ' . self::SUMAS() . " FROM {$fuente['tabla']} o WHERE $where");
+        $stmt = $db->prepare('SELECT ' . self::SUMAS() . " FROM {$fuente['tabla']} o {$fuente['tipo']} WHERE $where");
         $stmt->execute($params);
         $fila = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -151,7 +171,7 @@ class PlataformaHandler
     {
         $stmt = $db->prepare("
             SELECT DATE_FORMAT(o.pagada_en, '%Y-%m') AS mes, " . self::SUMAS() . "
-            FROM {$fuente['tabla']} o
+            FROM {$fuente['tabla']} o {$fuente['tipo']}
             WHERE $where AND o.pagada_en IS NOT NULL
             GROUP BY mes
             ORDER BY mes DESC
@@ -165,7 +185,7 @@ class PlataformaHandler
     {
         $stmt = $db->prepare('
             SELECT p.id, p.title, p.url_slug, ' . self::SUMAS() . "
-            FROM {$fuente['tabla']} o
+            FROM {$fuente['tabla']} o {$fuente['tipo']}
             {$fuente['joins']}
             WHERE $where
             GROUP BY p.id, p.title, p.url_slug
@@ -189,7 +209,7 @@ class PlataformaHandler
             SELECT o.codigo, o.pagada_en, o.total, o.comision AS pedida,
                    o.mp_comision_cobrada AS cobrada,
                    {$fuente['item']} AS evento, p.title AS pagina, p.url_slug
-            FROM {$fuente['tabla']} o
+            FROM {$fuente['tabla']} o {$fuente['tipo']}
             {$fuente['joins']}
             WHERE $where
               AND o.mp_comision_cobrada IS NOT NULL
@@ -230,9 +250,10 @@ class PlataformaHandler
     }
 
     /**
-     * Junta las filas de entradas y de productos que comparten clave (el mes,
-     * la página), sumándolas. Cada fila lleva también cuántas de sus ventas
-     * son de productos, para distinguirlas en el detalle.
+     * Junta las filas de cada tipo que comparten clave (el mes, la página),
+     * sumándolas. Cada fila lleva también cuántas de sus ventas son de
+     * productos digitales (ventas_productos) y de físicos (ventas_fisicos),
+     * para distinguirlas en el detalle.
      *
      * @param array  $porTipo tipo => filas
      * @param string $clave   la columna que identifica la fila
@@ -247,15 +268,15 @@ class PlataformaHandler
                 $k = (string) $fila[$clave];
 
                 if (!isset($juntas[$k])) {
-                    $juntas[$k] = array_merge($fila, self::ceros(), ['ventas_productos' => 0]);
+                    $juntas[$k] = array_merge($fila, self::ceros(), ['ventas_productos' => 0, 'ventas_fisicos' => 0]);
                 }
 
                 foreach (self::SUMABLES as $columna) {
                     $juntas[$k][$columna] += $fila[$columna];
                 }
 
-                if ($tipo === 'productos') {
-                    $juntas[$k]['ventas_productos'] += $fila['ventas'];
+                if ($tipo !== 'entradas') {
+                    $juntas[$k]['ventas_' . $tipo] += $fila['ventas'];
                 }
             }
         }
@@ -269,14 +290,14 @@ class PlataformaHandler
         return $juntas;
     }
 
-    /** La lista a revisar de los dos tipos, la más reciente primero, con el mismo tope. */
+    /** La lista a revisar de todos los tipos, la más reciente primero, con el mismo tope. */
     private static function juntarRevisar(array $porTipo)
     {
         $filas = [];
 
         foreach ($porTipo as $tipo => $deEseTipo) {
             foreach ($deEseTipo as $fila) {
-                $filas[] = $fila + ['tipo' => $tipo === 'productos' ? 'producto' : 'entrada'];
+                $filas[] = $fila + ['tipo' => self::SINGULAR[$tipo]];
             }
         }
 

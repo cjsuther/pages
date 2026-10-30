@@ -93,8 +93,8 @@ function Comisiones() {
         <Rotulo>Plataforma</Rotulo>
         <h1 className="mt-3 text-3xl sm:text-4xl font-bold tracking-tight">Comisiones cobradas</h1>
         <p className="mt-3 text-tinta-media max-w-2xl">
-          Lo que Mercado Pago descontó para Rezonar en cada venta de entradas y de productos
-          digitales, sobre todas las páginas.
+          Lo que Mercado Pago descontó para Rezonar en cada venta de entradas, de productos
+          digitales y de productos físicos, sobre todas las páginas.
         </p>
       </header>
 
@@ -228,7 +228,7 @@ function Comisiones() {
                 filas={datos.revisar.map((v) => ({
                   clave: v.codigo,
                   celdas: [
-                    fechaCorta(v.pagada_en), v.pagina, v.tipo === 'producto' ? 'Producto' : 'Entrada', v.evento,
+                    fechaCorta(v.pagada_en), v.pagina, TIPO_DE_VENTA[v.tipo] || 'Entrada', v.evento,
                     formatearPrecio(v.total), formatearPrecio(v.pedida), formatearPrecio(v.cobrada),
                   ],
                 }))}
@@ -241,22 +241,32 @@ function Comisiones() {
   );
 }
 
-/** Las dos fuentes de comisión, en el orden en que se muestran. */
+/** Las fuentes de comisión, en el orden en que se muestran. */
 const TIPOS = [
   { clave: 'entradas', nombre: 'Entradas' },
   { clave: 'productos', nombre: 'Productos digitales' },
+  { clave: 'fisicos', nombre: 'Productos físicos' },
 ];
 
-/** Las ventas de una fila, aclarando cuántas son de productos si hay alguna. */
-function Ventas({ fila }) {
-  const productos = Number(fila.ventas_productos) || 0;
+/** Cómo se lee el tipo de una venta de la lista a revisar. */
+const TIPO_DE_VENTA = { entrada: 'Entrada', producto: 'Digital', fisico: 'Físico' };
 
-  if (productos === 0) return fila.ventas;
+/** Las ventas de una fila, aclarando cuántas son de productos digitales y físicos si hay alguna. */
+function Ventas({ fila }) {
+  const digitales = Number(fila.ventas_productos) || 0;
+  const fisicos = Number(fila.ventas_fisicos) || 0;
+
+  const partes = [
+    digitales > 0 && `${digitales} ${digitales === 1 ? 'digital' : 'digitales'}`,
+    fisicos > 0 && `${fisicos} ${fisicos === 1 ? 'físico' : 'físicos'}`,
+  ].filter(Boolean);
+
+  if (partes.length === 0) return fila.ventas;
 
   return (
     <>
       {fila.ventas}
-      <span className="text-tinta-suave"> ({productos} {productos === 1 ? 'producto' : 'productos'})</span>
+      <span className="text-tinta-suave"> ({partes.join(' · ')})</span>
     </>
   );
 }

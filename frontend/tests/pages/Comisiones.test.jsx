@@ -150,7 +150,7 @@ describe('Comisiones', () => {
     it('dice cuántas ventas de una página son de productos', async () => {
       montar({ datos: conProductos() });
 
-      expect(await screen.findByText(/\(2 productos\)/)).toBeInTheDocument();
+      expect(await screen.findByText(/\(2 digitales\)/)).toBeInTheDocument();
     });
 
     it('en la lista a revisar dice si es entrada o producto', async () => {
@@ -164,7 +164,7 @@ describe('Comisiones', () => {
       });
 
       expect(await screen.findByText('Guía')).toBeInTheDocument();
-      expect(screen.getByText('Producto')).toBeInTheDocument();
+      expect(screen.getByText('Digital')).toBeInTheDocument();
       expect(screen.getByText('Entrada')).toBeInTheDocument();
     });
 
@@ -174,6 +174,49 @@ describe('Comisiones', () => {
 
       await screen.findByText('septiembre 2026');
       expect(screen.queryByText('Entradas y productos')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('productos físicos', () => {
+    const conFisicos = () => reporte({
+      resumen: { ventas: 6, recaudado: 80500, pedida: 1207.5, cobrada: 1207.5, diferencia: 0, sin_dato: 0 },
+      por_tipo: {
+        entradas: { ventas: 3, recaudado: 70000, pedida: 1050, cobrada: 1050, diferencia: 0, sin_dato: 0 },
+        productos: { ventas: 2, recaudado: 5000, pedida: 75, cobrada: 75, diferencia: 0, sin_dato: 0 },
+        fisicos: { ventas: 1, recaudado: 5500, pedida: 82.5, cobrada: 82.5, diferencia: 0, sin_dato: 0 },
+      },
+      paginas: [{
+        id: 26, title: 'El Ferro eventos', url_slug: 'elferro', ventas_productos: 2, ventas_fisicos: 1,
+        ventas: 6, recaudado: 80500, pedida: 1207.5, cobrada: 1207.5, diferencia: 0,
+      }],
+    });
+
+    it('tienen su propia fila, aparte de los digitales', async () => {
+      montar({ datos: conFisicos() });
+
+      const fila = (await screen.findByText('Productos físicos')).closest('tr');
+      expect(fila).toHaveTextContent(/5\.500/);
+      expect(fila).not.toHaveTextContent(/5\.000/);
+      expect(screen.getByText('Productos digitales').closest('tr')).toHaveTextContent(/5\.000/);
+    });
+
+    it('dice cuántas ventas de una página son digitales y cuántas físicas', async () => {
+      montar({ datos: conFisicos() });
+
+      expect(await screen.findByText(/\(2 digitales · 1 físico\)/)).toBeInTheDocument();
+    });
+
+    it('en la lista a revisar los marca como físicos', async () => {
+      montar({
+        datos: reporte({
+          revisar: [
+            { codigo: 'C', tipo: 'fisico', pagada_en: '2026-09-08 10:00:00', total: 5500, pedida: 82.5, cobrada: 0, evento: 'Remera', pagina: 'El Ferro' },
+          ],
+        }),
+      });
+
+      expect(await screen.findByText('Remera')).toBeInTheDocument();
+      expect(screen.getByText('Físico')).toBeInTheDocument();
     });
   });
 

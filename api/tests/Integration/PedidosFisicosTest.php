@@ -243,4 +243,36 @@ class PedidosFisicosTest extends IntegracionTestCase
         $this->assertSame('Talle M · Color Negro', $publica['opciones']);
         $this->assertSame('Av. Corrientes 1…', $publica['envio']['calle']);
     }
+
+    // ============================================= comisiones de la plataforma
+
+    /**
+     * Un físico va a su propia fila del reporte: no se suma a los productos
+     * digitales, aunque viva en la misma tabla.
+     */
+    public function testElReporteDeComisionesCuentaLosFisicosAparte()
+    {
+        $linkId = $this->remera(5);
+        $codigo = $this->comprar($linkId, 2)->body['codigo'];
+        $this->acreditar($codigo, 5500.0, '777001');
+        $this->db->exec('UPDATE product_orders SET mp_comision_cobrada = 0');
+        LinksHandler::detail($this->db, $this->put(['text' => 'Remera nueva'], $this->user($this->duenaId), ['id' => $linkId]));
+
+        $plataforma = $this->usuario('plataforma@test', 'Plataforma');
+        \Plataforma::olvidar();
+        $res = \PlataformaHandler::comisiones($this->db, $this->get([], $this->user($plataforma, 'plataforma@test')));
+
+        $this->assertStatus(200, $res);
+        $this->assertSame(0, $res->body['por_tipo']['productos']['ventas']);
+        $this->assertSame(1, $res->body['por_tipo']['fisicos']['ventas']);
+        $this->assertSame(5500.0, $res->body['por_tipo']['fisicos']['recaudado']);
+        $this->assertSame($res->body['resumen'], $res->body['por_tipo']['fisicos']);
+        $this->assertSame(1, $res->body['paginas'][0]['ventas_fisicos']);
+        $this->assertSame(0, $res->body['paginas'][0]['ventas_productos']);
+        $this->assertSame(1, $res->body['meses'][0]['ventas_fisicos']);
+
+        $this->assertCount(1, $res->body['revisar']);
+        $this->assertSame('fisico', $res->body['revisar'][0]['tipo']);
+        $this->assertSame('Remera', $res->body['revisar'][0]['evento'], 'el nombre del pedido, no el de ahora');
+    }
 }
