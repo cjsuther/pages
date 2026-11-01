@@ -130,6 +130,24 @@ describe('MyPages', () => {
       expect(screen.queryByRole('button', { name: 'Eliminar' })).not.toBeInTheDocument();
     });
 
+    it('dice que la página propia es tuya', async () => {
+      await render({ pages: [pagina({ is_owner: 1, owner_name: 'Yo', owner_email: 'yo@test.local' })] });
+
+      expect(await screen.findByText('Tuya')).toBeInTheDocument();
+    });
+
+    it('dice de quién es la página ajena por su nombre', async () => {
+      await render({ pages: [pagina({ is_owner: 0, is_admin: 1, owner_name: 'Beto', owner_email: 'beto@test.local' })] });
+
+      expect(await screen.findByText('De Beto')).toBeInTheDocument();
+    });
+
+    it('usa el email de la dueña si no tiene nombre', async () => {
+      await render({ pages: [pagina({ is_owner: 0, is_admin: 0, owner_name: null, owner_email: 'beto@test.local' })] });
+
+      expect(await screen.findByText('De beto@test.local')).toBeInTheDocument();
+    });
+
     it('interpreta is_owner como texto (lo que devuelve MySQL)', async () => {
       await render({ pages: [pagina({ is_owner: '1', is_admin: 0 })] });
 

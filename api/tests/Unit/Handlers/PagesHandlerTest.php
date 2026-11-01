@@ -84,6 +84,22 @@ class PagesHandlerTest extends HandlerTestCase
         $this->assertFalse($res->body['pages'][0]['is_admin']);
     }
 
+    /** Cada página dice de quién es: nombre y email de la dueña. */
+    public function testListarTraeLaDuenaDeCadaPagina()
+    {
+        $this->db->onSelect('AS is_owner', [[
+            'id' => 1, 'is_owner' => 0, 'is_admin' => 1,
+            'owner_name' => 'Beto', 'owner_email' => 'beto@test.local',
+        ]]);
+
+        $res = PagesHandler::index($this->db, $this->get([], $this->user(9)));
+
+        $sql = $this->db->callsFor('AS is_owner')[0]['sql'];
+        $this->assertStringContainsString('LEFT JOIN users u ON u.id = p.user_id', $sql);
+        $this->assertSame('Beto', $res->body['pages'][0]['owner_name']);
+        $this->assertSame('beto@test.local', $res->body['pages'][0]['owner_email']);
+    }
+
     public function testUnUsuarioComunNoEsPlataforma()
     {
         $res = PagesHandler::index($this->db, $this->get([], $this->user(9)));

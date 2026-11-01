@@ -6,7 +6,7 @@ import Marco from '../components/Marco';
 import PageQRDownload from '../components/PageQRDownload';
 import {
   Search, ChevronLeft, ChevronRight, Plus, ExternalLink, Pencil,
-  LayoutTemplate, UserCheck,
+  LayoutTemplate, User, UserCheck,
 } from 'lucide-react';
 import {
   Aviso, Boton, Campo, Cargando, Chip, Etiqueta, Modal, AreaTexto, Rotulo,
@@ -16,6 +16,13 @@ import {
 /** El servidor manda booleanos; MySQL supo mandar 0/1 y no cuesta tolerarlo. */
 const esDuenia = (page) => page.is_owner === true || Number(page.is_owner) === 1;
 const esAdministradora = (page) => page.is_admin === true || Number(page.is_admin) === 1;
+
+/** De quién es la página: el nombre si lo hay, si no el email. */
+const duenia = (page) => {
+  if (esDuenia(page)) return 'Tuya';
+  const quien = page.owner_name || page.owner_email;
+  return quien ? `De ${quien}` : 'De otra cuenta';
+};
 
 function MyPages() {
   const { token, apiUrl } = useContext(AuthContext);
@@ -332,6 +339,11 @@ function MyPages() {
                   rezon.ar/{page.url_slug}
                   <ExternalLink className="w-3 h-3" />
                 </a>
+
+                <p className="inline-flex items-center gap-1.5 text-sm text-tinta-media mt-1 min-w-0">
+                  <User className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                  <span className="truncate">{duenia(page)}</span>
+                </p>
 
                 {page.description && (
                   <p className="text-sm text-tinta-media mt-3 line-clamp-3 leading-relaxed">
