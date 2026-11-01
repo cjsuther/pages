@@ -131,14 +131,19 @@ class PagesHandler
             // plataforma las dos son falsas en una página ajena, y la interfaz
             // necesita distinguir "sos admin de esto" de "entrás por soporte"
             // para no ofrecerle dejar de administrar algo que nunca administró.
+            // owner_name/owner_email dicen de quién es cada página: con páginas
+            // compartidas o vistas por soporte, el título solo no alcanza.
             $stmt = $db->prepare("
                 SELECT p.*,
                        (p.user_id = ?) AS is_owner,
                        EXISTS (
                            SELECT 1 FROM page_admins pa
                            WHERE pa.page_id = p.id AND pa.user_id = ? AND pa.status = 'accepted'
-                       ) AS is_admin
+                       ) AS is_admin,
+                       u.name AS owner_name,
+                       u.email AS owner_email
                 FROM pages p
+                LEFT JOIN users u ON u.id = p.user_id
                 WHERE ($acceso)$filtro
                 ORDER BY p.created_at DESC
                 LIMIT $porPagina OFFSET $offset
