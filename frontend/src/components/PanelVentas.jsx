@@ -7,6 +7,7 @@ import { resumirLugares } from '../utils/plano';
 import { resumirTipos } from '../utils/tiposDeEntrada';
 import LinkDeVenta from './LinkDeVenta';
 import LinkDePuerta from './LinkDePuerta';
+import ModificarCompra from './ModificarCompra';
 
 /**
  * Estados desde los que una compra se puede dar de baja.
@@ -17,6 +18,12 @@ import LinkDePuerta from './LinkDePuerta';
 const CANCELABLES = ['pagada', 'reservada'];
 
 export const sePuedeCancelar = (estado) => CANCELABLES.includes(estado);
+
+/**
+ * Sólo las confirmadas —pagadas, o reservas sin costo, que se guardan como
+ * pagadas— se modifican: una que espera el pago cobraría lo de antes.
+ */
+export const sePuedeModificar = (estado) => estado === 'pagada';
 
 /** "ventas-fiesta-de-fin-de-ano.xlsx", o el id del evento si no hay nombre. */
 export function nombreDelArchivo(nombreEvento, linkId) {
@@ -44,6 +51,24 @@ function PanelVentas({ linkId, apiUrl, token, nombreEvento = '' }) {
   const [porCancelar, setPorCancelar] = useState(null);
   const [cancelando, setCancelando] = useState(false);
   const [errorCancelacion, setErrorCancelacion] = useState(null);
+  const [porModificar, setPorModificar] = useState(null);
+  const [avisoModificacion, setAvisoModificacion] = useState(null);
+
+  /** El servidor contesta con las ventas ya actualizadas y cómo le fue al mail. */
+  const alModificar = (cuerpo) => {
+    setDatos(cuerpo.ventas);
+    setAvisoModificacion(
+      cuerpo.mail && cuerpo.mail.enviado
+        ? { ok: true, texto: `Compra de ${porModificar.nombre} modificada. Le mandamos un mail con la entrada actualizada.` }
+        : {
+            ok: false,
+            texto: `Compra de ${porModificar.nombre} modificada, pero no pudimos mandarle el mail${
+              cuerpo.mail && cuerpo.mail.motivo ? ` (${cuerpo.mail.motivo})` : ''
+            }. Avisale por otro medio.`,
+          }
+    );
+    setPorModificar(null);
+  };
 
   const cargar = async () => {
     setCargando(true);
@@ -227,6 +252,19 @@ function PanelVentas({ linkId, apiUrl, token, nombreEvento = '' }) {
         )}
       </div>
 
+      {avisoModificacion && (
+        <p
+          role="status"
+          className={`text-sm px-3 py-2 mb-4 border ${
+            avisoModificacion.ok
+              ? 'text-verde-oscuro bg-white border-borde'
+              : 'text-amber-800 bg-amber-50 border-amber-200'
+          }`}
+        >
+          {avisoModificacion.texto}
+        </p>
+      )}
+
       {ordenes.length === 0 ? (
         <p className="text-tinta-suave text-sm border border-borde bg-white p-6">
           Todavía no hay ventas para este evento.
@@ -255,6 +293,9 @@ function PanelVentas({ linkId, apiUrl, token, nombreEvento = '' }) {
                   <td className="px-3 py-2 text-tinta">
                     {o.nombre}
                     <span className="block text-xs text-tinta-suave font-mono">{o.codigo}</span>
+                    {o.modificada_en && (
+                      <span className="block text-xs text-tinta-suave">modificada el {fechaCorta(o.modificada_en)}</span>
+                    )}
                     {o.lugares && o.lugares.length > 0 && (
                       <span
                         className={`block text-xs ${
@@ -291,7 +332,19 @@ function PanelVentas({ linkId, apiUrl, token, nombreEvento = '' }) {
                       </span>
                     )}
                   </td>
-                  <td className="px-3 py-2 text-right">
+                  <td className="px-3 py-2 text-right whitespace-nowrap">
+                    {sePuedeModificar(o.estado) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAvisoModificacion(null);
+                          setPorModificar(o);
+                        }}
+                        className="text-xs text-tinta-suave hover:text-tinta transition mr-3"
+                      >
+                        Modificar
+                      </button>
+                    )}
                     {sePuedeCancelar(o.estado) && (
                       <button
                         type="button"
@@ -307,6 +360,16 @@ function PanelVentas({ linkId, apiUrl, token, nombreEvento = '' }) {
             </tbody>
           </table>
         </div>
+      )}
+
+      {porModificar && (
+        <ModificarCompra
+          codigo={porModificar.codigo}
+          apiUrl={apiUrl}
+          token={token}
+          onCerrar={() => setPorModificar(null)}
+          onModificada={alModificar}
+        />
       )}
 
       {porCancelar && (

@@ -773,6 +773,65 @@ class EntradasHandlerTest extends HandlerTestCase
         $this->assertSame(0, $this->db->countCalls('UPDATE ticket_orders'));
     }
 
+    // ------------------------------------------------------------ modificar
+
+    private function modificar(array $body, $conSesion = true)
+    {
+        return EntradasHandler::modificar(
+            $this->db,
+            new Request('POST', $body, [], $conSesion ? $this->sesion() : null),
+            new \Tests\Support\FakeMailer()
+        );
+    }
+
+    public function testModificarExigeSesion()
+    {
+        $this->assertSame(401, $this->modificar(['codigo' => 'ABC123', 'cantidad' => 3], false)->status);
+    }
+
+    public function testModificarNoAceptaOtrosMetodos()
+    {
+        $r = EntradasHandler::modificar($this->db, new Request('DELETE', [], [], $this->sesion()));
+
+        $this->assertSame(405, $r->status);
+    }
+
+    public function testModificarExigeUnCodigoValido()
+    {
+        $this->assertSame(400, $this->modificar(['cantidad' => 3])->status);
+        $this->assertSame(400, $this->modificar(['codigo' => "ABC' OR 1=1", 'cantidad' => 3])->status);
+        $this->assertNoWrites();
+    }
+
+    public function testNoSePuedeModificarUnaCompraQueNoExiste()
+    {
+        $this->db->onSelect('FROM ticket_orders o', []);
+
+        $this->assertSame(404, $this->modificar(['codigo' => 'NOEXISTE', 'cantidad' => 3])->status);
+    }
+
+    /** Con el código de la orden alcanzaría para sumarse entradas gratis. */
+    public function testUnExtranoNoPuedeModificarCompras()
+    {
+        $this->hayCompra();
+        $this->db->onSelect('FROM links l', []);
+
+        $r = $this->modificar(['codigo' => 'ABC123', 'cantidad' => 5]);
+
+        $this->assertSame(403, $r->status);
+        $this->assertNoWrites();
+    }
+
+    public function testParaEditarUnExtranoTampocoVeLaCompra()
+    {
+        $this->hayCompra();
+        $this->db->onSelect('FROM links l', []);
+
+        $r = EntradasHandler::modificar($this->db, new Request('GET', [], ['codigo' => 'ABC123'], $this->sesion()));
+
+        $this->assertSame(403, $r->status);
+    }
+
     // ------------------------------------------------------- casos de borde
 
     public function testLasCredencialesNoAceptanOtrosMetodos()

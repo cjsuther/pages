@@ -861,7 +861,7 @@ class Entradas
                    precio_unitario, total, comision, comision_porcentaje,
                    moneda, estado, reserva_vence_en,
                    mp_payment_id, pagada_en, created_at,
-                   mp_neto, mp_comisiones, mp_comision_cobrada, acreditacion_en,
+                   mp_neto, mp_comisiones, mp_comision_cobrada, acreditacion_en, modificada_en,
                    (estado = 'reservada' AND reserva_vence_en <= NOW()) AS vencida
             FROM ticket_orders
             WHERE link_id = ?
@@ -920,7 +920,9 @@ class Entradas
                 $recaudado += (float) $orden['total'];
                 $comisiones += (float) $orden['comision'];
 
-                foreach ($orden['items'] as $item) {
+                $cobradoPorItem = self::cobradoPorItem($orden['items'], (float) $orden['total']);
+
+                foreach ($orden['items'] as $i => $item) {
                     if (!isset($porTipo[$item['tipo']])) {
                         $porTipo[$item['tipo']] = [
                             'tipo' => $item['tipo'], 'nombre' => $item['nombre'], 'personas_por_unidad' => $item['personas'],
@@ -931,7 +933,7 @@ class Entradas
                     // vendidas va en promos, como el cupo; personas, en gente.
                     $porTipo[$item['tipo']]['vendidas'] += TiposDeEntrada::unidades($item['cantidad'], $item['personas']);
                     $porTipo[$item['tipo']]['personas'] += $item['cantidad'];
-                    $porTipo[$item['tipo']]['recaudado'] = round($porTipo[$item['tipo']]['recaudado'] + TiposDeEntrada::subtotal($item), 2);
+                    $porTipo[$item['tipo']]['recaudado'] = round($porTipo[$item['tipo']]['recaudado'] + $cobradoPorItem[$i], 2);
                 }
 
                 if ($orden['items'] === []) {
@@ -1207,7 +1209,8 @@ class Entradas
 
     // ------------------------------------------------------------ internos
 
-    private static function decodificada(array $config)
+    /** La fila de event_ticketing con el plano y los tipos ya decodificados. */
+    public static function decodificada(array $config)
     {
         $plano = isset($config['plano']) && $config['plano'] !== '' ? json_decode($config['plano'], true) : null;
         $config['plano'] = is_array($plano) ? $plano : null;
@@ -1252,6 +1255,41 @@ class Entradas
         return $porTipo;
     }
 
+    /**
+     * Cuánto de lo cobrado le toca a cada renglón de una compra.
+     *
+     * En una compra sin modificar es el subtotal de cada renglón, que suma el
+     * total. Una compra modificada no se vuelve a cobrar: el total sigue
+     * siendo lo que se pagó y los renglones ya no suman eso. Ahí el total se
+     * reparte en proporción a lo que valdría cada renglón, para que el
+     * desglose por tipo siga cerrando con lo recaudado. Lo que sobra del
+     * redondeo va al último.
+     *
+     * @return float[] por índice de renglón
+     */
+    public static function cobradoPorItem(array $items, $total)
+    {
+        $subtotales = array_map([TiposDeEntrada::class, 'subtotal'], $items);
+        $suma = round(array_sum($subtotales), 2);
+        $total = round((float) $total, 2);
+
+        if ($items === [] || abs($suma - $total) < 0.005) {
+            return $subtotales;
+        }
+
+        $cobrado = [];
+
+        foreach ($subtotales as $i => $subtotal) {
+            // Si todo lo que quedó es sin cargo, lo cobrado va al primero.
+            $cobrado[$i] = $suma > 0 ? round($total * $subtotal / $suma, 2) : ($i === 0 ? $total : 0.0);
+        }
+
+        $ultimo = count($cobrado) - 1;
+        $cobrado[$ultimo] = round($cobrado[$ultimo] + $total - array_sum($cobrado), 2);
+
+        return $cobrado;
+    }
+
     /** Un renglón de ticket_order_items, con sus tipos. */
     private static function item(array $fila)
     {
@@ -1293,7 +1331,7 @@ class Entradas
      *
      * @return array<string, int>|null null si no tiene la forma esperada.
      */
-    private static function pedidoPorTipo($crudo)
+    public static function pedidoPorTipo($crudo)
     {
         if (!is_array($crudo)) {
             return null;

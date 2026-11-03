@@ -1383,4 +1383,40 @@ class EntradasTest extends HandlerTestCase
         $this->assertTrue($r['ok'], (string) $r['error']);
         $this->assertSame(1, $this->db->countCalls('INSERT INTO event_ticketing'));
     }
+
+    // ------------------------------------------------- cobrado por renglón
+
+    public function testSinModificarCadaRenglonEsSuSubtotal()
+    {
+        $items = [
+            ['tipo' => 'general', 'precio' => 8000, 'personas' => 1, 'cantidad' => 2],
+            ['tipo' => 'jubilados', 'precio' => 5000, 'personas' => 1, 'cantidad' => 1],
+        ];
+
+        $this->assertEquals([16000, 5000], \Entradas::cobradoPorItem($items, 21000));
+    }
+
+    /** Modificada: el total cobrado se reparte en proporción y cierra exacto. */
+    public function testModificadaElTotalSeRepartePorProporcion()
+    {
+        $items = [
+            ['tipo' => 'general', 'precio' => 8000, 'personas' => 1, 'cantidad' => 1],
+            ['tipo' => 'jubilados', 'precio' => 5000, 'personas' => 1, 'cantidad' => 2],
+        ];
+
+        $cobrado = \Entradas::cobradoPorItem($items, 16000);
+
+        $this->assertEquals(7111.11, $cobrado[0]);
+        $this->assertEqualsWithDelta(16000, array_sum($cobrado), 0.001);
+    }
+
+    public function testSiTodoQuedoSinCargoLoCobradoVaAlPrimero()
+    {
+        $items = [
+            ['tipo' => 'invitado', 'precio' => 0, 'personas' => 1, 'cantidad' => 2],
+            ['tipo' => 'prensa', 'precio' => 0, 'personas' => 1, 'cantidad' => 1],
+        ];
+
+        $this->assertEquals([5000, 0], \Entradas::cobradoPorItem($items, 5000));
+    }
 }

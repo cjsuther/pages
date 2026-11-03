@@ -463,4 +463,57 @@ class CorreoEntradasTest extends HandlerTestCase
         $this->assertSame(['enviados' => 1, 'fallidos' => 1], $resumen);
         $this->assertCount(1, $mailer->enviados);
     }
+
+    // ------------------------------------------------------ modificación
+
+    /** El aviso sale aunque la entrada ya se haya mandado: es la novedad. */
+    public function testElAvisoDeModificacionSaleAunqueYaSeHayaMandadoLaEntrada()
+    {
+        $this->hayOrden(['mail_enviado_en' => '2026-10-01 10:00:00', 'cantidad' => 4]);
+        $mailer = new FakeMailer();
+
+        $r = CorreoEntradas::enviarModificacion($this->db, self::CODIGO, $mailer);
+
+        $this->assertTrue($r['enviado']);
+        $mensaje = $mailer->mensajePara('ana@example.com');
+        $this->assertSame('Cambios en tu entrada para Fiesta de fin de año', $mensaje['asunto']);
+        $this->assertStringContainsString('Tu compra se modificó', $mensaje['html']);
+        $this->assertStringContainsString('4 entradas', $mensaje['texto']);
+        // Ya estaba anotada: no se toca el registro del envío original.
+        $this->assertSame(0, $this->db->countCalls('UPDATE ticket_orders'));
+    }
+
+    /** Si la entrada nunca había salido, el aviso la reemplaza y el cron no manda la vieja. */
+    public function testElAvisoDeModificacionCuentaComoLaEntradaSiNuncaHabiaSalido()
+    {
+        $this->hayOrden();
+        $this->db->onWrite('UPDATE ticket_orders', 1);
+
+        CorreoEntradas::enviarModificacion($this->db, self::CODIGO, new FakeMailer());
+
+        $this->assertSame(1, $this->db->countCalls('mail_enviado_en = NOW()'));
+    }
+
+    public function testElAvisoDeModificacionNoSaleSiLaOrdenNoEstaPagada()
+    {
+        $this->hayOrden(['estado' => 'cancelada']);
+        $mailer = new FakeMailer();
+
+        $r = CorreoEntradas::enviarModificacion($this->db, self::CODIGO, $mailer);
+
+        $this->assertFalse($r['enviado']);
+        $this->assertSame([], $mailer->enviados);
+    }
+
+    public function testLaEntradaNuevaNoDiceQueSeModifico()
+    {
+        $this->hayOrden();
+        $mailer = new FakeMailer();
+
+        $this->enviar($mailer);
+
+        $mensaje = $mailer->mensajePara('ana@example.com');
+        $this->assertSame('Tu entrada para Fiesta de fin de año', $mensaje['asunto']);
+        $this->assertStringNotContainsString('se modificó', $mensaje['html']);
+    }
 }

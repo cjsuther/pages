@@ -7,6 +7,7 @@
  *   - credenciales: alta y baja de las credenciales de Mercado Pago
  *   - config:       capacidad y precio de cada evento
  *   - ventas:       listado de órdenes de un evento
+ *   - modificar:    cambiar cantidad, tipos o lugares de una compra
  */
 class EntradasHandler
 {
@@ -420,6 +421,94 @@ class EntradasHandler
             'cancelada' => true,
             'mensaje' => $resultado['motivo'],
             'ventas' => Entradas::ventasDelEvento($db, (int) $orden['link_id']),
+        ]);
+    }
+
+    // -------------------------------------------------------------- modificar
+
+    /**
+     * Modifica una compra confirmada: cantidad, tipos o lugares.
+     *
+     * GET devuelve lo que necesita la pantalla para editarla; POST aplica el
+     * cambio y le avisa por mail a quien compró. No se cobra ni se devuelve
+     * nada: ver ModificarEntradas.
+     *
+     * Como cancelar, sólo lo hace quien administra la página: el comprador
+     * tiene el código de su orden, y con eso cualquiera podría sumarse
+     * entradas.
+     */
+    public static function modificar($db, Request $req, $mailer = null)
+    {
+        if (!$req->user) {
+            return Response::unauthorized();
+        }
+
+        if (!in_array($req->method, ['GET', 'POST'], true)) {
+            return Response::methodNotAllowed();
+        }
+
+        $codigo = trim((string) ($req->method === 'GET' ? $req->param('codigo') : $req->input('codigo')));
+
+        if ($codigo === '' || !preg_match('/^[A-Z0-9]{1,12}$/', $codigo)) {
+            return Response::error(400, 'codigo requerido');
+        }
+
+        $orden = Entradas::orden($db, $codigo);
+
+        if ($orden === null) {
+            return Response::error(404, 'No encontramos esa compra');
+        }
+
+        $linkId = (int) $orden['link_id'];
+
+        if (!PageAccess::canManageLink($db, $linkId, $req->userId())) {
+            return Response::error(403, 'No podés modificar compras de este evento');
+        }
+
+        if ($req->method === 'GET') {
+            $r = ModificarEntradas::datosParaEditar($db, $codigo);
+
+            return $r['ok'] ? Response::ok($r['datos']) : Response::error($r['status'], $r['error']);
+        }
+
+        $pedido = [];
+
+        foreach (['cantidad', 'tipos', 'lugares'] as $campo) {
+            if (array_key_exists($campo, $req->body)) {
+                $pedido[$campo] = $req->body[$campo];
+            }
+        }
+
+        $r = ModificarEntradas::modificar($db, $codigo, $pedido, $req->userId());
+
+        if (!$r['ok']) {
+            $cuerpo = ['error' => $r['error']];
+
+            // Como en la venta: con los lugares tomados la pantalla actualiza
+            // el plano sin tener que volver a abrir la compra.
+            if (isset($r['ocupados'])) {
+                $cuerpo['ocupados'] = $r['ocupados'];
+            }
+
+            return Response::json($r['status'], $cuerpo);
+        }
+
+        // Después del commit: el mail no puede voltear el cambio. Si falla,
+        // la compra queda modificada igual y la pantalla lo avisa.
+        try {
+            $envio = CorreoEntradas::enviarModificacion($db, $codigo, $mailer);
+        } catch (Throwable $e) {
+            $envio = ['enviado' => false, 'motivo' => 'no se pudo enviar el mail'];
+        }
+
+        ModificarEntradas::anotarMail($db, $r['modificacion_id'], $envio);
+
+        return Response::ok([
+            'modificada' => true,
+            'antes' => $r['antes'],
+            'despues' => $r['despues'],
+            'mail' => $envio,
+            'ventas' => Entradas::ventasDelEvento($db, $linkId),
         ]);
     }
 
