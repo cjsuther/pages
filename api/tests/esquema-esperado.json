@@ -510,6 +510,16 @@
         "link_id": "migration_planos.sql",
         "lugar": "migration_planos.sql"
     },
+    "ticket_order_modificaciones": {
+        "id": "migration_modificaciones_de_entradas.sql",
+        "order_id": "migration_modificaciones_de_entradas.sql",
+        "user_id": "migration_modificaciones_de_entradas.sql",
+        "antes": "migration_modificaciones_de_entradas.sql",
+        "despues": "migration_modificaciones_de_entradas.sql",
+        "mail_enviado_en": "migration_modificaciones_de_entradas.sql",
+        "mail_error": "migration_modificaciones_de_entradas.sql",
+        "created_at": "migration_modificaciones_de_entradas.sql"
+    },
     "ticket_orders": {
         "id": "migration_ticketing.sql",
         "codigo": "migration_ticketing.sql",
@@ -536,6 +546,7 @@
         "pagada_en": "migration_ticketing.sql",
         "acreditacion_en": "migration_acreditacion.sql",
         "cancelada_en": "migration_entradas_contacto_cancelacion.sql",
+        "modificada_en": "migration_modificaciones_de_entradas.sql",
         "mail_enviado_en": "migration_mail_entradas.sql",
         "mail_intentos": "migration_mail_entradas.sql",
         "mail_error": "migration_mail_entradas.sql",

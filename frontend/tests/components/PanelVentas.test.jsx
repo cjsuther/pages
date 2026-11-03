@@ -443,4 +443,50 @@ describe('PanelVentas', () => {
       expect(celdas[0]).toHaveTextContent('Pagada');
     });
   });
+
+  describe('modificar', () => {
+    it('ofrece modificar sólo las compras confirmadas', async () => {
+      await montar({ ordenes: [VENTA, { ...VENTA, id: 2, codigo: 'PEND', nombre: 'Beto', estado: 'reservada' }] });
+
+      expect(screen.getAllByRole('button', { name: 'Modificar' })).toHaveLength(1);
+    });
+
+    it('marca las compras modificadas', async () => {
+      await montar({ ordenes: [{ ...VENTA, modificada_en: '2026-11-02 10:00:00' }] });
+
+      expect(screen.getByText('modificada el 02/11/2026')).toBeInTheDocument();
+    });
+
+    async function modificarYGuardar(mail) {
+      await montar({ ordenes: [VENTA] });
+      global.fetch.mockReturnValueOnce(respuestaDe({
+        orden: { ...VENTA, ingresadas: 0, lugares: [], items: [] }, disponibles: 10, plano: null, ocupados: [], tipos: null,
+      }));
+
+      fireEvent.click(screen.getByRole('button', { name: 'Modificar' }));
+      await screen.findByRole('button', { name: 'Más Entradas' });
+
+      global.fetch.mockReturnValueOnce(respuestaDe({
+        modificada: true,
+        mail,
+        ventas: { ordenes: [{ ...VENTA, cantidad: 3 }], resumen: { vendidas: 3, reservadas: 0, recaudado: 3000 }, capacidad: 100 },
+      }));
+      fireEvent.click(screen.getByRole('button', { name: 'Más Entradas' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar y avisar' }));
+    }
+
+    it('al guardar actualiza el listado y avisa que salió el mail', async () => {
+      await modificarYGuardar({ enviado: true });
+
+      expect(await screen.findByRole('status')).toHaveTextContent('Le mandamos un mail con la entrada actualizada');
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(screen.getByText('3/100')).toBeInTheDocument();
+    });
+
+    it('si el mail falló lo dice, para que se avise por otro medio', async () => {
+      await modificarYGuardar({ enviado: false, motivo: 'SMTP caído' });
+
+      expect(await screen.findByRole('status')).toHaveTextContent('no pudimos mandarle el mail (SMTP caído)');
+    });
+  });
 });

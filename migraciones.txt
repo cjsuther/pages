@@ -50,3 +50,4 @@ migration_productos_fisicos.sql
 migration_pedidos_fisicos.sql
 migration_estados_de_pedidos.sql
 migration_formas_de_entrega.sql
+migration_modificaciones_de_entradas.sql
