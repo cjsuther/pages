@@ -309,6 +309,224 @@ class CheckoutHandlerTest extends HandlerTestCase
         $this->assertSame(0, $this->db->countCalls('UPDATE ticket_orders SET comision'));
     }
 
+    // ------------------------------------------- comisiones a cargo del comprador
+
+    /** Las de tests/bootstrap.php: 7,25% de Mercado Pago sin IVA, 10% de Rezonar. */
+    private function cargosEncendidos()
+    {
+        \CargosAlComprador::forzar([
+            'mp_porcentaje' => MP_FEE_PERCENT, 'mp_fijo' => 0, 'mp_iva' => 0,
+            'plataforma_porcentaje' => PLATFORM_FEE_PERCENT, 'plataforma_iva' => 0,
+        ]);
+    }
+
+    protected function tearDown(): void
+    {
+        \CargosAlComprador::forzar(null);
+        parent::tearDown();
+    }
+
+    private function comprarConCargos(array $config = [], $conectadoPor = 'oauth', array $pedido = ['cantidad' => 2])
+    {
+        $this->cargosEncendidos();
+        $this->hayEventoQueVende($config + ['precio' => '1500.00', 'cargos_al_comprador' => 1]);
+        $this->hayCredencialesDeCobro($conectadoPor, 2);
+        $this->db->onWrite('UPDATE ticket_orders SET comision', 1);
+        $http = $this->httpQueCreaLaPreferencia();
+
+        $r = CheckoutHandler::comprar($this->db, $this->pedido($pedido), $http);
+
+        return [$r, $http];
+    }
+
+    private static function sumaDeLaPreferencia(array $preferencia)
+    {
+        $centavos = 0;
+
+        foreach ($preferencia['items'] as $item) {
+            $centavos += $item['quantity'] * (int) round($item['unit_price'] * 100);
+        }
+
+        return $centavos / 100.0;
+    }
+
+    /**
+     * 2 × 1500 = 3000. Rezonar: 10% = 300. Mercado Pago (7,25%) sobre el
+     * total: (3000 + 300) / 0,9275 = 3557,95… → 3557,96. Lo de MP es el resto.
+     */
+    public function testConCargosElCompradorPagaPrecioMasComisiones()
+    {
+        list($r, $http) = $this->comprarConCargos();
+        $preferencia = $http->jsonDe('/checkout/preferences');
+
+        $this->assertSame(201, $r->status);
+        $this->assertSame(3557.96, $r->body['total']);
+        $this->assertSame(['mercadopago' => 257.96, 'plataforma' => 300.0], $r->body['cargos']);
+        $this->assertSame(3557.96, self::sumaDeLaPreferencia($preferencia), 'el monto de la preferencia es el total mostrado');
+
+        $this->assertSame(1500.0, $preferencia['items'][0]['unit_price'], 'la entrada sigue valiendo lo que cargó el organizador');
+        $this->assertSame(2, $preferencia['items'][0]['quantity']);
+        $this->assertSame(['Comisión de Mercado Pago', 1, 257.96], [$preferencia['items'][1]['title'], $preferencia['items'][1]['quantity'], $preferencia['items'][1]['unit_price']]);
+        $this->assertSame(['Comisión de Rezon.ar', 1, 300.0], [$preferencia['items'][2]['title'], $preferencia['items'][2]['quantity'], $preferencia['items'][2]['unit_price']]);
+    }
+
+    /** Lo que se reparte Rezonar es exactamente lo que se le sumó al comprador, no el 10% del total. */
+    public function testConCargosElMarketplaceFeeEsLoQueSeLeSumoAlComprador()
+    {
+        list(, $http) = $this->comprarConCargos();
+
+        $this->assertSame(300.0, $http->jsonDe('/checkout/preferences')['marketplace_fee']);
+        $this->assertSame([300.0, 10.0, 1], $this->db->paramsFor('UPDATE ticket_orders SET comision'));
+    }
+
+    public function testConCargosLaOrdenGuardaElTotalCobradoYLosCargos()
+    {
+        $this->comprarConCargos();
+        $params = $this->db->paramsFor('INSERT INTO ticket_orders');
+
+        $this->assertSame(1500.0, $params[7], 'precio unitario: lo que vale la entrada');
+        $this->assertSame(3557.96, $params[8], 'total: lo que se cobra');
+        $this->assertSame(257.96, $params[9], 'cargo de Mercado Pago');
+        $this->assertSame(300.0, $params[10], 'cargo de Rezonar');
+    }
+
+    /** La llave del evento sola no alcanza: con la global apagada, nada cambia. */
+    public function testConLaFuncionApagadaElEventoSigueCobrandoElPrecio()
+    {
+        $this->hayEventoQueVende(['precio' => '1500.00', 'cargos_al_comprador' => 1]);
+        $this->hayCredencialesDeCobro('oauth', 2);
+        $this->db->onWrite('UPDATE ticket_orders SET comision', 1);
+        $http = $this->httpQueCreaLaPreferencia();
+
+        $r = CheckoutHandler::comprar($this->db, $this->pedido(['cantidad' => 2]), $http);
+        $preferencia = $http->jsonDe('/checkout/preferences');
+
+        $this->assertEquals(3000, $r->body['total']);
+        $this->assertNull($r->body['cargos']);
+        $this->assertCount(1, $preferencia['items']);
+        $this->assertSame(3000.0, self::sumaDeLaPreferencia($preferencia));
+        $this->assertSame(300.0, $preferencia['marketplace_fee'], 'la comisión sale del organizador, como siempre');
+    }
+
+    /** Y la global sola tampoco: un evento que ya está a la venta no cambia de precio. */
+    public function testConLaFuncionEncendidaUnEventoSinLaLlaveNoCambia()
+    {
+        list($r, $http) = $this->comprarConCargos(['cargos_al_comprador' => 0]);
+
+        $this->assertEquals(3000, $r->body['total']);
+        $this->assertSame(0, $this->db->paramsFor('INSERT INTO ticket_orders')[9]);
+        $this->assertCount(1, $http->jsonDe('/checkout/preferences')['items']);
+    }
+
+    /** Sin split la comisión de Rezonar no llega: no se cobra ni se manda. */
+    public function testConCargosYSinSplitSoloSeSumaMercadoPago()
+    {
+        list($r, $http) = $this->comprarConCargos([], 'manual');
+        $preferencia = $http->jsonDe('/checkout/preferences');
+
+        // 3000 / 0,9275 = 3234,50… → 3234,51
+        $this->assertSame(3234.51, $r->body['total']);
+        $this->assertSame(['mercadopago' => 234.51, 'plataforma' => 0.0], $r->body['cargos']);
+        $this->assertArrayNotHasKey('marketplace_fee', $preferencia);
+        $this->assertCount(2, $preferencia['items']);
+        $this->assertSame(3234.51, self::sumaDeLaPreferencia($preferencia));
+    }
+
+    public function testConCargosUnaReservaGratisNoSumaNada()
+    {
+        $this->cargosEncendidos();
+        $this->hayEventoQueVende(['precio' => '0.00', 'cargos_al_comprador' => 1]);
+
+        $r = CheckoutHandler::comprar($this->db, $this->pedido(), new FakeHttpClient());
+        $params = $this->db->paramsFor('INSERT INTO ticket_orders');
+
+        $this->assertSame('pagada', $r->body['estado']);
+        $this->assertSame(0.0, $params[8]);
+        $this->assertSame(0, $params[9]);
+        $this->assertSame(0, $params[10]);
+    }
+
+    /**
+     * Con tipos y promos la comisión va sobre lo que suma la compra: la promo
+     * se cobra una vez por grupo y la entrada sin cargo no suma.
+     */
+    public function testConCargosYTiposLaComisionVaSobreElPrecioFinal()
+    {
+        $tipos = json_encode([
+            ['id' => 'general', 'nombre' => 'General', 'precio' => 1000, 'cupo' => null, 'personas' => 1],
+            ['id' => 'promo', 'nombre' => 'Promo 2x1', 'precio' => 1500, 'cupo' => null, 'personas' => 2],
+            ['id' => 'invitado', 'nombre' => 'Invitado', 'precio' => 0, 'cupo' => null, 'personas' => 1],
+        ]);
+        $this->db->onSelect('GROUP BY i.tipo', []);
+        $this->db->onWrite('INSERT INTO ticket_order_items', 1);
+
+        list($r, $http) = $this->comprarConCargos(
+            ['tipos' => $tipos, 'precio' => '1000.00'],
+            'oauth',
+            ['tipos' => ['general' => 1, 'promo' => 2, 'invitado' => 1]]
+        );
+        $preferencia = $http->jsonDe('/checkout/preferences');
+
+        // 1000 + 1500 (una promo para dos) + 0 = 2500. Rezonar 250.
+        // (2500 + 250) / 0,9275 = 2964,9596… → 2964,96
+        $this->assertSame(2964.96, $r->body['total']);
+        $this->assertSame(['mercadopago' => 214.96, 'plataforma' => 250.0], $r->body['cargos']);
+        $this->assertSame(2964.96, self::sumaDeLaPreferencia($preferencia));
+        $this->assertSame(['General', 'Promo 2x1'], array_map(function ($i) {
+            return explode(' — ', $i['title'])[1];
+        }, array_slice($preferencia['items'], 0, 2)));
+    }
+
+    /** La pantalla de la compra muestra lo que se pagó, separado. */
+    public function testLaOrdenTraeElDesgloseDeLoPagado()
+    {
+        $this->hayOrdenPendiente([
+            'estado' => 'pagada', 'total' => '3557.96',
+            'cargo_mercadopago' => '257.96', 'cargo_plataforma' => '300.00',
+        ]);
+
+        $orden = CheckoutHandler::orden($this->db, new Request('GET', [], ['codigo' => self::CODIGO]))->body['orden'];
+
+        $this->assertSame(
+            ['entradas' => 3000.0, 'mercadopago' => 257.96, 'plataforma' => 300.0, 'total' => 3557.96],
+            $orden['desglose']
+        );
+    }
+
+    public function testUnaOrdenSinCargosNoTraeDesglose()
+    {
+        $this->hayOrdenPendiente(['estado' => 'pagada']);
+
+        $orden = CheckoutHandler::orden($this->db, new Request('GET', [], ['codigo' => self::CODIGO]))->body['orden'];
+
+        $this->assertNull($orden['desglose']);
+    }
+
+    /** El pago se compara contra el total con cargos: pagar sólo el precio no alcanza. */
+    public function testConCargosUnPagoPorElPrecioSinComisionesNoSeAcredita()
+    {
+        $this->hayOrdenPendiente(['total' => '3557.96', 'cargo_mercadopago' => '257.96', 'cargo_plataforma' => '300.00']);
+        $this->hayCredencialesDeCobro();
+
+        $r = CheckoutHandler::aviso($this->db, $this->avisoDe('99'), $this->httpConPago(['transaction_amount' => 3000.0]));
+
+        $this->assertSame('el monto no coincide con la orden', $r->body['motivo']);
+    }
+
+    public function testConCargosUnPagoPorElTotalSeAcredita()
+    {
+        $this->hayOrdenPendiente(['total' => '3557.96', 'cargo_mercadopago' => '257.96', 'cargo_plataforma' => '300.00']);
+        $this->hayCredencialesDeCobro();
+        $this->db->onSelect('FROM ticket_orders WHERE codigo', [['codigo' => self::CODIGO, 'estado' => 'reservada']]);
+        $this->db->onWrite('UPDATE ticket_orders', 1);
+
+        $r = CheckoutHandler::aviso(
+            $this->db, $this->avisoDe('99'), $this->httpConPago(['transaction_amount' => 3557.96]), new FakeMailer()
+        );
+
+        $this->assertSame('pago acreditado', $r->body['motivo']);
+    }
+
     // ---------------------------------------------------------------- aviso
 
     private function ordenBase(array $overrides = [])

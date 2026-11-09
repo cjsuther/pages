@@ -191,6 +191,16 @@ class EntradasHandler
                 // dos descuentos, no sólo el nuestro.
                 'comision' => Comision::porcentaje(),
                 'mercadopago' => Comision::mercadoPago(),
+                // Si se puede ofrecer que las comisiones las pague quien
+                // compra, y con qué tasas, para mostrar cuánto le queda al
+                // comprador. null mientras la función esté apagada: la opción
+                // ni aparece.
+                'cargos'   => CargosAlComprador::disponible()
+                    ? CargosAlComprador::tasasDelEvento(
+                        ['cargos_al_comprador' => true],
+                        Cobros::admiteSplit($db, self::pageIdDelLink($db, $linkId))
+                    )
+                    : null,
             ]);
         }
 
@@ -221,6 +231,18 @@ class EntradasHandler
             // Los tipos, igual: sin la clave quedan los que había.
             if (array_key_exists('tipos', $req->body)) {
                 $datos['tipos'] = $req->body['tipos'];
+            }
+
+            // Y la llave de las comisiones a cargo de quien compra. Encenderla
+            // sólo se puede con la función global encendida; apagarla, siempre.
+            if (array_key_exists('cargos_al_comprador', $req->body)) {
+                $quiere = !empty($req->body['cargos_al_comprador']);
+
+                if ($quiere && !CargosAlComprador::disponible()) {
+                    return Response::error(400, 'Todavía no se pueden sumar las comisiones al precio');
+                }
+
+                $datos['cargos_al_comprador'] = $quiere;
             }
 
             $resultado = Entradas::guardarConfig($db, $linkId, $datos);

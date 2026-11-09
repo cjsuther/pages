@@ -33,6 +33,11 @@ class CheckoutHandler
             return Response::notFound('El evento no existe');
         }
 
+        // Se pregunta una sola vez y vale para las dos cosas: si se le puede
+        // cobrar a quien compra la comisión de Rezonar y si se manda el
+        // marketplace_fee.
+        $admiteSplit = Cobros::eventoAdmiteSplit($db, $linkId);
+
         $resultado = Entradas::crearOrden($db, $linkId, [
             'nombre'   => $req->input('nombre'),
             'email'    => $req->input('email'),
@@ -40,6 +45,7 @@ class CheckoutHandler
             'cantidad' => $req->input('cantidad'),
             'lugares'  => $req->input('lugares'),
             'tipos'    => $req->input('tipos'),
+            'admite_split' => $admiteSplit,
         ]);
 
         if (!$resultado['ok']) {
@@ -75,15 +81,31 @@ class CheckoutHandler
         // La comisión sólo se manda si la página conectó por OAuth: con una
         // credencial pegada a mano Mercado Pago la ignora, y mandarla igual
         // haría creer que se está cobrando algo que no se cobra.
-        $comision = Cobros::eventoAdmiteSplit($db, $linkId)
-            ? Comision::sobre($orden['total'])
-            : 0.0;
+        //
+        // Si la pagó quien compra, es exactamente lo que se le sumó (y ya
+        // vale 0 sin split). Si no, sale del total, como siempre.
+        if ($orden['cargos'] !== null) {
+            $comision = $orden['cargos']['plataforma'];
+        } else {
+            $comision = $admiteSplit ? Comision::sobre($orden['total']) : 0.0;
+        }
+
+        $items = self::itemsDelCobro($evento['text'], $orden);
+
+        // Lo que ve quien compra en Mercado Pago tiene que ser exactamente lo
+        // que vio acá y lo que se va a comparar con el pago al acreditarlo. Si
+        // por cualquier motivo no suma, no se cobra.
+        if (self::sumaDeItems($items) !== (int) round($orden['total'] * 100)) {
+            self::cancelar($db, $orden['codigo']);
+
+            return Response::serverError('No se pudo armar el cobro');
+        }
 
         $preferencia = (new MercadoPago($token, $http))->crearPreferencia([
             'titulo'     => $evento['text'],
             'cantidad'   => $orden['cantidad'],
             'precio'     => $orden['precio'],
-            'items'      => self::itemsDelCobro($evento['text'], $orden['items']),
+            'items'      => $items,
             'moneda'     => $orden['moneda'],
             'referencia' => $orden['codigo'],
             'urlRetorno' => self::urlDeRetorno($orden['codigo']),
@@ -116,6 +138,7 @@ class CheckoutHandler
             'estado'  => 'reservada',
             'url'     => $preferencia['url'],
             'total'   => $orden['total'],
+            'cargos'  => $orden['cargos'],
         ]);
     }
 
@@ -317,6 +340,9 @@ class CheckoutHandler
             'estado'        => $vencida ? 'vencida' : $orden['estado'],
             'cantidad'      => (int) $orden['cantidad'],
             'total'         => (float) $orden['total'],
+            // Si quien compró pagó las comisiones, el desglose de lo pagado.
+            // null en las compras sin cargos: ahí el total es el precio.
+            'desglose'      => self::desglose($orden),
             'moneda'        => $orden['moneda'],
             'nombre'        => $orden['nombre'],
             'evento'        => $orden['evento'],
@@ -383,33 +409,84 @@ class CheckoutHandler
     }
 
     /**
-     * Un renglón del checkout por tipo, para que el comprador vea qué paga.
+     * Los renglones del checkout, para que el comprador vea qué paga.
      *
-     * Los de precio 0 no van: Mercado Pago no acepta un ítem sin precio, y no
-     * cambian el total. Sin tipos no hay renglones y se cobra como siempre.
+     * Uno por tipo; sin tipos, uno solo con el precio del evento. Los de
+     * precio 0 no van: Mercado Pago no acepta un ítem sin precio, y no
+     * cambian el total.
      *
-     * @return array|null
+     * Si quien compra paga las comisiones, van como dos renglones más, con el
+     * mismo nombre que en la pantalla y en el mail: así el total de Mercado
+     * Pago es, al centavo, el que se le mostró.
+     *
+     * @return array
      */
-    private static function itemsDelCobro($titulo, array $items)
+    public static function itemsDelCobro($titulo, array $orden)
     {
-        $cobrados = array_values(array_filter($items, function ($item) {
+        $cobrados = array_values(array_filter($orden['items'], function ($item) {
             return $item['precio'] > 0;
         }));
 
-        if ($cobrados === []) {
+        // Una promo se cobra por promo: tres personas en una 2x1 son dos.
+        $renglones = $cobrados === []
+            ? [['titulo' => $titulo, 'cantidad' => $orden['cantidad'], 'precio' => $orden['precio']]]
+            : array_map(function ($item) use ($titulo) {
+                $personas = isset($item['personas']) ? $item['personas'] : 1;
+
+                return [
+                    'titulo'   => $titulo . ' — ' . $item['nombre'],
+                    'cantidad' => TiposDeEntrada::unidades($item['cantidad'], $personas),
+                    'precio'   => $item['precio'],
+                ];
+            }, $cobrados);
+
+        $cargos = isset($orden['cargos']) ? $orden['cargos'] : null;
+
+        if ($cargos !== null && $cargos['mercadopago'] > 0) {
+            $renglones[] = ['titulo' => self::CARGO_MERCADOPAGO, 'cantidad' => 1, 'precio' => $cargos['mercadopago']];
+        }
+
+        if ($cargos !== null && $cargos['plataforma'] > 0) {
+            $renglones[] = ['titulo' => self::CARGO_PLATAFORMA, 'cantidad' => 1, 'precio' => $cargos['plataforma']];
+        }
+
+        return $renglones;
+    }
+
+    /** Cómo se llaman los cargos en el checkout, la pantalla y el mail. */
+    const CARGO_MERCADOPAGO = 'Comisión de Mercado Pago';
+    const CARGO_PLATAFORMA = 'Comisión de Rezon.ar';
+
+    /** Lo que suman los renglones, en centavos, como lo va a sumar Mercado Pago. */
+    private static function sumaDeItems(array $items)
+    {
+        $suma = 0;
+
+        foreach ($items as $item) {
+            $suma += (int) $item['cantidad'] * (int) round((float) $item['precio'] * 100);
+        }
+
+        return $suma;
+    }
+
+    /**
+     * Lo que pagó quien compró, separado: entradas, Mercado Pago, Rezon.ar.
+     * null si la compra no tuvo cargos (el total es el precio).
+     */
+    public static function desglose(array $orden)
+    {
+        $cargos = CargosAlComprador::deLaOrden($orden);
+
+        if ($cargos <= 0) {
             return null;
         }
 
-        // Una promo se cobra por promo: tres personas en una 2x1 son dos.
-        return array_map(function ($item) use ($titulo) {
-            $personas = isset($item['personas']) ? $item['personas'] : 1;
-
-            return [
-                'titulo'   => $titulo . ' — ' . $item['nombre'],
-                'cantidad' => TiposDeEntrada::unidades($item['cantidad'], $personas),
-                'precio'   => $item['precio'],
-            ];
-        }, $cobrados);
+        return [
+            'entradas'    => CargosAlComprador::precioDeLaOrden($orden),
+            'mercadopago' => round((float) $orden['cargo_mercadopago'], 2),
+            'plataforma'  => round((float) $orden['cargo_plataforma'], 2),
+            'total'       => round((float) $orden['total'], 2),
+        ];
     }
 
     private static function evento($db, $linkId)

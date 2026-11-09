@@ -1020,4 +1020,95 @@ class EntradasHandlerTest extends HandlerTestCase
 
         $this->assertSame(400, $r->status);
     }
+
+    // ------------------------------------------- comisiones a cargo del comprador
+
+    protected function tearDown(): void
+    {
+        \CargosAlComprador::forzar(null);
+        parent::tearDown();
+    }
+
+    /** Mientras la función global esté apagada el editor ni ofrece la opción. */
+    public function testConLaFuncionApagadaElEditorNoOfreceCargos()
+    {
+        $this->puedeAdministrarElEvento();
+        $this->db->onSelect('FROM event_ticketing WHERE link_id', [[
+            'link_id' => 100, 'activo' => 1, 'capacidad' => 80, 'precio' => '2000.00',
+            'moneda' => 'ARS', 'max_por_compra' => 6, 'plano' => null,
+        ]]);
+
+        $r = EntradasHandler::config($this->db, new Request('GET', [], ['link_id' => 100], $this->sesion()));
+
+        $this->assertNull($r->body['cargos']);
+        $this->assertFalse($r->body['entradas']['cargos_al_comprador']);
+    }
+
+    public function testConLaFuncionEncendidaElEditorRecibeLasTasas()
+    {
+        \CargosAlComprador::forzar([
+            'mp_porcentaje' => 4.39, 'mp_fijo' => 0, 'mp_iva' => 21, 'plataforma_porcentaje' => 1.5, 'plataforma_iva' => 0,
+        ]);
+        $this->puedeAdministrarElEvento();
+        $this->db->onSelect('FROM event_ticketing WHERE link_id', [[
+            'link_id' => 100, 'activo' => 1, 'capacidad' => 80, 'precio' => '2000.00',
+            'moneda' => 'ARS', 'max_por_compra' => 6, 'plano' => null, 'cargos_al_comprador' => 1,
+        ]]);
+        // Una para el estado de la cuenta y otra para saber si admite split.
+        for ($i = 0; $i < 2; $i++) {
+            $this->db->onSelect('SELECT lg.page_id', [[5]]);
+            $this->db->onSelect('FROM page_payment_settings WHERE page_id', [[
+                'page_id' => 5, 'mp_user_id' => '987654321', 'modo' => 'produccion',
+                'conectado_por' => 'oauth', 'verificado_en' => '2026-08-16 20:00:00',
+            ]]);
+        }
+
+        $r = EntradasHandler::config($this->db, new Request('GET', [], ['link_id' => 100], $this->sesion()));
+
+        $this->assertSame(4.39, $r->body['cargos']['mp_porcentaje']);
+        $this->assertTrue($r->body['entradas']['cargos_al_comprador']);
+    }
+
+    public function testNoSePuedenSumarCargosConLaFuncionApagada()
+    {
+        $this->puedeAdministrarElEvento();
+
+        $r = EntradasHandler::config($this->db, new Request('POST', [
+            'precio' => 0, 'cargos_al_comprador' => true,
+        ], ['link_id' => 100], $this->sesion()));
+
+        $this->assertSame(400, $r->status);
+        $this->assertSame(0, $this->db->countCalls('INSERT INTO event_ticketing'));
+    }
+
+    public function testApagarLosCargosSiempreSePuede()
+    {
+        $this->puedeAdministrarElEvento();
+        $this->db->onSelect('COALESCE(SUM(cantidad), 0)', [[0]]);
+        $this->db->onWrite('INSERT INTO event_ticketing', 1);
+
+        $r = EntradasHandler::config($this->db, new Request('POST', [
+            'capacidad' => 100, 'precio' => 0, 'cargos_al_comprador' => false,
+        ], ['link_id' => 100], $this->sesion()));
+
+        $this->assertSame(200, $r->status);
+        $this->assertSame(0, $this->db->paramsFor('INSERT INTO event_ticketing')[8]);
+    }
+
+    public function testConLaFuncionEncendidaElEventoPuedeSumarCargos()
+    {
+        \CargosAlComprador::forzar([
+            'mp_porcentaje' => 4.39, 'mp_fijo' => 0, 'mp_iva' => 21, 'plataforma_porcentaje' => 1.5, 'plataforma_iva' => 0,
+        ]);
+        $this->puedeAdministrarElEvento();
+        $this->db->onSelect('COALESCE(SUM(cantidad), 0)', [[0]]);
+        $this->db->onWrite('INSERT INTO event_ticketing', 1);
+
+        $r = EntradasHandler::config($this->db, new Request('POST', [
+            'capacidad' => 100, 'precio' => 0, 'cargos_al_comprador' => true,
+        ], ['link_id' => 100], $this->sesion()));
+
+        $this->assertSame(200, $r->status);
+        $this->assertSame(1, $this->db->paramsFor('INSERT INTO event_ticketing')[8]);
+    }
 }

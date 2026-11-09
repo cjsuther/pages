@@ -63,14 +63,22 @@ class Entradas
      * quedan los que estaban. Con tipos, el precio del evento es el de
      * referencia que sale de ellos, y lo que venga en 'precio' no se usa.
      *
-     * @param array $datos ['activo', 'capacidad', 'precio', 'moneda', 'max_por_compra', 'plano'?, 'tipos'?]
+     * La llave de las comisiones a cargo de quien compra sigue la misma regla:
+     * si no viene, queda como estaba.
+     *
+     * @param array $datos ['activo', 'capacidad', 'precio', 'moneda', 'max_por_compra', 'plano'?, 'tipos'?, 'cargos_al_comprador'?]
      * @return array{ok: bool, error: string|null}
      */
     public static function guardarConfig($db, $linkId, array $datos)
     {
         $guardada = array_key_exists('plano', $datos) && array_key_exists('tipos', $datos)
+            && array_key_exists('cargos_al_comprador', $datos)
             ? null
             : self::configDelEvento($db, $linkId);
+
+        $cargosAlComprador = array_key_exists('cargos_al_comprador', $datos)
+            ? !empty($datos['cargos_al_comprador'])
+            : ($guardada !== null && !empty($guardada['cargos_al_comprador']));
 
         $plano = array_key_exists('plano', $datos)
             ? $datos['plano']
@@ -157,8 +165,8 @@ class Entradas
         }
 
         $stmt = $db->prepare('
-            INSERT INTO event_ticketing (link_id, activo, capacidad, precio, moneda, max_por_compra, plano, tipos)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO event_ticketing (link_id, activo, capacidad, precio, moneda, max_por_compra, plano, tipos, cargos_al_comprador)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 activo = VALUES(activo),
                 capacidad = VALUES(capacidad),
@@ -166,12 +174,14 @@ class Entradas
                 moneda = VALUES(moneda),
                 max_por_compra = VALUES(max_por_compra),
                 plano = VALUES(plano),
-                tipos = VALUES(tipos)
+                tipos = VALUES(tipos),
+                cargos_al_comprador = VALUES(cargos_al_comprador)
         ');
         $stmt->execute([
             (int) $linkId, $activo, $capacidad, $precio, $moneda, $maxPorCompra,
             $plano === null ? null : json_encode($plano, JSON_UNESCAPED_UNICODE),
             $tipos === null ? null : json_encode($tipos, JSON_UNESCAPED_UNICODE),
+            $cargosAlComprador ? 1 : 0,
         ]);
 
         return ['ok' => true, 'error' => null];
@@ -350,7 +360,26 @@ class Entradas
             'tipos'          => $tipos === null
                 ? null
                 : self::tiposConDisponibles($tipos, self::ocupadasPorTipo($db, $linkId), $disponibles),
+            // Si quien compra paga las comisiones, con qué tasas: la pantalla
+            // repite la cuenta para mostrar el desglose mientras se elige.
+            // null = el precio es el total, como siempre.
+            'cargos'         => self::tasasDeCargos($db, $linkId, $config),
         ];
+    }
+
+    /**
+     * Las tasas con las que se le suman las comisiones a quien compra en este
+     * evento, o null si las absorbe el organizador.
+     */
+    public static function tasasDeCargos($db, $linkId, array $config)
+    {
+        // Sin la función global ni la llave del evento no hace falta preguntar
+        // nada más: es el caso de todos los eventos hasta que se encienda.
+        if (empty($config['cargos_al_comprador']) || !CargosAlComprador::disponible()) {
+            return null;
+        }
+
+        return CargosAlComprador::tasasDelEvento($config, Cobros::eventoAdmiteSplit($db, $linkId));
     }
 
     /**
@@ -370,7 +399,12 @@ class Entradas
      * suma. Con plano el tipo lo pone la zona de cada lugar elegido. El cupo de
      * cada tipo se verifica dentro del mismo bloqueo.
      *
-     * @param array $datos ['nombre', 'email', 'telefono', 'cantidad', 'lugares'?, 'tipos'?]
+     * Si el evento suma las comisiones a quien compra, el total es el precio
+     * de las entradas más esos cargos (ver CargosAlComprador), y los dos
+     * montos quedan congelados en la orden. El precio unitario y los
+     * renglones por tipo siguen diciendo lo que vale cada entrada.
+     *
+     * @param array $datos ['nombre', 'email', 'telefono', 'cantidad', 'lugares'?, 'tipos'?, 'admite_split'?]
      * @return array{ok: bool, error: string|null, orden: array|null, ocupados?: string[]}
      */
     public static function crearOrden($db, $linkId, array $datos)
@@ -487,6 +521,17 @@ class Entradas
             // una compra sólo de entradas en 0 —"Invitado"— no tiene nada que
             // pagar aunque el resto de los tipos cobre.
             $esGratis = $total <= 0;
+
+            // Las comisiones van sobre lo que suma la compra (ya con promos),
+            // en una sola cuenta: así el redondeo es uno y no uno por entrada.
+            // Una compra gratis no suma nada: calcular() devuelve ceros.
+            $tasas = CargosAlComprador::tasasDelEvento($config, !empty($datos['admite_split']));
+            $cargos = $esGratis ? null : ($tasas === null ? null : CargosAlComprador::calcular($total, $tasas));
+            $precioEntradas = $total;
+
+            if ($cargos !== null) {
+                $total = $cargos['total'];
+            }
             $codigo = self::codigoLibre($db);
 
             // La compra se ata también al registro del evento, que es lo que
@@ -498,8 +543,9 @@ class Entradas
             $insert = $db->prepare('
                 INSERT INTO ticket_orders
                     (codigo, link_id, record_id, nombre, email, telefono, cantidad,
-                     precio_unitario, total, moneda, estado, reserva_vence_en, pagada_en)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     precio_unitario, total, cargo_mercadopago, cargo_plataforma,
+                     moneda, estado, reserva_vence_en, pagada_en)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ');
             $insert->execute([
                 $codigo,
@@ -512,6 +558,8 @@ class Entradas
                 $cantidad,
                 $precio,
                 $total,
+                $cargos === null ? 0 : $cargos['mercadopago'],
+                $cargos === null ? 0 : $cargos['plataforma'],
                 $config['moneda'],
                 $esGratis ? 'pagada' : 'reservada',
                 $esGratis ? null : date('Y-m-d H:i:s', time() + self::MINUTOS_DE_RESERVA * 60),
@@ -549,7 +597,14 @@ class Entradas
                     'codigo'    => $codigo,
                     'cantidad'  => $cantidad,
                     'precio'    => $precio,
+                    // Lo que se cobra. Con cargos, precio de las entradas + cargos.
                     'total'     => $total,
+                    'precio_entradas' => $precioEntradas,
+                    // null si quien compra no paga comisiones.
+                    'cargos'    => $cargos === null ? null : [
+                        'mercadopago' => $cargos['mercadopago'],
+                        'plataforma'  => $cargos['plataforma'],
+                    ],
                     'moneda'    => $config['moneda'],
                     'estado'    => $esGratis ? 'pagada' : 'reservada',
                     'es_gratis' => $esGratis,
@@ -858,7 +913,8 @@ class Entradas
     {
         $stmt = $db->prepare("
             SELECT id, codigo, nombre, email, telefono, cantidad, ingresadas, ingreso_en,
-                   precio_unitario, total, comision, comision_porcentaje,
+                   precio_unitario, total, cargo_mercadopago, cargo_plataforma,
+                   comision, comision_porcentaje,
                    moneda, estado, reserva_vence_en,
                    mp_payment_id, pagada_en, created_at,
                    mp_neto, mp_comisiones, mp_comision_cobrada, acreditacion_en, modificada_en,
@@ -883,6 +939,9 @@ class Entradas
         $vendidas = 0;
         $ingresadas = 0;
         $recaudado = 0.0;
+        // Lo que se les sumó a quienes compraron por las comisiones. Está
+        // dentro de lo recaudado, pero no es del organizador.
+        $cargos = 0.0;
         $comisiones = 0.0;
         // Lo que Mercado Pago dice que cobró de comisión de plataforma. Se
         // acumula aparte de $comisiones —que es lo que pedimos— porque la
@@ -918,9 +977,14 @@ class Entradas
                 $vendidas += (int) $orden['cantidad'];
                 $ingresadas += isset($orden['ingresadas']) ? (int) $orden['ingresadas'] : 0;
                 $recaudado += (float) $orden['total'];
+                $cargos += CargosAlComprador::deLaOrden($orden);
                 $comisiones += (float) $orden['comision'];
 
-                $cobradoPorItem = self::cobradoPorItem($orden['items'], (float) $orden['total']);
+                // Por tipo va lo que valían las entradas, sin los cargos: si
+                // no, una compra con cargos parecería modificada y el desglose
+                // le repartiría a cada tipo comisiones que no son suyas.
+                $precioEntradas = CargosAlComprador::precioDeLaOrden($orden);
+                $cobradoPorItem = self::cobradoPorItem($orden['items'], $precioEntradas);
 
                 foreach ($orden['items'] as $i => $item) {
                     if (!isset($porTipo[$item['tipo']])) {
@@ -938,7 +1002,7 @@ class Entradas
 
                 if ($orden['items'] === []) {
                     $sinTipo['personas'] += (int) $orden['cantidad'];
-                    $sinTipo['recaudado'] += (float) $orden['total'];
+                    $sinTipo['recaudado'] += $precioEntradas;
                 }
 
                 // null es "no lo sabemos" —una venta anterior a que se guardara
@@ -965,9 +1029,11 @@ class Entradas
 
                 // Sin dato de Mercado Pago se cae a la estimación de antes
                 // —total menos nuestra comisión—, que se queda corta en la de
-                // Mercado Pago pero es mejor que no contar la venta.
+                // Mercado Pago pero es mejor que no contar la venta. Si quien
+                // compró pagó la de Mercado Pago, también se resta: la
+                // estimación es el precio de las entradas.
                 $netoReal += $neto === null
-                    ? (float) $orden['total'] - (float) $orden['comision']
+                    ? (float) $orden['total'] - (float) $orden['comision'] - (float) (isset($orden['cargo_mercadopago']) ? $orden['cargo_mercadopago'] : 0)
                     : (float) $neto;
 
                 if ($neto === null) {
@@ -996,7 +1062,12 @@ class Entradas
                 // Cuántas de las vendidas ya pasaron por la puerta.
                 'ingresadas' => $ingresadas,
                 'reservadas' => $reservadas,
+                // Lo que pagaron quienes compraron, con los cargos incluidos.
                 'recaudado'  => round($recaudado, 2),
+                // De eso, cuánto fueron comisiones sumadas al precio (0 si el
+                // evento nunca las sumó) y cuánto el precio de las entradas.
+                'cargos_al_comprador' => round($cargos, 2),
+                'precio_entradas'     => round($recaudado - $cargos, 2),
                 // Lo que pedimos que se nos descuente. Sólo sirve para
                 // compararlo contra lo cobrado: si no coinciden, el
                 // marketplace_fee se está mandando y Mercado Pago lo ignora.
@@ -1215,6 +1286,7 @@ class Entradas
         $plano = isset($config['plano']) && $config['plano'] !== '' ? json_decode($config['plano'], true) : null;
         $config['plano'] = is_array($plano) ? $plano : null;
         $config['tipos'] = TiposDeEntrada::decodificar(isset($config['tipos']) ? $config['tipos'] : null);
+        $config['cargos_al_comprador'] = !empty($config['cargos_al_comprador']);
 
         return $config;
     }
