@@ -1,0 +1,322 @@
+{
+  "_comentario": "Casos del cálculo de comisiones al comprador. Los usan api/tests/Unit/Lib/CargosAlCompradorTest.php y frontend/tests/utils/cargos.test.js: PHP y el navegador tienen que dar exactamente lo mismo. Los esperados salen de aritmética exacta (fracciones), no de ninguna de las dos implementaciones.",
+  "casos": [
+    {
+      "nombre": "apagada: no se suma nada",
+      "precio": 5000,
+      "tasas": null,
+      "esperado": {
+        "precio": 5000.0,
+        "mercadopago": 0.0,
+        "plataforma": 0.0,
+        "total": 5000.0
+      }
+    },
+    {
+      "nombre": "entrada gratis: no suma comisión",
+      "precio": 0,
+      "tasas": {
+        "mp_porcentaje": 4.39,
+        "mp_fijo": 0,
+        "mp_iva": 21,
+        "plataforma_porcentaje": 1.5,
+        "plataforma_iva": 0
+      },
+      "esperado": {
+        "precio": 0.0,
+        "mercadopago": 0.0,
+        "plataforma": 0.0,
+        "total": 0.0
+      }
+    },
+    {
+      "nombre": "precio negativo se trata como gratis",
+      "precio": -100,
+      "tasas": {
+        "mp_porcentaje": 4.39,
+        "mp_fijo": 0,
+        "mp_iva": 21,
+        "plataforma_porcentaje": 1.5,
+        "plataforma_iva": 0
+      },
+      "esperado": {
+        "precio": 0.0,
+        "mercadopago": 0.0,
+        "plataforma": 0.0,
+        "total": 0.0
+      }
+    },
+    {
+      "nombre": "una entrada redonda",
+      "precio": 10000,
+      "tasas": {
+        "mp_porcentaje": 4.39,
+        "mp_fijo": 0,
+        "mp_iva": 21,
+        "plataforma_porcentaje": 1.5,
+        "plataforma_iva": 0
+      },
+      "esperado": {
+        "precio": 10000.0,
+        "mercadopago": 569.41,
+        "plataforma": 150.0,
+        "total": 10719.41
+      }
+    },
+    {
+      "nombre": "un centavo",
+      "precio": 0.01,
+      "tasas": {
+        "mp_porcentaje": 4.39,
+        "mp_fijo": 0,
+        "mp_iva": 21,
+        "plataforma_porcentaje": 1.5,
+        "plataforma_iva": 0
+      },
+      "esperado": {
+        "precio": 0.01,
+        "mercadopago": 0.01,
+        "plataforma": 0.0,
+        "total": 0.02
+      }
+    },
+    {
+      "nombre": "un peso: la de Rezon.ar cae justo en medio centavo",
+      "precio": 1,
+      "tasas": {
+        "mp_porcentaje": 4.39,
+        "mp_fijo": 0,
+        "mp_iva": 21,
+        "plataforma_porcentaje": 1.5,
+        "plataforma_iva": 0
+      },
+      "esperado": {
+        "precio": 1.0,
+        "mercadopago": 0.06,
+        "plataforma": 0.02,
+        "total": 1.08
+      }
+    },
+    {
+      "nombre": "con centavos",
+      "precio": 1234.56,
+      "tasas": {
+        "mp_porcentaje": 4.39,
+        "mp_fijo": 0,
+        "mp_iva": 21,
+        "plataforma_porcentaje": 1.5,
+        "plataforma_iva": 0
+      },
+      "esperado": {
+        "precio": 1234.56,
+        "mercadopago": 70.3,
+        "plataforma": 18.52,
+        "total": 1323.38
+      }
+    },
+    {
+      "nombre": "periódico",
+      "precio": 3333.33,
+      "tasas": {
+        "mp_porcentaje": 4.39,
+        "mp_fijo": 0,
+        "mp_iva": 21,
+        "plataforma_porcentaje": 1.5,
+        "plataforma_iva": 0
+      },
+      "esperado": {
+        "precio": 3333.33,
+        "mercadopago": 189.81,
+        "plataforma": 50.0,
+        "total": 3573.14
+      }
+    },
+    {
+      "nombre": "casi cien mil",
+      "precio": 99999.99,
+      "tasas": {
+        "mp_porcentaje": 4.39,
+        "mp_fijo": 0,
+        "mp_iva": 21,
+        "plataforma_porcentaje": 1.5,
+        "plataforma_iva": 0
+      },
+      "esperado": {
+        "precio": 99999.99,
+        "mercadopago": 5694.04,
+        "plataforma": 1500.0,
+        "total": 107194.03
+      }
+    },
+    {
+      "nombre": "varias entradas: 3 x 7500",
+      "precio": 22500,
+      "tasas": {
+        "mp_porcentaje": 4.39,
+        "mp_fijo": 0,
+        "mp_iva": 21,
+        "plataforma_porcentaje": 1.5,
+        "plataforma_iva": 0
+      },
+      "esperado": {
+        "precio": 22500.0,
+        "mercadopago": 1281.16,
+        "plataforma": 337.5,
+        "total": 24118.66
+      }
+    },
+    {
+      "nombre": "promo 2x1: la comisión va sobre lo que se cobra por la promo",
+      "precio": 15000,
+      "tasas": {
+        "mp_porcentaje": 4.39,
+        "mp_fijo": 0,
+        "mp_iva": 21,
+        "plataforma_porcentaje": 1.5,
+        "plataforma_iva": 0
+      },
+      "esperado": {
+        "precio": 15000.0,
+        "mercadopago": 854.11,
+        "plataforma": 225.0,
+        "total": 16079.11
+      }
+    },
+    {
+      "nombre": "acreditación inmediata y Rezon.ar con IVA",
+      "precio": 10000,
+      "tasas": {
+        "mp_porcentaje": 6.29,
+        "mp_fijo": 0,
+        "mp_iva": 21,
+        "plataforma_porcentaje": 1.5,
+        "plataforma_iva": 21
+      },
+      "esperado": {
+        "precio": 10000.0,
+        "mercadopago": 838.74,
+        "plataforma": 181.5,
+        "total": 11020.24
+      }
+    },
+    {
+      "nombre": "acreditación inmediata, precio impar",
+      "precio": 4567.89,
+      "tasas": {
+        "mp_porcentaje": 6.29,
+        "mp_fijo": 0,
+        "mp_iva": 21,
+        "plataforma_porcentaje": 1.5,
+        "plataforma_iva": 21
+      },
+      "esperado": {
+        "precio": 4567.89,
+        "mercadopago": 383.13,
+        "plataforma": 82.91,
+        "total": 5033.93
+      }
+    },
+    {
+      "nombre": "con fijo por operación y sin split",
+      "precio": 2500,
+      "tasas": {
+        "mp_porcentaje": 3.49,
+        "mp_fijo": 10,
+        "mp_iva": 21,
+        "plataforma_porcentaje": 0,
+        "plataforma_iva": 0
+      },
+      "esperado": {
+        "precio": 2500.0,
+        "mercadopago": 122.87,
+        "plataforma": 0.0,
+        "total": 2622.87
+      }
+    },
+    {
+      "nombre": "con fijo por operación, precio chico",
+      "precio": 50,
+      "tasas": {
+        "mp_porcentaje": 3.49,
+        "mp_fijo": 10,
+        "mp_iva": 21,
+        "plataforma_porcentaje": 0,
+        "plataforma_iva": 0
+      },
+      "esperado": {
+        "precio": 50.0,
+        "mercadopago": 14.84,
+        "plataforma": 0.0,
+        "total": 64.84
+      }
+    },
+    {
+      "nombre": "tasas en cero: el total es el precio",
+      "precio": 8000,
+      "tasas": {
+        "mp_porcentaje": 0,
+        "mp_fijo": 0,
+        "mp_iva": 0,
+        "plataforma_porcentaje": 0,
+        "plataforma_iva": 0
+      },
+      "esperado": {
+        "precio": 8000.0,
+        "mercadopago": 0.0,
+        "plataforma": 0.0,
+        "total": 8000.0
+      }
+    },
+    {
+      "nombre": "tasas de los tests",
+      "precio": 20000,
+      "tasas": {
+        "mp_porcentaje": 7.25,
+        "mp_fijo": 0,
+        "mp_iva": 0,
+        "plataforma_porcentaje": 10,
+        "plataforma_iva": 0
+      },
+      "esperado": {
+        "precio": 20000.0,
+        "mercadopago": 1719.68,
+        "plataforma": 2000.0,
+        "total": 23719.68
+      }
+    },
+    {
+      "nombre": "tasas de los tests, precio chico",
+      "precio": 7.77,
+      "tasas": {
+        "mp_porcentaje": 7.25,
+        "mp_fijo": 0,
+        "mp_iva": 0,
+        "plataforma_porcentaje": 10,
+        "plataforma_iva": 0
+      },
+      "esperado": {
+        "precio": 7.77,
+        "mercadopago": 0.67,
+        "plataforma": 0.78,
+        "total": 9.22
+      }
+    },
+    {
+      "nombre": "un millón y medio",
+      "precio": 1500000,
+      "tasas": {
+        "mp_porcentaje": 4.39,
+        "mp_fijo": 0,
+        "mp_iva": 21,
+        "plataforma_porcentaje": 1.5,
+        "plataforma_iva": 0
+      },
+      "esperado": {
+        "precio": 1500000.0,
+        "mercadopago": 85410.61,
+        "plataforma": 22500.0,
+        "total": 1607910.61
+      }
+    }
+  ]
+}
