@@ -177,7 +177,16 @@ function PanelVentas({ linkId, apiUrl, token, nombreEvento = '' }) {
         {resumen.ingresadas > 0 && (
           <Dato etiqueta="ENTRARON" valor={`${resumen.ingresadas}/${resumen.vendidas}`} />
         )}
-        <Dato etiqueta="RECAUDADO" valor={formatearPrecio(resumen.recaudado)} />
+        {/* Si el evento sumó las comisiones al precio, lo recaudado es lo que
+            pagaron quienes compraron: se separa lo que valían las entradas de
+            lo que se les sumó, que no es del organizador. */}
+        <Dato
+          etiqueta="RECAUDADO"
+          valor={formatearPrecio(resumen.recaudado)}
+          detalle={resumen.cargos_al_comprador > 0
+            ? `${formatearPrecio(resumen.precio_entradas)} en entradas y ${formatearPrecio(resumen.cargos_al_comprador)} de comisiones que pagaron quienes compraron`
+            : null}
+        />
         {/* Lo que efectivamente entra a la cuenta. Es el número con el que el
             dueño pone precios, así que tiene que estar descontado todo: antes
             restaba sólo la comisión de Rezonar e ignoraba la de Mercado Pago,
@@ -325,6 +334,12 @@ function PanelVentas({ linkId, apiUrl, token, nombreEvento = '' }) {
                   </td>
                   <td className="px-3 py-2 text-tinta text-right whitespace-nowrap">
                     {formatearPrecio(o.total, o.moneda)}
+                    {cargosDeLaOrden(o) > 0 && (
+                      <span className="block text-xs text-tinta-suave">
+                        entradas {formatearPrecio(o.total - cargosDeLaOrden(o), o.moneda)}
+                        {' + '}comisiones {formatearPrecio(cargosDeLaOrden(o), o.moneda)}
+                      </span>
+                    )}
                     {o.mp_neto !== null && o.mp_neto !== undefined && (
                       <span className="block text-xs text-tinta-suave">
                         te quedan {formatearPrecio(o.mp_neto, o.moneda)}
@@ -568,6 +583,11 @@ function detalleDeDescuentos(resumen) {
   }
 
   return partes.length ? `menos ${partes.join(' y ')}` : null;
+}
+
+/** Lo que se le sumó a quien compró por las comisiones (0 si no se sumó nada). */
+function cargosDeLaOrden(o) {
+  return Math.round(((Number(o.cargo_mercadopago) || 0) + (Number(o.cargo_plataforma) || 0)) * 100) / 100;
 }
 
 function Dato({ etiqueta, valor, detalle }) {

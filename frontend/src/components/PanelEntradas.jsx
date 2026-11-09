@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Loader2, AlertTriangle, Check } from 'lucide-react';
 import { formatearPrecio, esGratis } from '../utils/entradas';
 import { formatearPorcentaje } from '../utils/comisiones';
+import { calcularCargos } from '../utils/cargos';
 import { lugaresDelPlano, lugaresRepetidos, planoInicial } from '../utils/plano';
 import { algunoCobra, problemaConLosTipos, tiposIniciales } from '../utils/tiposDeEntrada';
 import EditorDePlano from './EditorDePlano';
@@ -30,6 +31,10 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio, enlace = null, onGuard
   const [ocupadas, setOcupadas] = useState(0);
   const [comision, setComision] = useState(0);
   const [mercadoPago, setMercadoPago] = useState(null);
+  // Tasas para sumarle las comisiones a quien compra. null mientras la
+  // función esté apagada en la plataforma: la opción ni se ofrece.
+  const [tasasDeCargos, setTasasDeCargos] = useState(null);
+  const [cargosAlComprador, setCargosAlComprador] = useState(false);
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState(null);
@@ -72,6 +77,7 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio, enlace = null, onGuard
         setOcupadas(cuerpo.ocupadas || 0);
         setComision(cuerpo.comision || 0);
         setMercadoPago(cuerpo.mercadopago || null);
+        setTasasDeCargos(cuerpo.cargos || null);
         setConfig(cuerpo.entradas);
         setLugaresOcupados(cuerpo.lugares_ocupados || []);
         setOcupadasPorTipo(cuerpo.ocupadas_por_tipo || {});
@@ -79,6 +85,7 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio, enlace = null, onGuard
         if (cuerpo.entradas) {
           setPlano(cuerpo.entradas.plano || null);
           setTipos(cuerpo.entradas.tipos || null);
+          setCargosAlComprador(Boolean(cuerpo.entradas.cargos_al_comprador));
 
           setForm({
             capacidad: Number(cuerpo.entradas.capacidad),
@@ -141,7 +148,12 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio, enlace = null, onGuard
       // El plano y los tipos van siempre, también en null: es lo que le dice
       // al servidor que se sacan. Con plano la capacidad la calcula él, y con
       // tipos el precio.
-      body: JSON.stringify({ ...form, activo, plano, tipos }),
+      // La llave de las comisiones sólo va si la plataforma la ofrece: si no,
+      // el servidor deja la que había.
+      body: JSON.stringify({
+        ...form, activo, plano, tipos,
+        ...(tasasDeCargos ? { cargos_al_comprador: cargosAlComprador } : {}),
+      }),
     });
     const cuerpo = await r.json();
 
@@ -194,6 +206,9 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio, enlace = null, onGuard
 
   const sinMercadoPago = !cobros || !cobros.configurado;
   const quiereCobrar = tipos ? algunoCobra(tipos) : !esGratis(form.precio);
+  // Con las comisiones a cargo de quien compra, al organizador le llega el
+  // precio entero: los textos de "menos la comisión" ya no aplican.
+  const sumaCargos = Boolean(tasasDeCargos) && cargosAlComprador;
   const problemaDeTipos = problemaConLosTipos(tipos);
   const capacidad = plano ? lugaresDelPlano(plano).length : Number(form.capacidad);
   const disponibles = Math.max(0, capacidad - ocupadas);
@@ -372,7 +387,7 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio, enlace = null, onGuard
                   {problemaDeTipos}
                 </p>
               )}
-              {quiereCobrar && comision > 0 && cobros && cobros.admite_split && (
+              {quiereCobrar && !sumaCargos && comision > 0 && cobros && cobros.admite_split && (
                 <p className="text-xs text-verde-oscuro">
                   De cada entrada que cobra se descuenta la comisión de Rezonar ({formatearPorcentaje(comision)}%)
                   {mercadoPago && (
@@ -431,7 +446,7 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio, enlace = null, onGuard
 
               {/* Lo que importa a la hora de poner el precio no es lo que paga
                   el comprador sino lo que termina entrando a la cuenta. */}
-              {!esGratis(form.precio) && comision > 0 && cobros && cobros.admite_split && (
+              {!esGratis(form.precio) && !sumaCargos && comision > 0 && cobros && cobros.admite_split && (
                 <>
                   <p className="text-xs text-verde-oscuro mt-1">
                     Menos la comisión de Rezonar ({formatearPorcentaje(comision)}%):{' '}
@@ -472,6 +487,20 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio, enlace = null, onGuard
               Para que una sola persona no se lleve todo el cupo.
             </p>
           </div>
+
+          {quiereCobrar && tasasDeCargos && (
+            <CargosAlComprador
+              activo={cargosAlComprador}
+              onCambiar={(valor) => {
+                setCargosAlComprador(valor);
+                setGuardado(false);
+                setError(null);
+              }}
+              tasas={tasasDeCargos}
+              precioDeEjemplo={tipos ? precioDeEjemploDeTipos(tipos) : Number(form.precio)}
+              conVentas={ocupadas > 0}
+            />
+          )}
 
           {ocupadas > 0 && (
             <div className="border border-borde bg-white p-4 text-sm">
@@ -573,6 +602,56 @@ function OpcionDeModo({
         <span className="block text-sm text-tinta-suave">{detalle}</span>
       </span>
     </label>
+  );
+}
+
+/** El precio más barato de los que cobran: el que se usa de ejemplo. */
+function precioDeEjemploDeTipos(tipos) {
+  const pagos = tipos.map((t) => Number(t.precio)).filter((p) => p > 0);
+  return pagos.length ? Math.min(...pagos) : 0;
+}
+
+/**
+ * La llave de las comisiones a cargo de quien compra, con un ejemplo hecho
+ * con la misma cuenta que se va a cobrar.
+ */
+function CargosAlComprador({ activo, onCambiar, tasas, precioDeEjemplo, conVentas }) {
+  const ejemplo = calcularCargos(precioDeEjemplo, tasas);
+
+  return (
+    <div className="border border-borde bg-white p-4 text-sm space-y-2">
+      <label className="flex items-start gap-3 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={activo}
+          onChange={(e) => onCambiar(e.target.checked)}
+          className="mt-1"
+        />
+        <span>
+          <span className="block font-semibold text-tinta">Sumar las comisiones al precio</span>
+          <span className="block text-tinta-suave">
+            Quien compra paga aparte la comisión de Mercado Pago
+            {tasas.plataforma_porcentaje > 0 && ' y la de Rezonar'}, y a vos te llega el precio que
+            pusiste.
+          </span>
+        </span>
+      </label>
+
+      {activo && ejemplo.precio > 0 && (
+        <p className="text-xs text-verde-oscuro">
+          Por una entrada de {formatearPrecio(ejemplo.precio)}, quien compra paga{' '}
+          <strong>{formatearPrecio(ejemplo.total)}</strong>: {formatearPrecio(ejemplo.mercadopago)} de
+          Mercado Pago
+          {ejemplo.plataforma > 0 && ` y ${formatearPrecio(ejemplo.plataforma)} de Rezonar`}.
+        </p>
+      )}
+
+      {conVentas && (
+        <p className="text-xs text-tinta-suave">
+          Las entradas ya vendidas no cambian: se aplica a las compras que se hagan desde que guardes.
+        </p>
+      )}
+    </div>
   );
 }
 

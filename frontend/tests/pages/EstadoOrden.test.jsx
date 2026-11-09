@@ -104,6 +104,27 @@ describe('EstadoOrden', () => {
       expect(screen.getByText(/3\.000/)).toBeInTheDocument();
     });
 
+    it('si pagó las comisiones, muestra qué fue cada parte del total', async () => {
+      await montar({
+        ...ORDEN,
+        total: 3557.96,
+        desglose: { entradas: 3000, mercadopago: 257.96, plataforma: 300, total: 3557.96 },
+      });
+
+      const desglose = screen.getByRole('list', { name: 'Lo que pagaste' });
+      expect(desglose).toHaveTextContent('Entradas');
+      expect(desglose).toHaveTextContent('Comisión de Mercado Pago');
+      expect(desglose).toHaveTextContent('257,96');
+      expect(desglose).toHaveTextContent('Comisión de Rezon.ar');
+      expect(screen.getByText(/3\.557,96/)).toBeInTheDocument();
+    });
+
+    it('sin comisiones a cargo de quien compra no hay desglose', async () => {
+      await montar({ ...ORDEN, desglose: null });
+
+      expect(screen.queryByRole('list', { name: 'Lo que pagaste' })).not.toBeInTheDocument();
+    });
+
     it('una reserva sin costo no muestra total', async () => {
       await montar({ ...ORDEN, total: 0 });
 

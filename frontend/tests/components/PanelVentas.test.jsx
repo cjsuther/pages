@@ -120,6 +120,24 @@ describe('PanelVentas', () => {
       expect(detalle).not.toHaveTextContent('Rezonar');
     });
 
+    /** Con comisiones a cargo de quien compra: lo que pagaron contra lo que vale lo vendido. */
+    it('separa lo que valían las entradas de las comisiones que pagaron los compradores', async () => {
+      await montar({
+        resumen: {
+          recaudado: 3557.96, cargos_al_comprador: 557.96, precio_entradas: 3000,
+          comision: 300, comision_cobrada: 300, comision_mercadopago: 257.96, neto: 3000,
+        },
+      });
+
+      expect(screen.getByText(/3\.000 en entradas y .*557,96 de comisiones que pagaron quienes compraron/)).toBeInTheDocument();
+    });
+
+    it('sin comisiones a cargo de quien compra, lo recaudado no se explica', async () => {
+      await montar({ resumen: { recaudado: 10000, neto: 10000 } });
+
+      expect(screen.queryByText(/de comisiones que pagaron/)).not.toBeInTheDocument();
+    });
+
     it('sin comisiones no muestra el detalle', async () => {
       await montar({
         resumen: { recaudado: 10000, comision: 0, comision_mercadopago: 0, neto: 10000 },
@@ -189,6 +207,20 @@ describe('PanelVentas', () => {
 
       expect(screen.getByText('1234')).toBeInTheDocument();
       expect(screen.queryByRole('link', { name: /WhatsApp/ })).not.toBeInTheDocument();
+    });
+
+    it('una compra con comisiones dice cuánto fueron las entradas y cuánto las comisiones', async () => {
+      await montar({
+        ordenes: [{ ...VENTA, total: '3557.96', cargo_mercadopago: '257.96', cargo_plataforma: '300.00' }],
+      });
+
+      expect(screen.getByText(/entradas .*3\.000 \+ comisiones .*557,96/)).toBeInTheDocument();
+    });
+
+    it('una compra sin comisiones no muestra ese detalle', async () => {
+      await montar({ ordenes: [{ ...VENTA, cargo_mercadopago: '0.00', cargo_plataforma: '0.00' }] });
+
+      expect(screen.queryByText(/\+ comisiones/)).not.toBeInTheDocument();
     });
 
     it('muestra la cantidad y el total', async () => {

@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router';
 import { Check, Clock, X, Loader2, MapPin, Calendar } from 'lucide-react';
 import Sugerencias from '../components/Sugerencias';
 import { formatearPrecio } from '../utils/entradas';
+import { renglonesDelDesglose } from '../utils/cargos';
 import { evento } from '../utils/metaPixel';
 
 /**
@@ -178,6 +179,18 @@ function EstadoOrden({ apiUrl }) {
             <span className="text-tinta font-bold">{formatearPrecio(orden.total, orden.moneda)}</span>
           )}
         </div>
+
+        {/* Si pagó las comisiones, qué fue cada parte del total. */}
+        {orden.desglose && (
+          <ul className="mt-3 text-sm text-tinta-media space-y-0.5" aria-label="Lo que pagaste">
+            {renglonesDelDesglose(orden.desglose).map(([concepto, monto]) => (
+              <li key={concepto} className="flex justify-between">
+                <span>{concepto}</span>
+                <span>{formatearPrecio(monto, orden.moneda)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
 
         {orden.tipos && (
           <p className="mt-3 text-sm text-tinta font-bold">{orden.tipos}</p>
