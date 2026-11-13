@@ -52,8 +52,9 @@ const pagina = (overrides = {}) => ({
   ...overrides,
 });
 
-function mockearEditor({ page = pagina(), admins = [], pending = [], results = [] } = {}) {
+function mockearEditor({ page = pagina(), admins = [], pending = [], results = [], automaticas = [] } = {}) {
   return mockFetch({
+    'collaborations/automaticas.php': { automaticas, message: 'ok' },
     'pages/detail.php': { page },
     'admins/index.php': { admins },
     'admins/detail.php': { message: 'ok' },
@@ -852,6 +853,171 @@ describe('PageEditor — flujos de edición', () => {
         ).not.toBeInTheDocument();
       });
       expect(put(llamadas, 'collaborations/detail.php')).toBeUndefined();
+    });
+
+    // ------------------------------------------------- aceptar siempre
+
+    it('ofrece aceptar siempre las de la página que invita, sin marcar', async () => {
+      await render(conPendiente(), 'Contenido');
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Aceptar' }));
+      await screen.findByRole('heading', { name: 'Aceptar colaboración' });
+
+      const casilla = screen.getByRole('checkbox', { name: 'Aceptar siempre las de Otra Página' });
+      expect(casilla).not.toBeChecked();
+      expect(screen.getByText(/se van a aceptar solas, en este mismo grupo/)).toBeInTheDocument();
+    });
+
+    it('marcando "siempre" lo manda al aceptar y recarga la lista', async () => {
+      const { llamadas } = await render(conPendiente(), 'Contenido');
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Aceptar' }));
+      await screen.findByRole('heading', { name: 'Aceptar colaboración' });
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Aceptar siempre las de Otra Página' }));
+      const antes = llamadas.filter((l) => l.url.includes('collaborations/automaticas.php')).length;
+      fireEvent.click(screen.getByRole('button', { name: 'Aceptar colaboración' }));
+
+      await waitFor(() => {
+        expect(cuerpoDe(put(llamadas, 'collaborations/detail.php'))).toEqual({
+          status: 'accepted',
+          group_id: 20,
+          aceptar_siempre: true,
+        });
+      });
+      await waitFor(() => {
+        expect(llamadas.filter((l) => l.url.includes('collaborations/automaticas.php')).length).toBeGreaterThan(antes);
+      });
+    });
+
+    it('la casilla no queda marcada para la próxima invitación', async () => {
+      await render(conPendiente(), 'Contenido');
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Aceptar' }));
+      await screen.findByRole('heading', { name: 'Aceptar colaboración' });
+      fireEvent.click(screen.getByRole('checkbox', { name: /Aceptar siempre/ }));
+      fireEvent.click(screen.getAllByRole('button', { name: 'Cancelar' })[0]);
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Aceptar' }));
+      expect(await screen.findByRole('checkbox', { name: /Aceptar siempre/ })).not.toBeChecked();
+    });
+
+    it('sin grupos de eventos no ofrece aceptar siempre', async () => {
+      await render({ ...conPendiente(), page: pagina({ groups: [] }) }, 'Contenido');
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Aceptar' }));
+      await screen.findByRole('heading', { name: 'Aceptar colaboración' });
+
+      expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    });
+  });
+
+  // ============================== colaboraciones que se aceptan solas
+
+  describe('colaboraciones que acepto automáticamente', () => {
+    const reglas = [
+      { id: 4, requester_page_id: 30, requester_page_title: 'La Sala', group_title: 'Agenda' },
+      { id: 6, requester_page_id: 31, requester_page_title: 'El Club', group_title: 'Agenda' },
+    ];
+
+    it('se piden para la página que se está editando', async () => {
+      const { llamadas } = await render();
+
+      await waitFor(() => {
+        expect(llamadaA(llamadas, 'collaborations/automaticas.php').url).toContain('page_id=5');
+      });
+    });
+
+    it('se listan en Configuración › Colaboraciones', async () => {
+      await render({ automaticas: reglas });
+
+      const sub = screen.getByRole('navigation', { name: 'Configuración' });
+      fireEvent.click(within(sub).getByRole('button', { name: 'Colaboraciones' }));
+
+      expect(await screen.findByRole('heading', { name: 'Colaboraciones que acepto automáticamente' })).toBeInTheDocument();
+      expect(screen.getByText('La Sala')).toBeInTheDocument();
+      expect(screen.getByText('El Club')).toBeInTheDocument();
+    });
+
+    it('dejar de aceptar borra la regla y la saca de la lista', async () => {
+      const { llamadas } = await render({ automaticas: reglas });
+      const sub = screen.getByRole('navigation', { name: 'Configuración' });
+      fireEvent.click(within(sub).getByRole('button', { name: 'Colaboraciones' }));
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Dejar de aceptar automáticamente las de La Sala' }));
+
+      await waitFor(() => {
+        const del = llamadas.find(
+          (l) => l.url.includes('collaborations/automaticas.php') && l.options.method === 'DELETE'
+        );
+        expect(del.url).toContain('id=4');
+      });
+      await waitFor(() => expect(screen.queryByText('La Sala')).not.toBeInTheDocument());
+      expect(screen.getByText('El Club')).toBeInTheDocument();
+      // No se toca ninguna colaboración ya aceptada.
+      expect(llamadas.some((l) => l.url.includes('collaborations/detail.php'))).toBe(false);
+    });
+
+    it('si el servidor no deja, avisa y la regla sigue', async () => {
+      await render({ automaticas: reglas });
+      // Desde acá el DELETE contesta 403.
+      const original = global.fetch;
+      global.fetch = vi.fn((url, opciones = {}) => (
+        opciones.method === 'DELETE'
+          ? Promise.resolve({ ok: false, status: 403, json: () => Promise.resolve({ error: 'Forbidden' }) })
+          : original(url, opciones)
+      ));
+      const sub = screen.getByRole('navigation', { name: 'Configuración' });
+      fireEvent.click(within(sub).getByRole('button', { name: 'Colaboraciones' }));
+
+      fireEvent.click(await screen.findByRole('button', { name: /La Sala/ }));
+
+      await waitFor(() => expect(window.alert).toHaveBeenCalledWith('Forbidden'));
+      expect(screen.getByText('La Sala')).toBeInTheDocument();
+    });
+
+    it('?c=colaboraciones abre la solapa', async () => {
+      mockearEditor({ automaticas: reglas });
+      renderConProviders(<PageEditor />, {
+        auth: autenticado(),
+        route: '/page/5?c=colaboraciones',
+        path: '/page/:id',
+      });
+
+      expect(await screen.findByRole('heading', { name: 'Colaboraciones que acepto automáticamente' })).toBeInTheDocument();
+    });
+
+    it('en un evento colaborado ofrece dejar de aceptar las de esa página', async () => {
+      const { llamadas } = await render({
+        automaticas: reglas,
+        page: pagina({
+          groups: [grupo({
+            id: 20,
+            type: 'eventos',
+            collaborated_events: [{
+              id: 300, text: 'Fecha de La Sala', collaboration_id: 9,
+              requester_page_id: 30, source_page_title: 'La Sala',
+            }, {
+              id: 301, text: 'Fecha sin regla', collaboration_id: 10,
+              requester_page_id: 99, source_page_title: 'Otra',
+            }],
+          })],
+        }),
+      }, 'Contenido');
+
+      expect(await screen.findByText(/Aceptás automáticamente las de La Sala/)).toBeInTheDocument();
+      expect(screen.getAllByRole('button', { name: 'Dejar de aceptarlas automáticamente' })).toHaveLength(1);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Dejar de aceptarlas automáticamente' }));
+
+      await waitFor(() => {
+        const del = llamadas.find(
+          (l) => l.url.includes('collaborations/automaticas.php') && l.options.method === 'DELETE'
+        );
+        expect(del.url).toContain('id=4');
+      });
+      await waitFor(() => expect(screen.queryByText(/Aceptás automáticamente/)).not.toBeInTheDocument());
+      // El evento colaborado sigue ahí.
+      expect(screen.getByText('Fecha de La Sala')).toBeInTheDocument();
     });
   });
 

@@ -1,6 +1,7 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, fireEvent, waitFor } from '@testing-library/react';
+import { useLocation } from 'react-router';
 import NotificationBell from '../../src/components/NotificationBell';
 import { renderConProviders, crearAuth, usuarioDePrueba, API_URL } from '../helpers/render';
 import { mockFetch, cuerpoDe, llamadaA, tokenDe } from '../helpers/api';
@@ -285,6 +286,29 @@ describe('NotificationBell', () => {
       await waitFor(() => {
         expect(window.location.href).toBe('');
       });
+    });
+
+    /** Se aceptó sola: lleva a la lista desde donde se deja de aceptarlas. */
+    it('las aceptadas automáticamente llevan a Configuración › Colaboraciones', async () => {
+      const Destino = () => {
+        const { search } = useLocation();
+        return <p>Editor {search}</p>;
+      };
+      mockearLista([notificacion({ type: 'collaboration_auto_accepted', page_id: 77 })], 1);
+      renderConProviders(<NotificationBell />, {
+        auth: autenticado(),
+        route: '/',
+        path: '/',
+        rutasExtra: [{ path: '/page/77', element: <Destino /> }],
+      });
+      fireEvent.click(await screen.findByRole('button'));
+      expect(screen.getByText('Automática')).toBeInTheDocument();
+      expect(screen.getByText('Ver editor →')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByText('Nuevo evento'));
+
+      expect(await screen.findByText('Editor ?c=colaboraciones')).toBeInTheDocument();
+      expect(window.location.href).toBe('');
     });
 
     it('cierra el panel al navegar', async () => {

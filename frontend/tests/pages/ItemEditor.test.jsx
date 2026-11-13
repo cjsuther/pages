@@ -50,11 +50,11 @@ const pagina = (overrides = {}) => ({
 const conItem = (overrides = {}, tipo = 'links', idGrupo = 10) =>
   pagina({ groups: [grupo({ id: idGrupo, type: tipo, links: [link({ id: 100, ...overrides })] })] });
 
-function mockearApi({ page = conItem(), results = [], entradas = null } = {}) {
+function mockearApi({ page = conItem(), results = [], entradas = null, invitacion = { collaboration_id: 40 } } = {}) {
   return mockFetch({
     'pages/detail.php': { page },
     'links/detail.php': { link: link() },
-    'collaborations/index.php': { collaboration_id: 40 },
+    'collaborations/index.php': invitacion,
     'collaborations/detail.php': { message: 'ok' },
     'public/search.php': { results },
     'upload/image.php': { url: 'https://img/subida.png' },
@@ -443,6 +443,38 @@ describe('ItemEditor', () => {
         );
         expect(cuerpoDe(post)).toEqual({ link_id: 100, collaborator_page_id: 7 });
       });
+    });
+
+    /** Si la página invitada acepta siempre las de esta, la invitación vuelve aceptada. */
+    it('muestra aceptada la invitación que se aceptó sola', async () => {
+      await render({
+        page: conEvento(),
+        results: [{ id: 7, type: 'page', title: 'Otra Página', slug: 'otra' }],
+        // Con forma detallada: el cuerpo trae su propio "status".
+        invitacion: { status: 201, body: { collaboration_id: 41, status: 'accepted', aceptada_automaticamente: true } },
+      });
+
+      fireEvent.change(screen.getByPlaceholderText('Buscar página para invitar...'), {
+        target: { value: 'otra' },
+      });
+      fireEvent.click(await screen.findByRole('button', { name: /Otra Página/ }));
+
+      expect(await screen.findByText('Aceptó')).toBeInTheDocument();
+      expect(screen.queryByText('Pendiente')).not.toBeInTheDocument();
+    });
+
+    it('sin aceptación automática la invitación queda pendiente', async () => {
+      await render({
+        page: conEvento(),
+        results: [{ id: 7, type: 'page', title: 'Otra Página', slug: 'otra' }],
+      });
+
+      fireEvent.change(screen.getByPlaceholderText('Buscar página para invitar...'), {
+        target: { value: 'otra' },
+      });
+      fireEvent.click(await screen.findByRole('button', { name: /Otra Página/ }));
+
+      expect(await screen.findByText('Pendiente')).toBeInTheDocument();
     });
 
     it('no ofrece invitar a una página que ya es colaboradora', async () => {

@@ -14,6 +14,16 @@ class PageAccess
             return self::existePagina($db, $pageId);
         }
 
+        return self::isOwnerOrAdmin($db, $pageId, $userId);
+    }
+
+    /**
+     * Dueño o administrador aceptado, sin contar el acceso de plataforma. Para
+     * lo que es una decisión de la página y no una tarea de soporte: por
+     * ejemplo, aceptar de antemano las colaboraciones de otra página.
+     */
+    public static function isOwnerOrAdmin($db, $pageId, $userId)
+    {
         $stmt = $db->prepare('
             SELECT 1 FROM pages p
             WHERE p.id = ? AND (

@@ -2,7 +2,14 @@
 
 /**
  * Colaboraciones entre páginas sobre un evento: invitar, aceptar/rechazar y
- * eliminar.
+ * eliminar, y las reglas para aceptar automáticamente las invitaciones de una
+ * página (colaboraciones_automaticas).
+ *
+ * La regla es de página a página, igual que las colaboraciones: la página
+ * invitada acepta de antemano lo que le mande una página concreta, y no otras
+ * de la misma persona. La crea y la borra sólo quien administra la página
+ * invitada —dueño o administrador aceptado, sin el acceso de plataforma—, y
+ * siempre a partir de una invitación real que está aceptando.
  *
  * Extraído de api/collaborations/index.php y api/collaborations/detail.php sin
  * cambios de comportamiento.
@@ -143,7 +150,8 @@ class CollaborationsHandler
             // El permiso ya está resuelto; esto sólo trae los datos y comprueba
             // que sea un evento: a un link común no se lo puede colaborar.
             $stmt = $db->prepare('
-                SELECT l.id, l.text as event_title, p.id as page_id, p.title as page_title
+                SELECT l.id, l.text as event_title, p.id as page_id, p.title as page_title,
+                    p.user_id as page_owner_id
                 FROM links l
                 JOIN link_groups lg ON l.group_id = lg.id
                 JOIN pages p ON lg.page_id = p.id
@@ -175,9 +183,52 @@ class CollaborationsHandler
                 return Response::error(409, 'Esta página ya fue invitada a colaborar');
             }
 
+            $db->beginTransaction();
+
             $stmt = $db->prepare('INSERT INTO event_collaborations (link_id, collaborator_page_id, requester_page_id) VALUES (?, ?, ?)');
             $stmt->execute([$linkId, $collaboratorPageId, $evento['page_id']]);
             $collabId = $db->lastInsertId();
+
+            // Si la página invitada acepta siempre las de esta página, se
+            // acepta ya, con el mismo efecto que si la hubiera aceptado a mano.
+            $regla = self::reglaVigente($db, $collaboratorPageId, $evento['page_id']);
+
+            if ($regla) {
+                self::registrarAceptacion($db, $collabId, $linkId, (int) $regla['group_id']);
+
+                self::avisarAlQueInvito(
+                    $db,
+                    $evento['page_owner_id'],
+                    $evento['page_id'],
+                    $linkId,
+                    'Colaboración aceptada',
+                    'La página "' . $regla['collaborator_page_title'] . '" aceptó colaborar en el evento "' . $evento['event_title'] . '" (aceptación automática)'
+                );
+
+                // El invitado no tiene nada que responder: se le avisa lo que
+                // pasó, dónde quedó publicado y cómo dejar de aceptarlas.
+                $stmt = $db->prepare('
+                    INSERT INTO notifications (user_id, title, message, page_id, link_id, type, collaboration_id, is_read)
+                    VALUES (?, ?, ?, ?, ?, "collaboration_auto_accepted", ?, 0)
+                ');
+                $stmt->execute([
+                    $paginaColaboradora['user_id'],
+                    'Colaboración aceptada automáticamente',
+                    'Se aceptó automáticamente la invitación de "' . $evento['page_title'] . '" a colaborar en el evento "' . $evento['event_title'] . '": ya está en tu grupo "' . $regla['group_title'] . '". Podés dejar de aceptarlas automáticamente desde Configuración › Colaboraciones.',
+                    $collaboratorPageId,
+                    $linkId,
+                    $collabId,
+                ]);
+
+                $db->commit();
+
+                return Response::created([
+                    'message' => 'Invitación aceptada automáticamente',
+                    'collaboration_id' => $collabId,
+                    'status' => 'accepted',
+                    'aceptada_automaticamente' => true,
+                ]);
+            }
 
             // page_id apunta a la página del invitado para que la notificación
             // lo lleve a su propio editor.
@@ -194,12 +245,19 @@ class CollaborationsHandler
                 $collabId,
             ]);
 
+            $db->commit();
+
             return Response::created([
                 'message' => 'Invitación enviada',
                 'collaboration_id' => $collabId,
+                'status' => 'pending',
+                'aceptada_automaticamente' => false,
             ]);
 
         } catch (Exception $e) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
             return Response::serverError($e->getMessage());
         }
     }
@@ -233,6 +291,7 @@ class CollaborationsHandler
     {
         $status = $req->input('status');
         $groupId = (int) $req->input('group_id');
+        $aceptarSiempre = filter_var($req->input('aceptar_siempre', false), FILTER_VALIDATE_BOOLEAN);
 
         if (!in_array($status, self::$estadosValidos, true)) {
             return Response::error(400, 'Estado inválido. Debe ser "accepted" o "rejected"');
@@ -281,41 +340,203 @@ class CollaborationsHandler
                 if (!$stmt->fetch()) {
                     return Response::error(400, 'Grupo inválido: debe ser un grupo de eventos de tu página');
                 }
-            }
 
-            $stmt = $db->prepare('UPDATE event_collaborations SET status = ?, collaborator_group_id = ?, updated_at = NOW() WHERE id = ?');
-            $stmt->execute([$status, $status === 'accepted' ? $groupId : null, $collabId]);
+                // Aceptar de antemano lo que mande otra página es una decisión
+                // de la página invitada: no la toma el acceso de plataforma.
+                if ($aceptarSiempre && !PageAccess::isOwnerOrAdmin($db, $collab['collaborator_page_id'], $req->userId())) {
+                    return Response::error(403, 'Sólo quien administra la página invitada puede aceptar siempre sus invitaciones');
+                }
+            }
 
             $aceptada = $status === 'accepted';
+            $reglaCreada = $aceptada && $aceptarSiempre;
 
-            // Desde que acepta, la página colaboradora ve a los clientes del
-            // evento, y los sigue viendo aunque el evento se borre.
+            $db->beginTransaction();
+
             if ($aceptada) {
-                Clientes::registrarEvento($db, (int) $collab['link_id']);
+                self::registrarAceptacion($db, $collabId, (int) $collab['link_id'], $groupId);
+            } else {
+                $stmt = $db->prepare('UPDATE event_collaborations SET status = ?, collaborator_group_id = ?, updated_at = NOW() WHERE id = ?');
+                $stmt->execute([$status, null, $collabId]);
             }
+
+            if ($reglaCreada) {
+                // Si ya había una regla con esta página, sólo cambia el grupo.
+                $stmt = $db->prepare('
+                    INSERT INTO colaboraciones_automaticas (collaborator_page_id, requester_page_id, group_id, created_by)
+                    VALUES (?, ?, ?, ?)
+                    ON DUPLICATE KEY UPDATE group_id = VALUES(group_id), created_by = VALUES(created_by)
+                ');
+                $stmt->execute([
+                    (int) $collab['collaborator_page_id'],
+                    (int) $collab['requester_page_id'],
+                    $groupId,
+                    $req->userId(),
+                ]);
+            }
+
             $notifTitulo = $aceptada ? 'Colaboración aceptada' : 'Colaboración rechazada';
             $notifMensaje = $aceptada
                 ? 'La página "' . $collab['collaborator_page_title'] . '" aceptó colaborar en el evento "' . $collab['event_title'] . '"'
                 : 'La página "' . $collab['collaborator_page_title'] . '" rechazó la colaboración en el evento "' . $collab['event_title'] . '"';
 
-            $stmt = $db->prepare('
-                INSERT INTO notifications (user_id, title, message, page_id, link_id, type, is_read)
-                VALUES (?, ?, ?, ?, ?, "collaboration_response", 0)
-            ');
-            $stmt->execute([
+            self::avisarAlQueInvito(
+                $db,
                 $collab['requester_owner_id'],
-                $notifTitulo,
-                $notifMensaje,
                 $collab['requester_page_id'],
                 $collab['link_id'],
-            ]);
+                $notifTitulo,
+                $notifMensaje
+            );
 
             $stmt = $db->prepare('UPDATE notifications SET is_read = 1 WHERE collaboration_id = ? AND user_id = ?');
             $stmt->execute([$collabId, $req->userId()]);
 
+            $db->commit();
+
             return Response::ok([
                 'message' => 'Colaboración ' . ($aceptada ? 'aceptada' : 'rechazada'),
+                'aceptar_siempre' => $reglaCreada,
             ]);
+
+        } catch (Exception $e) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+            return Response::serverError($e->getMessage());
+        }
+    }
+
+    /**
+     * Lo que tiene aceptar, a mano o por una regla: la colaboración queda
+     * aceptada en el grupo elegido y, desde ahí, la página colaboradora ve a
+     * los clientes del evento —y los sigue viendo aunque el evento se borre—.
+     */
+    private static function registrarAceptacion($db, $collabId, $linkId, $groupId)
+    {
+        $stmt = $db->prepare('UPDATE event_collaborations SET status = ?, collaborator_group_id = ?, updated_at = NOW() WHERE id = ?');
+        $stmt->execute(['accepted', $groupId, $collabId]);
+
+        Clientes::registrarEvento($db, (int) $linkId);
+    }
+
+    /** La respuesta a una invitación le llega a quien es dueño de la página que invitó. */
+    private static function avisarAlQueInvito($db, $userId, $pageId, $linkId, $titulo, $mensaje)
+    {
+        $stmt = $db->prepare('
+            INSERT INTO notifications (user_id, title, message, page_id, link_id, type, is_read)
+            VALUES (?, ?, ?, ?, ?, "collaboration_response", 0)
+        ');
+        $stmt->execute([$userId, $titulo, $mensaje, $pageId, $linkId]);
+    }
+
+    /**
+     * La regla de la página invitada para las invitaciones de esta página, si
+     * sigue sirviendo: el grupo tiene que seguir siendo un grupo de eventos de
+     * la página invitada. Si no, la invitación queda pendiente como siempre.
+     */
+    private static function reglaVigente($db, $collaboratorPageId, $requesterPageId)
+    {
+        $stmt = $db->prepare('
+            SELECT ca.id, ca.group_id, lg.title as group_title, cp.title as collaborator_page_title
+            FROM colaboraciones_automaticas ca
+            JOIN link_groups lg ON lg.id = ca.group_id
+            JOIN pages cp ON cp.id = ca.collaborator_page_id
+            WHERE ca.collaborator_page_id = ? AND ca.requester_page_id = ?
+                AND lg.page_id = ca.collaborator_page_id AND lg.type = "eventos"
+            LIMIT 1
+        ');
+        $stmt->execute([(int) $collaboratorPageId, (int) $requesterPageId]);
+
+        return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+    }
+
+    // ------------------------------------------------------------ automaticas
+
+    /**
+     * Las colaboraciones que una página acepta automáticamente: verlas
+     * (GET ?page_id=) y dejar de aceptarlas (DELETE ?id=). Se crean sólo al
+     * aceptar una invitación (PUT a detail con aceptar_siempre).
+     *
+     * Todo es de la página invitada: ni la página que invita ni el acceso de
+     * plataforma las ven o las tocan.
+     */
+    public static function automaticas($db, Request $req)
+    {
+        if (!$req->user) {
+            return Response::unauthorized();
+        }
+
+        if ($req->method === 'GET') {
+            return self::listarAutomaticas($db, $req);
+        }
+
+        if ($req->method === 'DELETE') {
+            return self::dejarDeAceptarAutomaticamente($db, $req);
+        }
+
+        return Response::methodNotAllowed();
+    }
+
+    private static function listarAutomaticas($db, Request $req)
+    {
+        $pageId = (int) $req->param('page_id', 0);
+
+        if (!$pageId) {
+            return Response::error(400, 'page_id es requerido');
+        }
+
+        try {
+            if (!PageAccess::isOwnerOrAdmin($db, $pageId, $req->userId())) {
+                return Response::error(403, 'Forbidden');
+            }
+
+            $stmt = $db->prepare('
+                SELECT ca.id, ca.requester_page_id, ca.group_id, ca.created_at,
+                    rp.title as requester_page_title, rp.url_slug as requester_page_slug,
+                    rp.profile_image as requester_page_image,
+                    lg.title as group_title
+                FROM colaboraciones_automaticas ca
+                JOIN pages rp ON rp.id = ca.requester_page_id
+                JOIN link_groups lg ON lg.id = ca.group_id
+                WHERE ca.collaborator_page_id = ?
+                ORDER BY rp.title, ca.id
+            ');
+            $stmt->execute([$pageId]);
+
+            return Response::ok(['automaticas' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
+
+        } catch (Exception $e) {
+            return Response::serverError($e->getMessage());
+        }
+    }
+
+    /** Sólo deja de aceptar las nuevas: las colaboraciones ya aceptadas siguen. */
+    private static function dejarDeAceptarAutomaticamente($db, Request $req)
+    {
+        $reglaId = (int) $req->param('id', 0);
+
+        if (!$reglaId) {
+            return Response::error(400, 'id es requerido');
+        }
+
+        try {
+            $stmt = $db->prepare('SELECT id, collaborator_page_id FROM colaboraciones_automaticas WHERE id = ?');
+            $stmt->execute([$reglaId]);
+            $regla = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$regla) {
+                return Response::notFound('Regla no encontrada');
+            }
+
+            if (!PageAccess::isOwnerOrAdmin($db, $regla['collaborator_page_id'], $req->userId())) {
+                return Response::error(403, 'Forbidden');
+            }
+
+            $stmt = $db->prepare('DELETE FROM colaboraciones_automaticas WHERE id = ?');
+            $stmt->execute([$reglaId]);
+
+            return Response::ok(['message' => 'Ya no se aceptan automáticamente']);
 
         } catch (Exception $e) {
             return Response::serverError($e->getMessage());
