@@ -150,13 +150,85 @@ class CargosAlCompradorTest extends IntegracionTestCase
 
     // =============================================================== tests
 
-    public function testUnEventoNuevoArrancaSinCargos()
+    private function llave($linkId)
+    {
+        return (int) $this->valor('SELECT cargos_al_comprador FROM event_ticketing WHERE link_id = ?', [$linkId]);
+    }
+
+    /** Lo que deja la migración en un evento que ya vendía: la fila con la llave en 0. */
+    private function eventoConfiguradoAntesDelDeploy()
+    {
+        $linkId = $this->evento($this->grupoId, ['text' => 'Festival WIP']);
+        $this->insertar('event_ticketing', [
+            'link_id' => $linkId, 'activo' => 1, 'capacidad' => 500, 'precio' => 1500,
+            'moneda' => 'ARS', 'max_por_compra' => 10,
+        ]);
+
+        return $linkId;
+    }
+
+    public function testUnEventoNuevoConLaFuncionPrendidaArrancaConLaLlave()
     {
         $this->encender();
         $this->conectarPorOAuth();
-        $linkId = $this->eventoConVenta();
 
-        $this->assertSame('0', (string) $this->valor('SELECT cargos_al_comprador FROM event_ticketing WHERE link_id = ?', [$linkId]));
+        $this->assertSame(1, $this->llave($this->eventoConVenta()));
+    }
+
+    public function testUnEventoNuevoConLaFuncionApagadaArrancaSinLaLlave()
+    {
+        $this->conectarPorOAuth();
+
+        $this->assertSame(0, $this->llave($this->eventoConVenta()));
+    }
+
+    public function testElOrganizadorApagaLaLlaveEnUnEventoNuevo()
+    {
+        $this->encender();
+        $this->conectarPorOAuth();
+
+        $this->assertSame(0, $this->llave($this->eventoConVenta(['cargos_al_comprador' => false])));
+    }
+
+    /**
+     * El festival que se está vendiendo: la migración lo dejó en 0 y, con la
+     * función prendida, reconfigurarlo sin mandar la llave —desde el editor de
+     * antes del deploy o desde el asistente— no lo cambia. Contra MariaDB,
+     * porque lo que importa es el ON DUPLICATE KEY UPDATE de verdad.
+     */
+    public function testUnEventoQueYaVendiaSigueEnCeroAlReconfigurarlo()
+    {
+        $this->conectarPorOAuth();
+        $linkId = $this->eventoConfiguradoAntesDelDeploy();
+        $this->assertSame(0, $this->llave($linkId), 'la migración lo deja en 0');
+        $this->encender();
+
+        $this->assertStatus(200, EntradasHandler::config($this->db, $this->post([
+            'activo' => 1, 'capacidad' => 600, 'precio' => 1800, 'max_por_compra' => 10,
+        ], $this->user($this->duenaId), ['link_id' => $linkId])));
+
+        $this->assertSame(0, $this->llave($linkId));
+        $this->assertSame('600', (string) $this->valor('SELECT capacidad FROM event_ticketing WHERE link_id = ?', [$linkId]));
+
+        // Lo mismo guardando directo, con plano y tipos pero sin la llave.
+        Entradas::guardarConfig($this->db, $linkId, [
+            'activo' => 1, 'capacidad' => 600, 'precio' => 1800, 'max_por_compra' => 10, 'plano' => null, 'tipos' => null,
+        ]);
+        $this->assertSame(0, $this->llave($linkId));
+    }
+
+    /** El organizador sí puede prenderla a mano en un evento que ya vendía. */
+    public function testUnEventoQueYaVendiaSePuedePrenderAMano()
+    {
+        $this->conectarPorOAuth();
+        $linkId = $this->eventoConfiguradoAntesDelDeploy();
+        $this->encender();
+
+        $this->assertStatus(200, EntradasHandler::config($this->db, $this->post([
+            'activo' => 1, 'capacidad' => 500, 'precio' => 1500, 'cargos_al_comprador' => true,
+        ], $this->user($this->duenaId), ['link_id' => $linkId])));
+
+        $this->assertSame(1, $this->llave($linkId));
     }
 
     /** La compra completa: cobrar, acreditar, mandar la entrada y mostrarla. */

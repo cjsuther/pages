@@ -1042,6 +1042,7 @@ class EntradasHandlerTest extends HandlerTestCase
 
         $this->assertNull($r->body['cargos']);
         $this->assertFalse($r->body['entradas']['cargos_al_comprador']);
+        $this->assertFalse($r->body['cargos_por_defecto']);
     }
 
     public function testConLaFuncionEncendidaElEditorRecibeLasTasas()
@@ -1067,6 +1068,8 @@ class EntradasHandlerTest extends HandlerTestCase
 
         $this->assertSame(4.39, $r->body['cargos']['mp_porcentaje']);
         $this->assertTrue($r->body['entradas']['cargos_al_comprador']);
+        // Para un evento sin configuración todavía, la llave arranca prendida.
+        $this->assertTrue($r->body['cargos_por_defecto']);
     }
 
     public function testNoSePuedenSumarCargosConLaFuncionApagada()

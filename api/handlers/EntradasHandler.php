@@ -201,6 +201,10 @@ class EntradasHandler
                         Cobros::admiteSplit($db, self::pageIdDelLink($db, $linkId))
                     )
                     : null,
+                // Con qué valor arranca la llave en un evento sin
+                // configuración todavía. El de uno ya configurado está en
+                // 'entradas'.
+                'cargos_por_defecto' => CargosAlComprador::porDefecto(),
             ]);
         }
 

@@ -23,8 +23,11 @@ function alAbrir({
   comision = 3,
   mercadopago = MERCADO_PAGO,
   cargos = null,
+  cargos_por_defecto = false,
 } = {}) {
-  global.fetch.mockReturnValueOnce(respuestaDe({ entradas, cobros, ocupadas, comision, mercadopago, cargos }));
+  global.fetch.mockReturnValueOnce(respuestaDe({
+    entradas, cobros, ocupadas, comision, mercadopago, cargos, cargos_por_defecto,
+  }));
 }
 
 async function montar(estado) {
@@ -725,6 +728,36 @@ describe('PanelEntradas', () => {
       await montar({ entradas: EVENTO, cargos: TASAS, ocupadas: 4 });
 
       expect(screen.getByText(/Las entradas ya vendidas no cambian/)).toBeInTheDocument();
+    });
+
+    /** Un evento que configura entradas por primera vez arranca con la llave prendida. */
+    it('en un evento sin configuración arranca marcada si la plataforma lo indica', async () => {
+      await montar({ cargos: TASAS, cargos_por_defecto: true });
+      activar();
+      fireEvent.change(screen.getByLabelText('Precio por entrada'), { target: { value: '10000' } });
+
+      expect(llave()).toBeChecked();
+    });
+
+    it('el organizador la puede desmarcar en un evento nuevo y se guarda apagada', async () => {
+      await montar({ cargos: TASAS, cargos_por_defecto: true });
+      activar();
+      fireEvent.change(screen.getByLabelText('Precio por entrada'), { target: { value: '10000' } });
+      fireEvent.click(llave());
+
+      global.fetch.mockReturnValueOnce(respuestaDe({ entradas: { ...EVENTO, cargos_al_comprador: false } }));
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar entradas' }));
+
+      await waitFor(() => {
+        expect(JSON.parse(global.fetch.mock.calls[1][1].body)).toMatchObject({ cargos_al_comprador: false });
+      });
+    });
+
+    /** El festival que ya vendía: aunque los nuevos arranquen marcados, el suyo queda como estaba. */
+    it('un evento ya configurado sin la llave sigue desmarcado', async () => {
+      await montar({ entradas: EVENTO, cargos: TASAS, cargos_por_defecto: true });
+
+      expect(llave()).not.toBeChecked();
     });
 
     it('un evento gratis no la ofrece', async () => {

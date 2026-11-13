@@ -82,8 +82,11 @@ define('MP_RELEASE_DAYS', 10);
 // explicada en lib/CargosAlComprador.php.
 //
 // Hacen falta dos llaves: esta (global) y la de cada evento, que el organizador
-// prende en la configuración de sus entradas. Mientras esta esté en false nada
+// ve en la configuración de sus entradas. Mientras esta esté en false nada
 // cambia para nadie: ni se ofrece la opción ni se le suma nada a ningún precio.
+// Con esta en true, los eventos que configuren entradas por primera vez
+// arrancan con su llave prendida (el organizador la puede apagar); los que ya
+// estaban configurados siguen en 0 hasta que su organizador la prenda.
 define('CARGOS_AL_COMPRADOR', false);
 
 // Para sumar lo de Mercado Pago se usa MP_FEE_PERCENT (arriba). OJO: ese

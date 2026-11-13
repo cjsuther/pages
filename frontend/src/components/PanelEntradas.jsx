@@ -78,6 +78,10 @@ function PanelEntradas({ linkId, apiUrl, token, onCambio, enlace = null, onGuard
         setComision(cuerpo.comision || 0);
         setMercadoPago(cuerpo.mercadopago || null);
         setTasasDeCargos(cuerpo.cargos || null);
+        // Un evento que configura entradas por primera vez arranca con la
+        // llave como diga la plataforma; uno ya configurado, como estaba
+        // (eso lo pone el bloque de abajo).
+        setCargosAlComprador(Boolean(cuerpo.cargos && cuerpo.cargos_por_defecto));
         setConfig(cuerpo.entradas);
         setLugaresOcupados(cuerpo.lugares_ocupados || []);
         setOcupadasPorTipo(cuerpo.ocupadas_por_tipo || {});

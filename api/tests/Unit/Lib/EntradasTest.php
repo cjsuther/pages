@@ -1514,7 +1514,8 @@ class EntradasTest extends HandlerTestCase
         $this->assertSame(1, $this->db->paramsFor('INSERT INTO event_ticketing')[8]);
     }
 
-    public function testUnEventoNuevoArrancaSinCargos()
+    /** Con la función global apagada, un evento nuevo arranca como siempre. */
+    public function testUnEventoNuevoConLaFuncionApagadaArrancaSinCargos()
     {
         $this->hayOcupadas(0);
         $this->db->onWrite('INSERT INTO event_ticketing', 1);
@@ -1522,6 +1523,72 @@ class EntradasTest extends HandlerTestCase
         Entradas::guardarConfig($this->db, 100, ['capacidad' => 50, 'precio' => 100]);
 
         $this->assertSame(0, $this->db->paramsFor('INSERT INTO event_ticketing')[8]);
+    }
+
+    /** Con la función prendida, un evento que configura entradas por primera vez arranca con la llave. */
+    public function testUnEventoNuevoConLaFuncionPrendidaArrancaConCargos()
+    {
+        $this->cargosEncendidos();
+        $this->hayOcupadas(0);
+        $this->db->onWrite('INSERT INTO event_ticketing', 1);
+
+        Entradas::guardarConfig($this->db, 100, ['capacidad' => 50, 'precio' => 100]);
+
+        $this->assertSame(1, $this->db->paramsFor('INSERT INTO event_ticketing')[8]);
+    }
+
+    public function testElOrganizadorPuedeApagarlaEnUnEventoNuevo()
+    {
+        $this->cargosEncendidos();
+        $this->hayOcupadas(0);
+        $this->db->onWrite('INSERT INTO event_ticketing', 1);
+
+        Entradas::guardarConfig($this->db, 100, ['capacidad' => 50, 'precio' => 100, 'cargos_al_comprador' => false]);
+
+        $this->assertSame(0, $this->db->paramsFor('INSERT INTO event_ticketing')[8]);
+    }
+
+    /**
+     * El festival que ya estaba a la venta: con la función prendida, volver a
+     * guardar su configuración no le prende la llave.
+     */
+    public function testUnEventoYaConfiguradoEnCeroSigueEnCeroAlReconfigurarlo()
+    {
+        $this->cargosEncendidos();
+        $this->hayEvento(['cargos_al_comprador' => 0]);
+        $this->hayOcupadas(0);
+        $this->db->onWrite('INSERT INTO event_ticketing', 1);
+
+        Entradas::guardarConfig($this->db, 100, ['capacidad' => 50, 'precio' => 100]);
+
+        $this->assertSame(0, $this->db->paramsFor('INSERT INTO event_ticketing')[8]);
+    }
+
+    /**
+     * Sin valor explícito, el UPDATE no toca la llave de una fila existente,
+     * aunque la lectura previa no la haya visto: el valor por defecto es sólo
+     * para el INSERT.
+     */
+    public function testSinValorExplicitoElUpdateNoPisaLaLlave()
+    {
+        $this->cargosEncendidos();
+        $this->hayOcupadas(0);
+        $this->db->onWrite('INSERT INTO event_ticketing', 1);
+
+        Entradas::guardarConfig($this->db, 100, ['capacidad' => 50, 'precio' => 100]);
+
+        $this->assertTrue($this->db->ran('cargos_al_comprador = cargos_al_comprador'));
+        $this->assertFalse($this->db->ran('cargos_al_comprador = VALUES(cargos_al_comprador)'));
+    }
+
+    public function testConValorExplicitoElUpdateLoGuarda()
+    {
+        $this->hayOcupadas(0);
+        $this->db->onWrite('INSERT INTO event_ticketing', 1);
+
+        Entradas::guardarConfig($this->db, 100, ['capacidad' => 50, 'precio' => 100, 'cargos_al_comprador' => false]);
+
+        $this->assertTrue($this->db->ran('cargos_al_comprador = VALUES(cargos_al_comprador)'));
     }
 
     public function testLaDisponibilidadTraeLasTasasSiElEventoSumaCargos()

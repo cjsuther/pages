@@ -63,22 +63,32 @@ class Entradas
      * quedan los que estaban. Con tipos, el precio del evento es el de
      * referencia que sale de ellos, y lo que venga en 'precio' no se usa.
      *
-     * La llave de las comisiones a cargo de quien compra sigue la misma regla:
-     * si no viene, queda como estaba.
+     * La llave de las comisiones a cargo de quien compra sigue la misma regla
+     * —si no viene, queda como estaba—, con una diferencia para los eventos
+     * que todavía no tienen configuración: esos arrancan con la llave
+     * prendida si la función global lo está (ver porDefecto()). Un evento que
+     * ya vendía —el que estaba configurado antes de que existiera la llave—
+     * nunca cambia de precio solo: su fila sólo cambia si el organizador
+     * manda el valor.
      *
      * @param array $datos ['activo', 'capacidad', 'precio', 'moneda', 'max_por_compra', 'plano'?, 'tipos'?, 'cargos_al_comprador'?]
      * @return array{ok: bool, error: string|null}
      */
     public static function guardarConfig($db, $linkId, array $datos)
     {
-        $guardada = array_key_exists('plano', $datos) && array_key_exists('tipos', $datos)
-            && array_key_exists('cargos_al_comprador', $datos)
+        $explicita = array_key_exists('cargos_al_comprador', $datos);
+
+        $guardada = array_key_exists('plano', $datos) && array_key_exists('tipos', $datos) && $explicita
             ? null
             : self::configDelEvento($db, $linkId);
 
-        $cargosAlComprador = array_key_exists('cargos_al_comprador', $datos)
-            ? !empty($datos['cargos_al_comprador'])
-            : ($guardada !== null && !empty($guardada['cargos_al_comprador']));
+        if ($explicita) {
+            $cargosAlComprador = !empty($datos['cargos_al_comprador']);
+        } elseif ($guardada !== null) {
+            $cargosAlComprador = !empty($guardada['cargos_al_comprador']);
+        } else {
+            $cargosAlComprador = CargosAlComprador::porDefecto();
+        }
 
         $plano = array_key_exists('plano', $datos)
             ? $datos['plano']
@@ -164,6 +174,15 @@ class Entradas
             return ['ok' => false, 'error' => 'Ya hay lugares vendidos o reservados: el plano no se puede sacar'];
         }
 
+        // Sin valor explícito, una fila que ya existe se queda con su llave
+        // aunque la lectura de arriba no la haya visto (otra pestaña que la
+        // creó recién): el valor por defecto es sólo para el INSERT. Así el
+        // ON DUPLICATE KEY UPDATE nunca prende la llave de un evento que ya
+        // estaba a la venta.
+        $actualizarCargos = $explicita
+            ? 'cargos_al_comprador = VALUES(cargos_al_comprador)'
+            : 'cargos_al_comprador = cargos_al_comprador';
+
         $stmt = $db->prepare('
             INSERT INTO event_ticketing (link_id, activo, capacidad, precio, moneda, max_por_compra, plano, tipos, cargos_al_comprador)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -175,7 +194,7 @@ class Entradas
                 max_por_compra = VALUES(max_por_compra),
                 plano = VALUES(plano),
                 tipos = VALUES(tipos),
-                cargos_al_comprador = VALUES(cargos_al_comprador)
+                ' . $actualizarCargos . '
         ');
         $stmt->execute([
             (int) $linkId, $activo, $capacidad, $precio, $moneda, $maxPorCompra,

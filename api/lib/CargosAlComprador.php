@@ -11,8 +11,11 @@
  * Se enciende en dos lugares, y hacen falta los dos:
  *   - CARGOS_AL_COMPRADOR en config.php (global, empieza en false): mientras
  *     esté apagado nada cambia para nadie, ni siquiera se ofrece la opción.
- *   - cargos_al_comprador en event_ticketing (por evento, empieza en 0): así
- *     encenderlo no le cambia el precio a lo que ya está a la venta.
+ *   - cargos_al_comprador en event_ticketing (por evento). Los eventos que ya
+ *     tenían entradas configuradas quedan en 0 con la migración, así que
+ *     encender la global no le cambia el precio a lo que ya está a la venta.
+ *     Los que configuran entradas por primera vez arrancan en 1 si la global
+ *     está prendida (porDefecto()); el organizador la puede apagar.
  *
  * --- La cuenta (gross-up) ---
  *
@@ -60,6 +63,16 @@ class CargosAlComprador
     public static function disponible()
     {
         return self::tasas() !== null;
+    }
+
+    /**
+     * Con qué valor arranca la llave de un evento que configura entradas por
+     * primera vez: prendida si la función global lo está. Los que ya tenían
+     * configuración quedaron en 0 con la migración y no pasan por acá.
+     */
+    public static function porDefecto()
+    {
+        return self::disponible();
     }
 
     /**
