@@ -189,6 +189,7 @@ class PageAccessTest extends TestCase
         return [
             ['canManage'],
             ['isOwner'],
+            ['isOwnerOrAdmin'],
             ['canManageGroup'],
             ['canManageLink'],
         ];
@@ -237,6 +238,35 @@ class PageAccessTest extends TestCase
         $this->esLaPlataforma();
 
         $this->assertFalse(PageAccess::isOwner($this->db, 10, 5));
+    }
+
+    // -------------------------------------------------------- isOwnerOrAdmin
+
+    public function testIsOwnerOrAdminEsTrueParaDuenoOAdministradorAceptado()
+    {
+        $this->db->onSelect('FROM pages p WHERE p.id = ?', [['1' => 1]]);
+
+        $this->assertTrue(PageAccess::isOwnerOrAdmin($this->db, 10, 5));
+        $this->assertSame([10, 5, 5], $this->db->paramsFor('FROM pages p WHERE p.id = ?'));
+        $this->assertStringContainsString('pa.status = "accepted"', $this->db->callsFor('FROM pages p')[0]['sql']);
+    }
+
+    public function testIsOwnerOrAdminEsFalseSiNoHayFila()
+    {
+        $this->assertFalse(PageAccess::isOwnerOrAdmin($this->db, 10, 5));
+    }
+
+    /**
+     * Lo que es una decisión de la página —aceptar de antemano lo que mande
+     * otra— no lo toma el acceso de soporte.
+     */
+    public function testIsOwnerOrAdminNoContemplaLaPlataforma()
+    {
+        $this->esLaPlataforma();
+        $this->db->onSelect('SELECT 1 FROM pages WHERE id = ? LIMIT 1', [[1]]);
+
+        $this->assertFalse(PageAccess::isOwnerOrAdmin($this->db, 10, 5));
+        $this->assertFalse($this->db->ran('SELECT email FROM users'));
     }
 
     /** Un usuario cualquiera sigue necesitando ser dueño o administrador. */

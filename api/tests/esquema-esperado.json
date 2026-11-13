@@ -61,6 +61,14 @@
         "created_at": "migration_carcajada.sql",
         "updated_at": "migration_carcajada.sql"
     },
+    "colaboraciones_automaticas": {
+        "id": "migration_colaboraciones_automaticas.sql",
+        "collaborator_page_id": "migration_colaboraciones_automaticas.sql",
+        "requester_page_id": "migration_colaboraciones_automaticas.sql",
+        "group_id": "migration_colaboraciones_automaticas.sql",
+        "created_by": "migration_colaboraciones_automaticas.sql",
+        "created_at": "migration_colaboraciones_automaticas.sql"
+    },
     "digital_products": {
         "id": "migration_productos_digitales.sql",
         "link_id": "migration_productos_digitales.sql",

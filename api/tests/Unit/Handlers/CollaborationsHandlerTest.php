@@ -597,6 +597,7 @@ class CollaborationsHandlerTest extends HandlerTestCase
             'event_title' => 'Mi evento',
             'page_id' => 5,
             'page_title' => 'Mi página',
+            'page_owner_id' => 9,
         ]]);
     }
 
@@ -681,6 +682,343 @@ class CollaborationsHandlerTest extends HandlerTestCase
 
         $this->assertError(500, $res, 'se cayó la base');
         $this->assertFalse($this->db->ran('INSERT INTO notifications'), 'no se avisa una respuesta que no se guardó');
+    }
+
+    // ========================================= aceptar siempre (automáticas)
+
+    // ------------------------------------------- invitar con y sin regla
+
+    public function testSinReglaLaInvitacionQuedaPendiente()
+    {
+        $this->invitacionValida();
+
+        $res = CollaborationsHandler::index($this->db, $this->post([
+            'link_id' => 100, 'collaborator_page_id' => 7,
+        ], $this->user(9)));
+
+        $this->assertStatus(201, $res);
+        $this->assertSame('pending', $res->body['status']);
+        $this->assertFalse($res->body['aceptada_automaticamente']);
+        $this->assertFalse($this->db->ran('UPDATE event_collaborations SET status'));
+        $this->assertStringContainsString('collaboration_request', $this->db->callsFor('INSERT INTO notifications')[0]['sql']);
+        $this->assertTrue($this->db->committed);
+    }
+
+    /** La regla se busca para esa pareja de páginas y con un grupo que siga sirviendo. */
+    public function testLaReglaEsDeLaPaginaInvitadaRespectoDeLaQueInvita()
+    {
+        $this->invitacionValida();
+
+        CollaborationsHandler::index($this->db, $this->post([
+            'link_id' => 100, 'collaborator_page_id' => 7,
+        ], $this->user(9)));
+
+        $llamada = $this->db->callsFor('FROM colaboraciones_automaticas ca')[0];
+        $this->assertSame([7, 5], $llamada['params'], 'invitada, después la que invita');
+        $this->assertStringContainsString('lg.page_id = ca.collaborator_page_id', $llamada['sql']);
+        $this->assertStringContainsString('lg.type = "eventos"', $llamada['sql']);
+    }
+
+    public function testConReglaLaInvitacionSeAceptaSola()
+    {
+        $this->invitacionValida();
+        $this->reglaDeAceptarSiempre();
+
+        $res = CollaborationsHandler::index($this->db, $this->post([
+            'link_id' => 100, 'collaborator_page_id' => 7,
+        ], $this->user(9)));
+
+        $this->assertStatus(201, $res);
+        $this->assertSame('accepted', $res->body['status']);
+        $this->assertTrue($res->body['aceptada_automaticamente']);
+        $this->assertEquals(40, $res->body['collaboration_id']);
+        // Lo mismo que una aceptación manual: estado, grupo y clientes.
+        $this->assertEquals(['accepted', 50, 40], $this->db->paramsFor('UPDATE event_collaborations SET status'));
+        $this->assertSame([100], $this->db->paramsFor('INSERT INTO event_records'));
+        $this->assertTrue($this->db->committed);
+    }
+
+    public function testLaAceptacionAutomaticaAvisaALasDosPartes()
+    {
+        $this->invitacionValida();
+        $this->reglaDeAceptarSiempre();
+
+        CollaborationsHandler::index($this->db, $this->post([
+            'link_id' => 100, 'collaborator_page_id' => 7,
+        ], $this->user(9)));
+
+        $avisos = $this->db->callsFor('INSERT INTO notifications');
+        $this->assertCount(2, $avisos);
+
+        // A quien invitó, la misma respuesta que con una aceptación manual.
+        $this->assertStringContainsString('collaboration_response', $avisos[0]['sql']);
+        $this->assertSame(9, $avisos[0]['params'][0]);
+        $this->assertSame('Colaboración aceptada', $avisos[0]['params'][1]);
+        $this->assertStringContainsString('Página Invitada', $avisos[0]['params'][2]);
+        $this->assertSame(5, $avisos[0]['params'][3]);
+
+        // Al invitado, que se aceptó sola y no una invitación para responder.
+        $this->assertStringContainsString('collaboration_auto_accepted', $avisos[1]['sql']);
+        $this->assertSame(11, $avisos[1]['params'][0]);
+        $this->assertStringContainsString('automáticamente', $avisos[1]['params'][2]);
+        $this->assertStringContainsString('Mi evento', $avisos[1]['params'][2]);
+        $this->assertStringContainsString('Fechas', $avisos[1]['params'][2]);
+        $this->assertSame(7, $avisos[1]['params'][3]);
+        $this->assertEquals(40, $avisos[1]['params'][5]);
+
+        $this->assertFalse($this->db->ran('"collaboration_request"'));
+    }
+
+    public function testSiFallaLaAceptacionAutomaticaNoQuedaNadaAMedias()
+    {
+        $this->invitacionValida();
+        $this->reglaDeAceptarSiempre();
+        $this->db->failOn('UPDATE event_collaborations SET status', 'se cayó la base');
+
+        $res = CollaborationsHandler::index($this->db, $this->post([
+            'link_id' => 100, 'collaborator_page_id' => 7,
+        ], $this->user(9)));
+
+        $this->assertError(500, $res, 'se cayó la base');
+        $this->assertTrue($this->db->rolledBack);
+        $this->assertFalse($this->db->committed);
+    }
+
+    // ------------------------------------------- aceptar con "siempre"
+
+    public function testAceptarSiempreGuardaLaRegla()
+    {
+        $this->aceptacionValida();
+        // isOwnerOrAdmin sobre la página invitada.
+        $this->db->onSelect('FROM pages p', [[1]]);
+
+        $res = CollaborationsHandler::detail($this->db, $this->put(
+            ['status' => 'accepted', 'group_id' => 50, 'aceptar_siempre' => true],
+            $this->user(11),
+            ['id' => '3']
+        ));
+
+        $this->assertStatus(200, $res);
+        $this->assertTrue($res->body['aceptar_siempre']);
+        $this->assertSame(['accepted', 50, 3], $this->db->paramsFor('UPDATE event_collaborations SET status'));
+        // Invitada, la que invita, grupo y quién la creó.
+        $this->assertSame([7, 5, 50, 11], $this->db->paramsFor('INSERT INTO colaboraciones_automaticas'));
+        $this->assertTrue($this->db->committed);
+    }
+
+    /** Volver a marcarla con la misma página sólo cambia el grupo. */
+    public function testAceptarSiempreDosVecesActualizaLaRegla()
+    {
+        $this->aceptacionValida();
+        $this->db->onSelect('FROM pages p', [[1]]);
+
+        CollaborationsHandler::detail($this->db, $this->put(
+            ['status' => 'accepted', 'group_id' => 50, 'aceptar_siempre' => '1'],
+            $this->user(11),
+            ['id' => '3']
+        ));
+
+        $sql = $this->db->callsFor('INSERT INTO colaboraciones_automaticas')[0]['sql'];
+        $this->assertStringContainsString('ON DUPLICATE KEY UPDATE group_id', $sql);
+    }
+
+    /**
+     * @dataProvider sinSiempre
+     */
+    public function testSinMarcarSiempreNoSeGuardaRegla($valor)
+    {
+        $this->aceptacionValida();
+
+        $cuerpo = ['status' => 'accepted', 'group_id' => 50];
+        if ($valor !== null) {
+            $cuerpo['aceptar_siempre'] = $valor;
+        }
+
+        $res = CollaborationsHandler::detail($this->db, $this->put($cuerpo, $this->user(11), ['id' => '3']));
+
+        $this->assertStatus(200, $res);
+        $this->assertFalse($res->body['aceptar_siempre']);
+        $this->assertFalse($this->db->ran('colaboraciones_automaticas'));
+    }
+
+    public function sinSiempre()
+    {
+        return ['ausente' => [null], 'false' => [false], 'cero' => ['0'], 'basura' => ['quizas']];
+    }
+
+    public function testRechazarConSiempreNoGuardaRegla()
+    {
+        $this->colaboracionPendienteDe(11);
+
+        $res = CollaborationsHandler::detail($this->db, $this->put(
+            ['status' => 'rejected', 'aceptar_siempre' => true],
+            $this->user(11),
+            ['id' => '3']
+        ));
+
+        $this->assertStatus(200, $res);
+        $this->assertFalse($this->db->ran('colaboraciones_automaticas'));
+    }
+
+    /**
+     * La plataforma puede aceptar a mano una invitación de una página ajena,
+     * pero no comprometer a esa página a aceptar todas las que vengan.
+     */
+    public function testLaPlataformaNoPuedeAceptarSiempreEnNombreDeOtro()
+    {
+        $this->colaboracionSinPermiso(11);
+        $this->db->onSelect('SELECT email FROM users', [['plataforma@test']]);
+        $this->db->onSelect('FROM pages WHERE id = ?', [[1]]);
+        $this->db->onSelect('SELECT lg.id FROM link_groups lg', [['id' => 50]]);
+
+        $res = CollaborationsHandler::detail($this->db, $this->put(
+            ['status' => 'accepted', 'group_id' => 50, 'aceptar_siempre' => true],
+            $this->user(9),
+            ['id' => '3']
+        ));
+
+        $this->assertError(403, $res, 'Sólo quien administra la página invitada');
+        $this->assertNoWrites();
+    }
+
+    public function testSiFallaGuardarLaReglaNoSeAceptaANadie()
+    {
+        $this->aceptacionValida();
+        $this->db->onSelect('FROM pages p', [[1]]);
+        $this->db->failOn('INSERT INTO colaboraciones_automaticas', 'se cayó la base');
+
+        $res = CollaborationsHandler::detail($this->db, $this->put(
+            ['status' => 'accepted', 'group_id' => 50, 'aceptar_siempre' => true],
+            $this->user(11),
+            ['id' => '3']
+        ));
+
+        $this->assertError(500, $res, 'se cayó la base');
+        $this->assertTrue($this->db->rolledBack);
+        $this->assertFalse($this->db->ran('INSERT INTO notifications'));
+    }
+
+    // ------------------------------------------- listar y dejar de aceptar
+
+    public function testAutomaticasExigeSesion()
+    {
+        $res = CollaborationsHandler::automaticas($this->db, $this->get(['page_id' => '7']));
+
+        $this->assertError(401, $res, 'Unauthorized');
+    }
+
+    public function testAutomaticasRechazaMetodoNoSoportado()
+    {
+        $res = CollaborationsHandler::automaticas($this->db, $this->post(['page_id' => 7], $this->user(11)));
+
+        $this->assertError(405, $res, 'Method not allowed');
+    }
+
+    public function testListarAutomaticasExigePagina()
+    {
+        $res = CollaborationsHandler::automaticas($this->db, $this->get([], $this->user(11)));
+
+        $this->assertError(400, $res, 'page_id es requerido');
+    }
+
+    public function testListarAutomaticasDeUnaPaginaAjena()
+    {
+        $res = CollaborationsHandler::automaticas($this->db, $this->get(['page_id' => '7'], $this->user(99)));
+
+        $this->assertError(403, $res, 'Forbidden');
+        $this->assertFalse($this->db->ran('FROM colaboraciones_automaticas ca'));
+    }
+
+    /** Ni siquiera la plataforma: la lista es de quien administra la página. */
+    public function testLaPlataformaNoVeLasAutomaticasDeOtro()
+    {
+        $this->db->onSelect('SELECT email FROM users', [['plataforma@test']]);
+        $this->db->onSelect('FROM pages WHERE id = ?', [[1]]);
+
+        $res = CollaborationsHandler::automaticas($this->db, $this->get(['page_id' => '7'], $this->user(9)));
+
+        $this->assertError(403, $res, 'Forbidden');
+    }
+
+    public function testListarAutomaticasDeMiPagina()
+    {
+        $this->db->onSelect('FROM pages p', [[1]]);
+        $this->db->onSelect('FROM colaboraciones_automaticas ca', [
+            ['id' => 4, 'requester_page_id' => 5, 'requester_page_title' => 'Mi página', 'group_title' => 'Fechas'],
+        ]);
+
+        $res = CollaborationsHandler::automaticas($this->db, $this->get(['page_id' => '7'], $this->user(11)));
+
+        $this->assertStatus(200, $res);
+        $this->assertCount(1, $res->body['automaticas']);
+        $this->assertSame([7], $this->db->paramsFor('FROM colaboraciones_automaticas ca'));
+        $this->assertStringContainsString('WHERE ca.collaborator_page_id = ?', $this->db->callsFor('FROM colaboraciones_automaticas ca')[0]['sql']);
+    }
+
+    public function testDejarDeAceptarExigeId()
+    {
+        $res = CollaborationsHandler::automaticas($this->db, $this->delete([], $this->user(11)));
+
+        $this->assertError(400, $res, 'id es requerido');
+    }
+
+    public function testDejarDeAceptarUnaReglaInexistente()
+    {
+        $res = CollaborationsHandler::automaticas($this->db, $this->delete(['id' => '4'], $this->user(11)));
+
+        $this->assertError(404, $res, 'Regla no encontrada');
+        $this->assertNoWrites();
+    }
+
+    /** Quien invita no puede borrar la regla del invitado (ni nadie más). */
+    public function testQuienInvitaNoPuedeBorrarLaRegla()
+    {
+        $this->db->onSelect('SELECT id, collaborator_page_id FROM colaboraciones_automaticas', [
+            ['id' => 4, 'collaborator_page_id' => 7],
+        ]);
+
+        $res = CollaborationsHandler::automaticas($this->db, $this->delete(['id' => '4'], $this->user(9)));
+
+        $this->assertError(403, $res, 'Forbidden');
+        $this->assertNoWrites();
+        $this->assertSame([7, 9, 9], $this->db->paramsFor('FROM pages p'), 'se mira la página invitada');
+    }
+
+    public function testElInvitadoDejaDeAceptarSinTocarLasYaAceptadas()
+    {
+        $this->db->onSelect('SELECT id, collaborator_page_id FROM colaboraciones_automaticas', [
+            ['id' => 4, 'collaborator_page_id' => 7],
+        ]);
+        $this->db->onSelect('FROM pages p', [[1]]);
+
+        $res = CollaborationsHandler::automaticas($this->db, $this->delete(['id' => '4'], $this->user(11)));
+
+        $this->assertStatus(200, $res);
+        $this->assertSame([4], $this->db->paramsFor('DELETE FROM colaboraciones_automaticas'));
+        $this->assertFalse($this->db->ran('event_collaborations'));
+    }
+
+    public function testDejarDeAceptarConLaBaseCaidaEsUn500()
+    {
+        $this->db->failOn('SELECT id, collaborator_page_id FROM colaboraciones_automaticas', 'se cayó la base');
+
+        $res = CollaborationsHandler::automaticas($this->db, $this->delete(['id' => '4'], $this->user(11)));
+
+        $this->assertError(500, $res, 'se cayó la base');
+    }
+
+    private function reglaDeAceptarSiempre()
+    {
+        $this->db->onSelect('FROM colaboraciones_automaticas ca', [[
+            'id' => 4, 'group_id' => 50, 'group_title' => 'Fechas', 'collaborator_page_title' => 'Página Invitada',
+        ]]);
+    }
+
+    /** Una invitación pendiente que el invitado acepta en un grupo de eventos suyo. */
+    private function aceptacionValida()
+    {
+        $this->colaboracionPendienteDe(11);
+        $this->db->onSelect('SELECT lg.id FROM link_groups lg', [['id' => 50]]);
     }
 
     public function testEliminarConLaBaseCaidaEsUn500()

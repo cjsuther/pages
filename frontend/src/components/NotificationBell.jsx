@@ -2,6 +2,9 @@ import React, { useState, useEffect, useContext, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { AuthContext } from '../App';
 
+// Los avisos de colaboraciones llevan al editor de la página, no a la pública.
+const DE_COLABORACION = ['collaboration_request', 'collaboration_response', 'collaboration_auto_accepted'];
+
 function NotificationBell() {
   const { token, apiUrl } = useContext(AuthContext);
   const navigate = useNavigate();
@@ -81,7 +84,10 @@ function NotificationBell() {
       markAsRead([notification.id]);
     }
     setShowDropdown(false);
-    if (notification.type === 'collaboration_request' || notification.type === 'collaboration_response') {
+    if (notification.type === 'collaboration_auto_accepted') {
+      // Se aceptó sola: se va a la lista desde donde se deja de aceptarlas.
+      navigate(`/page/${notification.page_id}?c=colaboraciones`);
+    } else if (DE_COLABORACION.includes(notification.type)) {
       navigate(`/page/${notification.page_id}`);
     } else {
       window.location.href = `/${notification.page_slug}`;
@@ -161,6 +167,9 @@ function NotificationBell() {
                         {notification.type === 'collaboration_request' && (
                           <span className="ml-2 text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded font-normal">Colaboración</span>
                         )}
+                        {notification.type === 'collaboration_auto_accepted' && (
+                          <span className="ml-2 text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded font-normal">Automática</span>
+                        )}
                       </p>
                       <p className="text-sm text-tinta-suave mb-2">
                         {notification.message}
@@ -169,7 +178,7 @@ function NotificationBell() {
                         <span className="truncate max-w-full">{notification.page_title}</span>
                         <span>•</span>
                         <span>{formatDate(notification.created_at)}</span>
-                        {(notification.type === 'collaboration_request' || notification.type === 'collaboration_response') && (
+                        {DE_COLABORACION.includes(notification.type) && (
                           <>
                             <span>•</span>
                             <span className="text-orange-600 font-medium">Ver editor →</span>

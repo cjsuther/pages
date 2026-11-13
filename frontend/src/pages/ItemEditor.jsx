@@ -363,7 +363,8 @@ function ItemEditor() {
           ...prev,
           collaborations: [...(prev.collaborations || []), {
             id: data.collaboration_id,
-            status: 'pending',
+            // Si la página invitada acepta siempre las de esta, ya vuelve aceptada.
+            status: data.status || 'pending',
             collaborator_page_id: colaboradora.id,
             page_title: colaboradora.title,
             page_slug: colaboradora.slug,

@@ -6,6 +6,7 @@ import GooglePlacesAutocomplete from '../components/GooglePlacesAutocomplete';
 import SeccionRedes from '../components/SeccionRedes';
 import SeccionEntradas from '../components/SeccionEntradas';
 import SeccionEmail from '../components/SeccionEmail';
+import ColaboracionesAutomaticas from '../components/ColaboracionesAutomaticas';
 import BuscadorDeVentas from '../components/BuscadorDeVentas';
 import PanelMetricas from '../components/PanelMetricas';
 import PanelClientes from '../components/PanelClientes';
@@ -71,6 +72,7 @@ const SECCIONES = [
 const SUB_CONFIGURACION = [
   { clave: 'general', etiqueta: 'General' },
   { clave: 'redes',   etiqueta: 'Redes sociales' },
+  { clave: 'colaboraciones', etiqueta: 'Colaboraciones' },
   { clave: 'admins',  etiqueta: 'Administradores', soloDueno: true },
   { clave: 'email',   etiqueta: 'Email' },
 ];
@@ -206,6 +208,11 @@ function PageEditor() {
   const [showCollabAcceptModal, setShowCollabAcceptModal] = useState(false);
   const [acceptingCollab, setAcceptingCollab] = useState(null);
   const [collabAcceptGroupId, setCollabAcceptGroupId] = useState('');
+  // "Aceptar siempre las de <página que invita>", en el modal de aceptar.
+  const [collabAceptarSiempre, setCollabAceptarSiempre] = useState(false);
+  // Las páginas cuyas invitaciones esta página acepta automáticamente.
+  const [reglasAutomaticas, setReglasAutomaticas] = useState([]);
+  const [quitandoRegla, setQuitandoRegla] = useState(null);
 
   // Page admins state
   const [admins, setAdmins] = useState([]);
@@ -251,7 +258,10 @@ function PageEditor() {
   }, [id]);
 
   useEffect(() => {
-    if (page) loadPendingCollaborations();
+    if (page) {
+      loadPendingCollaborations();
+      loadReglasAutomaticas();
+    }
   }, [page?.id]);
 
   useEffect(() => {
@@ -850,6 +860,49 @@ function PageEditor() {
     }
   };
 
+  const loadReglasAutomaticas = async () => {
+    try {
+      const response = await fetch(`${apiUrl}/collaborations/automaticas.php?page_id=${id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      // Sólo quien administra la página las ve: para el resto (por ejemplo,
+      // el acceso de plataforma) la lista queda vacía.
+      if (response.ok) {
+        const data = await response.json();
+        setReglasAutomaticas(data.automaticas || []);
+      } else {
+        setReglasAutomaticas([]);
+      }
+    } catch (err) {
+      console.error('Error loading automatic collaborations:', err);
+    }
+  };
+
+  /** La regla con la que esta página acepta solas las invitaciones de otra, si hay. */
+  const reglaDe = (requesterPageId) =>
+    reglasAutomaticas.find(r => Number(r.requester_page_id) === Number(requesterPageId)) || null;
+
+  // Sólo deja de aceptar las próximas: las colaboraciones ya aceptadas siguen.
+  const dejarDeAceptar = async (regla) => {
+    try {
+      setQuitandoRegla(regla.id);
+      const response = await fetch(`${apiUrl}/collaborations/automaticas.php?id=${regla.id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        setReglasAutomaticas(prev => prev.filter(r => r.id !== regla.id));
+      } else {
+        const data = await response.json().catch(() => ({}));
+        alert(data.error || 'No se pudo dejar de aceptar automáticamente');
+      }
+    } catch (err) {
+      console.error('Error removing automatic collaboration:', err);
+    } finally {
+      setQuitandoRegla(null);
+    }
+  };
+
   const removeCollaboration = async (collabId) => {
     if (!confirm('¿Quitar esta colaboración?')) return;
     try {
@@ -871,6 +924,7 @@ function PageEditor() {
     setAcceptingCollab(collab);
     const eventGroups = page?.groups?.filter(g => g.type === 'eventos') || [];
     setCollabAcceptGroupId(eventGroups.length === 1 ? String(eventGroups[0].id) : '');
+    setCollabAceptarSiempre(false);
     setShowCollabAcceptModal(true);
   };
 
@@ -882,14 +936,20 @@ function PageEditor() {
       const response = await fetch(`${apiUrl}/collaborations/detail.php?id=${acceptingCollab.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ status: 'accepted', group_id: parseInt(collabAcceptGroupId) })
+        body: JSON.stringify({
+          status: 'accepted',
+          group_id: parseInt(collabAcceptGroupId),
+          ...(collabAceptarSiempre ? { aceptar_siempre: true } : {}),
+        })
       });
       const data = await response.json();
       if (response.ok) {
         setShowCollabAcceptModal(false);
         setAcceptingCollab(null);
         setCollabAcceptGroupId('');
+        setCollabAceptarSiempre(false);
         loadPendingCollaborations();
+        if (collabAceptarSiempre) loadReglasAutomaticas();
         fetchPage();
       } else {
         alert(data.error || 'Error al aceptar');
@@ -1227,6 +1287,14 @@ function PageEditor() {
           />
         )}
 
+        {seccion === 'general' && subConfig === 'colaboraciones' && (
+          <ColaboracionesAutomaticas
+            reglas={reglasAutomaticas}
+            onDejar={dejarDeAceptar}
+            quitando={quitandoRegla}
+          />
+        )}
+
         {seccion === 'general' && subConfig === 'email' && (
           <SeccionEmail pageId={id} apiUrl={apiUrl} token={token} />
         )}
@@ -1531,6 +1599,19 @@ function PageEditor() {
                                 )}
                                 {link.event_due == '1' && (
                                   <p className="text-sm text-red-700 font-semibold mt-1">¡Evento vencido!</p>
+                                )}
+                                {reglaDe(link.requester_page_id) && (
+                                  <p className="text-xs text-tinta-suave mt-1">
+                                    Aceptás automáticamente las de {link.source_page_title}.{' '}
+                                    <button
+                                      type="button"
+                                      onClick={() => dejarDeAceptar(reglaDe(link.requester_page_id))}
+                                      disabled={quitandoRegla === reglaDe(link.requester_page_id).id}
+                                      className="underline text-tinta-media hover:text-tinta disabled:opacity-50"
+                                    >
+                                      Dejar de aceptarlas automáticamente
+                                    </button>
+                                  </p>
                                 )}
                               </div>
                               <button
@@ -2209,6 +2290,24 @@ function PageEditor() {
                   El evento aparecerá en ese grupo con un indicador de colaboración. También se agregará el link a tu página en el evento original.
                 </p>
               </div>
+              {page?.groups?.some(g => g.type === 'eventos') && (
+                <div>
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={collabAceptarSiempre}
+                      onChange={(e) => setCollabAceptarSiempre(e.target.checked)}
+                      className="mt-1 h-4 w-4 accent-verde-oscuro"
+                    />
+                    <span className="text-sm text-tinta">
+                      Aceptar siempre las de <span className="font-semibold">{acceptingCollab.requester_page_title}</span>
+                    </span>
+                  </label>
+                  <p className="text-xs text-tinta-suave mt-1 ml-7">
+                    Las próximas invitaciones de {acceptingCollab.requester_page_title} a {acceptingCollab.collaborator_page_title || page?.title} se van a aceptar solas, en este mismo grupo. Te avisamos cada vez, y podés dejar de aceptarlas en Configuración › Colaboraciones.
+                  </p>
+                </div>
+              )}
               <div className="flex gap-3 pt-2">
                 <button
                   type="button"
@@ -2216,6 +2315,7 @@ function PageEditor() {
                     setShowCollabAcceptModal(false);
                     setAcceptingCollab(null);
                     setCollabAcceptGroupId('');
+                    setCollabAceptarSiempre(false);
                   }}
                   className="flex-1 px-4 py-3 border border-borde-fuerte text-tinta hover:bg-papel-hueso transition font-bold"
                 >
