@@ -7,6 +7,7 @@ import {
   tiposPorLugar, pedidoDeLosLugares, resumenDelPedido, resumirTipos, precioDelTipo, lugaresSinCargo, personasDe,
 } from '../utils/tiposDeEntrada';
 import { evento as eventoDePixel } from '../utils/metaPixel';
+import { calcularCargos, renglonesDelDesglose } from '../utils/cargos';
 import PlanoDeLugares from './PlanoDeLugares';
 
 /**
@@ -71,9 +72,14 @@ function ComprarEntradas({ evento, entradas, apiUrl, color = '#3B82F6', onCerrar
   let cantidad = Number(datos.cantidad);
   if (conPlano) cantidad = elegidos.length;
   else if (resumen) cantidad = resumen.cantidad;
-  const total = resumen ? resumen.total : (Number(entradas.precio) || 0) * cantidad;
+  const precioEntradas = resumen ? resumen.total : (Number(entradas.precio) || 0) * cantidad;
   // Una compra que no suma nada —sólo entradas sin costo— no pasa por el pago.
-  const sinCobro = entradas.es_gratis || (resumen !== null && cantidad > 0 && total <= 0);
+  const sinCobro = entradas.es_gratis || (resumen !== null && cantidad > 0 && precioEntradas <= 0);
+  // Si el evento suma las comisiones, la misma cuenta que va a hacer el
+  // servidor: lo que se ve acá es al centavo lo que cobra Mercado Pago.
+  const cargos = calcularCargos(precioEntradas, sinCobro ? null : entradas.cargos);
+  const total = cargos.total;
+  const conCargos = cargos.mercadopago > 0 || cargos.plataforma > 0;
 
   const cambiarPedido = (id, valor) => {
     setPedido((previo) => ({ ...previo, [id]: valor }));
@@ -380,6 +386,19 @@ function ComprarEntradas({ evento, entradas, apiUrl, color = '#3B82F6', onCerrar
                 <span>{formatearPrecio(i.subtotal, entradas.moneda)}</span>
               </li>
             ))}
+          </ul>
+        )}
+
+        {!entradas.es_gratis && conCargos && (
+          <ul className="text-sm text-tinta-media space-y-1 border-t border-borde pt-4" aria-label="Desglose del total">
+            {renglonesDelDesglose({ entradas: cargos.precio, mercadopago: cargos.mercadopago, plataforma: cargos.plataforma }).map(
+              ([concepto, monto]) => (
+                <li key={concepto} className="flex justify-between">
+                  <span>{concepto}</span>
+                  <span>{formatearPrecio(monto, entradas.moneda)}</span>
+                </li>
+              )
+            )}
           </ul>
         )}
 

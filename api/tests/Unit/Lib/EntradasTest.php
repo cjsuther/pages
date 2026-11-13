@@ -318,8 +318,8 @@ class EntradasTest extends HandlerTestCase
         $params = $this->db->paramsFor('INSERT INTO ticket_orders');
 
         $this->assertSame('reservada', $r['orden']['estado']);
-        $this->assertSame('reservada', $params[10]);
-        $this->assertNotNull($params[11], 'tiene que tener fecha de vencimiento');
+        $this->assertSame('reservada', $params[12]);
+        $this->assertNotNull($params[13], 'tiene que tener fecha de vencimiento');
     }
 
     /** Sin cobro no hay pago que esperar: dejarla vencer perdería la reserva. */
@@ -334,8 +334,8 @@ class EntradasTest extends HandlerTestCase
 
         $this->assertTrue($r['orden']['es_gratis']);
         $this->assertSame('pagada', $r['orden']['estado']);
-        $this->assertSame('pagada', $params[10]);
-        $this->assertNull($params[11], 'no tiene que vencer');
+        $this->assertSame('pagada', $params[12]);
+        $this->assertNull($params[13], 'no tiene que vencer');
     }
 
     public function testElTotalEsPrecioPorCantidad()
@@ -1418,5 +1418,219 @@ class EntradasTest extends HandlerTestCase
         ];
 
         $this->assertEquals([5000, 0], \Entradas::cobradoPorItem($items, 5000));
+    }
+
+    // ------------------------------------------- comisiones a cargo del comprador
+
+    protected function tearDown(): void
+    {
+        \CargosAlComprador::forzar(null);
+        parent::tearDown();
+    }
+
+    private function cargosEncendidos()
+    {
+        \CargosAlComprador::forzar([
+            'mp_porcentaje' => MP_FEE_PERCENT, 'mp_fijo' => 0, 'mp_iva' => 0,
+            'plataforma_porcentaje' => PLATFORM_FEE_PERCENT, 'plataforma_iva' => 0,
+        ]);
+    }
+
+    /**
+     * El panel separa lo que pagaron los compradores de lo que vale lo vendido:
+     * los cargos están en lo recaudado pero no son del organizador.
+     */
+    public function testLasVentasSeparanLosCargosDelPrecio()
+    {
+        $this->hayVentas([
+            $this->venta(['id' => 1, 'codigo' => 'A', 'total' => '3557.96', 'cargo_mercadopago' => '257.96',
+                          'cargo_plataforma' => '300.00', 'comision' => '300.00',
+                          'mp_neto' => '3000.00', 'mp_comision_cobrada' => '300.00']),
+            $this->venta(['id' => 2, 'codigo' => 'B', 'total' => '3000.00', 'comision' => '300.00',
+                          'mp_neto' => '2482.50', 'mp_comision_cobrada' => '300.00']),
+        ]);
+
+        $r = Entradas::ventasDelEvento($this->db, 100)['resumen'];
+
+        $this->assertSame(6557.96, $r['recaudado']);
+        $this->assertSame(257.96 + 300.0, $r['cargos_al_comprador']);
+        $this->assertSame(6000.0, $r['precio_entradas']);
+        $this->assertSame(5482.5, $r['neto']);
+        $this->assertSame(
+            $r['neto'],
+            round($r['recaudado'] - $r['comision_cobrada'] - $r['comision_mercadopago'], 2),
+            'la resta de la pantalla sigue cerrando'
+        );
+    }
+
+    /** Sin el neto de Mercado Pago, una venta con cargos se estima en su precio. */
+    public function testSinNetoUnaVentaConCargosSeEstimaEnElPrecio()
+    {
+        $this->hayVentas([$this->venta([
+            'total' => '3557.96', 'cargo_mercadopago' => '257.96', 'cargo_plataforma' => '300.00',
+            'comision' => '300.00', 'mp_neto' => null,
+        ])]);
+
+        $this->assertSame(3000.0, Entradas::ventasDelEvento($this->db, 100)['resumen']['neto']);
+    }
+
+    /** Lo recaudado por tipo es lo que valían las entradas, sin cargos. */
+    public function testElDesglosePorTipoNoIncluyeLosCargos()
+    {
+        $this->hayVentas([$this->venta([
+            'total' => '3557.96', 'cargo_mercadopago' => '257.96', 'cargo_plataforma' => '300.00',
+        ])]);
+        $this->db->onSelect('FROM ticket_order_items i', [
+            ['order_id' => 1, 'tipo' => 'general', 'nombre' => 'General', 'precio_unitario' => '1000.00', 'personas' => 1, 'cantidad' => 1],
+            ['order_id' => 1, 'tipo' => 'vip', 'nombre' => 'VIP', 'precio_unitario' => '2000.00', 'personas' => 1, 'cantidad' => 1],
+        ]);
+
+        $porTipo = Entradas::ventasDelEvento($this->db, 100)['resumen']['por_tipo'];
+
+        $this->assertSame([1000.0, 2000.0], array_column($porTipo, 'recaudado'));
+    }
+
+    public function testLaLlaveDelEventoSeGuarda()
+    {
+        $this->hayOcupadas(0);
+        $this->db->onWrite('INSERT INTO event_ticketing', 1);
+
+        Entradas::guardarConfig($this->db, 100, [
+            'capacidad' => 50, 'precio' => 100, 'plano' => null, 'tipos' => null, 'cargos_al_comprador' => true,
+        ]);
+
+        $this->assertSame(1, $this->db->paramsFor('INSERT INTO event_ticketing')[8]);
+    }
+
+    /** Quien no la manda —el asistente, por ejemplo— no la apaga sin querer. */
+    public function testGuardarSinMandarLaLlaveConservaLaQueHabia()
+    {
+        $this->hayEvento(['cargos_al_comprador' => 1]);
+        $this->hayOcupadas(0);
+        $this->db->onWrite('INSERT INTO event_ticketing', 1);
+
+        Entradas::guardarConfig($this->db, 100, ['capacidad' => 50, 'precio' => 100]);
+
+        $this->assertSame(1, $this->db->paramsFor('INSERT INTO event_ticketing')[8]);
+    }
+
+    /** Con la función global apagada, un evento nuevo arranca como siempre. */
+    public function testUnEventoNuevoConLaFuncionApagadaArrancaSinCargos()
+    {
+        $this->hayOcupadas(0);
+        $this->db->onWrite('INSERT INTO event_ticketing', 1);
+
+        Entradas::guardarConfig($this->db, 100, ['capacidad' => 50, 'precio' => 100]);
+
+        $this->assertSame(0, $this->db->paramsFor('INSERT INTO event_ticketing')[8]);
+    }
+
+    /** Con la función prendida, un evento que configura entradas por primera vez arranca con la llave. */
+    public function testUnEventoNuevoConLaFuncionPrendidaArrancaConCargos()
+    {
+        $this->cargosEncendidos();
+        $this->hayOcupadas(0);
+        $this->db->onWrite('INSERT INTO event_ticketing', 1);
+
+        Entradas::guardarConfig($this->db, 100, ['capacidad' => 50, 'precio' => 100]);
+
+        $this->assertSame(1, $this->db->paramsFor('INSERT INTO event_ticketing')[8]);
+    }
+
+    public function testElOrganizadorPuedeApagarlaEnUnEventoNuevo()
+    {
+        $this->cargosEncendidos();
+        $this->hayOcupadas(0);
+        $this->db->onWrite('INSERT INTO event_ticketing', 1);
+
+        Entradas::guardarConfig($this->db, 100, ['capacidad' => 50, 'precio' => 100, 'cargos_al_comprador' => false]);
+
+        $this->assertSame(0, $this->db->paramsFor('INSERT INTO event_ticketing')[8]);
+    }
+
+    /**
+     * El festival que ya estaba a la venta: con la función prendida, volver a
+     * guardar su configuración no le prende la llave.
+     */
+    public function testUnEventoYaConfiguradoEnCeroSigueEnCeroAlReconfigurarlo()
+    {
+        $this->cargosEncendidos();
+        $this->hayEvento(['cargos_al_comprador' => 0]);
+        $this->hayOcupadas(0);
+        $this->db->onWrite('INSERT INTO event_ticketing', 1);
+
+        Entradas::guardarConfig($this->db, 100, ['capacidad' => 50, 'precio' => 100]);
+
+        $this->assertSame(0, $this->db->paramsFor('INSERT INTO event_ticketing')[8]);
+    }
+
+    /**
+     * Sin valor explícito, el UPDATE no toca la llave de una fila existente,
+     * aunque la lectura previa no la haya visto: el valor por defecto es sólo
+     * para el INSERT.
+     */
+    public function testSinValorExplicitoElUpdateNoPisaLaLlave()
+    {
+        $this->cargosEncendidos();
+        $this->hayOcupadas(0);
+        $this->db->onWrite('INSERT INTO event_ticketing', 1);
+
+        Entradas::guardarConfig($this->db, 100, ['capacidad' => 50, 'precio' => 100]);
+
+        $this->assertTrue($this->db->ran('cargos_al_comprador = cargos_al_comprador'));
+        $this->assertFalse($this->db->ran('cargos_al_comprador = VALUES(cargos_al_comprador)'));
+    }
+
+    public function testConValorExplicitoElUpdateLoGuarda()
+    {
+        $this->hayOcupadas(0);
+        $this->db->onWrite('INSERT INTO event_ticketing', 1);
+
+        Entradas::guardarConfig($this->db, 100, ['capacidad' => 50, 'precio' => 100, 'cargos_al_comprador' => false]);
+
+        $this->assertTrue($this->db->ran('cargos_al_comprador = VALUES(cargos_al_comprador)'));
+    }
+
+    public function testLaDisponibilidadTraeLasTasasSiElEventoSumaCargos()
+    {
+        $this->cargosEncendidos();
+        $this->hayEvento(['cargos_al_comprador' => 1]);
+        $this->hayOcupadas(0);
+        $this->db->onSelect('SELECT lg.page_id', [[5]]);
+        $this->db->onSelect('FROM page_payment_settings WHERE page_id', [['page_id' => 5, 'conectado_por' => 'oauth']]);
+
+        $cargos = Entradas::disponibilidad($this->db, 100)['cargos'];
+
+        $this->assertSame(7.25, $cargos['mp_porcentaje']);
+        $this->assertSame(10.0, $cargos['plataforma_porcentaje']);
+    }
+
+    public function testSinSplitLaDisponibilidadNoSumaLaDeRezonar()
+    {
+        $this->cargosEncendidos();
+        $this->hayEvento(['cargos_al_comprador' => 1]);
+        $this->hayOcupadas(0);
+        $this->db->onSelect('SELECT lg.page_id', [[5]]);
+        $this->db->onSelect('FROM page_payment_settings WHERE page_id', [['page_id' => 5, 'conectado_por' => 'manual']]);
+
+        $this->assertSame(0.0, Entradas::disponibilidad($this->db, 100)['cargos']['plataforma_porcentaje']);
+    }
+
+    public function testLaDisponibilidadNoTraeTasasConLaFuncionApagada()
+    {
+        $this->hayEvento(['cargos_al_comprador' => 1]);
+        $this->hayOcupadas(0);
+
+        $this->assertNull(Entradas::disponibilidad($this->db, 100)['cargos']);
+        $this->assertSame(0, $this->db->countCalls('page_payment_settings'), 'ni pregunta por la cuenta');
+    }
+
+    public function testLaDisponibilidadNoTraeTasasSiElEventoNoLasSuma()
+    {
+        $this->cargosEncendidos();
+        $this->hayEvento();
+        $this->hayOcupadas(0);
+
+        $this->assertNull(Entradas::disponibilidad($this->db, 100)['cargos']);
     }
 }

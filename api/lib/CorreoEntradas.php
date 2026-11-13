@@ -264,7 +264,7 @@ class CorreoEntradas
       ' . $bloqueFecha . $bloqueLugar . '
       <p style="margin:0 0 8px;color:#444444;font-size:15px">🎟 '
         . $cantidad . ($cantidad === 1 ? ' entrada' : ' entradas') . ' a nombre de ' . $e($orden['nombre']) . '</p>
-      ' . self::bloqueTipos($orden, $e) . self::bloqueLugares($orden, $e) . '
+      ' . self::bloqueTipos($orden, $e) . self::bloqueLugares($orden, $e) . self::bloquePago($orden, $e) . '
     </div>
 
     <a href="' . $e($url) . '"
@@ -290,6 +290,55 @@ class CorreoEntradas
 
         return '<p style="margin:0 0 8px;color:#000000;font-size:15px;font-weight:700">'
             . $e(TiposDeEntrada::resumir($orden['items'])) . '</p>';
+    }
+
+    /**
+     * Lo que se pagó, separado, si quien compró pagó las comisiones. Sin
+     * cargos no se muestra nada: el mail queda como siempre.
+     */
+    private static function bloquePago(array $orden, $e)
+    {
+        $renglones = self::renglonesDelPago($orden);
+
+        if ($renglones === []) {
+            return '';
+        }
+
+        $html = '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+                 style="margin:12px 0 0;border-top:1px solid #eeeeee;font-size:14px;color:#444444">';
+
+        foreach ($renglones as $i => $renglon) {
+            $ultimo = $i === count($renglones) - 1;
+            $estilo = $ultimo ? 'padding:8px 0 0;color:#000000;font-weight:700' : 'padding:6px 0 0';
+            $html .= '<tr><td style="' . $estilo . '">' . $e($renglon[0]) . '</td>'
+                . '<td style="' . $estilo . ';text-align:right">' . $e($renglon[1]) . '</td></tr>';
+        }
+
+        return $html . '</table>';
+    }
+
+    /** [[concepto, monto]], terminando en el total. Vacío si no hubo cargos. */
+    public static function renglonesDelPago(array $orden)
+    {
+        $desglose = CheckoutHandler::desglose($orden);
+
+        if ($desglose === null) {
+            return [];
+        }
+
+        $renglones = [['Entradas', CorreoProductos::pesos($desglose['entradas'])]];
+
+        if ($desglose['mercadopago'] > 0) {
+            $renglones[] = [CheckoutHandler::CARGO_MERCADOPAGO, CorreoProductos::pesos($desglose['mercadopago'])];
+        }
+
+        if ($desglose['plataforma'] > 0) {
+            $renglones[] = [CheckoutHandler::CARGO_PLATAFORMA, CorreoProductos::pesos($desglose['plataforma'])];
+        }
+
+        $renglones[] = ['Total pagado', CorreoProductos::pesos($desglose['total'])];
+
+        return $renglones;
     }
 
     /** Los lugares elegidos, si el evento tiene plano. */
@@ -365,6 +414,10 @@ class CorreoEntradas
 
         if (!empty($orden['lugares'])) {
             $lineas[] = 'Lugares: ' . Plano::resumir($orden['lugares']);
+        }
+
+        foreach (self::renglonesDelPago($orden) as $renglon) {
+            $lineas[] = $renglon[0] . ': ' . $renglon[1];
         }
 
         $lineas[] = '';

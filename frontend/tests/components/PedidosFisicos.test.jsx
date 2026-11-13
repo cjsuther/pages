@@ -333,14 +333,17 @@ describe('Ventas de productos físicos (#44)', () => {
     });
 
     it('pone la fecha con la franja, avisa y recarga la lista', async () => {
+      // Una fecha futura: el campo tiene min={hoy()} y con una fija el test se
+      // vence solo (pasaba hasta el 3/11/2026 y después no).
+      const fecha = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
       const actualizado = {
         ...DETALLE,
         estado_pedido: 'con_fecha',
-        entrega_fecha: '2026-11-03',
+        entrega_fecha: fecha,
         entrega_franja: 'tarde',
         siguientes: ['con_fecha', 'enviado', 'entregado', 'cancelado'],
         historial: [...DETALLE.historial, {
-          estado: 'con_fecha', etiqueta: 'Con fecha de entrega', datos: { fecha: '2026-11-03', franja: 'tarde' },
+          estado: 'con_fecha', etiqueta: 'Con fecha de entrega', datos: { fecha: fecha, franja: 'tarde' },
           creado_en: '2026-10-29 09:00:00', quien: 'Vendedora',
         }],
       };
@@ -348,7 +351,7 @@ describe('Ventas de productos físicos (#44)', () => {
       await abrirElDeAna();
 
       fireEvent.click(screen.getByRole('button', { name: 'Poner fecha de entrega' }));
-      fireEvent.change(screen.getByLabelText('Fecha de entrega'), { target: { value: '2026-11-03' } });
+      fireEvent.change(screen.getByLabelText('Fecha de entrega'), { target: { value: fecha } });
       fireEvent.change(screen.getByLabelText('Franja (opcional)'), { target: { value: 'tarde' } });
       fireEvent.click(screen.getByRole('button', { name: 'Confirmar y avisar' }));
 
@@ -356,7 +359,7 @@ describe('Ventas de productos físicos (#44)', () => {
       const llamada = llamadaA(llamadas, 'productos/pedido-estado.php');
       expect(llamada.options.method).toBe('POST');
       expect(tokenDe(llamada)).toBe('Bearer tok-123');
-      expect(cuerpoDe(llamada)).toEqual({ codigo: 'AAAA00000001', estado: 'con_fecha', fecha: '2026-11-03', franja: 'tarde' });
+      expect(cuerpoDe(llamada)).toEqual({ codigo: 'AAAA00000001', estado: 'con_fecha', fecha: fecha, franja: 'tarde' });
       expect(screen.getAllByText('Con fecha de entrega').length).toBeGreaterThan(0);
       expect(screen.getByText('29/10/2026 09:00 · Vendedora')).toBeInTheDocument();
       // La lista de atrás se vuelve a pedir, para que los contadores no mientan.

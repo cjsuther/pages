@@ -76,6 +76,35 @@ define('PLATFORM_FEE_PERCENT', 1.5);
 define('MP_FEE_PERCENT', 4.39);
 define('MP_RELEASE_DAYS', 10);
 
+// ------------------------------------------- Comisiones a cargo del comprador
+// Con esto encendido, quien compra paga aparte la comisión de Mercado Pago y la
+// de Rezonar, y el organizador recibe el precio que cargó. La cuenta está
+// explicada en lib/CargosAlComprador.php.
+//
+// Hacen falta dos llaves: esta (global) y la de cada evento, que el organizador
+// ve en la configuración de sus entradas. Mientras esta esté en false nada
+// cambia para nadie: ni se ofrece la opción ni se le suma nada a ningún precio.
+// Con esta en true, los eventos que configuren entradas por primera vez
+// arrancan con su llave prendida (el organizador la puede apagar); los que ya
+// estaban configurados siguen en 0 hasta que su organizador la prenda.
+define('CARGOS_AL_COMPRADOR', false);
+
+// Para sumar lo de Mercado Pago se usa MP_FEE_PERCENT (arriba). OJO: ese
+// porcentaje depende del plazo de acreditación que tenga elegido CADA cuenta
+// de vendedor (Mercado Pago -> Tu negocio -> Costos; en Checkout Pro va de
+// ~6,29% en el momento a ~1,49% a 35 días, más IVA) y acá hay uno solo para
+// todos. Si un organizador cobra en un plazo más caro que el configurado,
+// recibe un poco menos que su precio; si es más barato, un poco más.
+// PLACEHOLDERS: confirmar con la tabla de costos vigente de Mercado Pago.
+//
+// Monto fijo por operación que cobre Mercado Pago, en pesos (0 si no hay).
+define('MP_FEE_FIXED', 0);
+// IVA que Mercado Pago le suma a su comisión. Sus tasas publicadas son "+ IVA".
+define('MP_FEE_IVA_PERCENT', 21);
+// IVA sobre la comisión de Rezonar (PLATFORM_FEE_PERCENT, arriba). 0 si la
+// comisión ya lo incluye o si no corresponde facturarlo aparte.
+define('PLATFORM_FEE_IVA_PERCENT', 0);
+
 // Aplicación de marketplace, desde Mercado Pago -> Tus integraciones. Es la
 // cuenta a la que llega la comisión.
 define('MP_APP_ID', 'TU_CLIENT_ID_DE_MERCADO_PAGO');

@@ -516,4 +516,61 @@ class CorreoEntradasTest extends HandlerTestCase
         $this->assertSame('Tu entrada para Fiesta de fin de año', $mensaje['asunto']);
         $this->assertStringNotContainsString('se modificó', $mensaje['html']);
     }
+
+    // ------------------------------------------- comisiones a cargo del comprador
+
+    public function testConCargosLaEntradaDiceLoQueSePagoSeparado()
+    {
+        $this->hayOrden(['total' => '3557.96', 'cargo_mercadopago' => '257.96', 'cargo_plataforma' => '300.00']);
+        $mailer = new FakeMailer();
+
+        $this->enviar($mailer);
+
+        $html = $mailer->enviados[0]['html'];
+        $texto = $mailer->enviados[0]['texto'];
+
+        foreach (['Entradas', '$ 3.000', 'Comisión de Mercado Pago', '$ 257,96', 'Comisión de Rezon.ar', '$ 300', 'Total pagado', '$ 3.557,96'] as $parte) {
+            $this->assertStringContainsString($parte, $html);
+        }
+
+        $this->assertStringContainsString("Entradas: \$ 3.000\nComisión de Mercado Pago: \$ 257,96\nComisión de Rezon.ar: \$ 300\nTotal pagado: \$ 3.557,96", $texto);
+    }
+
+    /** Sin split sólo se sumó la de Mercado Pago: no se nombra una comisión que no se cobró. */
+    public function testSinComisionDeRezonarNoSeLaNombra()
+    {
+        $this->hayOrden(['total' => '3234.51', 'cargo_mercadopago' => '234.51', 'cargo_plataforma' => '0.00']);
+        $mailer = new FakeMailer();
+
+        $this->enviar($mailer);
+
+        $this->assertStringContainsString('Comisión de Mercado Pago', $mailer->enviados[0]['texto']);
+        $this->assertStringNotContainsString('Rezon.ar', $mailer->enviados[0]['texto']);
+    }
+
+    /** Las compras sin cargos —todas hasta que se encienda— reciben el mail de siempre. */
+    public function testSinCargosLaEntradaNoHablaDePagos()
+    {
+        $this->hayOrden();
+        $mailer = new FakeMailer();
+
+        $this->enviar($mailer);
+
+        $this->assertStringNotContainsString('Total pagado', $mailer->enviados[0]['html']);
+        $this->assertStringNotContainsString('Comisión', $mailer->enviados[0]['texto']);
+    }
+
+    /** Modificar no vuelve a cobrar: el aviso repite lo que se pagó al comprar. */
+    public function testElAvisoDeModificacionRepiteLoPagado()
+    {
+        $this->hayOrden([
+            'mail_enviado_en' => '2026-10-01 10:00:00', 'cantidad' => 4,
+            'total' => '3557.96', 'cargo_mercadopago' => '257.96', 'cargo_plataforma' => '300.00',
+        ]);
+        $mailer = new FakeMailer();
+
+        CorreoEntradas::enviarModificacion($this->db, self::CODIGO, $mailer);
+
+        $this->assertStringContainsString('Total pagado: $ 3.557,96', $mailer->mensajePara('ana@example.com')['texto']);
+    }
 }

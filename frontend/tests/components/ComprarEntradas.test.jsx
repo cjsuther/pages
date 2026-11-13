@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import ComprarEntradas from '../../src/components/ComprarEntradas';
 
 const EVENTO = { id: 100, text: 'Fiesta de fin de año' };
@@ -685,6 +685,83 @@ describe('ComprarEntradas', () => {
       await empezarLaCompra();
 
       expect(window.fbq).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('con las comisiones a cargo de quien compra', () => {
+    // 4,39% + IVA de Mercado Pago y 1,5% de Rezon.ar: 10.000 → 10.719,41.
+    const TASAS = { mp_porcentaje: 4.39, mp_fijo: 0, mp_iva: 21, plataforma_porcentaje: 1.5, plataforma_iva: 0 };
+    const desglose = () => screen.getByRole('list', { name: 'Desglose del total' });
+
+    it('muestra el precio, cada comisión y el total que se cobra', () => {
+      montar({ entradas: { ...ENTRADAS, precio: 10000, cargos: TASAS } });
+
+      const renglones = Array.from(desglose().querySelectorAll('li')).map((li) => li.textContent.replace(/\s/g, ' '));
+      expect(renglones).toEqual([
+        expect.stringMatching(/^Entradas.*10\.000$/),
+        expect.stringMatching(/^Comisión de Mercado Pago.*569,41$/),
+        expect.stringMatching(/^Comisión de Rezon\.ar.*150$/),
+      ]);
+      expect(screen.getByText(/10\.719,41/)).toBeInTheDocument();
+    });
+
+    it('la cuenta va sobre todas las entradas elegidas, no por entrada', async () => {
+      montar({ entradas: { ...ENTRADAS, precio: 7500, cargos: TASAS } });
+
+      fireEvent.change(screen.getByLabelText('Cantidad'), { target: { value: '3' } });
+
+      // 22.500 → 24.118,66 (mismo caso que prueba el servidor).
+      expect(await screen.findByText(/24\.118,66/)).toBeInTheDocument();
+    });
+
+    it('con tipos y promos, la comisión va sobre lo que suma la compra', () => {
+      const tipos = [
+        { id: 'general', nombre: 'General', precio: 8000, disponibles: 50, agotado: false },
+        { id: '2x1', nombre: 'Promo 2x1', precio: 7000, personas: 2, disponibles: 10, agotado: false },
+      ];
+      montar({ entradas: { ...ENTRADAS, precio: 7000, tipos, cargos: TASAS } });
+
+      fireEvent.change(screen.getByLabelText(/General/), { target: { value: '1' } });
+      fireEvent.change(screen.getByLabelText(/Promo 2x1/), { target: { value: '2' } });
+
+      // 8000 + 7000 = 15.000 → 16.079,11.
+      expect(within(desglose()).getByText(/15\.000/)).toBeInTheDocument();
+      expect(screen.getByText(/16\.079,11/)).toBeInTheDocument();
+    });
+
+    it('sin la comisión de Rezon.ar no la nombra', () => {
+      montar({ entradas: { ...ENTRADAS, precio: 10000, cargos: { ...TASAS, plataforma_porcentaje: 0 } } });
+
+      expect(within(desglose()).getByText('Comisión de Mercado Pago')).toBeInTheDocument();
+      expect(screen.queryByText('Comisión de Rezon.ar')).not.toBeInTheDocument();
+    });
+
+    it('sin comisiones a cargo de quien compra no hay desglose', () => {
+      montar();
+
+      expect(screen.queryByRole('list', { name: 'Desglose del total' })).not.toBeInTheDocument();
+      expect(screen.queryByText('Comisión de Mercado Pago')).not.toBeInTheDocument();
+    });
+
+    it('una reserva gratis no suma comisiones', () => {
+      montar({ entradas: { ...ENTRADAS, es_gratis: true, precio: 0, cargos: TASAS } });
+
+      expect(screen.queryByText('Comisión de Mercado Pago')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Confirmar reserva' })).toBeInTheDocument();
+    });
+
+    it('el pixel registra el total con comisiones, que es lo que se paga', async () => {
+      window.fbq = vi.fn();
+      global.fetch.mockReturnValueOnce(respuesta({ codigo: 'X', url: 'https://mp.test/pagar' }));
+      montar({ entradas: { ...ENTRADAS, precio: 10000, cargos: TASAS }, pixelId: '1111111111111111' });
+      completarFormulario();
+
+      fireEvent.click(screen.getByRole('button', { name: 'IR A PAGAR' }));
+
+      await waitFor(() => expect(window.location.href).toBe('https://mp.test/pagar'));
+      expect(window.fbq).toHaveBeenCalledWith(
+        'trackSingle', '1111111111111111', 'InitiateCheckout', expect.objectContaining({ value: 10719.41 })
+      );
     });
   });
 });

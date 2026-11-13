@@ -22,8 +22,12 @@ function alAbrir({
   ocupadas = 0,
   comision = 3,
   mercadopago = MERCADO_PAGO,
+  cargos = null,
+  cargos_por_defecto = false,
 } = {}) {
-  global.fetch.mockReturnValueOnce(respuestaDe({ entradas, cobros, ocupadas, comision, mercadopago }));
+  global.fetch.mockReturnValueOnce(respuestaDe({
+    entradas, cobros, ocupadas, comision, mercadopago, cargos, cargos_por_defecto,
+  }));
 }
 
 async function montar(estado) {
@@ -668,6 +672,98 @@ describe('PanelEntradas', () => {
 
       expect(screen.getByText(/ya están vendidos y no pueden salir del plano/)).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Guardar entradas' })).toBeDisabled();
+    });
+  });
+
+  describe('comisiones a cargo de quien compra', () => {
+    const TASAS = { mp_porcentaje: 4.39, mp_fijo: 0, mp_iva: 21, plataforma_porcentaje: 1.5, plataforma_iva: 0 };
+    const EVENTO = { activo: 1, capacidad: 100, precio: '10000.00', max_por_compra: 10, cargos_al_comprador: false };
+    const llave = () => screen.queryByRole('checkbox', { name: /Sumar las comisiones al precio/ });
+
+    it('con la función apagada en la plataforma no se ofrece', async () => {
+      await montar({ entradas: EVENTO });
+
+      expect(llave()).not.toBeInTheDocument();
+    });
+
+    it('arranca como estaba guardada: apagada', async () => {
+      await montar({ entradas: EVENTO, cargos: TASAS });
+
+      expect(llave()).not.toBeChecked();
+      expect(screen.getByText(/comisión de Rezonar \(3%\)/)).toBeInTheDocument();
+    });
+
+    it('al prenderla muestra cuánto paga quien compra y deja de hablar de descuentos', async () => {
+      await montar({ entradas: EVENTO, cargos: TASAS });
+
+      fireEvent.click(llave());
+
+      expect(screen.getByText(/quien compra paga/)).toHaveTextContent('10.719,41');
+      expect(screen.queryByText(/Menos la comisión de Rezonar/)).not.toBeInTheDocument();
+    });
+
+    it('se guarda con la configuración', async () => {
+      await montar({ entradas: EVENTO, cargos: TASAS });
+      fireEvent.click(llave());
+
+      global.fetch.mockReturnValueOnce(respuestaDe({ entradas: { ...EVENTO, cargos_al_comprador: true } }));
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar entradas' }));
+
+      await waitFor(() => {
+        expect(JSON.parse(global.fetch.mock.calls[1][1].body)).toMatchObject({ cargos_al_comprador: true });
+      });
+    });
+
+    it('con la función apagada no se manda: el servidor deja la que había', async () => {
+      await montar({ entradas: EVENTO });
+
+      global.fetch.mockReturnValueOnce(respuestaDe({ entradas: EVENTO }));
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar entradas' }));
+
+      await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
+      expect(JSON.parse(global.fetch.mock.calls[1][1].body)).not.toHaveProperty('cargos_al_comprador');
+    });
+
+    it('con ventas avisa que lo vendido no cambia', async () => {
+      await montar({ entradas: EVENTO, cargos: TASAS, ocupadas: 4 });
+
+      expect(screen.getByText(/Las entradas ya vendidas no cambian/)).toBeInTheDocument();
+    });
+
+    /** Un evento que configura entradas por primera vez arranca con la llave prendida. */
+    it('en un evento sin configuración arranca marcada si la plataforma lo indica', async () => {
+      await montar({ cargos: TASAS, cargos_por_defecto: true });
+      activar();
+      fireEvent.change(screen.getByLabelText('Precio por entrada'), { target: { value: '10000' } });
+
+      expect(llave()).toBeChecked();
+    });
+
+    it('el organizador la puede desmarcar en un evento nuevo y se guarda apagada', async () => {
+      await montar({ cargos: TASAS, cargos_por_defecto: true });
+      activar();
+      fireEvent.change(screen.getByLabelText('Precio por entrada'), { target: { value: '10000' } });
+      fireEvent.click(llave());
+
+      global.fetch.mockReturnValueOnce(respuestaDe({ entradas: { ...EVENTO, cargos_al_comprador: false } }));
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar entradas' }));
+
+      await waitFor(() => {
+        expect(JSON.parse(global.fetch.mock.calls[1][1].body)).toMatchObject({ cargos_al_comprador: false });
+      });
+    });
+
+    /** El festival que ya vendía: aunque los nuevos arranquen marcados, el suyo queda como estaba. */
+    it('un evento ya configurado sin la llave sigue desmarcado', async () => {
+      await montar({ entradas: EVENTO, cargos: TASAS, cargos_por_defecto: true });
+
+      expect(llave()).not.toBeChecked();
+    });
+
+    it('un evento gratis no la ofrece', async () => {
+      await montar({ entradas: { ...EVENTO, precio: '0.00' }, cargos: TASAS });
+
+      expect(llave()).not.toBeInTheDocument();
     });
   });
 });
