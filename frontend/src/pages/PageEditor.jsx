@@ -20,6 +20,8 @@ import InterruptorActivo from '../components/InterruptorActivo';
 import { analizarEmbed, portadaDe } from '../utils/embeds';
 import { paleta } from '../utils/colores';
 import { MAX_BYTES, excesoImagenEvento } from '../utils/imagenes';
+import { destinoDeGrupo } from '../utils/recorte';
+import { useRecorte } from '../hooks/useRecorte';
 import MiniaturaPlantilla from '../components/MiniaturaPlantilla';
 import Navigation from '../components/Navigation';
 import { ChevronLeft, ExternalLink, EyeOff } from 'lucide-react';
@@ -198,6 +200,7 @@ function PageEditor() {
   const [eleccionPrecio, setEleccionPrecio] = useState(() => eleccionDesdePrecio(null));
   const [errorPrecio, setErrorPrecio] = useState(null);
   const [uploadingLinkImage, setUploadingLinkImage] = useState(false);
+  const { recortar, dialogo: dialogoDeRecorte } = useRecorte();
   // El archivo de un producto nuevo se elige en el formulario, pero se sube
   // después de crear el producto: la subida necesita su id.
   const [archivoNuevo, setArchivoNuevo] = useState(null);
@@ -514,8 +517,18 @@ function PageEditor() {
     }
   };
 
+  // Se vacía el campo para que elegir de nuevo el mismo archivo, después de
+  // cancelar el recorte, vuelva a abrirlo.
+  const elegirYRecortar = async (e, destino) => {
+    const input = e.target;
+    const elegido = input.files && input.files[0];
+    input.value = '';
+    if (!elegido) return null;
+    return recortar(elegido, destino);
+  };
+
   const handleProfileImageUpload = async (e) => {
-    const file = e.target.files[0];
+    const file = await elegirYRecortar(e, 'perfil');
     if (!file) return;
 
     const url = await uploadImage(file);
@@ -525,7 +538,7 @@ function PageEditor() {
   };
 
   const handleBackgroundImageUpload = async (e) => {
-    const file = e.target.files[0];
+    const file = await elegirYRecortar(e, 'fondo');
     if (!file) return;
 
     const url = await uploadImage(file);
@@ -535,7 +548,7 @@ function PageEditor() {
   };
 
   const handleLinkImageUpload = async (e) => {
-    const file = e.target.files[0];
+    const file = await elegirYRecortar(e, destinoDeGrupo(selectedGroup?.type));
     if (!file) return;
 
     setUploadingLinkImage(true);
@@ -2334,6 +2347,8 @@ function PageEditor() {
           </div>
         </div>
       )}
+
+      {dialogoDeRecorte}
     </div>
   );
 }

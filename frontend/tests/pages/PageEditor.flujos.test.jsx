@@ -4,6 +4,12 @@ import { screen, fireEvent, waitFor, within } from '@testing-library/react';
 import PageEditor from '../../src/pages/PageEditor';
 import { renderConProviders, crearAuth, usuarioDePrueba } from '../helpers/render';
 import { mockFetch, cuerpoDe, llamadaA } from '../helpers/api';
+import { recorteFalso, responderRecorte } from '../helpers/recorte.jsx';
+import { exportarRecorte } from '../../src/utils/recorte';
+
+vi.mock('react-easy-crop', () => import('../helpers/recorte.jsx'));
+vi.mock('../../src/utils/recorte', async (original) =>
+  (await import('../helpers/recorte.jsx')).utilsDeRecorteFalsos(original));
 
 /**
  * Flujos de edición del editor: configuración de la página, grupos, links,
@@ -398,30 +404,45 @@ describe('PageEditor — flujos de edición', () => {
   // ====================================================== subida de imágenes
 
   describe('subida de imágenes', () => {
-    it('sube la imagen de perfil y la guarda en la página', async () => {
+    it('recorta la imagen de perfil en círculo y sube el recorte', async () => {
+      const recortada = recorteFalso();
+      exportarRecorte.mockResolvedValueOnce(recortada);
       const { container, llamadas } = await render();
 
       const inputs = container.querySelectorAll('input[type="file"]');
       fireEvent.change(inputs[0], { target: { files: [archivo()] } });
 
+      const dialogo = await responderRecorte('Usar recorte');
+      expect(dialogo).toHaveAccessibleName('Recortá la imagen de perfil');
+
       await waitFor(() => {
         const subida = llamadaA(llamadas, 'upload/image.php');
         expect(subida.options.method).toBe('POST');
         expect(subida.options.body).toBeInstanceOf(FormData);
+        expect(subida.options.body.get('image')).toBe(recortada);
       });
+      expect(exportarRecorte).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        expect.objectContaining({ maxLado: 800 })
+      );
 
       await waitFor(() => {
         expect(cuerpoDe(put(llamadas, 'pages/detail.php'))).toEqual({
           profile_image: 'https://img/subida.png',
         });
       });
+      expect(screen.queryByRole('dialog', { name: /^Recortá/ })).not.toBeInTheDocument();
     });
 
-    it('sube la imagen de fondo', async () => {
+    it('recorta y sube la imagen de fondo', async () => {
       const { container, llamadas } = await render();
 
       const inputs = container.querySelectorAll('input[type="file"]');
       fireEvent.change(inputs[1], { target: { files: [archivo()] } });
+
+      const dialogo = await responderRecorte('Usar recorte');
+      expect(dialogo).toHaveAccessibleName('Recortá la imagen de fondo');
 
       await waitFor(() => {
         expect(cuerpoDe(put(llamadas, 'pages/detail.php'))).toEqual({
@@ -430,27 +451,64 @@ describe('PageEditor — flujos de edición', () => {
       });
     });
 
-    /** El tope de 600 KB es sólo para afiches de eventos (#6). */
-    it('una foto de perfil de 1 MB se sigue subiendo con el límite general', async () => {
+    it('si se cancela el recorte no sube nada', async () => {
       const { container, llamadas } = await render();
 
       const inputs = container.querySelectorAll('input[type="file"]');
-      fireEvent.change(inputs[0], { target: { files: [archivo({ bytes: 1024 * 1024 })] } });
+      fireEvent.change(inputs[0], { target: { files: [archivo()] } });
+      await responderRecorte('Cancelar');
+
+      await waitFor(() => {
+        expect(screen.queryByRole('dialog', { name: /^Recortá/ })).not.toBeInTheDocument();
+      });
+      expect(llamadaA(llamadas, 'upload/image.php')).toBeNull();
+      expect(window.alert).not.toHaveBeenCalled();
+      // El campo queda vacío: elegir la misma foto vuelve a abrir el recorte.
+      expect(inputs[0].value).toBe('');
+    });
+
+    /** El tope de 600 KB es sólo para afiches de eventos (#6). */
+    it('una foto de perfil de 1 MB sin recortar se sube tal cual con el límite general', async () => {
+      const { container, llamadas } = await render();
+      const original = archivo({ bytes: 1024 * 1024 });
+
+      const inputs = container.querySelectorAll('input[type="file"]');
+      fireEvent.change(inputs[0], { target: { files: [original] } });
+      await responderRecorte('Usar sin recortar');
 
       await waitFor(() => {
         expect(llamadaA(llamadas, 'upload/image.php')).not.toBeNull();
       });
+      expect(llamadaA(llamadas, 'upload/image.php').options.body.get('image')).toBe(original);
       expect(llamadaA(llamadas, 'upload/image.php').options.body.get('destino')).toBeNull();
+      expect(exportarRecorte).not.toHaveBeenCalled();
       expect(window.alert).not.toHaveBeenCalled();
     });
 
-    it('rechaza archivos de más de 5MB sin llamar a la API', async () => {
+    it('una foto de 6 MB del celular entra después de recortarla', async () => {
       const { container, llamadas } = await render();
 
       const inputs = container.querySelectorAll('input[type="file"]');
       fireEvent.change(inputs[0], {
         target: { files: [archivo({ bytes: 6 * 1024 * 1024 })] },
       });
+      await responderRecorte('Usar recorte');
+
+      await waitFor(() => {
+        expect(llamadaA(llamadas, 'upload/image.php')).not.toBeNull();
+      });
+      expect(window.alert).not.toHaveBeenCalled();
+    });
+
+    it('si aun recortada pasa los 5MB avisa sin llamar a la API', async () => {
+      exportarRecorte.mockResolvedValueOnce(recorteFalso({ bytes: 6 * 1024 * 1024 }));
+      const { container, llamadas } = await render();
+
+      const inputs = container.querySelectorAll('input[type="file"]');
+      fireEvent.change(inputs[0], {
+        target: { files: [archivo({ bytes: 6 * 1024 * 1024 })] },
+      });
+      await responderRecorte('Usar recorte');
 
       await waitFor(() => {
         expect(window.alert).toHaveBeenCalledWith('La imagen es muy grande. Máximo 5MB');
@@ -492,6 +550,7 @@ describe('PageEditor — flujos de edición', () => {
 
       const inputs = container.querySelectorAll('input[type="file"]');
       fireEvent.change(inputs[0], { target: { files: [archivo()] } });
+      await responderRecorte('Usar recorte');
 
       await waitFor(() => {
         expect(window.alert).toHaveBeenCalledWith('Error al subir imagen: Invalid file type');

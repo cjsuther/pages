@@ -4,6 +4,12 @@ import { screen, fireEvent, waitFor } from '@testing-library/react';
 import ItemEditor from '../../src/pages/ItemEditor';
 import { renderConProviders, crearAuth, usuarioDePrueba } from '../helpers/render';
 import { mockFetch, cuerpoDe, llamadaA } from '../helpers/api';
+import { recorteFalso, responderRecorte } from '../helpers/recorte.jsx';
+import { exportarRecorte } from '../../src/utils/recorte';
+
+vi.mock('react-easy-crop', () => import('../helpers/recorte.jsx'));
+vi.mock('../../src/utils/recorte', async (original) =>
+  (await import('../helpers/recorte.jsx')).utilsDeRecorteFalsos(original));
 
 /**
  * Edición de un item en pantalla completa: campos según el tipo de grupo,
@@ -162,6 +168,8 @@ describe('ItemEditor', () => {
       fireEvent.change(document.querySelector('input[type="file"]'), {
         target: { files: [archivo()] },
       });
+      const dialogo = await responderRecorte('Usar recorte');
+      expect(dialogo).toHaveAccessibleName('Recortá la imagen del link');
 
       await waitFor(() => {
         expect(llamadaA(llamadas, 'upload/image.php')).not.toBeNull();
@@ -184,12 +192,38 @@ describe('ItemEditor', () => {
         page: conItem({ text: 'Mi Evento', event_latitude: '-34.6', event_longitude: '-58.4' }, 'eventos'),
       });
 
-      it('avisa y no sube una imagen de más de 600 KB', async () => {
+      it('un afiche de 2,1 MB se recorta en 4:5 y se achica hasta entrar', async () => {
+        const recortada = recorteFalso({ nombre: 'afiche.jpg', bytes: 450 * 1024 });
+        exportarRecorte.mockResolvedValueOnce(recortada);
         const { llamadas } = await render(evento());
 
         fireEvent.change(document.querySelector('input[type="file"]'), {
           target: { files: [archivo({ nombre: 'afiche.png', tipo: 'image/png', bytes: 2202009 })] },
         });
+        await screen.findByRole('dialog', { name: 'Recortá el afiche del evento' });
+        expect(screen.getByTestId('recortador')).toHaveAttribute('data-aspecto', String(4 / 5));
+        await responderRecorte('Usar recorte');
+
+        await waitFor(() => {
+          expect(llamadaA(llamadas, 'upload/image.php')).not.toBeNull();
+        });
+        expect(llamadaA(llamadas, 'upload/image.php').options.body.get('image')).toBe(recortada);
+        expect(exportarRecorte).toHaveBeenCalledWith(
+          expect.anything(),
+          expect.anything(),
+          expect.objectContaining({ maxBytes: 600 * 1024 })
+        );
+        expect(window.alert).not.toHaveBeenCalled();
+      });
+
+      it('avisa y no sube si aun así pasa los 600 KB', async () => {
+        exportarRecorte.mockResolvedValueOnce(recorteFalso({ bytes: 2202009 }));
+        const { llamadas } = await render(evento());
+
+        fireEvent.change(document.querySelector('input[type="file"]'), {
+          target: { files: [archivo({ nombre: 'afiche.png', tipo: 'image/png', bytes: 2202009 })] },
+        });
+        await responderRecorte('Usar sin recortar');
 
         await waitFor(() => {
           expect(window.alert).toHaveBeenCalledWith(
@@ -199,12 +233,13 @@ describe('ItemEditor', () => {
         expect(llamadaA(llamadas, 'upload/image.php')).toBeNull();
       });
 
-      it('sube una de 600 KB avisándole a la API que es de un evento', async () => {
+      it('sube una de 600 KB sin recortar avisándole a la API que es de un evento', async () => {
         const { llamadas } = await render(evento());
 
         fireEvent.change(document.querySelector('input[type="file"]'), {
           target: { files: [archivo({ bytes: 600 * 1024 })] },
         });
+        await responderRecorte('Usar sin recortar');
 
         await waitFor(() => {
           expect(llamadaA(llamadas, 'upload/image.php')).not.toBeNull();
@@ -219,6 +254,7 @@ describe('ItemEditor', () => {
         fireEvent.change(document.querySelector('input[type="file"]'), {
           target: { files: [archivo({ bytes: 1024 * 1024 })] },
         });
+        await responderRecorte('Usar sin recortar');
 
         await waitFor(() => {
           expect(llamadaA(llamadas, 'upload/image.php')).not.toBeNull();

@@ -12,6 +12,8 @@ import AvisoMercadoPago from '../components/AvisoMercadoPago';
 import EleccionDePrecio, { eleccionDesdePrecio, precioDeEleccion, problemaDeEleccion } from '../components/EleccionDePrecio';
 import { analizarEmbed, EJEMPLOS_EMBED } from '../utils/embeds';
 import { MAX_BYTES, excesoImagenEvento } from '../utils/imagenes';
+import { destinoDeGrupo } from '../utils/recorte';
+import { useRecorte } from '../hooks/useRecorte';
 import EditorCaracteristicas from '../components/EditorCaracteristicas';
 import EditorFormasDeEntrega from '../components/EditorFormasDeEntrega';
 import InterruptorActivo from '../components/InterruptorActivo';
@@ -47,6 +49,7 @@ function ItemEditor() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const { recortar, dialogo: dialogoDeRecorte } = useRecorte();
   const [subiendoArchivo, setSubiendoArchivo] = useState(false);
   const [errorArchivo, setErrorArchivo] = useState('');
   // Tab activo de un evento (datos | entradas | ventas) o de un producto (datos | ventas).
@@ -171,7 +174,13 @@ function ItemEditor() {
   };
 
   const handleImageUpload = async (e) => {
-    const file = e.target.files[0];
+    const input = e.target;
+    const elegido = input.files && input.files[0];
+    // Vacío: elegir el mismo archivo después de cancelar vuelve a abrir el recorte.
+    input.value = '';
+    if (!elegido) return;
+
+    const file = await recortar(elegido, destinoDeGrupo(group.type));
     if (!file) return;
 
     setUploadingImage(true);
@@ -916,6 +925,8 @@ function ItemEditor() {
           </div>
         )}
       </div>
+
+      {dialogoDeRecorte}
     </div>
   );
 }
