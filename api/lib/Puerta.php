@@ -76,7 +76,7 @@ class Puerta
     public static function lista($db, $linkId)
     {
         $stmt = $db->prepare("
-            SELECT id, codigo, nombre, cantidad, ingresadas, ingreso_en
+            SELECT id, codigo, origen, nombre, cantidad, ingresadas, ingreso_en
             FROM ticket_orders
             WHERE link_id = ? AND estado = 'pagada'
             ORDER BY nombre
@@ -122,7 +122,7 @@ class Puerta
         }
 
         $stmt = $db->prepare('
-            SELECT o.id, o.codigo, o.link_id, o.nombre, o.cantidad, o.ingresadas, o.ingreso_en, o.estado,
+            SELECT o.id, o.codigo, o.origen, o.link_id, o.nombre, o.cantidad, o.ingresadas, o.ingreso_en, o.estado,
                    o.reserva_vence_en, l.text AS evento
             FROM ticket_orders o
             INNER JOIN links l ON l.id = o.link_id
@@ -253,6 +253,9 @@ class Puerta
             'lugares'    => $lugares,
             // "2 General · 1 Jubilados", o vacío si el evento tiene un solo precio.
             'tipos'      => TiposDeEntrada::resumir($items),
+            // Entra igual que cualquiera, pero quien controla tiene que poder
+            // ver que es un invitado y no una entrada comprada.
+            'invitado'   => isset($fila['origen']) && $fila['origen'] === 'invitacion',
         ];
     }
 

@@ -565,13 +565,16 @@ class EntradasHandler
                 (float) $o['total'],
                 $o['moneda'],
                 $o['estado'],
+                // Los invitados van en la misma planilla, marcados, para que
+                // la lista de la puerta esté completa; su total es 0.
+                !empty($o['invitado']) ? 'Invitado' : 'Venta',
                 $o['created_at'],
             ];
         }
 
         $contenido = Excel::tabla(
             ['Código', 'Nombre', 'Email', 'Teléfono', 'Cantidad', 'Ingresaron', 'Lugares',
-             'Tipos', 'Total', 'Moneda', 'Estado', 'Fecha'],
+             'Tipos', 'Total', 'Moneda', 'Estado', 'Origen', 'Fecha'],
             $filas,
             'Ventas'
         );

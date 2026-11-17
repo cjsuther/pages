@@ -272,6 +272,13 @@ class ModificarEntradas
             return 'Sólo se pueden modificar compras pagadas o reservas confirmadas';
         }
 
+        // Un invitado se maneja desde Invitados: se anula y se vuelve a cargar.
+        // Modificarlo por acá le mandaría un "cambios en tu compra" a alguien
+        // que no compró, o a nadie si no tiene email.
+        if (isset($orden['origen']) && $orden['origen'] === 'invitacion') {
+            return 'Los invitados no se modifican: anulalo y volvé a cargarlo desde Invitados';
+        }
+
         return null;
     }
 

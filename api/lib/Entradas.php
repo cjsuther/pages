@@ -931,7 +931,7 @@ class Entradas
     public static function ventasDelEvento($db, $linkId)
     {
         $stmt = $db->prepare("
-            SELECT id, codigo, nombre, email, telefono, cantidad, ingresadas, ingreso_en,
+            SELECT id, codigo, origen, nombre, email, telefono, cantidad, ingresadas, ingreso_en,
                    precio_unitario, total, cargo_mercadopago, cargo_plataforma,
                    comision, comision_porcentaje,
                    moneda, estado, reserva_vence_en,
@@ -974,6 +974,10 @@ class Entradas
         // $sinDato avisa que el total no está cerrado.
         $netoReal = 0.0;
         $reservadas = 0;
+        // Los invitados ocupan lugar pero no son ventas: se cuentan aparte y
+        // no tocan ni lo vendido ni la plata.
+        $invitados = 0;
+        $invitadosIngresados = 0;
         $porAcreditar = 0.0;
         $acreditado = 0.0;
         $proxima = null;
@@ -991,6 +995,17 @@ class Entradas
             $orden['lugares_en_conflicto'] = $orden['estado'] === 'pagada'
                 ? array_values(array_intersect($orden['lugares'], $conflictos))
                 : [];
+
+            $orden['invitado'] = isset($orden['origen']) && $orden['origen'] === 'invitacion';
+
+            if ($orden['invitado']) {
+                if ($orden['estado'] === 'pagada') {
+                    $invitados += (int) $orden['cantidad'];
+                    $invitadosIngresados += (int) $orden['ingresadas'];
+                }
+
+                continue;
+            }
 
             if ($orden['estado'] === 'pagada') {
                 $vendidas += (int) $orden['cantidad'];
@@ -1081,6 +1096,9 @@ class Entradas
                 // Cuántas de las vendidas ya pasaron por la puerta.
                 'ingresadas' => $ingresadas,
                 'reservadas' => $reservadas,
+                // Lugares de invitados vigentes: ocupan capacidad, no son ventas.
+                'invitados'  => $invitados,
+                'invitados_ingresados' => $invitadosIngresados,
                 // Lo que pagaron quienes compraron, con los cargos incluidos.
                 'recaudado'  => round($recaudado, 2),
                 // De eso, cuánto fueron comisiones sumadas al precio (0 si el
@@ -1203,18 +1221,20 @@ class Entradas
                    COALESCE(v.ordenes, 0)    AS ordenes,
                    COALESCE(v.vendidas, 0)   AS vendidas,
                    COALESCE(v.reservadas, 0) AS reservadas,
-                   COALESCE(v.recaudado, 0)  AS recaudado
+                   COALESCE(v.recaudado, 0)  AS recaudado,
+                   COALESCE(v.invitados, 0)  AS invitados
             FROM links l
             JOIN link_groups lg ON l.group_id = lg.id
             LEFT JOIN event_ticketing et ON et.link_id = l.id
             LEFT JOIN (
                 SELECT link_id,
                        COUNT(*) AS ordenes,
-                       SUM(CASE WHEN estado = \'pagada\' THEN cantidad END) AS vendidas,
+                       SUM(CASE WHEN estado = \'pagada\' AND origen = \'venta\' THEN cantidad END) AS vendidas,
                        SUM(CASE WHEN estado = \'reservada\'
                             AND (reserva_vence_en IS NULL OR reserva_vence_en > NOW())
                             THEN cantidad END) AS reservadas,
-                       SUM(CASE WHEN estado = \'pagada\' THEN total END) AS recaudado
+                       SUM(CASE WHEN estado = \'pagada\' AND origen = \'venta\' THEN total END) AS recaudado,
+                       SUM(CASE WHEN estado = \'pagada\' AND origen = \'invitacion\' THEN cantidad END) AS invitados
                 FROM ticket_orders
                 GROUP BY link_id
             ) v ON v.link_id = l.id
@@ -1233,6 +1253,7 @@ class Entradas
             $eventos[$i]['vendidas'] = (int) $evento['vendidas'];
             $eventos[$i]['reservadas'] = (int) $evento['reservadas'];
             $eventos[$i]['recaudado'] = round((float) $evento['recaudado'], 2);
+            $eventos[$i]['invitados'] = (int) $evento['invitados'];
         }
 
         return $eventos;
@@ -1456,7 +1477,7 @@ class Entradas
      *
      * @return array|string
      */
-    private static function itemsDelPedido($db, $linkId, array $config, $lugares, $pedidoPorTipo, $cantidad)
+    public static function itemsDelPedido($db, $linkId, array $config, $lugares, $pedidoPorTipo, $cantidad)
     {
         $tipos = $config['tipos'];
         $porId = TiposDeEntrada::porId($tipos);
@@ -1557,7 +1578,7 @@ class Entradas
      *
      * @return array{error: string, ocupados?: string[]}|null
      */
-    private static function problemaConLosLugares($db, $linkId, $plano, $lugares)
+    public static function problemaConLosLugares($db, $linkId, $plano, $lugares)
     {
         if ($plano === null) {
             return $lugares === null || $lugares === []
