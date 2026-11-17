@@ -373,4 +373,162 @@ class InvitadosHandlerTest extends HandlerTestCase
         $this->assertSame(409, $r->status);
         $this->assertSame([], $this->mailer->enviados);
     }
+
+    // ------------------------------------------------- validaciones sueltas
+
+    /** @dataProvider datosInvalidos */
+    public function testRechazaDatosInvalidos(array $datos, $fragmento)
+    {
+        $this->administra();
+
+        $r = InvitadosHandler::invitados($this->db, $this->post(array_merge(['link_id' => 10, 'nombre' => 'Ana'], $datos), $this->user(7)), $this->mailer);
+
+        $this->assertSame(400, $r->status);
+        $this->assertStringContainsString($fragmento, $r->body['error']);
+        $this->assertFalse($this->db->ran('INSERT INTO ticket_orders'));
+    }
+
+    public function datosInvalidos()
+    {
+        return [
+            'nombre larguísimo' => [['nombre' => str_repeat('a', 151)], 'largo'],
+            'teléfono sin dígitos' => [['telefono' => 'abc'], 'teléfono'],
+            'lugares que no son lista' => [['lugares' => 'f:A:1'], 'lugares'],
+            'tipo con caracteres raros' => [['tipo' => 'v ip!'], 'tipo'],
+            'cero lugares' => [['cantidad' => 0], 'entre 1 y'],
+        ];
+    }
+
+    public function testConElEventoLlenoLoDice()
+    {
+        $this->administra();
+        $this->eventoConCapacidad(10, 10);
+
+        $r = InvitadosHandler::invitados($this->db, $this->post(['link_id' => 10, 'nombre' => 'Ana'], $this->user(7)), $this->mailer);
+
+        $this->assertSame(409, $r->status);
+        $this->assertStringContainsString('completo', $r->body['error']);
+    }
+
+    public function testConElLimiteAgotadoLoDice()
+    {
+        $this->administra();
+        $this->eventoConCapacidad(100, 5, ['max_invitados' => 5]);
+        $this->db->onSelect("origen = 'invitacion' AND estado = 'pagada'", [[5]]);
+
+        $r = InvitadosHandler::invitados($this->db, $this->post(['link_id' => 10, 'nombre' => 'Ana'], $this->user(7)), $this->mailer);
+
+        $this->assertSame(409, $r->status);
+        $this->assertStringContainsString('Ya se usaron los 5 lugares', $r->body['error']);
+    }
+
+    /** Si la base falla a mitad del alta, no queda nada a medias. */
+    public function testUnFalloDeLaBaseDeshaceElAlta()
+    {
+        $this->administra();
+        $this->eventoConCapacidad(10, 0);
+        $this->db->failOn('INSERT INTO ticket_orders');
+
+        try {
+            InvitadosHandler::invitados($this->db, $this->post(['link_id' => 10, 'nombre' => 'Ana'], $this->user(7)), $this->mailer);
+            $this->fail('tenía que propagar el error');
+        } catch (\PDOException $e) {
+            $this->assertTrue($this->db->rolledBack);
+            $this->assertFalse($this->db->committed);
+        }
+    }
+
+    /** El invitado queda aunque el mail tire: se reenvía o se pasa el link. */
+    public function testUnMailQueExplotaNoVoltaElAlta()
+    {
+        $this->administra();
+        $this->eventoConCapacidad(10, 0);
+        $this->db->onInsert('INSERT INTO ticket_orders', 79);
+        $this->db->failOn('FROM ticket_orders o INNER JOIN links l');
+
+        $r = InvitadosHandler::invitados(
+            $this->db,
+            $this->post(['link_id' => 10, 'nombre' => 'Ana', 'email' => 'ana@test.local'], $this->user(7)),
+            $this->mailer
+        );
+
+        $this->assertSame(201, $r->status);
+        $this->assertTrue($this->db->committed);
+        $this->assertFalse($r->body['mail']['enviado']);
+    }
+
+    public function testElLimiteSinValorSeRechaza()
+    {
+        $this->administra();
+
+        $r = InvitadosHandler::invitados($this->db, $this->put(['link_id' => 10], $this->user(7)));
+
+        $this->assertSame(400, $r->status);
+    }
+
+    public function testElLimiteNegativoSeRechaza()
+    {
+        $this->administra();
+        $this->db->onSelect('SELECT * FROM event_ticketing WHERE link_id = ?', [['link_id' => 10, 'capacidad' => 100, 'tipos' => null, 'plano' => null]]);
+
+        $r = InvitadosHandler::invitados($this->db, $this->put(['link_id' => 10, 'max_invitados' => -1], $this->user(7)));
+
+        $this->assertSame(400, $r->status);
+    }
+
+    public function testSinEntradasNoHayLimiteQueGuardar()
+    {
+        $this->administra();
+
+        $r = InvitadosHandler::invitados($this->db, $this->put(['link_id' => 10, 'max_invitados' => 3], $this->user(7)));
+
+        $this->assertSame(409, $r->status);
+    }
+
+    public function testLasAccionesExigenSesionYPost()
+    {
+        $this->assertSame(401, InvitadosHandler::invitado($this->db, $this->post(['codigo' => 'ABCDEF123456', 'accion' => 'anular']))->status);
+        $this->assertSame(405, InvitadosHandler::invitado($this->db, $this->get(['codigo' => 'ABCDEF123456'], $this->user(7)))->status);
+    }
+
+    private function invitadoConEmail()
+    {
+        $this->db->onSelect('FROM ticket_orders o INNER JOIN links l', [[
+            'id' => 1, 'codigo' => 'ABCDEF123456', 'link_id' => 10, 'origen' => 'invitacion', 'estado' => 'pagada',
+            'email' => 'ana@test.local', 'nombre' => 'Ana', 'cantidad' => 1, 'total' => 0, 'moneda' => 'ARS',
+            'cargo_mercadopago' => 0, 'cargo_plataforma' => 0, 'mail_enviado_en' => '2026-11-01 10:00:00', 'mail_intentos' => 1,
+            'evento' => 'Noche', 'event_date' => null, 'event_time' => null, 'event_address' => null,
+            'evento_imagen' => null, 'pagina' => 'La Sala', 'url_slug' => 'la-sala', 'email_contacto' => null,
+        ]]);
+    }
+
+    /** Si el mail no sale, el reenvío lo dice con el motivo. */
+    public function testUnReenvioQueFallaLoDice()
+    {
+        $this->invitadoConEmail();
+        $this->administra();
+        // La segunda lectura de la orden, la del envío.
+        $this->invitadoConEmail();
+        $this->mailer->fallarCon('buzón lleno');
+
+        $r = InvitadosHandler::invitado($this->db, $this->post(['codigo' => 'ABCDEF123456', 'accion' => 'reenviar'], $this->user(7)), $this->mailer);
+
+        $this->assertSame(502, $r->status);
+        $this->assertStringContainsString('buzón lleno', $r->body['error']);
+    }
+
+    public function testUnReenvioQueExplotaLoDice()
+    {
+        $this->invitadoConEmail();
+        $this->administra();
+        $this->invitadoConEmail();
+        $explota = new class extends \Mailer {
+            public function __construct() {}
+            public function enviar(array $mensaje, ?array $cuenta = null) { throw new \RuntimeException('SMTP caído'); }
+        };
+
+        $r = InvitadosHandler::invitado($this->db, $this->post(['codigo' => 'ABCDEF123456', 'accion' => 'reenviar'], $this->user(7)), $explota);
+
+        $this->assertSame(502, $r->status);
+    }
 }
