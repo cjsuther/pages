@@ -2,6 +2,7 @@ import React, { useState, useContext } from 'react';
 import { useParams } from 'react-router';
 import { AuthContext } from '../App';
 import { excesoImagenEvento } from '../utils/imagenes';
+import { useRecorte } from '../hooks/useRecorte';
 
 /**
  * Página donde se suelta el archivo del afiche.
@@ -24,8 +25,14 @@ function SubirImagen() {
   const [listo, setListo] = useState(false);
   const [error, setError] = useState(null);
   const [encima, setEncima] = useState(false);
+  const { recortar, dialogo: dialogoDeRecorte } = useRecorte();
 
-  const subir = async (archivo) => {
+  const subir = async (elegido) => {
+    if (!elegido) return;
+
+    // El recorte lo deja en 4:5 y, si hace falta, lo achica para que entre
+    // en los 600 KB.
+    const archivo = await recortar(elegido, 'evento');
     if (!archivo) return;
 
     // Se avisa antes de subir para no quemar el viaje; la API lo valida igual.
@@ -96,7 +103,11 @@ function SubirImagen() {
                 accept="image/jpeg,image/png,image/gif,image/webp"
                 className="sr-only"
                 aria-label="Elegir la imagen"
-                onChange={(e) => subir(e.target.files[0])}
+                onChange={(e) => {
+                  const elegido = e.target.files[0];
+                  e.target.value = '';
+                  subir(elegido);
+                }}
                 disabled={subiendo}
               />
               <span className="text-tinta-media">
@@ -112,6 +123,8 @@ function SubirImagen() {
           </>
         )}
       </div>
+
+      {dialogoDeRecorte}
     </div>
   );
 }

@@ -3,6 +3,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, fireEvent, waitFor } from '@testing-library/react';
 import Show from '../../src/carcajada/Show';
 import { renderConProviders, crearAuth, usuarioDePrueba } from '../helpers/render';
+import { recorteFalso, responderRecorte } from '../helpers/recorte.jsx';
+import { exportarRecorte } from '../../src/utils/recorte';
+
+vi.mock('react-easy-crop', () => import('../helpers/recorte.jsx'));
+vi.mock('../../src/utils/recorte', async (original) =>
+  (await import('../helpers/recorte.jsx')).utilsDeRecorteFalsos(original));
 
 const SHOW = {
   id: 7, ciclo: 'JaJaJaJueves', fecha: '2099-10-02', hora: '21:00:00', lugar: 'Humboldt 1574',
@@ -88,12 +94,21 @@ describe('Show (armado)', () => {
       fireEvent.change(screen.getByLabelText('Instagram'), { target: { value: '@luli' } });
 
       global.fetch.mockReturnValueOnce(respuesta({ url: 'https://rezon.ar/api/uploads/luli.jpg' }));
+      const recortada = recorteFalso({ nombre: 'luli.jpg' });
+      exportarRecorte.mockResolvedValueOnce(recortada);
       const foto = new File(['x'], 'luli.jpg', { type: 'image/jpeg' });
       fireEvent.change(screen.getByLabelText('Foto del comediante'), { target: { files: [foto] } });
 
+      // Cuadrada, como se ve en la grilla del show.
+      const dialogo = await screen.findByRole('dialog', { name: 'Recortá la foto' });
+      expect(screen.getByTestId('recortador')).toHaveAttribute('data-aspecto', '1');
+      await responderRecorte('Usar recorte');
+
       await screen.findByText('Cambiar foto');
+      expect(dialogo).not.toBeInTheDocument();
       expect(global.fetch.mock.calls[1][0]).toMatch(/\/upload\/image\.php$/);
       expect(global.fetch.mock.calls[1][1].headers.Authorization).toBe('Bearer tok');
+      expect(global.fetch.mock.calls[1][1].body.get('image')).toBe(recortada);
 
       global.fetch.mockReturnValueOnce(respuesta({ show: SHOW, comediantes: [] }));
       fireEvent.click(screen.getByRole('button', { name: /Sumar al show/ }));
@@ -111,6 +126,19 @@ describe('Show (armado)', () => {
       abrir();
 
       expect(screen.getByRole('button', { name: /Sumar al show/ })).toBeDisabled();
+    });
+
+    it('si se cancela el recorte no sube la foto', async () => {
+      await montar();
+      abrir();
+
+      const foto = new File(['x'], 'luli.jpg', { type: 'image/jpeg' });
+      fireEvent.change(screen.getByLabelText('Foto del comediante'), { target: { files: [foto] } });
+      await responderRecorte('Cancelar');
+
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Recortá la foto' })).not.toBeInTheDocument());
+      expect(screen.getByText('Subir foto')).toBeInTheDocument();
+      expect(global.fetch).toHaveBeenCalledTimes(1);
     });
 
     it('rechaza una foto que no es imagen sin subirla', async () => {

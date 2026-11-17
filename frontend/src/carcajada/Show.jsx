@@ -5,6 +5,7 @@ import { AuthContext } from '../App';
 import { Boton, Campo, Selector, Tarjeta, Rotulo, Aviso, Cargando, Chip } from '../components/ui';
 import EditorSimple from '../components/EditorSimple';
 import { fechaLarga } from '../utils/carcajada';
+import { useRecorte } from '../hooks/useRecorte';
 
 const TIPOS_DE_FOTO = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 const MAX_FOTO = 5 * 1024 * 1024;
@@ -329,8 +330,13 @@ function SumarInvitado({ apiUrl, token, onSumar }) {
   const [subiendo, setSubiendo] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState(null);
+  const { recortar, dialogo: dialogoDeRecorte } = useRecorte();
 
-  const subirFoto = async (archivo) => {
+  const subirFoto = async (elegido) => {
+    if (!elegido) return;
+
+    // Lo que no es imagen pasa derecho y lo frena el chequeo de abajo.
+    const archivo = await recortar(elegido, 'comediante');
     if (!archivo) return;
 
     if (!TIPOS_DE_FOTO.includes(archivo.type)) {
@@ -426,7 +432,12 @@ function SumarInvitado({ apiUrl, token, onSumar }) {
               className="sr-only"
               aria-label="Foto del comediante"
               disabled={subiendo}
-              onChange={(e) => subirFoto(e.target.files[0])}
+              onChange={(e) => {
+                const elegido = e.target.files[0];
+                // Vacío: elegir la misma foto después de cancelar vuelve a abrir el recorte.
+                e.target.value = '';
+                subirFoto(elegido);
+              }}
             />
           </label>
         </div>
@@ -453,6 +464,8 @@ function SumarInvitado({ apiUrl, token, onSumar }) {
           Cancelar
         </Boton>
       </div>
+
+      {dialogoDeRecorte}
     </form>
   );
 }
