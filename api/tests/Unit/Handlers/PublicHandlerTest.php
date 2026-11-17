@@ -902,6 +902,49 @@ class PublicHandlerTest extends HandlerTestCase
         $this->assertSame(\Comision::mercadoPago(), $res->body['mercadopago']);
     }
 
+    /**
+     * Con la función de comisiones a cargo de quien compra apagada, la
+     * página de precios no la ofrece: no llegan tasas.
+     */
+    public function testCostosSinCargosAlCompradorNoMandaTasas()
+    {
+        \CargosAlComprador::forzar(false);
+
+        try {
+            $res = PublicHandler::costos(null, $this->get());
+        } finally {
+            \CargosAlComprador::forzar(null);
+        }
+
+        $this->assertArrayHasKey('cargos', $res->body);
+        $this->assertNull($res->body['cargos']);
+    }
+
+    /**
+     * Encendida, manda las mismas tasas con las que se cobra, para que la
+     * página de precios haga el ejemplo con la cuenta del checkout.
+     */
+    public function testCostosConCargosAlCompradorMandaLasTasasDelCobro()
+    {
+        $tasas = [
+            'mp_porcentaje' => 4.39, 'mp_fijo' => 0, 'mp_iva' => 21,
+            'plataforma_porcentaje' => 1.0, 'plataforma_iva' => 0,
+        ];
+        \CargosAlComprador::forzar($tasas);
+
+        try {
+            $res = PublicHandler::costos(null, $this->get());
+            $this->assertSame(\CargosAlComprador::tasas(), $res->body['cargos']);
+            // Y con esas tasas el ejemplo de la página da lo que se cobraría.
+            $this->assertSame(
+                ['precio' => 10000.0, 'mercadopago' => 566.6, 'plataforma' => 100.0, 'total' => 10666.6],
+                \CargosAlComprador::calcular(10000, $res->body['cargos'])
+            );
+        } finally {
+            \CargosAlComprador::forzar(null);
+        }
+    }
+
     public function testCostosNoTocaLaBase()
     {
         PublicHandler::costos($this->db, $this->get());
