@@ -4,6 +4,12 @@ import { screen, fireEvent, waitFor, act } from '@testing-library/react';
 import PageEditor from '../../src/pages/PageEditor';
 import { renderConProviders, crearAuth, usuarioDePrueba } from '../helpers/render';
 import { mockFetch, cuerpoDe, llamadaA } from '../helpers/api';
+import { recorteFalso, responderRecorte } from '../helpers/recorte.jsx';
+import { exportarRecorte } from '../../src/utils/recorte';
+
+vi.mock('react-easy-crop', () => import('../helpers/recorte.jsx'));
+vi.mock('../../src/utils/recorte', async (original) =>
+  (await import('../helpers/recorte.jsx')).utilsDeRecorteFalsos(original));
 
 /**
  * Modal de alta de links: subida de imagen, campos según el tipo de grupo y
@@ -143,10 +149,12 @@ describe('PageEditor — modales de link', () => {
       return mock;
     }
 
-    it('sube la imagen y muestra la vista previa', async () => {
+    it('recorta la imagen, la sube y muestra la vista previa', async () => {
       const { llamadas } = await abrirAlta();
 
       fireEvent.change(inputDeArchivoDelModal(), { target: { files: [archivo()] } });
+      const dialogo = await responderRecorte('Usar recorte');
+      expect(dialogo).toHaveAccessibleName('Recortá la imagen del link');
 
       await waitFor(() => {
         expect(llamadaA(llamadas, 'upload/image.php')).not.toBeNull();
@@ -157,10 +165,60 @@ describe('PageEditor — modales de link', () => {
       );
     });
 
+    it('el afiche de un evento se recorta en 4:5 con el tope de 600 KB', async () => {
+      const recortada = recorteFalso({ bytes: 400 * 1024 });
+      exportarRecorte.mockResolvedValueOnce(recortada);
+      const { llamadas } = await abrirAlta('eventos');
+
+      fireEvent.change(inputDeArchivoDelModal(), {
+        target: { files: [archivo({ nombre: 'afiche.png', tipo: 'image/png', bytes: 2202009 })] },
+      });
+      const dialogo = await screen.findByRole('dialog', { name: 'Recortá el afiche del evento' });
+      expect(screen.getByTestId('recortador')).toHaveAttribute('data-aspecto', String(4 / 5));
+      await responderRecorte('Usar recorte');
+
+      await waitFor(() => {
+        expect(llamadaA(llamadas, 'upload/image.php')).not.toBeNull();
+      });
+      const cuerpo = llamadaA(llamadas, 'upload/image.php').options.body;
+      expect(cuerpo.get('image')).toBe(recortada);
+      expect(cuerpo.get('destino')).toBe('evento');
+      expect(exportarRecorte).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        expect.objectContaining({ maxBytes: 600 * 1024, maxLado: 1350 })
+      );
+      expect(window.alert).not.toHaveBeenCalled();
+      expect(dialogo).not.toBeInTheDocument();
+    });
+
+    it('en la galería se puede elegir la proporción', async () => {
+      await abrirAlta('galeria');
+
+      fireEvent.change(inputDeArchivoDelModal(), { target: { files: [archivo()] } });
+
+      await screen.findByRole('dialog', { name: 'Recortá la imagen' });
+      expect(screen.getByRole('group', { name: 'Proporción' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Original' })).toHaveAttribute('aria-pressed', 'true');
+    });
+
+    it('Escape cierra el recorte pero deja abierto el alta', async () => {
+      const { llamadas } = await abrirAlta();
+
+      fireEvent.change(inputDeArchivoDelModal(), { target: { files: [archivo()] } });
+      const dialogo = await screen.findByRole('dialog', { name: /^Recortá/ });
+      fireEvent.keyDown(dialogo, { key: 'Escape' });
+
+      await waitFor(() => expect(dialogo).not.toBeInTheDocument());
+      expect(screen.getByRole('button', { name: 'Crear' })).toBeInTheDocument();
+      expect(llamadaA(llamadas, 'upload/image.php')).toBeNull();
+    });
+
     it('permite quitar la imagen elegida', async () => {
       await abrirAlta();
 
       fireEvent.change(inputDeArchivoDelModal(), { target: { files: [archivo()] } });
+      await responderRecorte('Usar recorte');
       const preview = await screen.findByAltText('Vista previa');
 
       fireEvent.click(preview.closest('div').querySelector('button'));
@@ -170,12 +228,14 @@ describe('PageEditor — modales de link', () => {
       });
     });
 
-    it('rechaza una imagen demasiado grande', async () => {
+    it('rechaza una imagen que sigue demasiado grande sin recortar', async () => {
+      exportarRecorte.mockResolvedValueOnce(recorteFalso({ bytes: 6 * 1024 * 1024 }));
       const { llamadas } = await abrirAlta();
 
       fireEvent.change(inputDeArchivoDelModal(), {
         target: { files: [archivo({ bytes: 6 * 1024 * 1024 })] },
       });
+      await responderRecorte('Usar sin recortar');
 
       await waitFor(() => {
         expect(window.alert).toHaveBeenCalledWith('La imagen es muy grande. Máximo 5MB');
