@@ -213,6 +213,132 @@ describe('PanelInvitados', () => {
     expect(llamadas.filter((l) => l.metodo === 'POST')).toHaveLength(0);
   });
 
+  it('con plano manda los lugares elegidos y, si alguien los tomó, los saca', async () => {
+    const plano = {
+      ancho: 10, alto: 6,
+      elementos: [{ tipo: 'fila', nombre: 'A', butacas: 4, desde: 1, x: 0, y: 0 }],
+    };
+    const llamadas = servidor({
+      'GET invitados.php': { body: { invitados: [], resumen: { ...RESUMEN, plano } } },
+      'POST invitados.php': { status: 409, body: { error: 'Alguien acaba de tomar Fila A, butaca 1. Elegí otro.', ocupados: ['f:A:1'] } },
+    });
+
+    await montar();
+    fireEvent.change(screen.getByLabelText('Nombre y apellido'), { target: { value: 'Ana' } });
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Fila A, butaca 1' }));
+    expect(screen.getByText(/1 lugar:/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Agregar invitado' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Alguien acaba de tomar');
+    expect(llamadas.find((l) => l.metodo === 'POST').cuerpo.lugares).toEqual(['f:A:1']);
+    expect(screen.getByRole('checkbox', { name: 'Fila A, butaca 1, ocupado' })).toBeInTheDocument();
+    expect(screen.getByText('Tocá los lugares que le querés dar.')).toBeInTheDocument();
+  });
+
+  it('sin conexión lo dice en vez de quedarse cargando', async () => {
+    global.fetch = vi.fn(() => Promise.reject(new Error('red')));
+
+    await montar();
+
+    expect(screen.getByText('No pudimos conectarnos al servidor')).toBeInTheDocument();
+  });
+
+  it('si falla el alta por la red, lo avisa', async () => {
+    servidor({
+      'GET invitados.php': { body: { invitados: [], resumen: RESUMEN } },
+      'POST invitados.php': () => Promise.reject(new Error('red')),
+    });
+
+    await montar();
+    fireEvent.change(screen.getByLabelText('Nombre y apellido'), { target: { value: 'Ana' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Agregar invitado' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('No pudimos conectarnos al servidor');
+  });
+
+  it('si el reenvío falla, muestra el motivo', async () => {
+    servidor({
+      'GET invitados.php': { body: { invitados: [ANA], resumen: RESUMEN } },
+      'POST invitado.php': { status: 502, body: { error: 'No pudimos mandar el mail: casilla llena' } },
+    });
+
+    await montar();
+    fireEvent.click(screen.getByRole('button', { name: 'Reenviar la entrada a Ana Gómez' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('casilla llena');
+  });
+
+  it('si la acción no llega al servidor, lo avisa', async () => {
+    servidor({
+      'GET invitados.php': { body: { invitados: [ANA], resumen: RESUMEN } },
+      'POST invitado.php': () => Promise.reject(new Error('red')),
+    });
+
+    await montar();
+    fireEvent.click(screen.getByRole('button', { name: 'Reenviar la entrada a Ana Gómez' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('No pudimos conectarnos al servidor');
+  });
+
+  it('copia el link de la entrada', async () => {
+    servidor({ 'GET invitados.php': { body: { invitados: [ANA], resumen: RESUMEN } } });
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+
+    await montar();
+    fireEvent.click(screen.getByRole('button', { name: 'Copiar el link de Ana Gómez' }));
+
+    expect(await screen.findByText('Copiamos el link de la entrada de Ana Gómez.')).toBeInTheDocument();
+    expect(writeText).toHaveBeenCalledWith(ANA.url);
+  });
+
+  it('si no se puede copiar, muestra el link para copiarlo a mano', async () => {
+    servidor({ 'GET invitados.php': { body: { invitados: [ANA], resumen: RESUMEN } } });
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: () => Promise.reject(new Error('no')) }, configurable: true });
+
+    await montar();
+    fireEvent.click(screen.getByRole('button', { name: 'Copiar el link de Ana Gómez' }));
+
+    expect(await screen.findByText(`No pudimos copiar. El link es ${ANA.url}`)).toBeInTheDocument();
+  });
+
+  it('volver no anula a nadie', async () => {
+    const llamadas = servidor({ 'GET invitados.php': { body: { invitados: [ANA], resumen: RESUMEN } } });
+
+    await montar();
+    fireEvent.click(screen.getByRole('button', { name: 'Anular a Ana Gómez' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Volver' }));
+
+    expect(screen.queryByRole('dialog', { name: 'Anular invitado' })).not.toBeInTheDocument();
+    expect(llamadas.filter((l) => l.url.includes('invitado.php'))).toHaveLength(0);
+  });
+
+  it('el límite muestra el error del servidor', async () => {
+    servidor({
+      'GET invitados.php': { body: { invitados: [], resumen: RESUMEN } },
+      'PUT invitados.php': { status: 409, body: { error: 'Ya hay 6 lugares de invitados: el límite no puede ser menor' } },
+    });
+
+    await montar();
+    fireEvent.change(screen.getByLabelText('LÍMITE DE INVITADOS'), { target: { value: '2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('el límite no puede ser menor');
+  });
+
+  it('el límite avisa si no hay conexión', async () => {
+    servidor({
+      'GET invitados.php': { body: { invitados: [], resumen: RESUMEN } },
+      'PUT invitados.php': () => Promise.reject(new Error('red')),
+    });
+
+    await montar();
+    fireEvent.change(screen.getByLabelText('LÍMITE DE INVITADOS'), { target: { value: '2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('No pudimos conectarnos');
+  });
+
   it('anular pide confirmación y deja al invitado anulado', async () => {
     const llamadas = servidor({
       'GET invitados.php': { body: { invitados: [ANA], resumen: { ...RESUMEN, lugares: 2 } } },
@@ -263,6 +389,9 @@ describe('PanelInvitados', () => {
 
     expect(await screen.findByAltText('Código QR de la entrada de Ana Gómez')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Descargar QR/ })).toHaveAttribute('download', 'entrada-ABC123DEF456.png');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cerrar' }));
+    expect(screen.queryByAltText('Código QR de la entrada de Ana Gómez')).not.toBeInTheDocument();
   });
 
   it('muestra quién ya entró', async () => {

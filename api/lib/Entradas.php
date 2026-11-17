@@ -1253,7 +1253,7 @@ class Entradas
             $eventos[$i]['vendidas'] = (int) $evento['vendidas'];
             $eventos[$i]['reservadas'] = (int) $evento['reservadas'];
             $eventos[$i]['recaudado'] = round((float) $evento['recaudado'], 2);
-            $eventos[$i]['invitados'] = (int) $evento['invitados'];
+            $eventos[$i]['invitados'] = isset($evento['invitados']) ? (int) $evento['invitados'] : 0;
         }
 
         return $eventos;
