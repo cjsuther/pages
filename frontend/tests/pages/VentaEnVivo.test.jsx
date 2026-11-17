@@ -51,6 +51,21 @@ describe('VentaEnVivo', () => {
     window.location.hash = '';
   });
 
+  /** Ocupan lugar sin ser ventas: se muestran aparte para que la cuenta cierre. */
+  it('muestra los invitados aparte de lo vendido', async () => {
+    await montar({ ...ESTADO, venta: { ...ESTADO.venta, invitados: 6, disponibles: 28 } });
+
+    expect(await screen.findByText('Invitados')).toBeInTheDocument();
+    expect(screen.getByText('6')).toBeInTheDocument();
+  });
+
+  it('sin invitados no aparece el dato', async () => {
+    await montar();
+
+    await screen.findByText('Disponibles');
+    expect(screen.queryByText('Invitados')).not.toBeInTheDocument();
+  });
+
   /** La clave viaja en la dirección, que es lo que deja armar la previsualización. */
   it('toma la clave de la dirección', async () => {
     await montar();

@@ -158,6 +158,8 @@ function VentaEnVivo({ apiUrl }) {
               <dl className="grid grid-cols-2 gap-4 mt-6">
                 <Dato etiqueta="Disponibles" valor={venta.disponibles} />
                 {venta.reservadas > 0 && <Dato etiqueta="Reservando ahora" valor={venta.reservadas} />}
+                {/* Ocupan lugar sin ser ventas: sin esto, vendidas y disponibles no suman la capacidad. */}
+                {venta.invitados > 0 && <Dato etiqueta="Invitados" valor={venta.invitados} />}
                 <Dato etiqueta="Compras" valor={venta.compras} />
                 <Dato etiqueta="Recaudado" valor={formatearPrecio(venta.recaudado, venta.moneda)} />
                 {venta.ingresadas > 0 && <Dato etiqueta="Ya entraron" valor={venta.ingresadas} />}
