@@ -140,7 +140,7 @@ class ModificarEntradas
 
             $config = Entradas::decodificada($config);
 
-            $stmt = $db->prepare('SELECT id, estado, cantidad, ingresadas FROM ticket_orders WHERE id = ? FOR UPDATE');
+            $stmt = $db->prepare('SELECT id, origen, estado, cantidad, ingresadas FROM ticket_orders WHERE id = ? FOR UPDATE');
             $stmt->execute([$ordenId]);
             $orden = $stmt->fetch(PDO::FETCH_ASSOC);
 

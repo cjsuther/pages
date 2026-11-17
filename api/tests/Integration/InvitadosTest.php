@@ -520,6 +520,11 @@ class InvitadosTest extends IntegracionTestCase
 
         $this->assertFalse($r['ok']);
         $this->assertStringContainsString('invitados', $r['error']);
+
+        // Y por el POST, que lee la orden bloqueada por su cuenta.
+        $res = EntradasHandler::modificar($this->db, $this->post(['codigo' => $codigo, 'cantidad' => 5], $this->user($this->duenaId)), $this->mailer);
+        $this->assertStatus(409, $res);
+        $this->assertSame(1, (int) $this->orden($codigo)['cantidad']);
     }
 
     // =========================================================== permisos
