@@ -53,3 +53,4 @@ migration_formas_de_entrega.sql
 migration_modificaciones_de_entradas.sql
 migration_cargos_al_comprador.sql
 migration_colaboraciones_automaticas.sql
+migration_invitados.sql
