@@ -619,6 +619,11 @@ class PublicHandler
         return Response::ok([
             'comision'    => Comision::porcentaje(),
             'mercadopago' => Comision::mercadoPago(),
+            // Las tasas con las que se le suman las comisiones a quien compra
+            // cuando el organizador lo elige, o null si la función está
+            // apagada. Sólo informativo: la página de precios repite con
+            // ellas la cuenta del checkout (utils/cargos.js) para el ejemplo.
+            'cargos'      => CargosAlComprador::tasas(),
         ]);
     }
 }
