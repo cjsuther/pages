@@ -35,6 +35,10 @@ window.matchMedia = window.matchMedia || function matchMedia(query) {
 
 window.scrollTo = vi.fn();
 
+// El recorte de imágenes muestra el archivo elegido con una URL local.
+if (!URL.createObjectURL) URL.createObjectURL = () => 'blob:prueba';
+if (!URL.revokeObjectURL) URL.revokeObjectURL = () => {};
+
 global.IntersectionObserver = class {
   observe() {}
   unobserve() {}
