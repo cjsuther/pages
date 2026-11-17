@@ -50,6 +50,31 @@ describe('PanelVentas', () => {
     vi.restoreAllMocks();
   });
 
+  describe('invitados', () => {
+    const INVITADO = { ...VENTA, id: 2, codigo: 'FEDCBA654321', nombre: 'Invitada Vip', email: '', telefono: '', total: '0.00', invitado: true };
+
+    it('los marca como invitados y no ofrece modificarlos', async () => {
+      await montar({ ordenes: [INVITADO], resumen: { invitados: 2 } });
+
+      expect(screen.getByText('Invitado')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Modificar' })).not.toBeInTheDocument();
+    });
+
+    it('cuenta los lugares de invitados aparte de lo vendido', async () => {
+      await montar({ ordenes: [VENTA, INVITADO], resumen: { vendidas: 2, invitados: 3 }, capacidad: 10 });
+
+      expect(screen.getByText('INVITADOS')).toBeInTheDocument();
+      expect(screen.getByText('3')).toBeInTheDocument();
+      expect(screen.getByText('2/10')).toBeInTheDocument();
+    });
+
+    it('sin invitados no aparece el dato', async () => {
+      await montar({ ordenes: [VENTA], resumen: { vendidas: 2 } });
+
+      expect(screen.queryByText('INVITADOS')).not.toBeInTheDocument();
+    });
+  });
+
   describe('resumen', () => {
     it('muestra vendidas sobre la capacidad', async () => {
       await montar({ resumen: { vendidas: 45 }, capacidad: 100 });

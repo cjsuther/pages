@@ -252,7 +252,10 @@ function Puerta({ apiUrl }) {
                       className="w-full text-left p-4 flex items-center justify-between gap-3 transition-opacity hover:opacity-80"
                     >
                       <span className="min-w-0">
-                        <span className="block font-semibold truncate">{o.nombre}</span>
+                        <span className="block font-semibold truncate">
+                          {o.nombre}
+                          {o.invitado && <span className="ml-2 text-xs font-bold tracking-wide">INVITADO</span>}
+                        </span>
                         <span className="block text-xs font-mono" style={{ color: tema.tenue }}>{o.codigo}</span>
                         {o.lugares.length > 0 && (
                           <span className="block text-xs" style={{ color: tema.suave }}>
@@ -347,6 +350,9 @@ function TarjetaDeEntrada({ respuesta, procesando, onIngresar, onDeshacer, onCer
           {orden && (
             <div>
               <p className="text-xl font-bold">{orden.nombre}</p>
+              {/* Entra igual que cualquiera, pero no pagó: quien controla tiene
+                  que saberlo si le preguntan. */}
+              {orden.invitado && <p className="text-sm font-bold tracking-wide">INVITADO · SIN COSTO</p>}
               <p className="text-sm font-mono" style={{ color: tema.tenue }}>{orden.codigo}</p>
               <p className="text-sm mt-1" style={{ color: tema.suave }}>
                 {orden.cantidad} {orden.cantidad === 1 ? 'entrada' : 'entradas'}

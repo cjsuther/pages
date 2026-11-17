@@ -5,6 +5,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import GooglePlacesAutocomplete from '../components/GooglePlacesAutocomplete';
 import PanelEntradas from '../components/PanelEntradas';
 import PanelVentas from '../components/PanelVentas';
+import PanelInvitados from '../components/PanelInvitados';
 import PanelVentasProductos from '../components/PanelVentasProductos';
 import ArchivoDeProducto from '../components/ArchivoDeProducto';
 import LinkDeProducto from '../components/LinkDeProducto';
@@ -435,6 +436,7 @@ function ItemEditor() {
         { clave: 'datos', etiqueta: 'Datos' },
         { clave: 'entradas', etiqueta: 'Entradas' },
         { clave: 'ventas', etiqueta: 'Ventas' },
+        { clave: 'invitados', etiqueta: 'Invitados' },
       ]
     : group.type === 'productos'
       ? [
@@ -505,6 +507,10 @@ function ItemEditor() {
 
         {tab === 'ventas' && group.type === 'eventos' && (
           <PanelVentas linkId={item.id} apiUrl={apiUrl} token={token} nombreEvento={item.text} />
+        )}
+
+        {tab === 'invitados' && group.type === 'eventos' && (
+          <PanelInvitados linkId={item.id} apiUrl={apiUrl} token={token} nombreEvento={item.text} />
         )}
 
         {tab === 'ventas' && group.type === 'productos' && (

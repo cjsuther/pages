@@ -229,6 +229,28 @@ describe('EstadoOrden', () => {
       expect(screen.getByText('La orden se canceló')).toBeInTheDocument();
     });
 
+    it('un invitado ve que su entrada es sin cargo y de parte de quién', async () => {
+      await montar({ ...ORDEN, total: 0, invitacion: true });
+
+      expect(screen.getByText('¡Estás invitado!')).toBeInTheDocument();
+      expect(screen.getByText(/sin cargo, de parte de Mi Página/)).toBeInTheDocument();
+      expect(screen.getByText('Invitación')).toBeInTheDocument();
+    });
+
+    it('un invitado anulado ve que su entrada ya no vale', async () => {
+      await montar({ ...ORDEN, total: 0, invitacion: true, estado: 'cancelada' });
+
+      expect(screen.getByText('Esta invitación se anuló')).toBeInTheDocument();
+      expect(screen.queryByAltText('Código QR de tu entrada')).not.toBeInTheDocument();
+    });
+
+    /** Quien recibió la entrada por WhatsApp no tiene el mail: el QR va acá. */
+    it('una entrada confirmada muestra su QR', async () => {
+      await montar();
+
+      expect(await screen.findByAltText('Código QR de tu entrada')).toBeInTheDocument();
+    });
+
     it('un código inexistente no muestra una pantalla rota', async () => {
       await montar(null, false);
 
@@ -252,6 +274,16 @@ describe('EstadoOrden', () => {
         value: 3000,
         currency: 'ARS',
       }));
+    });
+
+    /** Un invitado no compró nada: registrarlo inflaría las ventas del pixel. */
+    it('un invitado no registra ninguna compra', async () => {
+      window.fbq = vi.fn();
+
+      await montar({ ...ORDEN, total: 0, invitacion: true, meta_pixel_id: '1234567890123456' });
+
+      expect(screen.getByText('¡Estás invitado!')).toBeInTheDocument();
+      expect(window.fbq).not.toHaveBeenCalled();
     });
 
     it('una orden que todavía no se pagó no registra ninguna compra', async () => {

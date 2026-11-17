@@ -117,6 +117,22 @@ describe('Puerta', () => {
     expect(cuerpoDe(2)).toMatchObject({ accion: 'ingresar', codigo: 'ABC123DEF456', cantidad: 2 });
   });
 
+  /** Un invitado entra igual que cualquiera, pero quien controla ve que no pagó. */
+  it('un invitado se ve marcado en la lista y al escanearlo', async () => {
+    const invitada = { ...ESTADO.ordenes[0], invitado: true };
+    global.fetch.mockReturnValueOnce(respuesta({ ...ESTADO, ordenes: [invitada, ESTADO.ordenes[1]] }));
+    await montar();
+
+    expect(screen.getByText('INVITADO')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Escanear QR' }));
+    global.fetch.mockReturnValueOnce(respuesta({ resultado: 'valida', orden: invitada }));
+    fireEvent.click(screen.getByRole('button', { name: 'simular QR' }));
+
+    expect(await screen.findByRole('dialog', { name: 'Entrada válida' })).toBeInTheDocument();
+    expect(screen.getByText('INVITADO · SIN COSTO')).toBeInTheDocument();
+  });
+
   /** Una compra de tres puede llegar en tandas: se elige cuántos pasan ahora. */
   it('se puede marcar sólo una parte de la compra', async () => {
     global.fetch.mockReturnValueOnce(respuesta(ESTADO));
