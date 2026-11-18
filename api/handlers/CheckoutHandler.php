@@ -344,6 +344,9 @@ class CheckoutHandler
             // null en las compras sin cargos: ahí el total es el precio.
             'desglose'      => self::desglose($orden),
             'moneda'        => $orden['moneda'],
+            // Una entrada sin costo que dio quien organiza: la pantalla la
+            // muestra como invitación y no la registra como compra.
+            'invitacion'    => isset($orden['origen']) && $orden['origen'] === 'invitacion',
             'nombre'        => $orden['nombre'],
             'evento'        => $orden['evento'],
             // El link del evento, que es público: con él la pantalla pide

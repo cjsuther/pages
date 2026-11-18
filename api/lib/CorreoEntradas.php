@@ -32,6 +32,11 @@ class CorreoEntradas
             return ['enviado' => false, 'motivo' => 'la orden no está pagada'];
         }
 
+        // Un invitado puede no tener email: su entrada se pasa por link.
+        if (trim((string) $orden['email']) === '') {
+            return ['enviado' => false, 'motivo' => 'sin email'];
+        }
+
         // Mandar dos veces la misma entrada hace dudar de cuál vale.
         if (!empty($orden['mail_enviado_en'])) {
             return ['enviado' => false, 'motivo' => 'ya se había enviado'];
@@ -88,15 +93,60 @@ class CorreoEntradas
             : ['enviado' => false, 'motivo' => $resultado['error']];
     }
 
+    /**
+     * Vuelve a mandar la entrada de un invitado, aunque ya se haya mandado.
+     *
+     * Es a pedido de quien invita —"no le llegó", "lo borró"—, así que no
+     * mira el "ya se había enviado" ni los reintentos del envío automático.
+     * El código y el QR son los mismos: no hay dos entradas que puedan valer.
+     *
+     * @return array{enviado: bool, motivo: string}
+     */
+    public static function reenviar($db, $codigo, $mailer = null)
+    {
+        $orden = Entradas::orden($db, $codigo);
+
+        if ($orden === null) {
+            return ['enviado' => false, 'motivo' => 'orden inexistente'];
+        }
+
+        if ($orden['estado'] !== 'pagada') {
+            return ['enviado' => false, 'motivo' => 'la entrada no está vigente'];
+        }
+
+        if (trim((string) $orden['email']) === '') {
+            return ['enviado' => false, 'motivo' => 'sin email'];
+        }
+
+        $mailer = $mailer === null ? new Mailer() : $mailer;
+        $resultado = $mailer->enviar(self::mensaje($orden));
+
+        self::anotar($db, $orden['id'], $resultado);
+
+        return $resultado['ok']
+            ? ['enviado' => true, 'motivo' => 'entrada reenviada']
+            : ['enviado' => false, 'motivo' => $resultado['error']];
+    }
+
+    /** Si la orden es la de un invitado (entrada sin costo que no se compró). */
+    private static function esInvitacion(array $orden)
+    {
+        return isset($orden['origen']) && $orden['origen'] === 'invitacion';
+    }
+
     /** El mail de la entrada, nueva o modificada. */
     private static function mensaje(array $orden, $modificada = false)
     {
         $qr = CodigoQR::png(CodigoQR::urlDeLaOrden($orden['codigo']));
 
+        $asunto = $modificada
+            ? 'Cambios en tu entrada para '
+            : (self::esInvitacion($orden) ? 'Tu invitación para ' : 'Tu entrada para ');
+
         $mensaje = [
             'para'       => $orden['email'],
             'paraNombre' => $orden['nombre'],
-            'asunto'     => ($modificada ? 'Cambios en tu entrada para ' : 'Tu entrada para ') . $orden['evento'],
+            'asunto'     => $asunto . $orden['evento'],
             'html'       => self::html($orden, $qr !== null, $modificada),
             'texto'      => self::texto($orden, $modificada),
             'imagenes'   => $qr === null ? [] : [['cid' => 'qr', 'contenido' => $qr, 'tipo' => 'image/png']],
@@ -132,6 +182,7 @@ class CorreoEntradas
               AND mail_enviado_en IS NULL
               AND mail_intentos < ?
               AND link_id IS NOT NULL
+              AND email <> ''
             ORDER BY id
             LIMIT " . (int) $limite);
         $stmt->execute([self::MAX_INTENTOS]);
@@ -239,6 +290,15 @@ class CorreoEntradas
               . 'Tu compra se modificó. Esta es la información actualizada: el código y el QR son los mismos de antes.</p>'
             : '';
 
+        // Un invitado no compró nada: que lo lea como lo que es, y de parte de
+        // quién viene.
+        $bloqueInvitacion = !$modificada && self::esInvitacion($orden)
+            ? '<p style="margin:0 0 20px;color:#000000;font-size:15px;line-height:1.5;text-align:left;
+                       background:#f4f4f5;border-radius:4px;padding:12px 16px">'
+              . 'Estás invitado' . (empty($orden['pagina']) ? '' : ' por ' . $e($orden['pagina']))
+              . '. Tu entrada es sin cargo.</p>'
+            : '';
+
         // Estilos en línea y tabla de una columna: es lo único que renderiza
         // igual en Gmail, Outlook y el cliente de iOS.
         return '<!DOCTYPE html>
@@ -250,12 +310,12 @@ class CorreoEntradas
         . $bloqueImagen . '</td></tr>') . '
 
   <tr><td style="background:#000000;padding:24px;text-align:center' . ($bloqueImagen === '' ? ';border-radius:8px 8px 0 0' : '') . '">
-    <p style="margin:0;color:#ffffff;font-size:13px;letter-spacing:2px">' . ($modificada ? 'TU ENTRADA ACTUALIZADA' : 'TU ENTRADA') . '</p>
+    <p style="margin:0;color:#ffffff;font-size:13px;letter-spacing:2px">' . ($modificada ? 'TU ENTRADA ACTUALIZADA' : (self::esInvitacion($orden) ? 'TU INVITACIÓN' : 'TU ENTRADA')) . '</p>
     <h1 style="margin:8px 0 0;color:#ffffff;font-size:24px;font-weight:800">' . $e($orden['evento']) . '</h1>
   </td></tr>
 
   <tr><td style="background:#ffffff;padding:24px;text-align:center">
-    ' . $bloqueModificada . $bloqueQr . '
+    ' . $bloqueModificada . $bloqueInvitacion . $bloqueQr . '
     <p style="margin:0 0 4px;color:#888888;font-size:12px;letter-spacing:1px">CÓDIGO</p>
     <p style="margin:0 0 24px;color:#000000;font-size:26px;font-weight:800;letter-spacing:3px;font-family:monospace">'
       . $e($orden['codigo']) . '</p>
@@ -386,9 +446,15 @@ class CorreoEntradas
         $cantidad = (int) $orden['cantidad'];
 
         $lineas = [
-            ($modificada ? 'TU ENTRADA ACTUALIZADA PARA ' : 'TU ENTRADA PARA ') . mb_strtoupper($orden['evento']),
+            ($modificada ? 'TU ENTRADA ACTUALIZADA PARA ' : (self::esInvitacion($orden) ? 'TU INVITACIÓN PARA ' : 'TU ENTRADA PARA '))
+                . mb_strtoupper($orden['evento']),
             '',
         ];
+
+        if (!$modificada && self::esInvitacion($orden)) {
+            $lineas[] = 'Estás invitado' . (empty($orden['pagina']) ? '' : ' por ' . $orden['pagina']) . '. Tu entrada es sin cargo.';
+            $lineas[] = '';
+        }
 
         if ($modificada) {
             $lineas[] = 'Tu compra se modificó. Esta es la información actualizada: el código y el QR son los mismos de antes.';

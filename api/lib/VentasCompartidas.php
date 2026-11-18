@@ -42,7 +42,9 @@ class VentasCompartidas
                 'capacidad'   => $capacidad,
                 'vendidas'    => $totales['vendidas'],
                 'reservadas'  => $totales['reservadas'],
-                'disponibles' => max(0, $capacidad - $totales['vendidas'] - $totales['reservadas']),
+                'disponibles' => max(0, $capacidad - $totales['vendidas'] - $totales['reservadas'] - $totales['invitados']),
+                // Ocupan lugar pero no son ventas: no suman a lo vendido ni a lo recaudado.
+                'invitados'   => $totales['invitados'],
                 'recaudado'   => $totales['recaudado'],
                 'precio'      => (float) $config['precio'],
                 'moneda'      => $config['moneda'],
@@ -67,12 +69,13 @@ class VentasCompartidas
     {
         $stmt = $db->prepare("
             SELECT
-                COALESCE(SUM(CASE WHEN estado = 'pagada' THEN cantidad END), 0)   AS vendidas,
-                COALESCE(SUM(CASE WHEN estado = 'pagada' THEN total END), 0)      AS recaudado,
+                COALESCE(SUM(CASE WHEN estado = 'pagada' AND origen = 'venta' THEN cantidad END), 0)   AS vendidas,
+                COALESCE(SUM(CASE WHEN estado = 'pagada' AND origen = 'venta' THEN total END), 0)      AS recaudado,
                 COALESCE(SUM(CASE WHEN estado = 'pagada' THEN ingresadas END), 0) AS ingresadas,
                 COALESCE(SUM(CASE WHEN estado = 'reservada' AND reserva_vence_en > NOW()
                                   THEN cantidad END), 0)                          AS reservadas,
-                COALESCE(SUM(estado = 'pagada'), 0)                               AS compras
+                COALESCE(SUM(estado = 'pagada' AND origen = 'venta'), 0)          AS compras,
+                COALESCE(SUM(CASE WHEN estado = 'pagada' AND origen = 'invitacion' THEN cantidad END), 0) AS invitados
             FROM ticket_orders
             WHERE link_id = ?
         ");
@@ -85,6 +88,7 @@ class VentasCompartidas
             'ingresadas' => (int) $fila['ingresadas'],
             'compras'    => (int) $fila['compras'],
             'recaudado'  => round((float) $fila['recaudado'], 2),
+            'invitados'  => isset($fila['invitados']) ? (int) $fila['invitados'] : 0,
         ];
     }
 
@@ -103,7 +107,7 @@ class VentasCompartidas
             SELECT i.tipo, COALESCE(SUM(CEIL(i.cantidad / i.personas)), 0) AS vendidas
             FROM ticket_order_items i
             INNER JOIN ticket_orders o ON o.id = i.order_id
-            WHERE o.link_id = ? AND o.estado = 'pagada'
+            WHERE o.link_id = ? AND o.estado = 'pagada' AND o.origen = 'venta'
             GROUP BY i.tipo
         ");
         $stmt->execute([(int) $linkId]);
@@ -117,7 +121,7 @@ class VentasCompartidas
         $stmt = $db->prepare("
             SELECT COALESCE(SUM(o.cantidad), 0)
             FROM ticket_orders o
-            WHERE o.link_id = ? AND o.estado = 'pagada'
+            WHERE o.link_id = ? AND o.estado = 'pagada' AND o.origen = 'venta'
               AND NOT EXISTS (SELECT 1 FROM ticket_order_items i WHERE i.order_id = o.id)
         ");
         $stmt->execute([(int) $linkId]);
@@ -157,7 +161,7 @@ class VentasCompartidas
         $stmt = $db->prepare("
             SELECT DATE(pagada_en) AS dia, SUM(cantidad) AS vendidas
             FROM ticket_orders
-            WHERE link_id = ? AND estado = 'pagada' AND pagada_en IS NOT NULL
+            WHERE link_id = ? AND estado = 'pagada' AND origen = 'venta' AND pagada_en IS NOT NULL
               AND pagada_en >= (CURDATE() - INTERVAL " . (self::DIAS_DE_RITMO - 1) . " DAY)
             GROUP BY DATE(pagada_en)
         ");

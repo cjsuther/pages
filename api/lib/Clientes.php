@@ -313,6 +313,9 @@ class Clientes
             INNER JOIN ticket_orders o ON o.record_id = r.id
             LEFT JOIN users u ON u.email = o.email
             WHERE rp.page_id = ?
+              -- Un invitado sin email no es nadie a quien escribirle, y
+              -- todos juntos formarían un cliente vacío.
+              AND o.email <> ''
             ORDER BY o.created_at ASC, o.id ASC
         ");
         $stmt->execute([(int) $pageId]);

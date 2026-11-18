@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router';
+import QRCode from 'qrcode';
 import { Check, Clock, X, Loader2, MapPin, Calendar } from 'lucide-react';
 import Sugerencias from '../components/Sugerencias';
 import { formatearPrecio } from '../utils/entradas';
@@ -55,7 +56,8 @@ function EstadoOrden({ apiUrl }) {
   const yaRegistrada = useRef(false);
 
   useEffect(() => {
-    if (!orden || orden.estado !== 'pagada' || yaRegistrada.current) {
+    // Un invitado no compró nada: registrarlo inflaría las ventas del pixel.
+    if (!orden || orden.estado !== 'pagada' || orden.invitacion || yaRegistrada.current) {
       return;
     }
 
@@ -136,6 +138,19 @@ function EstadoOrden({ apiUrl }) {
     },
   };
 
+  if (orden.invitacion) {
+    estados.pagada = {
+      ...estados.pagada,
+      titulo: '¡Estás invitado!',
+      detalle: `Tu entrada es sin cargo${orden.pagina ? `, de parte de ${orden.pagina}` : ''}. Mostrá este QR en la entrada.`,
+    };
+    estados.cancelada = {
+      ...estados.cancelada,
+      titulo: 'Esta invitación se anuló',
+      detalle: 'La entrada ya no es válida. Si creés que es un error, escribile a quien te invitó.',
+    };
+  }
+
   const estado = estados[orden.estado] || estados.reservada;
 
   return (
@@ -146,6 +161,10 @@ function EstadoOrden({ apiUrl }) {
 
       <h1 className="text-3xl font-bold text-tinta mb-2">{estado.titulo}</h1>
       <p className="text-tinta-suave mb-8">{estado.detalle}</p>
+
+      {/* El QR en la pantalla: quien recibió la entrada por WhatsApp no
+          tiene el mail, y en la puerta se escanea desde acá. */}
+      {orden.estado === 'pagada' && <QrDeLaEntrada codigo={orden.codigo} />}
 
       <div className="border border-borde bg-white p-6 text-left mb-6">
         <p className="text-xs text-tinta-suave tracking-wide mb-1">Código</p>
@@ -178,6 +197,7 @@ function EstadoOrden({ apiUrl }) {
           {orden.total > 0 && (
             <span className="text-tinta font-bold">{formatearPrecio(orden.total, orden.moneda)}</span>
           )}
+          {orden.invitacion && <span className="text-tinta font-bold">Invitación</span>}
         </div>
 
         {/* Si pagó las comisiones, qué fue cada parte del total. */}
@@ -212,11 +232,33 @@ function EstadoOrden({ apiUrl }) {
       )}
 
       {/* Acaba de comprar: es el momento de mostrarle qué más hay. */}
-      {orden.estado === 'pagada' && orden.link_id && (
+      {orden.estado === 'pagada' && !orden.invitacion && orden.link_id && (
         <Sugerencias tipo="evento" id={orden.link_id} apiUrl={apiUrl} className="mt-10 text-tinta" />
       )}
     </Marco>
   );
+}
+
+/**
+ * El QR de la entrada: lleva a esta misma página, que es lo que lee el
+ * escáner de la puerta (y lo mismo que va en el mail).
+ */
+function QrDeLaEntrada({ codigo }) {
+  const [imagen, setImagen] = useState(null);
+
+  useEffect(() => {
+    let vigente = true;
+
+    QRCode.toDataURL(`${window.location.origin}/entrada/${codigo}`, { width: 480, margin: 1, errorCorrectionLevel: 'H' })
+      .then((dato) => { if (vigente) setImagen(dato); })
+      .catch(() => { if (vigente) setImagen(null); });
+
+    return () => { vigente = false; };
+  }, [codigo]);
+
+  if (!imagen) return null;
+
+  return <img src={imagen} alt="Código QR de tu entrada" className="w-56 h-56 mx-auto mb-6 border-8 border-white" />;
 }
 
 function Marco({ children }) {

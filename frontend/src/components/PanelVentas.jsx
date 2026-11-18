@@ -174,6 +174,10 @@ function PanelVentas({ linkId, apiUrl, token, nombreEvento = '' }) {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Dato etiqueta="VENDIDAS" valor={capacidad ? `${resumen.vendidas}/${capacidad}` : resumen.vendidas} />
         <Dato etiqueta="RESERVANDO" valor={resumen.reservadas} />
+        {/* Ocupan lugar pero no son ventas: van aparte, sin plata. */}
+        {resumen.invitados > 0 && (
+          <Dato etiqueta="INVITADOS" valor={resumen.invitados} detalle="sin costo, no suman a lo recaudado" />
+        )}
         {resumen.ingresadas > 0 && (
           <Dato etiqueta="ENTRARON" valor={`${resumen.ingresadas}/${resumen.vendidas}`} />
         )}
@@ -298,6 +302,11 @@ function PanelVentas({ linkId, apiUrl, token, nombreEvento = '' }) {
                     <span className={`text-xs px-2 py-0.5 rounded ${colorDeEstado(o.estado)}`}>
                       {etiquetaDeEstado(o.estado)}
                     </span>
+                    {o.invitado && (
+                      <span className="block mt-1 text-xs px-2 py-0.5 rounded bg-verde-claro text-verde-oscuro w-fit">
+                        Invitado
+                      </span>
+                    )}
                   </td>
                   <td className="px-3 py-2 text-tinta">
                     {o.nombre}
@@ -321,7 +330,7 @@ function PanelVentas({ linkId, apiUrl, token, nombreEvento = '' }) {
                     )}
                   </td>
                   <td className="px-3 py-2 text-tinta-media">
-                    <a href={`mailto:${o.email}`} className="hover:text-tinta block">{o.email}</a>
+                    {o.email && <a href={`mailto:${o.email}`} className="hover:text-tinta block">{o.email}</a>}
                     <Telefono numero={o.telefono} nombre={o.nombre} />
                   </td>
                   <td className="px-3 py-2 text-tinta text-right">
@@ -348,7 +357,7 @@ function PanelVentas({ linkId, apiUrl, token, nombreEvento = '' }) {
                     )}
                   </td>
                   <td className="px-3 py-2 text-right whitespace-nowrap">
-                    {sePuedeModificar(o.estado) && (
+                    {sePuedeModificar(o.estado) && !o.invitado && (
                       <button
                         type="button"
                         onClick={() => {

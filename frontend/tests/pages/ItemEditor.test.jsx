@@ -687,5 +687,13 @@ describe('ItemEditor', () => {
       expect(screen.getByRole('button', { name: 'Entradas' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Ventas' })).toBeInTheDocument();
     });
+
+    it('un evento tiene la solapa de invitados', async () => {
+      await render({
+        page: conItem({ event_latitude: '-34.6', event_longitude: '-58.4' }, 'eventos'),
+      });
+
+      expect(screen.getByRole('button', { name: 'Invitados' })).toBeInTheDocument();
+    });
   });
 });

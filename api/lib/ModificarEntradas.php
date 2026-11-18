@@ -140,7 +140,7 @@ class ModificarEntradas
 
             $config = Entradas::decodificada($config);
 
-            $stmt = $db->prepare('SELECT id, estado, cantidad, ingresadas FROM ticket_orders WHERE id = ? FOR UPDATE');
+            $stmt = $db->prepare('SELECT id, origen, estado, cantidad, ingresadas FROM ticket_orders WHERE id = ? FOR UPDATE');
             $stmt->execute([$ordenId]);
             $orden = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -270,6 +270,13 @@ class ModificarEntradas
 
         if ($orden['estado'] !== 'pagada') {
             return 'Sólo se pueden modificar compras pagadas o reservas confirmadas';
+        }
+
+        // Un invitado se maneja desde Invitados: se anula y se vuelve a cargar.
+        // Modificarlo por acá le mandaría un "cambios en tu compra" a alguien
+        // que no compró, o a nadie si no tiene email.
+        if (isset($orden['origen']) && $orden['origen'] === 'invitacion') {
+            return 'Los invitados no se modifican: anulalo y volvé a cargarlo desde Invitados';
         }
 
         return null;
