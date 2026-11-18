@@ -48,6 +48,23 @@ class InvitadosHandlerTest extends HandlerTestCase
         $this->db->onSelect('FROM pages p', []);
     }
 
+    /**
+     * El usuario no tiene nada que ver con la página del evento, pero
+     * administra la plataforma (entra por soporte).
+     */
+    private function soporte()
+    {
+        $this->noAdministra();
+        $this->db->onSelect('SELECT email FROM users', [['plataforma@test']]);
+    }
+
+    /** Ni la página ni la plataforma: un usuario cualquiera con correo. */
+    private function nadie()
+    {
+        $this->noAdministra();
+        $this->db->onSelect('SELECT email FROM users', [['alguien@test.local']]);
+    }
+
     private function eventoConCapacidad($capacidad = 10, $ocupadas = 0, array $extra = [])
     {
         $this->db->onSelect('FROM event_ticketing WHERE link_id = ? FOR UPDATE', [array_merge([
@@ -113,6 +130,80 @@ class InvitadosHandlerTest extends HandlerTestCase
     public function testUnEventoQueNoExisteNoDaPermiso()
     {
         $r = InvitadosHandler::invitados($this->db, $this->get(['link_id' => 999], $this->user(7)));
+
+        $this->assertSame(403, $r->status);
+    }
+
+    // ------------------------------------------------- soporte de la plataforma
+
+    /**
+     * Quien administra la plataforma puede invitar en cualquier evento, y la
+     * invitación queda a su nombre (su user id real), no al del dueño.
+     */
+    public function testLaPlataformaPuedeInvitarEnCualquierEvento()
+    {
+        $this->soporte();
+        $this->eventoConCapacidad(10, 0);
+        $this->db->onInsert('INSERT INTO ticket_orders', 79);
+
+        $r = InvitadosHandler::invitados(
+            $this->db,
+            $this->post(['link_id' => 10, 'nombre' => 'Por Soporte'], $this->user(9)),
+            $this->mailer
+        );
+
+        $this->assertSame(201, $r->status);
+        $insert = $this->db->callsFor('INSERT INTO ticket_orders')[0];
+        $this->assertSame(9, $insert['params'][3]);
+    }
+
+    public function testLaPlataformaPuedeAnular()
+    {
+        $this->db->onSelect('FROM ticket_orders o INNER JOIN links l', [[
+            'id' => 1, 'codigo' => 'ABCDEF123456', 'link_id' => 10, 'origen' => 'invitacion', 'estado' => 'pagada', 'email' => '',
+        ]]);
+        $this->soporte();
+        $this->db->onSelect('SELECT estado, cantidad FROM ticket_orders WHERE codigo = ?', [['estado' => 'pagada', 'cantidad' => 1]]);
+
+        InvitadosHandler::invitado($this->db, $this->post(['codigo' => 'ABCDEF123456', 'accion' => 'anular'], $this->user(9)));
+
+        // Pasó el permiso y llegó a anular; la anulación real está en integración.
+        $this->assertTrue($this->db->ran("SET estado = 'cancelada'"));
+    }
+
+    public function testLaPlataformaPuedeReenviar()
+    {
+        $this->invitadoConEmail();
+        $this->soporte();
+        $this->invitadoConEmail();
+
+        $r = InvitadosHandler::invitado($this->db, $this->post(['codigo' => 'ABCDEF123456', 'accion' => 'reenviar'], $this->user(9)), $this->mailer);
+
+        $this->assertSame(200, $r->status);
+        $this->assertCount(1, $this->mailer->enviados);
+    }
+
+    /** Un usuario con sesión que no es ni de la página ni de la plataforma, no. */
+    public function testUnUsuarioCualquieraNoPuedeInvitar()
+    {
+        $this->nadie();
+
+        $r = InvitadosHandler::invitados(
+            $this->db,
+            $this->post(['link_id' => 10, 'nombre' => 'Colado'], $this->user(8)),
+            $this->mailer
+        );
+
+        $this->assertSame(403, $r->status);
+        $this->assertFalse($this->db->ran('INSERT INTO ticket_orders'));
+    }
+
+    /** Un evento que no existe no da permiso ni al soporte. */
+    public function testUnEventoQueNoExisteNoDaPermisoNiAlSoporte()
+    {
+        $this->db->onSelect('SELECT email FROM users', [['plataforma@test']]);
+
+        $r = InvitadosHandler::invitados($this->db, $this->get(['link_id' => 999], $this->user(9)));
 
         $this->assertSame(403, $r->status);
     }

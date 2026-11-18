@@ -9,10 +9,12 @@
  *                    PUT  {link_id, max_invitados}   (null = sin límite)
  *   - invitado.php   POST {codigo, accion: 'anular' | 'reenviar'}
  *
- * Permisos: sólo el dueño o un administrador aceptado de la página que
- * organiza el evento. Ni el acceso de soporte de la plataforma ni las
- * páginas colaboradoras: dar entradas gratis es una decisión de quien
- * organiza, consume su capacidad y no deja rastro de cobro.
+ * Permisos: el dueño o un administrador aceptado de la página que organiza
+ * el evento, y quien administra la plataforma (acceso de soporte,
+ * SUPERADMIN_EMAILS), en cualquier evento. Las páginas colaboradoras no:
+ * dar entradas gratis consume la capacidad de quien organiza y no deja
+ * rastro de cobro. Cada alta guarda en invitado_por al usuario real que la
+ * hizo, así que una invitación cargada por soporte queda identificada.
  */
 class InvitadosHandler
 {
@@ -174,11 +176,12 @@ class InvitadosHandler
     }
 
     /**
-     * Dueño o administrador aceptado de la página que organiza el evento.
+     * Dueño o administrador aceptado de la página que organiza el evento, o
+     * quien administra la plataforma.
      *
-     * Es canManageLink sin el acceso de plataforma: la página dueña del
-     * evento es la del grupo donde está cargado, así que una página
-     * colaboradora —que lo muestra pero no lo organiza— no entra.
+     * La página dueña del evento es la del grupo donde está cargado, así que
+     * una página colaboradora —que lo muestra pero no lo organiza— no entra.
+     * Un evento que no existe no da permiso a nadie, tampoco al soporte.
      */
     public static function puedeInvitar($db, $linkId, $userId)
     {
@@ -195,6 +198,7 @@ class InvitadosHandler
             return false;
         }
 
-        return PageAccess::isOwnerOrAdmin($db, (int) $pageId, (int) $userId);
+        return PageAccess::isOwnerOrAdmin($db, (int) $pageId, (int) $userId)
+            || Plataforma::esAdmin($db, (int) $userId);
     }
 }

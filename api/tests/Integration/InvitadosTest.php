@@ -568,14 +568,44 @@ class InvitadosTest extends IntegracionTestCase
         $this->assertSame('pagada', $this->orden($codigo)['estado']);
     }
 
-    /** El acceso de soporte de la plataforma tampoco: es una decisión de la página. */
-    public function testLaPlataformaNoInvitaPorLaPagina()
+    /**
+     * Quien administra la plataforma (acceso de soporte) maneja los invitados
+     * de cualquier evento: los ve, los agrega, los reenvía y los anula. La
+     * invitación queda a su nombre en invitado_por, no al de la dueña.
+     */
+    public function testLaPlataformaManejaLosInvitadosDeCualquierEvento()
     {
         $linkId = $this->eventoConVenta();
         $plataforma = $this->usuario('plataforma@test', 'Plataforma');
         \Plataforma::olvidar();
 
-        $this->assertStatus(403, $this->invitar($linkId, [], $plataforma));
+        $res = $this->invitar($linkId, ['email' => 'ana@test.local'], $plataforma);
+        $this->assertStatus(201, $res);
+        $codigo = $res->body['invitado']['codigo'];
+        $this->assertSame($plataforma, (int) $this->orden($codigo)['invitado_por']);
+
+        $this->assertStatus(200, InvitadosHandler::invitados($this->db, $this->get(['link_id' => $linkId], $this->user($plataforma))));
+
+        $this->assertStatus(200, $this->accion($codigo, 'reenviar', $plataforma));
+        $this->assertCount(2, $this->mailer->enviados);
+
+        $this->assertStatus(200, $this->accion($codigo, 'anular', $plataforma));
+        $this->assertSame('cancelada', $this->orden($codigo)['estado']);
+    }
+
+    /** Un usuario con sesión sin relación con la página ni con la plataforma, no. */
+    public function testUnUsuarioCualquieraNoPuedeInvitar()
+    {
+        $linkId = $this->eventoConVenta();
+        $otro = $this->usuario('otro@test.local', 'Otro');
+        \Plataforma::olvidar();
+
+        $this->assertStatus(403, $this->invitar($linkId, [], $otro));
+
+        $codigo = $this->invitado($linkId);
+        $this->assertStatus(403, $this->accion($codigo, 'anular', $otro));
+        $this->assertStatus(403, $this->accion($codigo, 'reenviar', $otro));
+        $this->assertSame('pagada', $this->orden($codigo)['estado']);
     }
 
     // ===================================================== otras pantallas
