@@ -25,7 +25,9 @@ const FORMULARIO_VACIO = { nombre: '', email: '', telefono: '', cantidad: 1, tip
  * El email es opcional: si está, la entrada sale por mail; si no, se le pasa
  * el link por WhatsApp o se le muestra el QR.
  *
- * El servidor sólo responde a quien administra la página del evento.
+ * El servidor sólo responde a quien administra la página del evento o a
+ * quien administra la plataforma (acceso de soporte); al resto le da 403 y
+ * el panel lo muestra como error.
  */
 function PanelInvitados({ linkId, apiUrl, token, nombreEvento = '' }) {
   const [datos, setDatos] = useState(null);

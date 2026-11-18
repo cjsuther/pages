@@ -56,9 +56,10 @@ const pagina = (overrides = {}) => ({
 const conItem = (overrides = {}, tipo = 'links', idGrupo = 10) =>
   pagina({ groups: [grupo({ id: idGrupo, type: tipo, links: [link({ id: 100, ...overrides })] })] });
 
-function mockearApi({ page = conItem(), results = [], entradas = null, invitacion = { collaboration_id: 40 } } = {}) {
+function mockearApi({ page = conItem(), results = [], entradas = null, invitacion = { collaboration_id: 40 }, esPlataforma = false, invitados = null } = {}) {
   return mockFetch({
-    'pages/detail.php': { page },
+    'pages/detail.php': { page, es_plataforma: esPlataforma },
+    ...(invitados ? { 'entradas/invitados.php': invitados } : {}),
     'links/detail.php': { link: link() },
     'collaborations/index.php': invitacion,
     'collaborations/detail.php': { message: 'ok' },
@@ -694,6 +695,29 @@ describe('ItemEditor', () => {
       });
 
       expect(screen.getByRole('button', { name: 'Invitados' })).toBeInTheDocument();
+    });
+
+    it('quien entra por soporte a un evento ajeno ve y usa la solapa de invitados', async () => {
+      const { llamadas } = await render({
+        page: { ...conItem({ event_latitude: '-34.6', event_longitude: '-58.4' }, 'eventos'), user_id: 999 },
+        esPlataforma: true,
+        invitados: {
+          invitados: [{
+            id: 1, codigo: 'ABC123DEF456', nombre: 'Invitada por Soporte', email: '', telefono: '',
+            cantidad: 1, ingresadas: 0, estado: 'vigente', lugares: [], tipos: '', invitado_por: 'Plataforma',
+            url: 'https://rezon.ar/entrada/ABC123DEF456',
+          }],
+          resumen: {
+            configurado: true, lugares: 1, ingresaron: 0, capacidad: 100, disponibles: 99,
+            max_invitados: null, quedan_del_limite: null, plano: null, ocupados: [], tipos: null,
+          },
+        },
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Invitados' }));
+
+      expect(await screen.findByText('Invitada por Soporte')).toBeInTheDocument();
+      expect(llamadaA(llamadas, 'entradas/invitados.php')).toBeTruthy();
     });
   });
 });
