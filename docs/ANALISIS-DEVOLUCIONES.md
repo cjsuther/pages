@@ -1,6 +1,20 @@
 # Análisis: devoluciones a compradores a través de Rezon.ar
 
-> Estado: **análisis, sin implementar**. Base: `origin/main` @ `ac74b64` (26/11/2026).
+> Estado: **implementado en la rama `claude/devoluciones-mp`, detrás de `DEVOLUCIONES_HABILITADAS` (apagado)**. Base: `origin/main` @ `ac74b64` (26/11/2026).
+>
+> **Decisiones de Cristian (26/11/2026):**
+> 1. El organizador devuelve sólo su parte: el neto que le llegó (`mp_neto`/`net_received_amount`) menos lo ya devuelto. La parte de Rezon.ar no se toca.
+> 2. Siempre como reembolso de Mercado Pago (`POST /v1/payments/{id}/refunds`, parcial con `amount` = neto devolvible, con el token OAuth del vendedor). Nada de transferencias por fuera.
+> 3. No se detectan las devoluciones ni los contracargos hechos por fuera de la plataforma: la Fase 1 queda fuera de alcance.
+> 4. Si una devolución no se puede hacer, el motivo queda registrado en la compra y en el historial de intentos (pedido posterior).
+>
+> **El riesgo sigue abierto**: si MP reparte el reembolso en forma proporcional, el parcial le saca una parte a Rezon.ar (§2). Después de cada reembolso se guarda el reparto real que informa MP (`ticket_order_devoluciones.reparto`). La prueba para medirlo está en [`PRUEBA-DEVOLUCIONES-SANDBOX.md`](PRUEBA-DEVOLUCIONES-SANDBOX.md). Decisiones de diseño que tomé en la implementación (para revisar):
+> - Por entrada, el neto que queda se reparte según lo que valen las entradas que tiene **hoy** la compra (también si fue modificada). Va hacia abajo al centavo y la última entrada se lleva el resto.
+> - Tope: lo ya devuelto es el mayor entre nuestro registro y lo que informa MP (`transaction_amount_refunded`).
+> - Una compra devuelta entera queda `cancelada` y sigue sumando en "recaudado". Lo devuelto se resta de "te queda", de lo acreditado y de lo que falta acreditar.
+> - Los productos (`product_orders`) quedan fuera de alcance.
+>
+> El texto de abajo es el análisis original.
 > Nada de esto se probó contra Mercado Pago: no se hicieron pagos ni reembolsos, ni de prueba ni reales.
 > Lo que no está confirmado por la documentación oficial está marcado con **[SIN CONFIRMAR]**.
 
