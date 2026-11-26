@@ -25,11 +25,11 @@ function respuestaDe(cuerpo, ok = true) {
   return Promise.resolve({ ok, json: () => Promise.resolve(cuerpo) });
 }
 
-async function montar({ ordenes = [], resumen = {}, capacidad = 100, ok = true } = {}) {
+async function montar({ ordenes = [], resumen = {}, capacidad = 100, ok = true, devoluciones = false } = {}) {
   global.fetch.mockReturnValueOnce(
     respuestaDe(
       ok
-        ? { ordenes, resumen: { vendidas: 0, reservadas: 0, recaudado: 0, ...resumen }, capacidad }
+        ? { ordenes, resumen: { vendidas: 0, reservadas: 0, recaudado: 0, ...resumen }, capacidad, devoluciones }
         : { error: 'No podés ver las ventas de este evento' },
       ok
     )
@@ -544,6 +544,93 @@ describe('PanelVentas', () => {
       await modificarYGuardar({ enviado: false, motivo: 'SMTP caído' });
 
       expect(await screen.findByRole('status')).toHaveTextContent('no pudimos mandarle el mail (SMTP caído)');
+    });
+  });
+  describe('devoluciones', () => {
+    const PAGA = { ...VENTA, total: '10000.00', mp_neto: '9368.81', devuelto: 0 };
+
+    it('con la plataforma apagada no se ofrece devolver', async () => {
+      await montar({ ordenes: [PAGA], devoluciones: false });
+
+      expect(screen.queryByRole('button', { name: 'Devolver' })).not.toBeInTheDocument();
+    });
+
+    it('se ofrece devolver una venta pagada, no un invitado ni una reserva gratis', async () => {
+      await montar({
+        devoluciones: true,
+        ordenes: [
+          PAGA,
+          { ...VENTA, id: 2, codigo: 'INVITADO1234', total: '0.00', invitado: true },
+          { ...VENTA, id: 3, codigo: 'GRATIS123456', total: '0.00' },
+        ],
+      });
+
+      expect(screen.getAllByRole('button', { name: 'Devolver' })).toHaveLength(1);
+    });
+
+    it('muestra el último intento que no se pudo hacer, con su fecha', async () => {
+      await montar({
+        devoluciones: true,
+        ordenes: [{
+          ...PAGA,
+          devolucion_error: 'No hay saldo suficiente en la cuenta de Mercado Pago del organizador para hacer la devolución.',
+          devolucion_error_en: '2026-11-26 14:05:00',
+        }],
+      });
+
+      expect(screen.getByRole('note')).toHaveTextContent(
+        'Devolución no realizada: No hay saldo suficiente en la cuenta de Mercado Pago del organizador para hacer la devolución. (26/11 14:05)'
+      );
+    });
+
+    it('una compra devuelta muestra lo devuelto y lo que le queda al organizador', async () => {
+      await montar({
+        devoluciones: true,
+        ordenes: [{ ...PAGA, cantidad: 2, total: '20000.00', mp_neto: '18737.62', devuelto: 9368.81, devuelta_en: '2026-11-26 10:00:00' }],
+        resumen: { recaudado: 20000, devuelto: 9368.81, neto: 9368.81 },
+      });
+
+      expect(screen.getByText(/devuelto \$\s?9\.368,81 el 26\/11\/2026/)).toBeInTheDocument();
+      expect(screen.getByText(/te quedan \$\s?9\.368,81/)).toBeInTheDocument();
+      expect(screen.getByText(/se devolvieron \$\s?9\.368,81/)).toBeInTheDocument();
+    });
+
+    it('una cancelada con devoluciones deja ver el historial', async () => {
+      await montar({
+        devoluciones: true,
+        ordenes: [{ ...PAGA, estado: 'cancelada', devuelto: 9368.81 }],
+      });
+
+      expect(screen.getByRole('button', { name: 'Devoluciones' })).toBeInTheDocument();
+    });
+
+    it('al devolver actualiza las ventas y avisa', async () => {
+      await montar({ devoluciones: true, ordenes: [PAGA] });
+
+      global.fetch.mockReturnValueOnce(respuestaDe({
+        orden: { ...PAGA, cantidad: 2, ingresadas: 0, lugares: [], items: [] },
+        desglose: { cobrado: 10000, comision_plataforma: 100, comision_mercadopago: 531.19, neto: 9368.81, devuelto: 0, devolvible: 9368.81 },
+        por_entrada: { forma: 'cantidad', cantidad: 2 },
+        aviso: null,
+        intentos: [],
+      }));
+      fireEvent.click(screen.getByRole('button', { name: 'Devolver' }));
+      await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+
+      global.fetch.mockReturnValueOnce(respuestaDe({ ok: true, simulada: true, monto: 9368.81, modo: 'completa' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Calcular devolución' }));
+      await waitFor(() => expect(screen.getByRole('button', { name: /Devolver \$/ })).toBeInTheDocument());
+
+      global.fetch.mockReturnValueOnce(respuestaDe({
+        ok: true, estado: 'aprobada', monto: 9368.81, mail: { enviado: true },
+        ventas: { ordenes: [{ ...PAGA, estado: 'cancelada', devuelto: 9368.81 }], resumen: { vendidas: 0, recaudado: 10000, devuelto: 9368.81, neto: 0 } },
+      }));
+      fireEvent.click(screen.getByRole('button', { name: /Devolver \$/ }));
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      expect(screen.getByRole('status')).toHaveTextContent('Le devolviste');
+      expect(screen.getByRole('status')).toHaveTextContent('Le mandamos un mail');
+      expect(screen.getByText('Cancelada')).toBeInTheDocument();
     });
   });
 });
