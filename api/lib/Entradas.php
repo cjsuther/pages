@@ -937,6 +937,7 @@ class Entradas
                    moneda, estado, reserva_vence_en,
                    mp_payment_id, pagada_en, created_at,
                    mp_neto, mp_comisiones, mp_comision_cobrada, acreditacion_en, modificada_en,
+                   devuelto, devuelta_en, devolucion_error, devolucion_error_en,
                    (estado = 'reservada' AND reserva_vence_en <= NOW()) AS vencida
             FROM ticket_orders
             WHERE link_id = ?
@@ -980,6 +981,9 @@ class Entradas
         $invitadosIngresados = 0;
         $porAcreditar = 0.0;
         $acreditado = 0.0;
+        // Lo que el organizador ya les devolvió a quienes compraron. Sale de
+        // lo que le quedaba: se resta del neto y de lo acreditado.
+        $devueltoTotal = 0.0;
         $proxima = null;
         $sinDato = 0;
         $ahora = date('Y-m-d H:i:s');
@@ -1007,12 +1011,22 @@ class Entradas
                 continue;
             }
 
+            $devueltoOrden = isset($orden['devuelto']) ? (float) $orden['devuelto'] : 0.0;
+            $orden['devuelto'] = $devueltoOrden;
+
+            // Una compra devuelta entera queda cancelada, pero la plata pasó:
+            // lo que se quedaron Mercado Pago y Rezonar se cobró igual. Se
+            // sigue contando en lo recaudado, con lo devuelto restado del neto.
+            $cuentaLaPlata = $orden['estado'] === 'pagada'
+                || ($orden['estado'] === 'cancelada' && $devueltoOrden > 0);
+
+            if ($cuentaLaPlata) {
+                $devueltoTotal += $devueltoOrden;
+            }
+
             if ($orden['estado'] === 'pagada') {
                 $vendidas += (int) $orden['cantidad'];
                 $ingresadas += isset($orden['ingresadas']) ? (int) $orden['ingresadas'] : 0;
-                $recaudado += (float) $orden['total'];
-                $cargos += CargosAlComprador::deLaOrden($orden);
-                $comisiones += (float) $orden['comision'];
 
                 // Por tipo va lo que valían las entradas, sin los cargos: si
                 // no, una compra con cargos parecería modificada y el desglose
@@ -1038,6 +1052,14 @@ class Entradas
                     $sinTipo['personas'] += (int) $orden['cantidad'];
                     $sinTipo['recaudado'] += $precioEntradas;
                 }
+            } elseif ($orden['estado'] === 'reservada') {
+                $reservadas += (int) $orden['cantidad'];
+            }
+
+            if ($cuentaLaPlata) {
+                $recaudado += (float) $orden['total'];
+                $cargos += CargosAlComprador::deLaOrden($orden);
+                $comisiones += (float) $orden['comision'];
 
                 // null es "no lo sabemos" —una venta anterior a que se guardara
                 // el desglose— y no es lo mismo que un cero, que sí sería una
@@ -1073,16 +1095,14 @@ class Entradas
                 if ($neto === null) {
                     $sinDato++;
                 } elseif ($cuando !== null && $cuando > $ahora) {
-                    $porAcreditar += (float) $neto;
+                    $porAcreditar += (float) $neto - $devueltoOrden;
 
                     if ($proxima === null || $cuando < $proxima) {
                         $proxima = $cuando;
                     }
                 } else {
-                    $acreditado += (float) $neto;
+                    $acreditado += (float) $neto - $devueltoOrden;
                 }
-            } elseif ($orden['estado'] === 'reservada') {
-                $reservadas += (int) $orden['cantidad'];
             }
         }
         unset($orden);
@@ -1125,7 +1145,10 @@ class Entradas
                 // Lo que efectivamente entra a la cuenta. Antes era
                 // recaudado - nuestra comisión, que ignoraba la de Mercado
                 // Pago: prometía varios miles de más en una venta chica.
-                'neto'       => round($netoReal, 2),
+                'neto'       => round($netoReal - $devueltoTotal, 2),
+                // Lo que se les devolvió a quienes compraron (ya restado de
+                // neto, acreditado y por acreditar).
+                'devuelto'   => round($devueltoTotal, 2),
                 // Y lo que dice Mercado Pago, que además descuenta su propia
                 // comisión: es la plata que efectivamente entra a la cuenta.
                 'acreditado'    => round($acreditado, 2),
@@ -1233,7 +1256,10 @@ class Entradas
                        SUM(CASE WHEN estado = \'reservada\'
                             AND (reserva_vence_en IS NULL OR reserva_vence_en > NOW())
                             THEN cantidad END) AS reservadas,
-                       SUM(CASE WHEN estado = \'pagada\' AND origen = \'venta\' THEN total END) AS recaudado,
+                       -- Una devuelta entera queda cancelada pero se cobró: cuenta,
+                       -- como en el panel de ventas.
+                       SUM(CASE WHEN (estado = \'pagada\' OR (estado = \'cancelada\' AND devuelto > 0))
+                                 AND origen = \'venta\' THEN total END) AS recaudado,
                        SUM(CASE WHEN estado = \'pagada\' AND origen = \'invitacion\' THEN cantidad END) AS invitados
                 FROM ticket_orders
                 GROUP BY link_id

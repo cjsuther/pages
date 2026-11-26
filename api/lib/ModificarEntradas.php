@@ -171,55 +171,12 @@ class ModificarEntradas
                 return self::mal(400, 'No hay cambios para guardar');
             }
 
-            // La condición sobre ingresadas va también en el UPDATE: es la
-            // garantía de no dejar una compra con más gente adentro que
-            // entradas, aunque la puerta marque justo en este momento.
-            $upd = $db->prepare("
-                UPDATE ticket_orders
-                SET cantidad = ?, modificada_en = NOW()
-                WHERE id = ? AND estado = 'pagada' AND ingresadas <= ?
-            ");
-            $upd->execute([$despues['cantidad'], $ordenId, $despues['cantidad']]);
+            $modificacionId = self::aplicar($db, $ordenId, $linkId, $config, $antes, $despues, $userId);
 
-            if ($upd->rowCount() === 0) {
+            if ($modificacionId === null) {
                 $db->rollBack();
                 return self::mal(409, 'La compra cambió mientras la editabas. Volvé a abrirla.');
             }
-
-            $db->prepare('DELETE FROM ticket_order_lugares WHERE order_id = ?')->execute([$ordenId]);
-
-            if ($config['plano'] !== null) {
-                $conLugar = $db->prepare('INSERT INTO ticket_order_lugares (order_id, link_id, lugar) VALUES (?, ?, ?)');
-
-                foreach ($despues['lugares'] as $lugar) {
-                    $conLugar->execute([$ordenId, $linkId, $lugar]);
-                }
-            }
-
-            $db->prepare('DELETE FROM ticket_order_items WHERE order_id = ?')->execute([$ordenId]);
-
-            if ($despues['items'] !== []) {
-                $conTipo = $db->prepare('
-                    INSERT INTO ticket_order_items (order_id, tipo, nombre, precio_unitario, personas, cantidad)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                ');
-
-                foreach ($despues['items'] as $item) {
-                    $conTipo->execute([$ordenId, $item['tipo'], $item['nombre'], $item['precio'], $item['personas'], $item['cantidad']]);
-                }
-            }
-
-            $historial = $db->prepare('
-                INSERT INTO ticket_order_modificaciones (order_id, user_id, antes, despues)
-                VALUES (?, ?, ?, ?)
-            ');
-            $historial->execute([
-                $ordenId,
-                $userId === null ? null : (int) $userId,
-                json_encode($antes, JSON_UNESCAPED_UNICODE),
-                json_encode($despues, JSON_UNESCAPED_UNICODE),
-            ]);
-            $modificacionId = (int) $db->lastInsertId();
 
             $db->commit();
 
@@ -237,6 +194,167 @@ class ModificarEntradas
 
             throw $e;
         }
+    }
+
+    /**
+     * Escribe el cambio: cantidad, lugares, renglones e historial.
+     *
+     * Va dentro de una transacción que abrió quien llama, con el evento y la
+     * orden ya bloqueados. La usan modificar() y las devoluciones por entrada,
+     * que sacan entradas de la compra del mismo modo.
+     *
+     * @return int|null id del historial, o null si la orden ya no estaba
+     *                  pagada o entró más gente de la que queda.
+     */
+    public static function aplicar($db, $ordenId, $linkId, array $config, array $antes, array $despues, $userId)
+    {
+        // La condición sobre ingresadas va también en el UPDATE: es la
+        // garantía de no dejar una compra con más gente adentro que
+        // entradas, aunque la puerta marque justo en este momento.
+        $upd = $db->prepare("
+            UPDATE ticket_orders
+            SET cantidad = ?, modificada_en = NOW()
+            WHERE id = ? AND estado = 'pagada' AND ingresadas <= ?
+        ");
+        $upd->execute([$despues['cantidad'], $ordenId, $despues['cantidad']]);
+
+        if ($upd->rowCount() === 0) {
+            return null;
+        }
+
+        $db->prepare('DELETE FROM ticket_order_lugares WHERE order_id = ?')->execute([$ordenId]);
+
+        if ($config['plano'] !== null) {
+            $conLugar = $db->prepare('INSERT INTO ticket_order_lugares (order_id, link_id, lugar) VALUES (?, ?, ?)');
+
+            foreach ($despues['lugares'] as $lugar) {
+                $conLugar->execute([$ordenId, $linkId, $lugar]);
+            }
+        }
+
+        $db->prepare('DELETE FROM ticket_order_items WHERE order_id = ?')->execute([$ordenId]);
+
+        if ($despues['items'] !== []) {
+            $conTipo = $db->prepare('
+                INSERT INTO ticket_order_items (order_id, tipo, nombre, precio_unitario, personas, cantidad)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ');
+
+            foreach ($despues['items'] as $item) {
+                $conTipo->execute([$ordenId, $item['tipo'], $item['nombre'], $item['precio'], $item['personas'], $item['cantidad']]);
+            }
+        }
+
+        $historial = $db->prepare('
+            INSERT INTO ticket_order_modificaciones (order_id, user_id, antes, despues)
+            VALUES (?, ?, ?, ?)
+        ');
+        $historial->execute([
+            $ordenId,
+            $userId === null ? null : (int) $userId,
+            json_encode($antes, JSON_UNESCAPED_UNICODE),
+            json_encode($despues, JSON_UNESCAPED_UNICODE),
+        ]);
+        return (int) $db->lastInsertId();
+    }
+
+    /**
+     * Cómo queda la compra si se le sacan algunas entradas, sin escribir nada.
+     *
+     * $quitar, según el evento: 'lugares' (con plano: los que se liberan),
+     * 'tipos' (id => personas que se sacan de ese tipo) o 'cantidad'. Pasa por
+     * los mismos controles que una modificación: entradas usadas, promos
+     * completas, tipos que siguen existiendo.
+     *
+     * Va dentro de la transacción de quien llama (orden y evento bloqueados).
+     *
+     * @return array ok, antes, despues y todas (true si no queda ninguna:
+     *               eso no es sacar entradas sino anular la compra), o
+     *               ok=false con status y error.
+     */
+    public static function sinEntradas($db, $ordenId, $linkId, array $config, array $quitar, $ingresadas)
+    {
+        $antes = [
+            'cantidad' => 0,
+            'lugares'  => Entradas::lugaresDeLaOrden($db, $ordenId),
+            'items'    => Entradas::itemsDeLaOrden($db, $ordenId),
+        ];
+        $stmt = $db->prepare('SELECT cantidad FROM ticket_orders WHERE id = ?');
+        $stmt->execute([(int) $ordenId]);
+        $antes['cantidad'] = (int) $stmt->fetchColumn();
+
+        $pedido = [];
+
+        if ($config['plano'] !== null) {
+            $sacar = isset($quitar['lugares']) && is_array($quitar['lugares'])
+                ? array_values(array_unique(array_map('strval', $quitar['lugares'])))
+                : [];
+
+            if ($sacar === []) {
+                return self::mal(400, 'Elegí qué lugares se devuelven');
+            }
+
+            if (array_diff($sacar, $antes['lugares']) !== []) {
+                return self::mal(400, 'Alguno de esos lugares no es de esta compra');
+            }
+
+            $pedido['lugares'] = array_values(array_diff($antes['lugares'], $sacar));
+            $quedan = count($pedido['lugares']);
+        } elseif ($config['tipos'] !== null && $antes['items'] !== []) {
+            $sacar = Entradas::pedidoPorTipo(isset($quitar['tipos']) ? $quitar['tipos'] : null);
+
+            if ($sacar === null || $sacar === []) {
+                return self::mal(400, 'Elegí cuántas entradas de cada tipo se devuelven');
+            }
+
+            $actual = [];
+
+            foreach ($antes['items'] as $item) {
+                $actual[(string) $item['tipo']] = (int) $item['cantidad'];
+            }
+
+            foreach ($sacar as $id => $cantidad) {
+                if (!isset($actual[$id]) || $cantidad > $actual[$id]) {
+                    return self::mal(400, 'Esa compra no tiene tantas entradas de ese tipo');
+                }
+
+                $actual[$id] -= $cantidad;
+            }
+
+            $pedido['tipos'] = $actual;
+            $quedan = array_sum($actual);
+        } else {
+            if ($config['tipos'] === null && $antes['items'] !== []) {
+                return self::mal(409, 'El evento ya no tiene los tipos de entrada de esta compra: devolvé la compra completa');
+            }
+
+            if (!isset($quitar['cantidad']) || !is_numeric($quitar['cantidad']) || (int) $quitar['cantidad'] < 1) {
+                return self::mal(400, 'Elegí cuántas entradas se devuelven');
+            }
+
+            if ((int) $quitar['cantidad'] > $antes['cantidad']) {
+                return self::mal(400, 'Esa compra no tiene tantas entradas');
+            }
+
+            $pedido['cantidad'] = $antes['cantidad'] - (int) $quitar['cantidad'];
+            $quedan = $pedido['cantidad'];
+        }
+
+        if ($quedan === 0) {
+            return ['ok' => true, 'error' => null, 'todas' => true, 'antes' => $antes, 'despues' => null];
+        }
+
+        $nuevo = self::loPedido($db, $linkId, $ordenId, $config, $pedido, $antes, (int) $ingresadas);
+
+        if (!$nuevo['ok']) {
+            return $nuevo;
+        }
+
+        if (self::iguales($antes, $nuevo['despues'])) {
+            return self::mal(400, 'Con esa elección la compra queda igual (las promos se devuelven completas)');
+        }
+
+        return ['ok' => true, 'error' => null, 'todas' => false, 'antes' => $antes, 'despues' => $nuevo['despues']];
     }
 
     /** Anota en el historial cómo le fue al mail que avisa el cambio. */
