@@ -8,6 +8,7 @@ import { resumirTipos } from '../utils/tiposDeEntrada';
 import LinkDeVenta from './LinkDeVenta';
 import LinkDePuerta from './LinkDePuerta';
 import ModificarCompra from './ModificarCompra';
+import DevolverCompra, { fechaYHora } from './DevolverCompra';
 
 /**
  * Estados desde los que una compra se puede dar de baja.
@@ -24,6 +25,15 @@ export const sePuedeCancelar = (estado) => CANCELABLES.includes(estado);
  * pagadas— se modifican: una que espera el pago cobraría lo de antes.
  */
 export const sePuedeModificar = (estado) => estado === 'pagada';
+
+/**
+ * A quién se le puede devolver plata: una venta pagada que costó algo. Un
+ * invitado o una reserva gratis no tienen pago que devolver.
+ */
+export const sePuedeDevolver = (o) => o.estado === 'pagada' && !o.invitado && Number(o.total) > 0;
+
+/** Una compra con devoluciones (hechas o intentadas) muestra su historial. */
+const tieneDevoluciones = (o) => Number(o.devuelto) > 0 || Boolean(o.devolucion_error);
 
 /** "ventas-fiesta-de-fin-de-ano.xlsx", o el id del evento si no hay nombre. */
 export function nombreDelArchivo(nombreEvento, linkId) {
@@ -53,6 +63,7 @@ function PanelVentas({ linkId, apiUrl, token, nombreEvento = '' }) {
   const [errorCancelacion, setErrorCancelacion] = useState(null);
   const [porModificar, setPorModificar] = useState(null);
   const [avisoModificacion, setAvisoModificacion] = useState(null);
+  const [porDevolver, setPorDevolver] = useState(null);
 
   /** El servidor contesta con las ventas ya actualizadas y cómo le fue al mail. */
   const alModificar = (cuerpo) => {
@@ -68,6 +79,26 @@ function PanelVentas({ linkId, apiUrl, token, nombreEvento = '' }) {
           }
     );
     setPorModificar(null);
+  };
+
+  /** Devuelta o en verificación: el servidor manda las ventas ya actualizadas. */
+  const alDevolver = (cuerpo) => {
+    if (cuerpo.ventas) setDatos((previos) => ({ ...previos, ...cuerpo.ventas }));
+
+    if (cuerpo.estado === 'incierta') {
+      setAvisoModificacion({ ok: false, texto: cuerpo.mensaje });
+    } else {
+      const mail = cuerpo.mail && cuerpo.mail.enviado
+        ? 'Le mandamos un mail avisándole.'
+        : 'No pudimos mandarle el mail: avisale por otro medio.';
+      const entradas = cuerpo.entradas_error ? ` ${cuerpo.entradas_error}` : '';
+
+      setAvisoModificacion({
+        ok: !cuerpo.entradas_error,
+        texto: `Le devolviste ${formatearPrecio(cuerpo.monto)} a ${cuerpo.nombre} por Mercado Pago. ${mail}${entradas}`,
+      });
+    }
+    setPorDevolver(null);
   };
 
   const cargar = async () => {
@@ -187,9 +218,12 @@ function PanelVentas({ linkId, apiUrl, token, nombreEvento = '' }) {
         <Dato
           etiqueta="RECAUDADO"
           valor={formatearPrecio(resumen.recaudado)}
-          detalle={resumen.cargos_al_comprador > 0
-            ? `${formatearPrecio(resumen.precio_entradas)} en entradas y ${formatearPrecio(resumen.cargos_al_comprador)} de comisiones que pagaron quienes compraron`
-            : null}
+          detalle={[
+            resumen.cargos_al_comprador > 0
+              ? `${formatearPrecio(resumen.precio_entradas)} en entradas y ${formatearPrecio(resumen.cargos_al_comprador)} de comisiones que pagaron quienes compraron`
+              : null,
+            resumen.devuelto > 0 ? `se devolvieron ${formatearPrecio(resumen.devuelto)}` : null,
+          ].filter(Boolean).join('; ') || null}
         />
         {/* Lo que efectivamente entra a la cuenta. Es el número con el que el
             dueño pone precios, así que tiene que estar descontado todo: antes
@@ -314,6 +348,12 @@ function PanelVentas({ linkId, apiUrl, token, nombreEvento = '' }) {
                     {o.modificada_en && (
                       <span className="block text-xs text-tinta-suave">modificada el {fechaCorta(o.modificada_en)}</span>
                     )}
+                    {o.devolucion_error && (
+                      <span role="note" className="block text-xs text-red-700">
+                        Devolución no realizada: {o.devolucion_error}
+                        {o.devolucion_error_en && ` (${fechaYHora(o.devolucion_error_en)})`}
+                      </span>
+                    )}
                     {o.lugares && o.lugares.length > 0 && (
                       <span
                         className={`block text-xs ${
@@ -349,9 +389,15 @@ function PanelVentas({ linkId, apiUrl, token, nombreEvento = '' }) {
                         {' + '}comisiones {formatearPrecio(cargosDeLaOrden(o), o.moneda)}
                       </span>
                     )}
+                    {Number(o.devuelto) > 0 && (
+                      <span className="block text-xs text-tinta-media">
+                        devuelto {formatearPrecio(o.devuelto, o.moneda)}
+                        {fechaCorta(o.devuelta_en) && ` el ${fechaCorta(o.devuelta_en)}`}
+                      </span>
+                    )}
                     {o.mp_neto !== null && o.mp_neto !== undefined && (
                       <span className="block text-xs text-tinta-suave">
-                        te quedan {formatearPrecio(o.mp_neto, o.moneda)}
+                        te quedan {formatearPrecio(Number(o.mp_neto) - (Number(o.devuelto) || 0), o.moneda)}
                         {fechaCorta(o.acreditacion_en) && ` el ${fechaCorta(o.acreditacion_en)}`}
                       </span>
                     )}
@@ -367,6 +413,18 @@ function PanelVentas({ linkId, apiUrl, token, nombreEvento = '' }) {
                         className="text-xs text-tinta-suave hover:text-tinta transition mr-3"
                       >
                         Modificar
+                      </button>
+                    )}
+                    {datos.devoluciones && (sePuedeDevolver(o) || tieneDevoluciones(o)) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAvisoModificacion(null);
+                          setPorDevolver(o);
+                        }}
+                        className="text-xs text-tinta-suave hover:text-tinta transition mr-3"
+                      >
+                        {sePuedeDevolver(o) ? 'Devolver' : 'Devoluciones'}
                       </button>
                     )}
                     {sePuedeCancelar(o.estado) && (
@@ -393,6 +451,16 @@ function PanelVentas({ linkId, apiUrl, token, nombreEvento = '' }) {
           token={token}
           onCerrar={() => setPorModificar(null)}
           onModificada={alModificar}
+        />
+      )}
+
+      {porDevolver && (
+        <DevolverCompra
+          codigo={porDevolver.codigo}
+          apiUrl={apiUrl}
+          token={token}
+          onCerrar={() => setPorDevolver(null)}
+          onDevuelta={alDevolver}
         />
       )}
 

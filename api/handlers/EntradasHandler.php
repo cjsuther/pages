@@ -305,6 +305,8 @@ class EntradasHandler
         $config = Entradas::configDelEvento($db, $linkId);
 
         $ventas['capacidad'] = $config === null ? 0 : (int) $config['capacidad'];
+        // Para que la pantalla ofrezca devolver sólo si la plataforma lo permite.
+        $ventas['devoluciones'] = Devoluciones::habilitadas();
 
         if (in_array($req->param('formato'), ['excel', 'csv'], true)) {
             // csv sigue aceptándose como nombre: es lo que manda una pantalla
@@ -563,6 +565,12 @@ class EntradasHandler
                 Plano::resumir(isset($o['lugares']) ? $o['lugares'] : []),
                 TiposDeEntrada::resumir(isset($o['items']) ? $o['items'] : []),
                 (float) $o['total'],
+                // Lo devuelto y lo que le quedó al organizador después de
+                // devolver (vacío si Mercado Pago todavía no informó el neto).
+                isset($o['devuelto']) ? (float) $o['devuelto'] : 0.0,
+                isset($o['mp_neto']) && $o['mp_neto'] !== null
+                    ? round((float) $o['mp_neto'] - (isset($o['devuelto']) ? (float) $o['devuelto'] : 0.0), 2)
+                    : '',
                 $o['moneda'],
                 $o['estado'],
                 // Los invitados van en la misma planilla, marcados, para que
@@ -574,7 +582,7 @@ class EntradasHandler
 
         $contenido = Excel::tabla(
             ['Código', 'Nombre', 'Email', 'Teléfono', 'Cantidad', 'Ingresaron', 'Lugares',
-             'Tipos', 'Total', 'Moneda', 'Estado', 'Origen', 'Fecha'],
+             'Tipos', 'Total', 'Devuelto', 'Te queda', 'Moneda', 'Estado', 'Origen', 'Fecha'],
             $filas,
             'Ventas'
         );

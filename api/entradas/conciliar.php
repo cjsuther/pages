@@ -14,6 +14,10 @@
  *
  * Es seguro que se solape con el aviso o con otra corrida: acreditarPago sólo
  * mueve órdenes que sigan en reservada, así que la segunda no hace nada.
+ *
+ * También resuelve las devoluciones 'inciertas' (Devoluciones::conciliar).
+ * Dos corridas a la vez no pueden aprobar dos veces la misma: la aprobación
+ * bloquea la fila y sólo pasa de pendiente/incierta a aprobada.
  */
 
 require_once __DIR__ . '/../bootstrap.php';
@@ -75,7 +79,14 @@ foreach (Entradas::pagadasSinDesglose($db) as $venta) {
     }
 }
 
+// Tercera pasada: devoluciones que quedaron sin saber cómo terminaron (se
+// cortó la conexión con Mercado Pago). Sólo pregunta: nunca vuelve a pedir un
+// reembolso. Corre aunque las devoluciones estén apagadas, para no dejar sin
+// resolver una que se pidió cuando estaban prendidas.
+$devoluciones = Devoluciones::conciliar($db);
+
 $resumen = [
+    'devoluciones' => $devoluciones,
     'candidatas'  => count($codigos) + count($codigosDeProductos),
     'revisadas'   => $revisadas,
     'acreditadas' => $acreditadas,
@@ -87,7 +98,9 @@ if ($esCli) {
         . $resumen['candidatas'] . ' candidatas, '
         . $resumen['revisadas'] . ' revisadas, '
         . count($acreditadas) . ' acreditadas, '
-        . $completadas . ' desgloses'
+        . $completadas . ' desgloses, '
+        . $devoluciones['aprobadas'] . ' devoluciones confirmadas, '
+        . $devoluciones['rechazadas'] . ' descartadas'
         . ($acreditadas ? ' (' . implode(', ', $acreditadas) . ')' : '')
         . PHP_EOL;
     exit(0);

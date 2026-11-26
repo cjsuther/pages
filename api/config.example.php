@@ -105,6 +105,15 @@ define('MP_FEE_IVA_PERCENT', 21);
 // comisión ya lo incluye o si no corresponde facturarlo aparte.
 define('PLATFORM_FEE_IVA_PERCENT', 0);
 
+// ------------------------------------------------- Devoluciones a compradores
+// Con esto en true, quien administra una página puede devolverle a quien
+// compró lo que le llegó por esa compra a su cuenta de Mercado Pago (el neto:
+// sin las comisiones de Mercado Pago ni de Rezonar), como reembolso de Mercado
+// Pago. La lógica y los riesgos están en lib/Devoluciones.php; antes de
+// prenderlo, hacer la prueba de docs/PRUEBA-DEVOLUCIONES-SANDBOX.md.
+// Si no está definido, está apagado.
+define('DEVOLUCIONES_HABILITADAS', false);
+
 // Aplicación de marketplace, desde Mercado Pago -> Tus integraciones. Es la
 // cuenta a la que llega la comisión.
 define('MP_APP_ID', 'TU_CLIENT_ID_DE_MERCADO_PAGO');

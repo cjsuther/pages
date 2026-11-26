@@ -278,6 +278,263 @@ class MercadoPago
             // Cuándo queda disponible la plata. Con tarjeta de crédito puede
             // ser un mes después; con dinero en cuenta, el mismo día.
             'acreditacion' => isset($datos['money_release_date']) ? $datos['money_release_date'] : null,
+            // Cuánto del pago ya se devolvió, según Mercado Pago (por la
+            // plataforma o por fuera). Sirve de tope: nunca se pide devolver
+            // más de lo que queda.
+            'devuelto' => isset($datos['transaction_amount_refunded']) && is_numeric($datos['transaction_amount_refunded'])
+                ? (float) $datos['transaction_amount_refunded']
+                : 0.0,
+            'estado_detalle' => isset($datos['status_detail']) ? (string) $datos['status_detail'] : null,
+        ];
+    }
+
+    // ------------------------------------------------------------ reembolsos
+
+    /**
+     * Pide un reembolso del pago.
+     *
+     * Con $monto es parcial ({"amount": X}); con null es total y el cuerpo va
+     * vacío, como objeto: {} y no []. La plataforma siempre pide un monto
+     * (lo que le llegó al organizador): un reembolso total devolvería también
+     * lo que se quedaron Mercado Pago y Rezonar.
+     *
+     * X-Idempotency-Key es obligatorio para Mercado Pago y es lo que hace que
+     * repetir el mismo pedido (un reintento de red) no genere dos reembolsos.
+     * La clave la arma quien llama, una por intento, y la guarda antes.
+     *
+     * El resultado distingue tres cosas, porque se tratan distinto:
+     *   aprobada  Mercado Pago lo hizo.
+     *   rechazada Mercado Pago contestó que no (4xx o estado rechazado): la
+     *             plata no se movió.
+     *   incierta  No sabemos: se cortó la conexión, venció el tiempo, contestó
+     *             5xx o algo ilegible, o el reembolso quedó "en proceso".
+     *             Nunca se reintenta con otra clave sin preguntar antes.
+     *
+     * @return array{resultado: string, status_http: int, id: string|null, monto: float|null,
+     *               estado: string|null, error_codigo: string|null, error_mensaje: string|null, respuesta: array|null}
+     */
+    public function devolver($pagoId, $monto, $claveIdempotencia)
+    {
+        $cuerpo = $monto === null ? new stdClass() : ['amount' => round((float) $monto, 2)];
+
+        $r = $this->http->postJson(
+            self::BASE . '/v1/payments/' . urlencode((string) $pagoId) . '/refunds',
+            $cuerpo,
+            array_merge($this->cabeceras(), ['X-Idempotency-Key: ' . $claveIdempotencia])
+        );
+
+        $status = (int) $r['status'];
+        $datos = json_decode((string) $r['body'], true);
+        $datos = is_array($datos) ? $datos : null;
+
+        $resultado = [
+            'resultado'     => 'incierta',
+            'status_http'   => $status,
+            'id'            => null,
+            'monto'         => null,
+            'estado'        => null,
+            'error_codigo'  => null,
+            'error_mensaje' => null,
+            'respuesta'     => $datos === null ? null : self::resumenDeDevolucion($datos),
+        ];
+
+        if ($status === 200 || $status === 201) {
+            if ($datos === null || !isset($datos['id'])) {
+                return $resultado;
+            }
+
+            $resultado['id'] = (string) $datos['id'];
+            $resultado['monto'] = isset($datos['amount']) && is_numeric($datos['amount']) ? (float) $datos['amount'] : null;
+            $resultado['estado'] = isset($datos['status']) ? (string) $datos['status'] : null;
+
+            // Sin estado se toma como hecho: el alta respondió con un id.
+            if ($resultado['estado'] === null || $resultado['estado'] === 'approved') {
+                $resultado['resultado'] = 'aprobada';
+            } elseif (in_array($resultado['estado'], ['rejected', 'cancelled'], true)) {
+                $resultado['resultado'] = 'rechazada';
+                $resultado['error_codigo'] = $resultado['estado'];
+                $resultado['error_mensaje'] = 'refund ' . $resultado['estado'];
+            }
+
+            return $resultado;
+        }
+
+        // 4xx: Mercado Pago lo leyó y dijo que no. Lo demás (0, 5xx) no dice
+        // nada sobre si se hizo.
+        if ($status >= 400 && $status < 500) {
+            list($codigo, $mensaje) = self::errorDe($datos, $status);
+            $resultado['resultado'] = 'rechazada';
+            $resultado['error_codigo'] = $codigo;
+            $resultado['error_mensaje'] = $mensaje;
+        }
+
+        return $resultado;
+    }
+
+    /**
+     * Los reembolsos que tiene un pago, según Mercado Pago.
+     *
+     * Es lo que permite resolver un reembolso "incierto" sin volver a pedirlo.
+     *
+     * @return array{ok: bool, devoluciones: array<array{id: string, monto: float|null, estado: string|null}>}
+     */
+    public function devoluciones($pagoId)
+    {
+        $r = $this->http->get(self::BASE . '/v1/payments/' . urlencode((string) $pagoId) . '/refunds', $this->cabeceras());
+
+        if ($r['status'] !== 200) {
+            return ['ok' => false, 'devoluciones' => []];
+        }
+
+        $datos = json_decode($r['body'], true);
+
+        if (!is_array($datos)) {
+            return ['ok' => false, 'devoluciones' => []];
+        }
+
+        // La API devuelve una lista; se acepta también {results: [...]}.
+        $lista = isset($datos['results']) && is_array($datos['results']) ? $datos['results'] : $datos;
+        $devoluciones = [];
+
+        foreach ($lista as $item) {
+            if (!is_array($item) || !isset($item['id'])) {
+                continue;
+            }
+
+            $devoluciones[] = [
+                'id'     => (string) $item['id'],
+                'monto'  => isset($item['amount']) && is_numeric($item['amount']) ? (float) $item['amount'] : null,
+                'estado' => isset($item['status']) ? (string) $item['status'] : null,
+            ];
+        }
+
+        return ['ok' => true, 'devoluciones' => $devoluciones];
+    }
+
+    /**
+     * El pago como lo devuelve Mercado Pago, reducido a lo que explica cómo
+     * se repartió la plata. Sin datos de quien pagó.
+     *
+     * Se guarda después de cada reembolso: es la forma de comprobar con datos
+     * de Mercado Pago, y no con una suposición, si el reembolso le descontó
+     * algo a la comisión de la plataforma (application_fee).
+     *
+     * @return array|null null si no se pudo leer
+     */
+    public function repartoDelPago($pagoId)
+    {
+        $r = $this->http->get(self::BASE . '/v1/payments/' . urlencode((string) $pagoId), $this->cabeceras());
+
+        if ($r['status'] !== 200) {
+            return null;
+        }
+
+        $datos = json_decode($r['body'], true);
+
+        if (!is_array($datos)) {
+            return null;
+        }
+
+        $tarifas = [];
+
+        foreach (isset($datos['fee_details']) && is_array($datos['fee_details']) ? $datos['fee_details'] : [] as $detalle) {
+            if (!is_array($detalle)) {
+                continue;
+            }
+
+            $tarifas[] = [
+                'type'     => isset($detalle['type']) ? (string) $detalle['type'] : null,
+                'amount'   => isset($detalle['amount']) && is_numeric($detalle['amount']) ? (float) $detalle['amount'] : null,
+                'fee_payer' => isset($detalle['fee_payer']) ? (string) $detalle['fee_payer'] : null,
+            ];
+        }
+
+        $reembolsos = [];
+
+        foreach (isset($datos['refunds']) && is_array($datos['refunds']) ? $datos['refunds'] : [] as $reembolso) {
+            if (is_array($reembolso)) {
+                $reembolsos[] = self::resumenDeDevolucion($reembolso);
+            }
+        }
+
+        return [
+            'status'                      => isset($datos['status']) ? $datos['status'] : null,
+            'status_detail'               => isset($datos['status_detail']) ? $datos['status_detail'] : null,
+            'transaction_amount'          => isset($datos['transaction_amount']) ? $datos['transaction_amount'] : null,
+            'transaction_amount_refunded' => isset($datos['transaction_amount_refunded']) ? $datos['transaction_amount_refunded'] : null,
+            'net_received_amount'         => isset($datos['transaction_details']['net_received_amount'])
+                ? $datos['transaction_details']['net_received_amount']
+                : null,
+            'marketplace_fee'             => isset($datos['marketplace_fee']) ? $datos['marketplace_fee'] : null,
+            'application_fee'             => self::comisionDePlataforma($datos),
+            'fee_details'                 => $tarifas,
+            'refunds'                     => $reembolsos,
+        ];
+    }
+
+    /** Los campos de un reembolso que sirven para auditar, sin nada personal. */
+    private static function resumenDeDevolucion(array $datos)
+    {
+        $resumen = [];
+
+        foreach (['id', 'payment_id', 'amount', 'status', 'date_created', 'source', 'refund_mode',
+                  'adjustment_amount', 'reason', 'partition_details', 'unique_sequence_number'] as $campo) {
+            if (array_key_exists($campo, $datos)) {
+                $resumen[$campo] = $campo === 'source' && is_array($datos[$campo])
+                    // source trae quién la pidió; se deja sólo el tipo.
+                    ? (isset($datos[$campo]['type']) ? ['type' => $datos[$campo]['type']] : null)
+                    : $datos[$campo];
+            }
+        }
+
+        // Respuestas de error: código y mensaje, para el registro.
+        foreach (['message', 'error', 'status', 'cause'] as $campo) {
+            if (array_key_exists($campo, $datos) && !array_key_exists($campo, $resumen)) {
+                $resumen[$campo] = $datos[$campo];
+            }
+        }
+
+        return $resumen;
+    }
+
+    /**
+     * Código y mensaje de un error de Mercado Pago, tal cual.
+     *
+     * El código útil viene en cause[0].code (3024, 15016, ...); si no hay,
+     * el campo error ("bad_request") o el status HTTP.
+     *
+     * @return array{0: string, 1: string}
+     */
+    public static function errorDe($datos, $status)
+    {
+        $codigo = null;
+        $mensaje = null;
+
+        if (is_array($datos)) {
+            if (isset($datos['cause']) && is_array($datos['cause'])) {
+                $causa = isset($datos['cause'][0]) && is_array($datos['cause'][0]) ? $datos['cause'][0] : $datos['cause'];
+
+                if (isset($causa['code']) && $causa['code'] !== '') {
+                    $codigo = (string) $causa['code'];
+                }
+
+                if (isset($causa['description']) && is_string($causa['description']) && $causa['description'] !== '') {
+                    $mensaje = $causa['description'];
+                }
+            }
+
+            if ($codigo === null && isset($datos['error']) && is_scalar($datos['error']) && $datos['error'] !== '') {
+                $codigo = (string) $datos['error'];
+            }
+
+            if ($mensaje === null && isset($datos['message']) && is_string($datos['message'])) {
+                $mensaje = $datos['message'];
+            }
+        }
+
+        return [
+            mb_substr($codigo === null ? (string) $status : $codigo, 0, 50),
+            mb_substr($mensaje === null ? 'Mercado Pago respondió ' . $status : $mensaje, 0, 255),
         ];
     }
 
