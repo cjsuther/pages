@@ -34,7 +34,7 @@ class FakeHttpClient extends HttpClient
         return $this->respuestaPara($url);
     }
 
-    public function postJson($url, array $body, array $headers = [])
+    public function postJson($url, $body, array $headers = [])
     {
         $this->llamadas[] = ['method' => 'POST', 'url' => $url, 'json' => $body, 'headers' => $headers];
         return $this->respuestaPara($url);
